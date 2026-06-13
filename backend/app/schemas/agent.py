@@ -1,0 +1,82 @@
+"""
+AI 代理相关的 Pydantic 模型
+"""
+from pydantic import BaseModel, Field
+
+
+class AgentCreateRequest(BaseModel):
+    """创建 AI 请求"""
+    name: str = Field(..., min_length=1, max_length=50)
+    system_prompt: str | None = None
+    temperature: float = Field(default=0.8, ge=0, le=2.0)
+    top_p: float = Field(default=0.9, ge=0, le=1.0)
+    presence_penalty: float = Field(default=0.5, ge=-2.0, le=2.0)
+    frequency_penalty: float = Field(default=0.5, ge=-2.0, le=2.0)
+    chat_model: str | None = None  # NULL = 继承全局
+    work_model: str | None = None
+
+
+class AgentGenerateRequest(BaseModel):
+    """AI 辅助生成性格请求"""
+    description: str = Field(..., min_length=5, max_length=2000, description="描述你想要的 AI 性格")
+
+
+class AgentGenerateResponse(BaseModel):
+    """AI 辅助生成性格响应"""
+    name: str
+    system_prompt: str
+    temperature: float
+    top_p: float
+    presence_penalty: float
+    frequency_penalty: float
+
+
+class AgentUpdateConfigRequest(BaseModel):
+    """AI 自修改配置请求"""
+    system_prompt: str | None = None
+    temperature: float | None = Field(default=None, ge=0, le=2.0)
+    top_p: float | None = Field(default=None, ge=0, le=1.0)
+    presence_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
+    frequency_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
+
+
+class AgentStateRequest(BaseModel):
+    """切换状态请求"""
+    target_state: str = Field(..., description="active|dnd|offline|blocked")
+    duration_hours: int | None = Field(default=None, ge=1, le=72)
+    reason: str | None = None
+
+
+class AgentResponse(BaseModel):
+    """AI 代理响应"""
+    id: int
+    owner_id: int
+    name: str
+    original_system_prompt: str | None
+    original_temperature: float
+    original_top_p: float
+    original_presence_penalty: float
+    original_frequency_penalty: float
+    current_system_prompt: str | None
+    current_temperature: float | None
+    current_top_p: float | None
+    current_presence_penalty: float | None
+    current_frequency_penalty: float | None
+    chat_model: str | None
+    work_model: str | None
+    state: str
+    offline_until: str | None
+    is_ai_editable: bool
+    created_at: str | None
+
+
+class AgentConfigHistoryResponse(BaseModel):
+    """配置历史响应"""
+    id: int
+    agent_id: int
+    system_prompt: str | None
+    temperature: float | None
+    top_p: float | None
+    presence_penalty: float | None
+    frequency_penalty: float | None
+    created_at: str | None

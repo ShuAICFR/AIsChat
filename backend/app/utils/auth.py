@@ -1,0 +1,100 @@
+"""
+认证工具模块
+- 密码哈希/验证
+- JWT 令牌生成/验证
+"""
+from datetime import datetime, timedelta, timezone
+from passlib.context import CryptContext
+from jose import JWTError, jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from app.config import settings
+
+# 密码哈希上下文
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# HTTP Bearer 安全方案
+security = HTTPBearer(auto_error=False)
+
+
+def _truncate_password(password: str) -> str:
+    """bcrypt 限制密码最大 72 字节，逐字符截断以确保不切割多字节 Unicode"""
+    while len(password.encode("utf-8")) > 72:
+        password = password[:-1]
+    return password
+
+
+def hash_password(password: str) -> str:
+    """对密码进行哈希"""
+    return pwd_context.hash(_truncate_password(password))
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """验证密码"""
+    return pwd_context.verify(_truncate_password(plain_password), hashed_password)
+
+
+def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+    """创建 JWT 访问令牌"""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(days=settings.jwt_expire_days)
+    )
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_access_token(token: str) -> dict | None:
+    """解码 JWT 令牌，失败返回 None"""
+    try:
+        payload = jwt.decode(
+            token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+        )
+        return payload
+    except JWTError:
+        return None
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    """
+    FastAPI 依赖：从 JWT 中获取当前用户信息。
+    返回 {"user_id": int, "username": str, "role": str}
+    """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="缺少认证令牌",
+        )
+
+    payload = decode_access_token(credentials.credentials)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌无效或已过期",
+        )
+
+    user_id = payload.get("user_id")
+    username = payload.get("username")
+    role = payload.get("role", "user")
+
+    if user_id is None or username is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="令牌数据不完整",
+        )
+
+    return {"user_id": int(user_id), "username": username, "role": role}
+
+
+async def require_admin(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """FastAPI 依赖：要求管理员权限"""
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要管理员权限",
+        )
+    return current_user

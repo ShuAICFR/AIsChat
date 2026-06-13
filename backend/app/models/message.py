@@ -1,0 +1,54 @@
+"""
+消息模型
+"""
+from sqlalchemy import (
+    Column, Integer, String, Boolean, Text, DateTime, ForeignKey, func,
+    CheckConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
+from app.database import Base
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    sender_type = Column(String(10), nullable=False)  # 'human' | 'ai'
+    sender_id = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    reply_to = Column(Integer, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "sender_type IN ('human', 'ai')",
+            name="ck_message_sender_type",
+        ),
+    )
+
+
+class PendingMessage(Base):
+    """暂存消息表（AI 离线/免打扰/暂停期间的消息积压）"""
+    __tablename__ = "pending_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class GroupMessageEmbedding(Base):
+    """向量加速消息表"""
+    __tablename__ = "group_message_embeddings"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(1536))  # 嵌入向量，维度运行时自动检测
+    created_at = Column(DateTime, server_default=func.now())
+    metadata_ = Column("metadata", JSONB)

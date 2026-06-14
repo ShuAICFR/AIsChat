@@ -106,7 +106,7 @@ function UsersTab() {
   return (
     <div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
@@ -206,7 +206,7 @@ function AgentsTab() {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
@@ -260,7 +260,7 @@ function GroupsTab() {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
@@ -360,7 +360,7 @@ function CodesTab() {
       <div className="bg-surface rounded-xl border border-border p-5">
         <h3 className="font-semibold mb-3">兑换码列表</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-textPrimary">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">兑换码</th>
@@ -511,7 +511,7 @@ function LogsTab() {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
             <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>
@@ -665,7 +665,7 @@ function OpenCLIAgentsSection() {
     <div className="bg-surface rounded-xl border border-border p-5">
       <h3 className="font-semibold mb-3">AI OpenCLI 白名单</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
@@ -771,7 +771,7 @@ function OpenCLICommandsSection() {
       <div className="bg-surface rounded-xl border border-border p-5">
         <h3 className="font-semibold mb-3">命令白名单列表</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm text-textPrimary">
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">模式</th>
@@ -830,7 +830,7 @@ function OpenCLILogsSection() {
     <div className="bg-surface rounded-xl border border-border p-5">
       <h3 className="font-semibold mb-3">使用日志</h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
               <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>

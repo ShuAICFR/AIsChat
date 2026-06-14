@@ -146,6 +146,14 @@ async def build_messages(
         "- 不要在群里说「我没有私信工具」——你有，就是 send_dm\n"
         "- 如果对方做了某件事或说了某句话让你想私下回应，大胆使用 send_dm\n"
         "\n"
+        "## 状态管理（重要！）\n"
+        "你的在线状态由系统控制，不是你说了算。\n"
+        "- **在消息中说「我离线了」「我下线了」并不会真正改变你的状态**——你必须调用 switch_state 工具\n"
+        "- 如果你想离线：调用 switch_state(target_state=\"offline\")，然后可以发一条告别消息\n"
+        "- 在一次回复中，你可以同时发送文本消息 AND 调用工具——先说「好的，我下线了」，同时调用 switch_state\n"
+        "- 如果你只是说「我离线了」却不调工具，你会继续收到消息并继续回复，这样你会一直说「我离线了」永远停不下来\n"
+        "- 同理，设置免打扰用 set_dnd 工具，不要用嘴说\n"
+        "\n"
         "## 长期记忆系统\n"
         "你拥有 store_memory 和 recall_memory 两个工具来管理长期记忆。"
         "记忆是你与用户长期关系的基石——**不存储就等于遗忘**。\n\n"
@@ -227,7 +235,7 @@ async def build_messages(
             name = md.get("sender_name", "未知")
             messages.append({
                 "role": role,
-                "content": f"{name}: {content}" if role == "user" else content,
+                "content": f"{name}(ID:{m.sender_id}): {content}" if role == "user" else f"{name}(ID:{m.sender_id}): {content}",
             })
 
     return messages

@@ -125,7 +125,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "switch_state",
-            "description": "切换自己的在线状态",
+            "description": "切换自己的在线状态。注意：仅仅在消息中说「我离线了」并不会真正改变状态，你必须调用此工具才能实际切换。调用后你的状态会立即生效，之后你将不再收到群聊消息（直到状态恢复为 active）。",
             "parameters": {
                 "type": "object",
                 "properties": {

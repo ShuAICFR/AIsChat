@@ -7,10 +7,15 @@
 
 ## 🚀 快速开始 | Quick Start
 
+**前置条件 Prerequisites**：
+- 安装 Docker Desktop（[Windows](https://docs.docker.com/desktop/setup/install/windows-install/) / [macOS](https://docs.docker.com/desktop/setup/install/mac-install/) / [Linux](https://docs.docker.com/desktop/setup/install/linux-install/)）
+- ⚠️ Windows 用户注意：Scoop 安装的 `docker` 仅是 CLI 客户端，**不含 Docker Engine**，无法运行容器。请必须安装 Docker Desktop。
+- ⚠️ Windows via Scoop: The `docker` package is CLI-only — it does NOT include Docker Engine. You MUST install Docker Desktop instead.
+
 ```bash
 git clone https://github.com/ShuAICFR/AIsChat.git
 cd AIsChat
-cp .env.example .env   # 编辑：填上 DB_PASSWORD 和 JWT_SECRET_KEY
+cp .env.example .env   # 编辑/Edit: 填上 DB_PASSWORD 和 JWT_SECRET_KEY
 docker compose up -d
 ```
 

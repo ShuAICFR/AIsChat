@@ -42,10 +42,10 @@ const stateLabels: Record<string, string> = {
 }
 
 const stateColors: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  dnd: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  offline: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-400',
-  blocked: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+  active: 'bg-mint-400/15 text-mint-400 border-mint-400/30',
+  dnd: 'bg-rose-400/15 text-rose-400 border-rose-400/30',
+  offline: 'bg-[#6B7280]/15 text-[#9CA3B0] border-[#6B7280]/30',
+  blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }
 
 export default function AgentsPage() {
@@ -70,19 +70,19 @@ export default function AgentsPage() {
   }, [])
 
   return (
-    <div className="h-full overflow-y-auto p-6">
+    <div className="h-full overflow-y-auto p-6 bg-canvas">
       <div className="max-w-4xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">我的 AI</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <h1 className="text-2xl font-bold text-[#EDE9F6] tracking-tight">我的 AI</h1>
+            <p className="text-sm text-[#9CA3B0] mt-1">
               创建和管理你的 AI 角色
             </p>
           </div>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             <Plus size={16} />
             创建 AI
@@ -92,14 +92,13 @@ export default function AgentsPage() {
         {/* AI 卡片列表 */}
         {agents.length === 0 ? (
           <div className="text-center py-16">
-            <Bot size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">还没有 AI 角色</p>
-            <p className="text-sm text-gray-400 mt-1">点击"创建 AI"开始</p>
+            <Bot size={48} className="mx-auto text-[#2A2540] mb-4" />
+            <p className="text-[#9CA3B0]">还没有 AI 角色</p>
+            <p className="text-sm text-[#6B7280] mt-1">点击"创建 AI"开始</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {agents.map((agent) => {
-              // 判断 AI 是否修改过自己的设定
               const hasModified =
                 agent.current_system_prompt !== agent.original_system_prompt ||
                 agent.current_temperature !== agent.original_temperature
@@ -107,63 +106,62 @@ export default function AgentsPage() {
               return (
                 <div
                   key={agent.id}
-                  className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
+                  className="bg-surface border border-border rounded-xl p-5 hover:border-primary-500/30 transition-all duration-200"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                        <Bot size={20} className="text-primary-600 dark:text-primary-400" />
+                      <div className="w-10 h-10 rounded-full bg-primary-500/15 flex items-center justify-center">
+                        <Bot size={20} className="text-primary-400" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900 dark:text-white">{agent.name}</h3>
-                        <p className="text-xs text-gray-400">
+                        <h3 className="font-medium text-[#EDE9F6]">{agent.name}</h3>
+                        <p className="text-xs text-[#6B7280]">
                           {new Date(agent.created_at).toLocaleDateString('zh-CN')}
                         </p>
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stateColors[agent.state] || ''}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${stateColors[agent.state] || ''}`}>
                       {stateLabels[agent.state] || agent.state}
                     </span>
                   </div>
 
-                  {/* 显示当前 system prompt 摘要 */}
                   {agent.current_system_prompt && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
+                    <p className="text-sm text-[#9CA3B0] line-clamp-2 mb-3">
                       {agent.current_system_prompt}
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
+                  <div className="flex items-center gap-2 text-xs text-[#6B7280] mb-1">
                     <span>
                       Temp: {agent.current_temperature}
                       {hasModified && agent.original_temperature !== agent.current_temperature && (
-                        <span className="text-orange-400 ml-0.5">({agent.original_temperature})</span>
+                        <span className="text-accent-400 ml-0.5">({agent.original_temperature})</span>
                       )}
                     </span>
                     {agent.is_ai_editable && (
-                      <span className="text-green-500">可自修改</span>
+                      <span className="text-mint-400">可自修改</span>
                     )}
                     {hasModified && (
-                      <span className="text-amber-500 font-medium">已修改</span>
+                      <span className="text-accent-400 font-medium">已修改</span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
                     <button
                       onClick={() => setEditAgent(agent)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-primary-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-[#9CA3B0] hover:text-primary-400 rounded-lg hover:bg-[#1E1A30] transition-colors"
                     >
                       <Edit3 size={12} /> 编辑
                     </button>
                     <button
                       onClick={() => setHistoryAgent(agent)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-primary-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-[#9CA3B0] hover:text-primary-400 rounded-lg hover:bg-[#1E1A30] transition-colors"
                     >
                       <History size={12} /> 历史
                     </button>
                     <button
                       onClick={() => setStateAgent(agent)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:text-orange-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-[#9CA3B0] hover:text-accent-400 rounded-lg hover:bg-[#1E1A30] transition-colors"
                     >
                       <Power size={12} /> 状态
                     </button>
@@ -265,55 +263,54 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">编辑 {agent.name}</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+          <h2 className="text-lg font-semibold text-[#EDE9F6]">编辑 {agent.name}</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[#1E1A30] rounded-lg text-[#6B7280] hover:text-[#9CA3B0]">
             <X size={18} />
           </button>
         </div>
 
-        {/* 两栏对比 */}
         <div className="grid grid-cols-2 gap-4 mb-4">
           {/* 原始设定（只读） */}
-          <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-1">
+          <div className="bg-[#0C0A14] rounded-xl p-4 border border-border">
+            <h3 className="text-sm font-semibold text-[#9CA3B0] mb-3 flex items-center gap-1">
               📋 原始设定（你的初始配置）
             </h3>
             <div className="space-y-2 text-sm">
               <div>
-                <span className="text-xs text-gray-400">System Prompt:</span>
-                <p className="text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap line-clamp-6">
+                <span className="text-xs text-[#6B7280]">System Prompt:</span>
+                <p className="text-[#9CA3B0] mt-0.5 whitespace-pre-wrap line-clamp-6">
                   {agent.original_system_prompt || '（未设置）'}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs">
-                <span className="text-gray-400">Temperature:</span>
-                <span className="text-gray-600 dark:text-gray-400">{agent.original_temperature}</span>
-                <span className="text-gray-400">Top P:</span>
-                <span className="text-gray-600 dark:text-gray-400">{agent.original_top_p}</span>
-                <span className="text-gray-400">Presence:</span>
-                <span className="text-gray-600 dark:text-gray-400">{agent.original_presence_penalty}</span>
-                <span className="text-gray-400">Frequency:</span>
-                <span className="text-gray-600 dark:text-gray-400">{agent.original_frequency_penalty}</span>
+                <span className="text-[#6B7280]">Temperature:</span>
+                <span className="text-[#9CA3B0]">{agent.original_temperature}</span>
+                <span className="text-[#6B7280]">Top P:</span>
+                <span className="text-[#9CA3B0]">{agent.original_top_p}</span>
+                <span className="text-[#6B7280]">Presence:</span>
+                <span className="text-[#9CA3B0]">{agent.original_presence_penalty}</span>
+                <span className="text-[#6B7280]">Frequency:</span>
+                <span className="text-[#9CA3B0]">{agent.original_frequency_penalty}</span>
               </div>
             </div>
           </div>
 
           {/* 当前设定（可编辑） */}
-          <div className="bg-primary-50/30 dark:bg-primary-900/10 rounded-xl p-4 border border-primary-200 dark:border-primary-800">
-            <h3 className="text-sm font-semibold text-primary-600 dark:text-primary-400 mb-3 flex items-center gap-1">
+          <div className="bg-primary-500/5 rounded-xl p-4 border border-primary-500/20">
+            <h3 className="text-sm font-semibold text-primary-400 mb-3 flex items-center gap-1">
               ✏️ 当前设定{hasModified ? '（AI 已修改）' : ''}
             </h3>
             <div className="space-y-2">
               <div>
-                <label className="text-xs text-gray-500">System Prompt</label>
+                <label className="text-xs text-[#6B7280]">System Prompt</label>
                 <textarea
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   rows={4}
-                  className="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none mt-0.5"
+                  className="w-full px-3 py-1.5 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none mt-0.5"
                 />
               </div>
               <div className="space-y-1.5 text-xs">
@@ -324,7 +321,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   ['Frequency', frequencyPenalty, setFrequencyPenalty, -2, 2, 0.1],
                 ].map(([label, value, setter, min, max, step]) => (
                   <div key={label as string}>
-                    <label className="text-gray-400">{label as string}: {String(value)}</label>
+                    <label className="text-[#6B7280]">{label as string}: {String(value)}</label>
                     <input
                       type="range"
                       min={min as number}
@@ -332,7 +329,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                       step={step as number}
                       value={value as number}
                       onChange={(e) => (setter as any)(parseFloat(e.target.value))}
-                      className="w-full h-1"
+                      className="w-full h-1 accent-primary-500"
                     />
                   </div>
                 ))}
@@ -341,16 +338,16 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-500 mb-3">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mb-3">{error}</div>}
 
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium">
             取消
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-40"
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             {loading ? '保存中...' : '保存修改'}
           </button>
@@ -399,19 +396,19 @@ function HistoryModal({ agent, onClose, onRollback }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">{agent.name} · 配置历史</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+          <h2 className="text-lg font-semibold text-[#EDE9F6]">{agent.name} · 配置历史</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[#1E1A30] rounded-lg text-[#6B7280] hover:text-[#9CA3B0]">
             <X size={18} />
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
+          <div className="text-center py-8 text-[#6B7280] text-sm">加载中...</div>
         ) : history.length === 0 ? (
-          <div className="text-center py-8 text-gray-400 text-sm">暂无配置历史记录</div>
+          <div className="text-center py-8 text-[#6B7280] text-sm">暂无配置历史记录</div>
         ) : (
           <div className="space-y-3">
             {history.map((h, idx) => {
@@ -421,20 +418,20 @@ function HistoryModal({ agent, onClose, onRollback }: {
                   key={h.id}
                   className={`rounded-xl p-4 border ${
                     isLatest
-                      ? 'border-primary-200 dark:border-primary-800 bg-primary-50/30 dark:bg-primary-900/10'
-                      : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50'
+                      ? 'border-primary-500/30 bg-primary-500/5'
+                      : 'border-border bg-[#0C0A14]'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-[#6B7280]">
                       {h.created_at ? new Date(h.created_at).toLocaleString('zh-CN') : '未知时间'}
-                      {isLatest && <span className="ml-1 text-primary-500 font-medium">（当前）</span>}
+                      {isLatest && <span className="ml-1 text-primary-400 font-medium">（当前）</span>}
                     </span>
                     {!isLatest && (
                       <button
                         onClick={() => handleRollback(h.id)}
                         disabled={rollingBack === h.id}
-                        className="flex items-center gap-1 px-2 py-0.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded transition-colors disabled:opacity-40"
+                        className="flex items-center gap-1 px-2 py-0.5 text-xs text-accent-400 hover:bg-accent-400/10 rounded-lg transition-colors disabled:opacity-30"
                       >
                         <RotateCcw size={11} />
                         {rollingBack === h.id ? '回滚中...' : '回滚到此'}
@@ -442,11 +439,11 @@ function HistoryModal({ agent, onClose, onRollback }: {
                     )}
                   </div>
                   {h.system_prompt && (
-                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 whitespace-pre-wrap mb-1">
+                    <p className="text-xs text-[#9CA3B0] line-clamp-2 whitespace-pre-wrap mb-1">
                       {h.system_prompt}
                     </p>
                   )}
-                  <div className="text-xs text-gray-400 flex gap-3">
+                  <div className="text-xs text-[#6B7280] flex gap-3">
                     <span>T: {h.temperature}</span>
                     <span>P: {h.top_p}</span>
                     <span>Pre: {h.presence_penalty}</span>
@@ -458,7 +455,7 @@ function HistoryModal({ agent, onClose, onRollback }: {
           </div>
         )}
 
-        {error && <div className="text-sm text-red-500 mt-3">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}
       </div>
     </div>
   )
@@ -498,22 +495,22 @@ function StateModal({ agent, onClose, onUpdated }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">{agent.name} · 状态</h2>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded">
+          <h2 className="text-lg font-semibold text-[#EDE9F6]">{agent.name} · 状态</h2>
+          <button onClick={onClose} className="p-1 hover:bg-[#1E1A30] rounded-lg text-[#6B7280] hover:text-[#9CA3B0]">
             <X size={18} />
           </button>
         </div>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1.5">当前: {stateLabels[agent.state] || agent.state}</label>
+            <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">当前: {stateLabels[agent.state] || agent.state}</label>
             <select
               value={targetState}
               onChange={(e) => setTargetState(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             >
               {Object.entries(stateLabels).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
@@ -523,39 +520,39 @@ function StateModal({ agent, onClose, onUpdated }: {
 
           {targetState === 'blocked' && (
             <div>
-              <label className="block text-sm font-medium mb-1">封禁时长（小时，≤72）</label>
+              <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">封禁时长（小时，≤72）</label>
               <input
                 type="number"
                 min={1} max={72}
                 value={durationHours}
                 onChange={(e) => setDurationHours(parseInt(e.target.value) || 1)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               />
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-1">原因（可选）</label>
+            <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">原因（可选）</label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               placeholder="简短说明..."
             />
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-500 mt-3">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}
 
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium">
             取消
           </button>
           <button
             onClick={handleSwitch}
             disabled={loading || targetState === agent.state}
-            className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-40"
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             {loading ? '切换中...' : '切换'}
           </button>
@@ -594,33 +591,33 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold mb-4">创建新 AI</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-semibold mb-4 text-[#EDE9F6]">创建新 AI</h2>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium mb-1">名称 *</label>
+            <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">名称 *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               placeholder="给 AI 起个名字"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">系统提示词</label>
+            <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">系统提示词</label>
             <textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
               placeholder="描述 AI 的性格和行为..."
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
+            <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">
               Temperature: {temperature}
             </label>
             <input
@@ -630,21 +627,21 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               step="0.1"
               value={temperature}
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
-              className="w-full"
+              className="w-full accent-primary-500"
             />
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-500 mt-3">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}
 
         <div className="flex gap-2 mt-4">
-          <button onClick={onClose} className="flex-1 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium">
             取消
           </button>
           <button
             onClick={handleCreate}
             disabled={!name.trim() || loading}
-            className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-40"
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             {loading ? '创建中...' : '创建'}
           </button>

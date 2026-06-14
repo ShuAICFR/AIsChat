@@ -77,8 +77,8 @@ export default function SearchOverlay() {
   return (
     <div ref={containerRef} className="relative">
       {/* 搜索框 */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
-        <Search size={14} className="text-gray-400 shrink-0" />
+      <div className="flex items-center gap-2 px-3 py-2 bg-[#0C0A14] border border-border rounded-xl">
+        <Search size={14} className="text-[#6B7280] shrink-0" />
         <input
           ref={inputRef}
           type="text"
@@ -86,10 +86,10 @@ export default function SearchOverlay() {
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setShowDropdown(true)}
           placeholder="搜索用户或 AI..."
-          className="flex-1 bg-transparent text-sm focus:outline-none dark:text-gray-200 placeholder-gray-400"
+          className="flex-1 bg-transparent text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none"
         />
         {query && (
-          <button onClick={() => { setQuery(''); setResults([]) }} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => { setQuery(''); setResults([]) }} className="text-[#6B7280] hover:text-[#9CA3B0]">
             <X size={14} />
           </button>
         )}
@@ -97,22 +97,22 @@ export default function SearchOverlay() {
 
       {/* 下拉结果 */}
       {showDropdown && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-elevated border border-border rounded-xl shadow-2xl shadow-black/30 z-50 max-h-80 overflow-y-auto">
           {loading ? (
-            <div className="p-3 text-sm text-gray-400 text-center">搜索中...</div>
+            <div className="p-3 text-sm text-[#6B7280] text-center">搜索中...</div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-sm text-gray-400 text-center">无结果</div>
+            <div className="p-3 text-sm text-[#6B7280] text-center">无结果</div>
           ) : (
             results.map((item) => (
               <div
                 key={`${item.type}:${item.id}`}
-                className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-750"
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-[#1E1A30]"
               >
                 {/* 头像 */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
                   item.type === 'human'
-                    ? 'bg-primary-100 dark:bg-primary-800 text-primary-600 dark:text-primary-300'
-                    : 'bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300'
+                    ? 'from-primary-500 to-primary-700 text-white'
+                    : 'from-mint-400 to-emerald-600 text-white'
                 }`}>
                   {item.name.charAt(0).toUpperCase()}
                 </div>
@@ -120,37 +120,37 @@ export default function SearchOverlay() {
                 {/* 信息 */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                    <span className="text-sm font-medium text-[#EDE9F6] truncate">
                       {item.name}
                     </span>
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-[#6B7280] shrink-0">
                       {item.type === 'ai' ? '🤖AI' : '👤'}
                     </span>
                     {item.state && (
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        item.state === 'active' ? 'bg-green-500' :
-                        item.state === 'dnd' ? 'bg-red-500' : 'bg-gray-400'
+                        item.state === 'active' ? 'bg-mint-400' :
+                        item.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
                       }`} />
                     )}
                   </div>
                   {item.owner_name && (
-                    <div className="text-xs text-gray-400 truncate">创建者: {item.owner_name}</div>
+                    <div className="text-xs text-[#6B7280] truncate">创建者: {item.owner_name}</div>
                   )}
                 </div>
 
                 {/* 操作按钮 */}
                 {item.is_friend ? (
-                  <span className="text-xs text-green-500 flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-mint-400 flex items-center gap-1 shrink-0">
                     <UserCheck size={12} /> 好友
                   </span>
                 ) : pendingRequests.has(`${item.type}:${item.id}`) ? (
-                  <span className="text-xs text-orange-400 flex items-center gap-1 shrink-0">
+                  <span className="text-xs text-accent-400 flex items-center gap-1 shrink-0">
                     <Clock size={12} /> 已申请
                   </span>
                 ) : (
                   <button
                     onClick={() => handleAddFriend(item.type, item.id, item.name)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-md bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/50 shrink-0"
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 shrink-0 transition-colors"
                   >
                     <UserPlus size={12} /> 加好友
                   </button>

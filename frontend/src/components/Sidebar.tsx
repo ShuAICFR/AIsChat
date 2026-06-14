@@ -12,6 +12,13 @@ const mainNavItems = [
   { to: '/settings', label: '设置', icon: Settings },
 ]
 
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+    isActive
+      ? 'bg-primary-500/15 text-primary-300'
+      : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
+  }`
+
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -28,72 +35,64 @@ export default function Sidebar() {
     <aside
       className={`${
         collapsed ? 'w-16' : 'w-60'
-      } bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col transition-all duration-200 shrink-0`}
+      } bg-surface border-r border-border flex flex-col transition-all duration-200 shrink-0`}
     >
       {/* 头部 */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+      <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0">
         {!collapsed && (
-          <h1 className="text-lg font-bold text-primary-600 dark:text-primary-400 truncate">
-            AI 群聊
-          </h1>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow shadow-primary-500/30">
+              <MessageCircle size={12} className="text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-base font-bold text-[#EDE9F6] tracking-tight">AIsChat</span>
+          </div>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"
+          className="p-1.5 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-[#9CA3B0] transition-colors"
           title={collapsed ? '展开' : '折叠'}
         >
-          {collapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
+          {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
       {/* 搜索框 */}
       {!collapsed && (
-        <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-3 py-2 border-b border-border">
           <SearchOverlay />
         </div>
       )}
 
       {/* 用户信息 */}
       {!collapsed && user && (
-        <div className="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium truncate">{user.username}</p>
-            <p className="text-xs text-gray-500">
-              ID: {user.id} · {user.role === 'admin' ? '管理员' : `额度: ${user.ai_quota}`}
+        <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[#EDE9F6] truncate">{user.username}</p>
+            <p className="text-xs text-[#6B7280]">
+              {user.role === 'admin' ? (
+                <span className="text-accent-400">管理员</span>
+              ) : (
+                `额度 ${user.ai_quota}`
+              )}
             </p>
           </div>
           <FriendRequestBadge />
         </div>
       )}
 
-      {/* 主导航 + 好友面板 */}
+      {/* 主导航 */}
       {!collapsed && !showFriendList && (
-        <nav className="flex-1 py-2">
-          {/* 聊天 - 特殊处理：点击不跳转，仅切换到群聊视图 */}
-          <NavLink
-            to="/chat"
-            onClick={() => setShowFriendList(false)}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
-                isActive
-                  ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`
-            }
-          >
-            <MessageCircle size={20} />
+        <nav className="flex-1 py-3 space-y-0.5">
+          <NavLink to="/chat" onClick={() => setShowFriendList(false)} className={navLinkClass}>
+            <MessageCircle size={18} />
             <span>聊天</span>
           </NavLink>
 
-          {/* 好友 - 展开好友列表 */}
           <button
-            onClick={() => {
-              setShowFriendList(true)
-              setFriendRefresh(Date.now())
-            }}
-            className="flex items-center gap-3 w-full px-4 py-2.5 mx-2 rounded-lg transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={() => { setShowFriendList(true); setFriendRefresh(Date.now()) }}
+            className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30] text-left"
           >
-            <Users size={20} />
+            <Users size={18} />
             <span>好友</span>
           </button>
 
@@ -102,33 +101,17 @@ export default function Sidebar() {
               key={item.to}
               to={item.to}
               onClick={() => setShowFriendList(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`
-              }
+              className={navLinkClass}
               title={collapsed ? item.label : undefined}
             >
-              <item.icon size={20} />
+              <item.icon size={18} />
               <span>{item.label}</span>
             </NavLink>
           ))}
 
           {user?.role === 'admin' && (
-            <NavLink
-              to="/admin"
-              onClick={() => setShowFriendList(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 font-medium'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`
-              }
-            >
-              <Shield size={20} />
+            <NavLink to="/admin" onClick={() => setShowFriendList(false)} className={navLinkClass}>
+              <Shield size={18} />
               <span>管理</span>
             </NavLink>
           )}
@@ -138,11 +121,11 @@ export default function Sidebar() {
       {/* 好友列表面板 */}
       {!collapsed && showFriendList && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">好友列表</span>
+          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+            <span className="text-sm font-medium text-[#EDE9F6]">好友列表</span>
             <button
               onClick={() => setShowFriendList(false)}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"
+              className="p-1 rounded hover:bg-[#1E1A30] text-[#6B7280] hover:text-[#9CA3B0]"
               title="返回导航"
             >
               <X size={14} />
@@ -156,65 +139,60 @@ export default function Sidebar() {
 
       {/* 折叠时的最小导航 */}
       {collapsed && (
-        <nav className="flex-1 py-2">
+        <nav className="flex-1 py-3 space-y-0.5">
           {[
             { to: '/chat', label: '聊天', icon: MessageCircle },
-            { to: '/agents', label: '我的 AI', icon: Bot },
+            { to: '/agents', label: 'AI', icon: Bot },
             { to: '/settings', label: '设置', icon: Settings },
           ].map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center justify-center py-2.5 mx-2 rounded-lg transition-colors ${
+                `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-primary-500/15 text-primary-300'
+                    : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
                 }`
               }
               title={item.label}
             >
-              <item.icon size={20} />
+              <item.icon size={18} />
             </NavLink>
           ))}
-          {/* 折叠时：好友按钮 */}
           <button
-            onClick={() => {
-              setCollapsed(false)
-              setShowFriendList(true)
-              setFriendRefresh(Date.now())
-            }}
-            className="flex items-center justify-center w-full py-2.5 mx-2 rounded-lg transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
+            className="flex items-center justify-center w-full py-2.5 mx-2 rounded-xl transition-all duration-200 text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]"
             title="好友"
           >
-            <Users size={20} />
+            <Users size={18} />
           </button>
           {user?.role === 'admin' && (
             <NavLink
               to="/admin"
               className={({ isActive }) =>
-                `flex items-center justify-center py-2.5 mx-2 rounded-lg transition-colors ${
+                `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-primary-500/15 text-primary-300'
+                    : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
                 }`
               }
               title="管理面板"
             >
-              <Shield size={20} />
+              <Shield size={18} />
             </NavLink>
           )}
         </nav>
       )}
 
       {/* 退出 */}
-      <div className="p-2 border-t border-gray-200 dark:border-gray-700">
+      <div className="p-2 border-t border-border shrink-0">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[#9CA3B0] hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm"
           title={collapsed ? '退出登录' : undefined}
         >
-          <LogOut size={20} />
+          <LogOut size={18} />
           {!collapsed && <span>退出</span>}
         </button>
       </div>

@@ -49,24 +49,24 @@ export default function FriendList({ onSelectFriend, refreshTrigger }: FriendLis
 
   const getStateColor = (s: string | null) => {
     switch (s) {
-      case 'active': return 'bg-green-500'
-      case 'dnd': return 'bg-red-500'
-      case 'offline': return 'bg-gray-400'
-      default: return 'bg-gray-300'
+      case 'active': return 'bg-mint-400'
+      case 'dnd': return 'bg-rose-400'
+      case 'offline': return 'bg-[#6B7280]'
+      default: return 'bg-[#2A2540]'
     }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="animate-spin text-gray-400" size={20} />
+        <Loader2 className="animate-spin text-[#6B7280]" size={20} />
       </div>
     )
   }
 
   if (friends.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 text-sm">
+      <div className="text-center py-8 text-[#6B7280] text-sm">
         <p>暂无好友</p>
         <p className="text-xs mt-1">使用顶部搜索框添加好友</p>
       </div>
@@ -79,13 +79,13 @@ export default function FriendList({ onSelectFriend, refreshTrigger }: FriendLis
         <button
           key={friend.id}
           onClick={() => onSelectFriend?.(friend)}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-750 text-left transition-colors group"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-[#1E1A30] text-left transition-colors group"
         >
           {/* 头像 */}
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
             friend.friend_type === 'human'
-              ? 'bg-primary-100 dark:bg-primary-800 text-primary-600 dark:text-primary-300'
-              : 'bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300'
+              ? 'from-primary-500 to-primary-700 text-white'
+              : 'from-mint-400 to-emerald-600 text-white'
           }`}>
             {friend.friend_name.charAt(0).toUpperCase()}
           </div>
@@ -93,14 +93,14 @@ export default function FriendList({ onSelectFriend, refreshTrigger }: FriendLis
           {/* 信息 */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+              <span className="text-sm font-medium text-[#EDE9F6] truncate">
                 {friend.friend_name}
               </span>
               {friend.state && (
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStateColor(friend.state)}`} />
               )}
             </div>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-[#6B7280]">
               {friend.friend_type === 'ai' ? 'AI' : '用户'}
             </span>
           </div>
@@ -108,7 +108,7 @@ export default function FriendList({ onSelectFriend, refreshTrigger }: FriendLis
           {/* 删除按钮 */}
           <button
             onClick={(e) => handleRemove(friend, e)}
-            className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+            className="p-1 rounded-lg hover:bg-rose-400/10 text-[#2A2540] hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-all"
             title="删除好友"
           >
             <UserX size={14} />

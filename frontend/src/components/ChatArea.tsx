@@ -115,23 +115,23 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
   return (
     <div className="flex h-full">
       {/* 群聊列表 + 好友私信 - 始终可见 */}
-      <div className="w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shrink-0 hidden md:flex flex-col">
+      <div className="w-56 bg-surface border-r border-border shrink-0 hidden md:flex flex-col">
         {/* 群聊标题 */}
-        <div className="p-3 border-b border-gray-200 dark:border-gray-700 font-medium text-sm flex items-center justify-between">
+        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-[#EDE9F6]">
           群聊列表
           <button
             onClick={() => setShowCreateGroup(true)}
-            className="p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-primary-500 transition-colors"
+            className="p-1 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-primary-400 transition-colors"
             title="创建群聊"
           >
             <Plus size={16} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto py-1">
           {/* 群聊 */}
           {regularGroups.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-gray-400">
+            <div className="px-3 py-8 text-center text-xs text-[#6B7280]">
               暂无群聊，点击 + 创建
             </div>
           ) : (
@@ -139,15 +139,15 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
               <button
                 key={g.id}
                 onClick={() => onSelectGroup(g.id)}
-                className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
+                className={`w-full text-left px-3 py-2.5 text-sm transition-all duration-150 ${
                   g.id === groupId
-                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                    : 'hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
+                    ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
+                    : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
                 }`}
               >
                 <div className="font-medium truncate"># {g.name}</div>
                 {g.is_vector_accelerated && (
-                  <span className="text-xs text-green-500">⚡ 加速</span>
+                  <span className="text-[10px] text-mint-400 font-medium">⚡ 加速</span>
                 )}
               </button>
             ))
@@ -156,21 +156,21 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           {/* 已有 DM 列表 */}
           {dmGroups.length > 0 && (
             <>
-              <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                 私信
               </div>
               {dmGroups.map((g) => (
                 <button
                   key={g.id}
                   onClick={() => onSelectGroup(g.id)}
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+                  className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                     g.id === groupId
-                      ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
+                      ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
+                      : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
                   }`}
                 >
                   <div className="truncate flex items-center gap-1.5">
-                    <MessageSquare size={12} className="shrink-0 text-gray-400" />
+                    <MessageSquare size={12} className="shrink-0 text-[#6B7280]" />
                     <span className="font-medium">
                       {g.name.replace(/^DM:\s*/, '')}
                     </span>
@@ -183,7 +183,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           {/* 好友列表（可点击发起 DM） */}
           {friends.length > 0 && (
             <>
-              <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                 好友
               </div>
               {friends.map((f) => {
@@ -195,7 +195,6 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                   <button
                     key={key}
                     onClick={() => {
-                      // 先检查是否已有 DM 群
                       const existing = dmGroups.find((g) =>
                         g.name.includes(f.friend_name)
                       )
@@ -205,18 +204,18 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                         handleStartDM(f.friend_type, f.friend_id)
                       }
                     }}
-                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center gap-2 ${
+                    className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 flex items-center gap-2 ${
                       isActive
-                        ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-750 text-gray-700 dark:text-gray-300'
+                        ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
+                        : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full shrink-0 ${
-                      f.state === 'active' ? 'bg-green-400' :
-                      f.state === 'dnd' ? 'bg-red-400' : 'bg-gray-400'
+                      f.state === 'active' ? 'bg-mint-400' :
+                      f.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
                     }`} />
                     <span className="truncate flex-1">{f.friend_name}</span>
-                    <ChevronRight size={12} className="text-gray-400 shrink-0" />
+                    <ChevronRight size={12} className="text-[#6B7280] shrink-0" />
                   </button>
                 )
               })}
@@ -227,14 +226,14 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 
       {/* 主区域：空状态 or 聊天 */}
       {!groupId ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-          <div className="text-center text-gray-400">
+        <div className="flex-1 flex items-center justify-center bg-canvas">
+          <div className="text-center">
             <MessageBubblePlaceholder />
-            <p className="mt-4 text-lg">选择一个群聊开始对话</p>
+            <p className="mt-4 text-lg text-[#9CA3B0] font-medium">选择一个群聊开始对话</p>
             {groups.length === 0 && (
               <button
                 onClick={() => setShowCreateGroup(true)}
-                className="mt-4 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
+                className="mt-5 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
               >
                 创建第一个群聊
               </button>
@@ -245,15 +244,15 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         <div className="flex-1 flex flex-col min-w-0">
           {/* 错误 Toast */}
           {errors.length > 0 && (
-            <div className="absolute top-16 right-4 z-50 space-y-1 max-w-sm">
+            <div className="absolute top-4 right-4 z-50 space-y-1 max-w-sm">
               {errors.map((err) => (
                 <div
                   key={err.timestamp}
-                  className="flex items-start gap-2 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg px-3 py-2 text-sm shadow-lg"
+                  className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl px-3 py-2 text-sm shadow-lg shadow-black/20"
                 >
                   <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                   <span className="flex-1">{err.message}</span>
-                  <button onClick={clearErrors} className="shrink-0 text-red-400 hover:text-red-600">
+                  <button onClick={clearErrors} className="shrink-0 text-rose-400/60 hover:text-rose-400">
                     <X size={14} />
                   </button>
                 </div>
@@ -262,29 +261,28 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           )}
 
           {/* 群聊头部 */}
-          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex items-center gap-2">
-            <h2 className="font-semibold text-gray-800 dark:text-gray-200">
+          <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
+            <h2 className="font-semibold text-[#EDE9F6] text-sm">
               # {currentGroup?.name || '加载中...'}
             </h2>
             <button
               onClick={() => setShowInvite(true)}
-              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400 hover:text-primary-500 transition-colors"
+              className="p-1 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-primary-400 transition-colors"
               title="邀请成员"
             >
               <UserPlus size={16} />
             </button>
             {connected ? (
-              <span className="inline-flex items-center gap-1 text-xs text-green-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> 已连接
+              <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-xs text-gray-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> 未连接
+              <span className="inline-flex items-center gap-1 text-[10px] text-[#6B7280]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280]" /> 离线
               </span>
             )}
-            {/* DND 状态指示 */}
             <span
-              className="inline-flex items-center gap-1 text-xs text-orange-500 cursor-pointer hover:text-orange-600 ml-auto"
+              className="inline-flex items-center gap-1 text-xs text-[#6B7280] cursor-pointer hover:text-rose-400 ml-auto transition-colors"
               title="点击切换免打扰"
             >
               <Bell size={14} />
@@ -293,18 +291,18 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 
           {/* 未读摘要提示 */}
           {unreadSummary && (
-            <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+            <div className="px-4 py-2.5 bg-primary-500/10 border-b border-primary-500/20">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                <span className="text-sm text-primary-300 font-medium">
                   📋 未读消息摘要
                 </span>
-                <button onClick={clearSummary} className="text-blue-400 hover:text-blue-600">
+                <button onClick={clearSummary} className="text-primary-400/60 hover:text-primary-400">
                   <X size={14} />
                 </button>
               </div>
               <div className="mt-1 space-y-1">
                 {unreadSummary.groups?.map((g) => (
-                  <div key={g.group_id} className="text-xs text-blue-600 dark:text-blue-400">
+                  <div key={g.group_id} className="text-xs text-primary-300/80">
                     <span className="font-medium">{g.group_name}</span>：{g.unread_count} 条新消息 — {g.last_message_preview}
                   </div>
                 ))}
@@ -313,13 +311,13 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           )}
 
           {/* 消息列表 */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50 dark:bg-gray-900">
+          <div className="flex-1 overflow-y-auto px-4 py-4 bg-canvas">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <Loader2 className="animate-spin text-gray-400" size={24} />
+                <Loader2 className="animate-spin text-[#6B7280]" size={24} />
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+              <div className="flex items-center justify-center h-full text-[#6B7280] text-sm">
                 暂无消息，发送第一条消息吧
               </div>
             ) : (
@@ -342,7 +340,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           </div>
 
           {/* 输入框 */}
-          <div className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+          <div className="p-3 bg-surface border-t border-border">
             <div className="flex items-end gap-2">
               <textarea
                 value={input}
@@ -354,12 +352,12 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                 onKeyDown={handleKeyDown}
                 placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
                 rows={1}
-                className="flex-1 resize-none rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200"
+                className="flex-1 resize-none rounded-xl border border-border bg-[#0C0A14] px-4 py-2.5 text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"
               />
               <button
                 onClick={handleSend}
                 disabled={!input.trim()}
-                className="p-2.5 rounded-lg bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="p-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-500/20"
               >
                 <Send size={18} />
               </button>
@@ -405,9 +403,9 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 function MessageBubblePlaceholder() {
   return (
     <svg className="mx-auto" width="80" height="80" viewBox="0 0 80 80" fill="none">
-      <rect x="10" y="15" width="60" height="45" rx="12" className="fill-gray-200 dark:fill-gray-700" />
-      <circle cx="30" cy="37" r="8" className="fill-gray-300 dark:fill-gray-600" />
-      <circle cx="50" cy="37" r="8" className="fill-gray-300 dark:fill-gray-600" />
+      <rect x="10" y="15" width="60" height="45" rx="12" className="fill-[#1E1A30]" />
+      <circle cx="30" cy="37" r="8" className="fill-[#2A2540]" />
+      <circle cx="50" cy="37" r="8" className="fill-[#2A2540]" />
     </svg>
   )
 }
@@ -438,36 +436,36 @@ function CreateGroupModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl"
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">创建新群聊</h2>
+        <h2 className="text-lg font-semibold mb-4 text-[#EDE9F6]">创建新群聊</h2>
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">群聊名称 *</label>
+          <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">群聊名称 *</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-[#EDE9F6] placeholder:text-[#6B7280] text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             placeholder="给群聊起个名字"
             autoFocus
           />
         </div>
-        {error && <div className="text-sm text-red-500 mt-3">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}
         <div className="flex gap-2 mt-4">
           <button
             onClick={onClose}
-            className="flex-1 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium"
           >
             取消
           </button>
           <button
             onClick={handleCreate}
             disabled={!name.trim() || loading}
-            className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-40"
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             {loading ? '创建中...' : '创建'}
           </button>
@@ -584,21 +582,21 @@ function InviteMemberModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md mx-4 shadow-xl max-h-[80vh] flex flex-col"
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-1 text-gray-900 dark:text-white">邀请成员</h2>
-        <p className="text-xs text-gray-400 mb-4">从好友列表勾选要邀请的成员</p>
+        <h2 className="text-lg font-semibold mb-1 text-[#EDE9F6]">邀请成员</h2>
+        <p className="text-xs text-[#6B7280] mb-4">从好友列表勾选要邀请的成员</p>
 
         {/* 好友列表 */}
         {friendsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="animate-spin text-gray-400" size={20} />
+            <Loader2 className="animate-spin text-[#6B7280]" size={20} />
           </div>
         ) : friends.length === 0 ? (
-          <div className="py-8 text-center text-sm text-gray-400">
+          <div className="py-8 text-center text-sm text-[#6B7280]">
             暂无好友，请先在搜索框中添加好友
           </div>
         ) : (
@@ -606,13 +604,13 @@ function InviteMemberModal({
             {/* 全选 */}
             <button
               onClick={selectAll}
-              className="text-xs text-primary-500 hover:text-primary-600 mb-2 self-start"
+              className="text-xs text-primary-400 hover:text-primary-300 mb-2 self-start"
             >
               {selected.size === friends.length ? '取消全选' : '全选'}
             </button>
 
             {/* 好友勾选列表 */}
-            <div className="flex-1 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-750 mb-4 max-h-64">
+            <div className="flex-1 overflow-y-auto border border-border rounded-xl divide-y divide-border/50 mb-4 max-h-64">
               {friends.map((f) => {
                 const key = `${f.friend_type}:${f.friend_id}`
                 const checked = selected.has(key)
@@ -621,19 +619,19 @@ function InviteMemberModal({
                     key={key}
                     className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
                       checked
-                        ? 'bg-primary-50 dark:bg-primary-900/20'
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-750'
+                        ? 'bg-primary-500/10'
+                        : 'hover:bg-[#1E1A30]'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleFriend(f.friend_type, f.friend_id)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                      className="w-4 h-4 rounded border-border bg-[#0C0A14] text-primary-500 focus:ring-primary-500/50"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                        <span className="text-sm font-medium text-[#EDE9F6] truncate">
                           {f.friend_name}
                         </span>
                         <span className="text-xs">
@@ -641,7 +639,7 @@ function InviteMemberModal({
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs text-gray-400 shrink-0">
+                    <span className="text-xs text-[#6B7280] shrink-0">
                       {f.friend_type === 'ai' ? '🤖 AI' : '👤'}
                     </span>
                   </label>
@@ -655,12 +653,12 @@ function InviteMemberModal({
         {!showManual ? (
           <button
             onClick={() => setShowManual(true)}
-            className="text-xs text-gray-400 hover:text-primary-500 mb-3 self-start"
+            className="text-xs text-[#6B7280] hover:text-primary-400 mb-3 self-start"
           >
             + 手动输入 ID
           </button>
         ) : (
-          <div className="space-y-2 mb-3 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-3">
+          <div className="space-y-2 mb-3 border border-dashed border-border rounded-xl p-3">
             <div className="flex gap-2">
               {(['ai', 'human'] as const).map((t) => (
                 <button
@@ -668,8 +666,8 @@ function InviteMemberModal({
                   onClick={() => setManualType(t)}
                   className={`flex-1 py-1.5 text-xs rounded-lg border transition-colors ${
                     manualType === t
-                      ? 'bg-primary-50 dark:bg-primary-900/30 border-primary-500 text-primary-600'
-                      : 'border-gray-300 dark:border-gray-600 text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                      ? 'bg-primary-500/15 border-primary-500/40 text-primary-300'
+                      : 'border-border text-[#9CA3B0] hover:bg-[#1E1A30]'
                   }`}
                 >
                   {t === 'ai' ? '🤖 AI' : '👤 人类'}
@@ -682,30 +680,30 @@ function InviteMemberModal({
                 value={manualId}
                 onChange={(e) => setManualId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleManualInvite()}
-                className="flex-1 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200"
+                className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 placeholder="输入 ID"
                 min={1}
               />
               <button
                 onClick={handleManualInvite}
                 disabled={!manualId.trim() || loading}
-                className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40"
+                className="px-3 py-1.5 text-xs bg-[#1E1A30] text-[#9CA3B0] rounded-lg hover:bg-[#2A2540] disabled:opacity-30"
               >
                 邀请
               </button>
             </div>
             <button
               onClick={() => setShowManual(false)}
-              className="text-xs text-gray-400 hover:text-gray-500"
+              className="text-xs text-[#6B7280] hover:text-[#9CA3B0]"
             >
               收起
             </button>
           </div>
         )}
 
-        {error && <div className="text-sm text-red-500 mb-2">{error}</div>}
+        {error && <div className="text-sm text-rose-400 mb-2">{error}</div>}
         {success.length > 0 && (
-          <div className="text-sm text-green-500 mb-2">
+          <div className="text-sm text-mint-400 mb-2">
             已成功邀请 {success.length} 位好友
           </div>
         )}
@@ -713,14 +711,14 @@ function InviteMemberModal({
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
+            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium"
           >
             取消
           </button>
           <button
             onClick={handleInviteSelected}
             disabled={selected.size === 0 || loading}
-            className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-40"
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             {loading ? '邀请中...' : `邀请 (${selected.size})`}
           </button>

@@ -4,17 +4,13 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 
-/** 将 UTC 时间字符串转为用户时区显示 */
 function formatTime(utcStr: string, timezone: string): string {
   try {
-    // 后端返回 "2026-06-13 15:28:00" 格式的 UTC 时间
     const isoStr = utcStr.replace(' ', 'T') + 'Z'
     return new Date(isoStr).toLocaleTimeString('zh-CN', {
       hour: '2-digit', minute: '2-digit', timeZone: timezone,
     })
-  } catch {
-    return utcStr
-  }
+  } catch { return utcStr }
 }
 
 interface MessageBubbleProps {
@@ -25,62 +21,72 @@ interface MessageBubbleProps {
   state?: string
   senderType?: string
   senderId?: number
+  thinking?: boolean
   onAvatarClick?: (type: string, id: number, name: string, state?: string) => void
 }
 
 export default function MessageBubble({
   senderName, content, isHuman, createdAt, state,
-  senderType, senderId, onAvatarClick,
+  senderType, senderId, thinking, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
   const tz = user?.timezone || 'Asia/Shanghai'
 
-  const getStateIcon = (s?: string) => {
-    switch (s) {
-      case 'active': return '🟢'
-      case 'dnd': return '🔴'
-      case 'offline': return '⚫'
-      default: return ''
-    }
-  }
+  const stateColor = state === 'active' ? 'bg-mint-400' :
+    state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
 
-  const bubbleColor = isHuman
-    ? 'bg-primary-500 text-white rounded-tr-sm'
-    : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-tl-sm shadow-sm border border-gray-100 dark:border-gray-600'
+  const bubbleBg = isHuman
+    ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
+    : 'bg-surface text-[#EDE9F6] rounded-2xl rounded-tl-md border border-border'
 
   return (
-    <div className={`flex gap-3 mb-4 ${isHuman ? 'flex-row-reverse' : ''}`}>
-      {/* 头像 */}
-      <div
-        onClick={() => {
-          if (onAvatarClick && senderType && senderId) {
-            onAvatarClick(senderType, senderId, senderName, state)
-          }
-        }}
-        className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all ${
-          isHuman
-            ? 'bg-primary-100 dark:bg-primary-800 text-primary-600 dark:text-primary-300'
-            : 'bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-300'
-        }`}
-        title="点击查看资料"
-      >
-        {senderName.charAt(0).toUpperCase()}
+    <div className={`flex gap-3 mb-5 msg-enter ${isHuman ? 'flex-row-reverse' : ''}`}>
+      {/* 头像 — 思考时带脉动光环 */}
+      <div className="relative shrink-0">
+        {/* 仅在 AI 思考中显示脉动 */}
+        {!isHuman && thinking && (
+          <div className="absolute -inset-0.5 w-10 h-10 rounded-full ai-pulse-active" />
+        )}
+        {/* 头像 */}
+        <div
+          onClick={() => {
+            if (onAvatarClick && senderType && senderId) {
+              onAvatarClick(senderType, senderId, senderName, state)
+            }
+          }}
+          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${
+            isHuman
+              ? 'from-primary-500 to-primary-700 shadow-primary-500/25'
+              : 'from-mint-400 to-emerald-600 shadow-mint-400/20'
+          }`}
+          title={thinking ? `${senderName} 思考中...` : `查看 ${senderName} 资料`}
+        >
+          {thinking ? (
+            <span className="inline-flex gap-0.5">
+              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            </span>
+          ) : (
+            senderName.charAt(0).toUpperCase()
+          )}
+        </div>
+        {/* 在线状态点 */}
+        {!isHuman && state && !thinking && (
+          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${stateColor} border-2 border-canvas`} />
+        )}
       </div>
 
       {/* 消息内容 */}
-      <div className={`max-w-[70%] ${isHuman ? 'items-end' : 'items-start'}`}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-            {senderName}
-          </span>
-          {state && (
-            <span className="text-xs" title={state}>{getStateIcon(state)}</span>
+      <div className={`max-w-[72%] ${isHuman ? 'items-end' : 'items-start'}`}>
+        <div className={`flex items-center gap-2 mb-1 ${isHuman ? 'flex-row-reverse' : ''}`}>
+          <span className="text-xs font-medium text-[#9CA3B0]">{senderName}</span>
+          <span className="text-[10px] text-[#6B7280]">{formatTime(createdAt, tz)}</span>
+          {thinking && (
+            <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>
           )}
-          <span className="text-xs text-gray-400">
-            {formatTime(createdAt, tz)}
-          </span>
         </div>
-        <div className={`rounded-2xl px-4 py-2 text-sm leading-relaxed ${bubbleColor}`}>
+        <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking ? 'opacity-70' : ''}`}>
           {isHuman ? (
             <span className="whitespace-pre-wrap">{content}</span>
           ) : (

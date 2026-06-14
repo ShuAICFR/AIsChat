@@ -8,6 +8,7 @@ from sqlalchemy import select, func, update
 from app.models.user import User
 from app.models.agent import Agent, AgentConfigHistory
 from app.config import settings
+from app.utils.text import extract_mentions
 
 logger = logging.getLogger(__name__)
 
@@ -338,8 +339,9 @@ async def calculate_willingness(
 
     score = 50  # 基础分
 
-    # 1. @ 提及检测
-    agent_name_mentioned = f"@{agent.name}" in message_content
+    # 1. @ 提及检测（复用 utils.text 正则，避免子串误匹配）
+    mentioned_names = extract_mentions(message_content)
+    agent_name_mentioned = agent.name in mentioned_names
     generic_mention = "@ai" in message_content.lower() or "@all" in message_content.lower()
     if agent_name_mentioned:
         score += 40
@@ -354,12 +356,11 @@ async def calculate_willingness(
 
     # 3. 群聊活跃度（最近 1 小时消息数）
     from datetime import datetime, timedelta, timezone
-    from sqlalchemy import func as sqlfunc
     from app.models.message import Message
 
     one_hour_ago = datetime.utcnow() - timedelta(hours=1)
     count_result = await db.execute(
-        select(sqlfunc.count(Message.id)).where(
+        select(func.count(Message.id)).where(
             Message.group_id == group_id,
             Message.created_at >= one_hour_ago,
         )

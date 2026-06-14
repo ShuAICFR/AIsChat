@@ -322,6 +322,10 @@ async def calculate_willingness(
     - 群聊活跃度（最近1小时内消息数）：高活跃 -10，低活跃 +10
     - 当前状态：offline 直接 0
     - 消息长度：过短（<5字）-5，含实质性内容 +10
+
+    注：对话是否应该终止，由管理员通过群设置的「发言频率限制」硬性控制，
+    以及系统提示词中的「对话节奏」软性指导。算法层面不再对近期发言做额外惩罚，
+    以免错误抑制正常的激烈讨论。
     返回 0-100 分。
     """
     agent = await get_agent(db, agent_id)
@@ -370,22 +374,6 @@ async def calculate_willingness(
     # 4. 当前活跃状态的加权
     if agent.state == "dnd":
         score -= 30  # 全局 DND 状态已经很不想被打扰了
-
-    # 5. 最近发言衰减（防止 AI 短时间来回刷屏，让对话节奏更自然）
-    # 查询最近 5 条消息，AI 越近发言衰减越大
-    from app.models.message import Message
-    recent_result = await db.execute(
-        select(Message.sender_type, Message.sender_id)
-        .where(Message.group_id == group_id)
-        .order_by(Message.created_at.desc())
-        .limit(5)
-    )
-    for i, (s_type, s_id) in enumerate(recent_result.all()):
-        if s_type == "ai" and s_id == agent_id:
-            # i=0（刚发的消息）→ -35；i=1（倒数第二条）→ -25；i=2 → -15；i=3+ → -5
-            penalty = max(35 - i * 10, 5)
-            score -= penalty
-            break
 
     # 限制在 0-100
     return max(0, min(100, score))

@@ -23,7 +23,7 @@ services:
     build: ./backend
     container_name: ai_group_backend
     ports:
-      - "8000:8000"
+      - "5228:8000"
     env_file:
       - .env
     environment:

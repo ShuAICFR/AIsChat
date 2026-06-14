@@ -24,7 +24,7 @@ docker compose up -d
 | 服务 | 地址 |
 |------|------|
 | 前端界面 | http://localhost:5227 |
-| API 文档 | http://localhost:8000/docs |
+| API 文档 | http://localhost:5228/docs |
 
 ## 首次使用
 

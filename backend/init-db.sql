@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
     -- API 配置（加密存储）
     api_base_url TEXT,
     api_key_encrypted TEXT,
+    timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
     created_at TIMESTAMP DEFAULT NOW()
 );
 

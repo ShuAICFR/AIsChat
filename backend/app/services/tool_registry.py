@@ -152,6 +152,32 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
+            "name": "send_dm",
+            "description": "向好友发送私信。如果你和某人是好友，可以直接私聊他/她，无需在群里说话。私信是一对一的，其他人看不到。发送后对方会立即收到通知。注意：你只能给已经是好友的人发私信，不能给陌生人发。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "friend_type": {
+                        "type": "string",
+                        "enum": ["human", "ai"],
+                        "description": "好友类型：human（人类用户）或 ai（AI 角色）",
+                    },
+                    "friend_id": {
+                        "type": "integer",
+                        "description": "好友的用户 ID（人类）或 AI ID。如果你不知道对方的 ID，可以先回忆或查看之前的对话。",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "消息内容（支持 Markdown）",
+                    },
+                },
+                "required": ["friend_type", "friend_id", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_group",
             "description": "创建一个新群聊",
             "parameters": {
@@ -241,7 +267,7 @@ TOOL_DEFINITIONS = [
 
 STATE_TOOL_WHITELIST: dict[str, list[str]] = {
     "active": [
-        "send_message", "set_dnd", "store_memory", "recall_memory",
+        "send_message", "send_dm", "set_dnd", "store_memory", "recall_memory",
         "switch_state", "create_group", "invite_to_group",
         "view_unread", "update_self_config",
     ],
@@ -566,9 +592,96 @@ async def _handle_update_self_config(
         return {"error": True, "message": str(e)}
 
 
+async def _handle_send_dm(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: send_dm — AI 向好友发送私信"""
+    from app.services.friend_service import get_or_create_dm_group
+    from app.services.group_service import create_message, message_to_dict
+    from app.models.friendship import Friendship
+    from app.models.agent import Agent as AgentModel
+
+    friend_type = arguments["friend_type"]
+    friend_id = arguments["friend_id"]
+    content = arguments["content"]
+
+    try:
+        if friend_type == "human":
+            # AI → 人类好友：验证好友关系（从人类视角）
+            result = await db.execute(
+                select(Friendship).where(
+                    Friendship.user_id == friend_id,
+                    Friendship.friend_type == "ai",
+                    Friendship.friend_id == agent_id,
+                )
+            )
+            if result.scalar_one_or_none() is None:
+                return {"error": True, "message": "你们还不是好友，无法发送私信。请先让对方加你为好友。"}
+
+            dm = await get_or_create_dm_group(
+                db, user_id=friend_id, friend_type="ai", friend_id=agent_id,
+            )
+        elif friend_type == "ai":
+            # AI → AI：通过当前 AI 的 owner 视角建立 DM
+            agent_result = await db.execute(
+                select(AgentModel).where(AgentModel.id == agent_id)
+            )
+            agent = agent_result.scalar_one_or_none()
+            if agent is None:
+                return {"error": True, "message": "AI 不存在"}
+            dm = await get_or_create_dm_group(
+                db, user_id=agent.owner_id, friend_type="ai", friend_id=friend_id,
+            )
+        else:
+            return {"error": True, "message": f"不支持的好友类型: {friend_type}"}
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+
+    # 在 DM 群聊中发送消息
+    message = await create_message(
+        db, group_id=dm["group_id"], sender_type="ai",
+        sender_id=agent_id, content=content,
+    )
+    await db.commit()
+
+    # WebSocket 广播
+    agent_name = context.get("agent_name", f"AI:{agent_id}")
+    msg_data = message_to_dict(message, sender_name=agent_name)
+    manager = context.get("manager")
+    if manager:
+        await manager.broadcast_to_group(
+            dm["group_id"],
+            {"type": "message", "data": msg_data},
+        )
+
+    # 推入消息队列触发对话链
+    from app.services.ai_response_worker import message_queue
+    try:
+        message_queue.put_nowait({
+            "group_id": dm["group_id"],
+            "message_id": message.id,
+            "content": content,
+            "sender_type": "ai",
+            "sender_id": agent_id,
+            "chain_depth": 0,
+        })
+    except asyncio.QueueFull:
+        pass
+
+    return {
+        "success": True,
+        "message_id": message.id,
+        "group_id": dm["group_id"],
+        "group_name": dm["group_name"],
+        "is_new_dm": dm.get("is_new", False),
+    }
+
+
 # Handler 注册表
 TOOL_HANDLERS: dict[str, callable] = {
     "send_message": _handle_send_message,
+    "send_dm": _handle_send_dm,
     "set_dnd": _handle_set_dnd,
     "store_memory": _handle_store_memory,
     "recall_memory": _handle_recall_memory,

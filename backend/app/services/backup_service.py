@@ -58,6 +58,8 @@ async def create_backup() -> bytes:
         "-d", dbname,
         "--no-owner",
         "--no-acl",
+        "--clean",
+        "--if-exists",
         "--encoding=UTF8",
     ]
 
@@ -96,6 +98,7 @@ async def restore_backup(sql_content: bytes) -> dict:
     """
     执行 psql 恢复数据库。
     ⚠️ 此操作会覆盖当前数据库所有数据，需谨慎使用。
+    恢复前先清空 public schema，避免 "relation already exists" 错误。
     超时 300 秒。
     """
     db_url = settings.database_url_sync
@@ -106,6 +109,24 @@ async def restore_backup(sql_content: bytes) -> dict:
     user, password = user_pass.split(":", 1)
     host, port = host_port.split(":", 1) if ":" in host_port else (host_port, "5432")
 
+    _env = {**os.environ, "PGPASSWORD": password}
+
+    # ---- 第一步：清空 public schema（避免与 init-db.sql 建的表冲突）----
+    logger.info(f"恢复前清空数据库 public schema: {dbname}")
+    clean_proc = await asyncio.create_subprocess_exec(
+        "psql",
+        "-h", host, "-p", port, "-U", user, "-d", dbname,
+        "-c", "DROP SCHEMA public CASCADE; CREATE SCHEMA public;",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=_env,
+    )
+    clean_stdout, clean_stderr = await clean_proc.communicate()
+    if clean_proc.returncode != 0:
+        err = clean_stderr.decode("utf-8", errors="replace")
+        logger.warning(f"清空 schema 警告（可能是空库）: {err[:200]}")
+
+    # ---- 第二步：执行恢复 ----
     # 将 SQL 写入临时文件，psql 从文件读取更稳定
     tmp_path = None
     try:
@@ -134,7 +155,7 @@ async def restore_backup(sql_content: bytes) -> dict:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            env={**os.environ, "PGPASSWORD": password},
+            env=_env,
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(), timeout=RESTORE_TIMEOUT

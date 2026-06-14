@@ -13,6 +13,25 @@ logger = logging.getLogger(__name__)
 BACKUP_TIMEOUT = 120  # 备份超时（秒）
 RESTORE_TIMEOUT = 300  # 恢复超时（秒）
 
+# PostgreSQL 17+ 新增参数，在 PG16 及以下版本中不存在
+# pg_dump 17 导出时会在文件头部写入这些 SET 语句，需过滤以确保跨版本兼容
+_PG17_PLUS_SETTINGS = [
+    b"SET transaction_timeout",
+]
+
+
+def _filter_pg_version_specific(sql: bytes) -> bytes:
+    """
+    从 pg_dump 输出中移除高版本 PG 专有的 SET 语句，
+    使备份文件可在低版本 PG 上恢复（如 PG17 导出 → PG16 导入）。
+    """
+    lines = sql.split(b"\n")
+    filtered = [
+        line for line in lines
+        if not any(line.strip().startswith(s) for s in _PG17_PLUS_SETTINGS)
+    ]
+    return b"\n".join(filtered)
+
 
 async def create_backup() -> bytes:
     """
@@ -60,8 +79,11 @@ async def create_backup() -> bytes:
             logger.error(f"pg_dump 失败 (code={proc.returncode}): {err_msg}")
             raise RuntimeError(f"数据库备份失败: {err_msg[:500]}")
 
-        logger.info(f"数据库备份完成: {len(stdout)} bytes")
-        return stdout
+        # 过滤高版本 PG 专有参数，确保备份可跨版本恢复（如 PG17 → PG16）
+        sql_bytes = _filter_pg_version_specific(stdout)
+
+        logger.info(f"数据库备份完成: {len(sql_bytes)} bytes")
+        return sql_bytes
 
     except asyncio.TimeoutError:
         proc.kill()
@@ -87,6 +109,9 @@ async def restore_backup(sql_content: bytes) -> dict:
     # 将 SQL 写入临时文件，psql 从文件读取更稳定
     tmp_path = None
     try:
+        # 过滤高版本 PG 专有参数（用户可能上传外部 PG17 导出的备份）
+        sql_content = _filter_pg_version_specific(sql_content)
+
         with tempfile.NamedTemporaryFile(
             mode="wb", suffix=".sql", delete=False, prefix="aischat_restore_"
         ) as f:

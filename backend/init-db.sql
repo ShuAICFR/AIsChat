@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS agents (
     state VARCHAR(20) DEFAULT 'active',
     offline_until TIMESTAMP,
     is_ai_editable BOOLEAN DEFAULT TRUE,
+    thinking_enabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 

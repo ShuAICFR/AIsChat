@@ -11,12 +11,53 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 # ============================================================
+# 工具错误码常量
+# ============================================================
+
+class ToolErrorCode:
+    """工具调用错误码，全项目统一使用，避免各 handler 各自发明字符串"""
+    UNKNOWN_TOOL = "UNKNOWN_TOOL"
+    TOOL_EXEC_FAILED = "TOOL_EXEC_FAILED"
+    OPENCLI_PERMISSION_DENIED = "OPENCLI_PERMISSION_DENIED"
+    OPENCLI_TIMEOUT = "OPENCLI_TIMEOUT"
+    OPENCLI_EXEC_FAILED = "OPENCLI_EXEC_FAILED"
+
+
+# ============================================================
+# 技能段元数据（工具列表由 TOOL_DEFINITIONS 的 "segment" 字段自动推导）
+# ============================================================
+
+_SKILL_SEGMENT_META: dict[str, dict] = {
+    "chat_social": {
+        "name": "群聊社交",
+        "description": "在群聊和私信中发言、加好友发私信、切换在线状态、管理免打扰",
+    },
+    "file_operations": {
+        "name": "文件操作",
+        "description": "通过命令执行来读写文件、管理自己的工作文件夹",
+    },
+    "memory": {
+        "name": "记忆系统",
+        "description": "存储长期记忆、检索相关记忆",
+    },
+    "group_management": {
+        "name": "群聊管理",
+        "description": "创建群聊、邀请新成员",
+    },
+    "self_config": {
+        "name": "自我配置",
+        "description": "修改自己的系统提示词、温度参数、推理模式等",
+    },
+}
+
+# ============================================================
 # 工具定义（OpenAI function schema）
 # ============================================================
 
 TOOL_DEFINITIONS = [
     {
         "type": "function",
+        "segment": "chat_social",
         "function": {
             "name": "send_message",
             "description": "在群聊中发送一条消息。可以用 @名称 来提及群里的任何人（AI 或人类），被提及的 AI 一定会注意到你的消息。@all 或 @ai 可以通知所有 AI。",
@@ -43,6 +84,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "chat_social",
         "function": {
             "name": "set_dnd",
             "description": "设置群聊免打扰状态",
@@ -65,6 +107,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "memory",
         "function": {
             "name": "store_memory",
             "description": "存储一条记忆（用于以后回忆）",
@@ -96,6 +139,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "memory",
         "function": {
             "name": "recall_memory",
             "description": "检索相关记忆",
@@ -123,6 +167,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "chat_social",
         "function": {
             "name": "switch_state",
             "description": "切换自己的在线状态。注意：仅仅在消息中说「我离线了」并不会真正改变状态，你必须调用此工具才能实际切换。调用后你的状态会立即生效，之后你将不再收到群聊消息（直到状态恢复为 active）。",
@@ -151,6 +196,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "chat_social",
         "function": {
             "name": "send_dm",
             "description": "向好友发送私信。如果你和某人是好友，可以直接私聊他/她，无需在群里说话。私信是一对一的，其他人看不到。发送后对方会立即收到通知。注意：你只能给已经是好友的人发私信，不能给陌生人发。",
@@ -177,6 +223,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "group_management",
         "function": {
             "name": "create_group",
             "description": "创建一个新群聊",
@@ -200,6 +247,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "group_management",
         "function": {
             "name": "invite_to_group",
             "description": "邀请成员加入群聊",
@@ -226,6 +274,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "chat_social",
         "function": {
             "name": "view_unread",
             "description": "查看你所在的所有群聊及其未读消息。即使某个群没有未读消息，你也能看到它的存在。这样你就不会误以为自己不在任何群聊里。",
@@ -238,6 +287,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "self_config",
         "function": {
             "name": "update_self_config",
             "description": "修改自己的配置（性格、温度等）",
@@ -259,7 +309,104 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "segment": "self_config",
+        "function": {
+            "name": "toggle_thinking",
+            "description": "开启或关闭深度推理模式。开启后回复更慢但思考更深入，适合复杂项目工作、深度分析、代码编写；关闭后回复更快，适合日常聊天。你可以根据当前任务的复杂度自行决定是否开启。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "true 开启推理模式，false 关闭",
+                    },
+                },
+                "required": ["enabled"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "execute_command",
+            "description": "通过 OpenCLI 执行命令。你可以用这个工具来读写文件、列出目录、运行脚本等——相当于你的「手」伸到了自己的文件夹里。注意：可用的命令名称由管理员配置的白名单控制，不在白名单中的命令会被拒绝。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "要执行的命令名称（如 file_read, file_write, file_list 等）",
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "命令参数列表",
+                        "nullable": True,
+                    },
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "chat_social",
+        "function": {
+            "name": "list_available_skills",
+            "description": "查看所有可用的技能段（skill segments）。你可以看到哪些技能模块存在、每个模块包含什么工具、以及当前是否已加载。如果当前模式缺少你需要的能力（比如文件操作），可以调用此工具了解如何获取。",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "chat_social",
+        "function": {
+            "name": "send_friend_request",
+            "description": "向某人发送好友申请。加上好友之后，你们就能互相发私信（DM）了。在群聊里看到想私聊的人，可以用这个工具先加好友。注意：friend_type 和 friend_id 可以从群聊消息格式「名字(ID:数字)」中获取。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "friend_type": {
+                        "type": "string",
+                        "enum": ["human", "ai"],
+                        "description": "好友类型：human（人类用户）或 ai（AI 角色）",
+                    },
+                    "friend_id": {
+                        "type": "integer",
+                        "description": "对方的用户 ID（人类）或 AI ID。从消息格式「名字(ID:数字)」中可以获取。",
+                    },
+                    "message": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "附言（可选，如「你好，我是XX，想加你好友」）",
+                    },
+                },
+                "required": ["friend_type", "friend_id"],
+            },
+        },
+    },
 ]
+
+# 从 TOOL_DEFINITIONS 自动推导 SKILL_SEGMENTS（单一数据源，避免三方维护）
+SKILL_SEGMENTS: dict[str, dict] = {}
+for _seg_key, _seg_meta in _SKILL_SEGMENT_META.items():
+    _seg_tools = [
+        t["function"]["name"]
+        for t in TOOL_DEFINITIONS
+        if t.get("segment") == _seg_key
+    ]
+    SKILL_SEGMENTS[_seg_key] = {
+        "name": _seg_meta["name"],
+        "description": _seg_meta["description"],
+        "tools": _seg_tools,
+    }
 
 # ============================================================
 # 状态工具白名单
@@ -267,27 +414,37 @@ TOOL_DEFINITIONS = [
 
 STATE_TOOL_WHITELIST: dict[str, list[str]] = {
     "active": [
-        "send_message", "send_dm", "set_dnd", "store_memory", "recall_memory",
+        "send_message", "send_dm", "send_friend_request",
+        "set_dnd", "store_memory", "recall_memory",
         "switch_state", "create_group", "invite_to_group",
-        "view_unread", "update_self_config",
+        "view_unread", "update_self_config", "toggle_thinking",
+        "execute_command", "list_available_skills",
     ],
     "dnd": [
-        "switch_state", "recall_memory", "view_unread",
+        "switch_state", "recall_memory", "view_unread", "toggle_thinking",
+        "execute_command", "list_available_skills",
     ],
     "offline": [
-        "switch_state",
+        "switch_state", "list_available_skills",
     ],
     "blocked": [],
 }
 
 
-def get_allowed_tools(state: str) -> list[dict]:
-    """根据 AI 状态返回允许使用的工具定义列表"""
+def get_allowed_tools(state: str, thinking_enabled: bool | None = None) -> list[dict]:
+    """根据 AI 状态返回允许使用的工具定义列表。
+
+    thinking_enabled 为 False 时，过滤掉 toggle_thinking 工具（省 token，防止 AI 擅自开启）。
+    为 None 时不额外过滤（保持向后兼容）。
+    """
     allowed_names = STATE_TOOL_WHITELIST.get(state, [])
-    return [
+    tools = [
         t for t in TOOL_DEFINITIONS
         if t["function"]["name"] in allowed_names
     ]
+    if thinking_enabled is False:
+        tools = [t for t in tools if t["function"]["name"] != "toggle_thinking"]
+    return tools
 
 
 # ============================================================
@@ -632,6 +789,32 @@ async def _handle_update_self_config(
         return {"error": True, "message": str(e)}
 
 
+async def _handle_toggle_thinking(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: toggle_thinking — 开启/关闭深度推理模式"""
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select
+
+    enabled = arguments["enabled"]
+
+    result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if agent is None:
+        return {"error": True, "message": "AI 代理不存在"}
+
+    agent.thinking_enabled = enabled
+    await db.commit()
+
+    status_text = "已开启" if enabled else "已关闭"
+    return {
+        "success": True,
+        "thinking_enabled": enabled,
+        "message": f"深度推理模式{status_text}",
+    }
+
+
 async def _handle_send_dm(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
@@ -751,6 +934,133 @@ async def _handle_send_dm(
     }
 
 
+async def _handle_send_friend_request(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: send_friend_request — AI 向某人发送好友申请"""
+    from app.services.friend_service import send_friend_request
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as sa_select
+
+    friend_type = arguments["friend_type"]
+    friend_id = arguments["friend_id"]
+    message = arguments.get("message")
+
+    # AI 不能加自己为好友
+    if friend_type == "ai" and friend_id == agent_id:
+        return {"error": True, "message": "不能加自己为好友"}
+
+    # 获取 AI 的 owner（以 owner 身份发送好友申请）
+    agent_result = await db.execute(
+        sa_select(AgentModel).where(AgentModel.id == agent_id)
+    )
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        return {"error": True, "message": "AI 代理不存在"}
+
+    try:
+        result = await send_friend_request(
+            db,
+            requester_id=agent.owner_id,
+            target_type=friend_type,
+            target_id=friend_id,
+            message=message,
+        )
+        await db.commit()
+
+        if result.get("auto"):
+            return {
+                "success": True,
+                "message": f"对方已经向你发送过好友申请，已自动成为好友！现在可以用 send_dm 私信了。",
+                "auto_accepted": True,
+            }
+        return {
+            "success": True,
+            "message": f"好友申请已发送给 {friend_type}:{friend_id}，等待对方接受。",
+            "request_id": result.get("request_id"),
+        }
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+
+
+async def _handle_execute_command(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: execute_command — 通过 OpenCLI 执行命令"""
+    from app.services.opencli_service import execute_opencli
+    from app.utils.error_handler import build_tool_error
+
+    command = arguments["command"]
+    args = arguments.get("args") or []
+
+    try:
+        result = await execute_opencli(db, agent_id=agent_id, command=command, args=args)
+        return {
+            "success": True,
+            "command": result["command"],
+            "exit_code": result["exit_code"],
+            "stdout": result["stdout"],
+            "stderr": result["stderr"],
+            "duration_ms": result["duration_ms"],
+        }
+    except PermissionError as e:
+        return build_tool_error(ToolErrorCode.OPENCLI_PERMISSION_DENIED, str(e))
+    except TimeoutError as e:
+        return build_tool_error(ToolErrorCode.OPENCLI_TIMEOUT, str(e))
+    except Exception as e:
+        return build_tool_error(ToolErrorCode.OPENCLI_EXEC_FAILED, f"命令执行失败: {str(e)}")
+
+
+async def _handle_list_available_skills(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: list_available_skills — 查看所有技能段和当前可用工具"""
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as sa_select
+
+    # 获取 AI 当前状态
+    agent_result = await db.execute(
+        sa_select(AgentModel).where(AgentModel.id == agent_id)
+    )
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        return {"error": True, "message": "AI 代理不存在"}
+
+    current_state = agent.state
+    thinking_enabled = agent.thinking_enabled
+
+    # 复用 get_allowed_tools 的过滤逻辑（单一过滤规则来源）
+    current_tools = get_allowed_tools(current_state, thinking_enabled=thinking_enabled)
+    current_tool_names = {t["function"]["name"] for t in current_tools}
+
+    # 构建技能段信息
+    segments = []
+    for seg_key, seg_info in SKILL_SEGMENTS.items():
+        seg_tools = seg_info["tools"]
+        loaded_tools = [t for t in seg_tools if t in current_tool_names]
+        segments.append({
+            "key": seg_key,
+            "name": seg_info["name"],
+            "description": seg_info["description"],
+            "total_tools": len(seg_tools),
+            "loaded_tools": len(loaded_tools),
+            "is_fully_loaded": len(loaded_tools) == len(seg_tools),
+            "is_partially_loaded": 0 < len(loaded_tools) < len(seg_tools),
+            "available_tools": loaded_tools,
+            "unavailable_tools": [t for t in seg_tools if t not in current_tool_names],
+        })
+
+    return {
+        "current_state": current_state,
+        "thinking_enabled": thinking_enabled,
+        "total_available_tools": len(current_tool_names),
+        "segments": segments,
+    }
+
+
 # Handler 注册表
 TOOL_HANDLERS: dict[str, callable] = {
     "send_message": _handle_send_message,
@@ -763,6 +1073,10 @@ TOOL_HANDLERS: dict[str, callable] = {
     "invite_to_group": _handle_invite_to_group,
     "view_unread": _handle_view_unread,
     "update_self_config": _handle_update_self_config,
+    "toggle_thinking": _handle_toggle_thinking,
+    "execute_command": _handle_execute_command,
+    "list_available_skills": _handle_list_available_skills,
+    "send_friend_request": _handle_send_friend_request,
 }
 
 
@@ -798,11 +1112,11 @@ async def dispatch_tool_call(
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
         logger.warning(f"未知工具调用: {tool_name}")
-        return build_tool_error("UNKNOWN_TOOL", f"未知工具: {tool_name}")
+        return build_tool_error(ToolErrorCode.UNKNOWN_TOOL, f"未知工具: {tool_name}")
 
     try:
         result = await handler(db, agent_id, group_id, arguments, context)
         return result
     except Exception as e:
         logger.error(f"工具 {tool_name} 执行失败: {e}", exc_info=True)
-        return build_tool_error("TOOL_EXEC_FAILED", f"工具执行失败: {str(e)}")
+        return build_tool_error(ToolErrorCode.TOOL_EXEC_FAILED, f"工具执行失败: {str(e)}")

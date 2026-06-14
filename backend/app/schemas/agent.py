@@ -14,6 +14,7 @@ class AgentCreateRequest(BaseModel):
     frequency_penalty: float = Field(default=0.5, ge=-2.0, le=2.0)
     chat_model: str | None = None  # NULL = 继承全局
     work_model: str | None = None
+    thinking_enabled: bool = Field(default=False)
 
 
 class AgentGenerateRequest(BaseModel):
@@ -38,6 +39,7 @@ class AgentUpdateConfigRequest(BaseModel):
     top_p: float | None = Field(default=None, ge=0, le=1.0)
     presence_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
     frequency_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
+    thinking_enabled: bool | None = None
 
 
 class AgentStateRequest(BaseModel):
@@ -67,6 +69,7 @@ class AgentResponse(BaseModel):
     state: str
     offline_until: str | None
     is_ai_editable: bool
+    thinking_enabled: bool
     created_at: str | None
 
 

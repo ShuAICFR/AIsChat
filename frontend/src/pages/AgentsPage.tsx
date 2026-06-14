@@ -20,6 +20,7 @@ interface Agent {
   current_top_p: number
   current_presence_penalty: number
   current_frequency_penalty: number
+  thinking_enabled: boolean
   created_at: string
 }
 
@@ -174,6 +175,9 @@ export default function AgentsPage() {
                     {agent.is_ai_editable && (
                       <span className="text-mint-400">可自修改</span>
                     )}
+                    {agent.thinking_enabled && (
+                      <span className="text-accent-400">🧠 深度推理</span>
+                    )}
                     {hasModified && (
                       <span className="text-accent-400 font-medium">已修改</span>
                     )}
@@ -287,6 +291,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [topP, setTopP] = useState(agent.current_top_p)
   const [presencePenalty, setPresencePenalty] = useState(agent.current_presence_penalty)
   const [frequencyPenalty, setFrequencyPenalty] = useState(agent.current_frequency_penalty)
+  const [thinkingEnabled, setThinkingEnabled] = useState(agent.thinking_enabled)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -304,6 +309,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         top_p: topP,
         presence_penalty: presencePenalty,
         frequency_penalty: frequencyPenalty,
+        thinking_enabled: thinkingEnabled,
       })
       onUpdated()
     } catch (err: any) {
@@ -384,6 +390,22 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                     />
                   </div>
                 ))}
+              </div>
+              {/* 深度推理模式 */}
+              <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                <div>
+                  <span className="text-xs text-textSecondary">🧠 深度推理模式</span>
+                  <p className="text-[10px] text-textMuted mt-0.5">开启后回复更慢但思考更深入</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={thinkingEnabled}
+                    onChange={(e) => setThinkingEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                </label>
               </div>
             </div>
           </div>
@@ -725,6 +747,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [name, setName] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [temperature, setTemperature] = useState(0.8)
+  const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -737,6 +760,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
         name: name.trim(),
         system_prompt: systemPrompt || null,
         temperature,
+        thinking_enabled: thinkingEnabled,
       })
       onCreated()
     } catch (err: any) {
@@ -785,6 +809,18 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
               className="w-full accent-primary-500"
             />
+          </div>
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={thinkingEnabled}
+                onChange={(e) => setThinkingEnabled(e.target.checked)}
+                className="rounded accent-primary-500"
+              />
+              <span className="text-xs text-textSecondary">🧠 启用深度推理模式</span>
+            </label>
+            <p className="text-[10px] text-textMuted mt-0.5 ml-6">开启后回复更慢但思考更深入，适合执行复杂任务的 AI</p>
           </div>
         </div>
 

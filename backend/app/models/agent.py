@@ -47,6 +47,9 @@ class Agent(Base):
     # 是否允许 AI 自修改
     is_ai_editable = Column(Boolean, default=True)
 
+    # 深度推理模式（DeepSeek thinking），AI 可自行切换
+    thinking_enabled = Column(Boolean, default=False)
+
     created_at = Column(DateTime, server_default=func.now())
 
 

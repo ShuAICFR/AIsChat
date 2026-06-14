@@ -26,6 +26,7 @@ async def create_agent(
     frequency_penalty: float = 0.5,
     chat_model: str | None = None,
     work_model: str | None = None,
+    thinking_enabled: bool = False,
     is_admin: bool = False,
 ) -> Agent:
     """
@@ -60,6 +61,7 @@ async def create_agent(
         current_frequency_penalty=frequency_penalty,
         chat_model=chat_model,
         work_model=work_model,
+        thinking_enabled=thinking_enabled,
         state="active",
     )
     db.add(agent)
@@ -139,6 +141,10 @@ async def update_agent_config(
     for field in allowed_fields:
         if field in updates and updates[field] is not None:
             setattr(agent, f"current_{field}", updates[field])
+
+    # thinking_enabled 是简单布尔，不遵循 current_* 模式
+    if "thinking_enabled" in updates and updates["thinking_enabled"] is not None:
+        agent.thinking_enabled = updates["thinking_enabled"]
 
     await db.flush()
     await db.refresh(agent)
@@ -475,6 +481,7 @@ async def export_agent_soul(
             "frequency_penalty": agent.current_frequency_penalty,
             "chat_model": agent.chat_model,
             "work_model": agent.work_model,
+            "thinking_enabled": agent.thinking_enabled,
         },
         "original_config": {
             "system_prompt": agent.original_system_prompt,
@@ -516,6 +523,7 @@ async def import_agent_soul(
         frequency_penalty=orig.get("frequency_penalty", 0.5),
         chat_model=cfg.get("chat_model"),
         work_model=cfg.get("work_model"),
+        thinking_enabled=cfg.get("thinking_enabled", False),
         is_admin=is_admin,
     )
 
@@ -538,6 +546,7 @@ async def import_agent_soul(
         agent.current_top_p = cur_top_p if cur_top_p is not None else agent.current_top_p
         agent.current_presence_penalty = cur_pp if cur_pp is not None else agent.current_presence_penalty
         agent.current_frequency_penalty = cur_fp if cur_fp is not None else agent.current_frequency_penalty
+        agent.thinking_enabled = cfg.get("thinking_enabled", agent.thinking_enabled)
 
     # 导入配置历史
     config_history = data.get("config_history", [])
@@ -606,5 +615,6 @@ def agent_to_dict(agent: Agent) -> dict:
         "auto_dnd_threshold": agent.auto_dnd_threshold,
         "auto_dnd_duration": agent.auto_dnd_duration,
         "is_ai_editable": agent.is_ai_editable,
+        "thinking_enabled": agent.thinking_enabled,
         "created_at": str(agent.created_at) if agent.created_at else None,
     }

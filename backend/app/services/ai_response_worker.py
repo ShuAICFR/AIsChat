@@ -237,7 +237,7 @@ async def _maybe_trigger_ai_reply(
 
     # 7. 获取工具
     from app.services.tool_registry import get_allowed_tools
-    tools = get_allowed_tools(agent.state)
+    tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
     model = resolve_model(agent)
     logger.info(f"🔍 AI {agent.name}: model={model}, tools={len(tools)}")
 
@@ -330,6 +330,7 @@ async def _tool_call_loop(
                 top_p=agent.current_top_p or 0.9,
                 presence_penalty=agent.current_presence_penalty or 0.5,
                 frequency_penalty=agent.current_frequency_penalty or 0.5,
+                thinking_enabled=agent.thinking_enabled,
             )
         except Exception as e:
             logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
@@ -339,33 +340,46 @@ async def _tool_call_loop(
         tool_calls = response.get("tool_calls")
         finish_reason = response.get("finish_reason", "stop")
 
-        # ── 嘴炮检测：有文字但没有工具调用 ──
+        # ── 提醒：有文字但没有工具调用 ──
+        # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，
+        # 但必须通过工具调用来发送。这里提醒 AI 补上工具调用。
         if content and not tool_calls:
-            logger.warning(
-                f"AI {agent.name}({agent.id}) 返回了文字但没有工具调用（嘴炮），"
-                f"内容: {content[:100]}"
+            logger.info(
+                f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"
+                f"注入提醒: {content[:80]}"
             )
-            # 注入错误反馈，让 LLM 知道这样不行
-            messages.append({
+            # 构造虚拟 tool_calls 以满足 OpenAI API 格式要求
+            #（tool 消息必须跟在有 tool_calls 的 assistant 之后）
+            reminder_assistant_msg = {
                 "role": "assistant",
                 "content": content,
-            })
+                "tool_calls": [{
+                    "id": "system_reminder",
+                    "type": "function",
+                    "function": {
+                        "name": "system_reminder",
+                        "arguments": "{}",
+                    },
+                }],
+            }
+            # DeepSeek 推理模式：reasoning_content 必须传回
+            if response.get("reasoning_content"):
+                reminder_assistant_msg["reasoning_content"] = response["reasoning_content"]
+            messages.append(reminder_assistant_msg)
             messages.append({
                 "role": "tool",
-                "tool_call_id": "system_discipline",
+                "tool_call_id": "system_reminder",
                 "content": json.dumps({
-                    "error": True,
+                    "reminder": True,
                     "message": (
                         "你刚才返回了文字但没有调用任何工具。"
-                        "文字不能自动发送！"
-                        "如果你想说话，请调用 send_message 工具。"
-                        "如果你想切换状态，请调用 switch_state 工具。"
-                        "所有操作都必须通过工具调用来完成。"
-                        "请现在就调用正确的工具。"
+                        "文字不能自动发送——如果你想说话，请调用 send_message 工具。"
+                        "括号表情可以写在 send_message 的 content 里发出去，"
+                        "但不能只返回括号文字而不调工具。"
+                        "请现在就调用 send_message 或你需要的其他工具。"
                     ),
                 }, ensure_ascii=False),
             })
-            # 给 LLM 一次改正机会，继续循环
             await asyncio.sleep(0.3)
             continue
 
@@ -376,6 +390,9 @@ async def _tool_call_loop(
         # ── 有工具调用 → 执行（文字只作为附加上下文，不自动发送） ──
         assistant_msg: dict = {"role": "assistant", "content": content}
         assistant_msg["tool_calls"] = tool_calls
+        # DeepSeek 推理模式：reasoning_content 必须传回 API，否则报 400
+        if response.get("reasoning_content"):
+            assistant_msg["reasoning_content"] = response["reasoning_content"]
         messages.append(assistant_msg)
 
         for tc in tool_calls:

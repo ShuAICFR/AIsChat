@@ -106,6 +106,7 @@ async def create_new_agent(
             frequency_penalty=req.frequency_penalty,
             chat_model=req.chat_model,
             work_model=req.work_model,
+            thinking_enabled=req.thinking_enabled,
             is_admin=current_user["role"] == "admin",
         )
         return agent_to_dict(agent)

@@ -298,12 +298,13 @@ async def _tool_call_loop(
     chain_depth: int = 0,
 ):
     """
-    工具调用循环：LLM 返回 tool_calls → 执行 → 将结果回传 → LLM 再决定
+    工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
 
+    铁律：文字不能自动发出去。想说话必须调 send_message。
     流程：
     1. 调用 LLM
-    2. 如果有 text content → 创建 AI 消息，广播到群聊
-    3. 如果有 tool_calls → 执行工具，结果追加到 messages，回到步骤 1
+    2. 如果有 text content 但没有 tool_calls → 注入错误提示，让 LLM 重试
+    3. 如果有 tool_calls → 执行工具（不自动发送文字），结果回传，回到步骤 1
     4. 如果都没有 → 退出循环
     """
     from app.services.llm_service import chat_completion
@@ -338,59 +339,42 @@ async def _tool_call_loop(
         tool_calls = response.get("tool_calls")
         finish_reason = response.get("finish_reason", "stop")
 
-        # 有文本内容 → 发送消息 + 触发其他 AI
-        if content:
-            from app.services.group_service import create_message, message_to_dict
-            try:
-                message = await create_message(
-                    db, group_id=group_id, sender_type="ai",
-                    sender_id=agent.id, content=content,
-                )
-                await db.flush()
+        # ── 嘴炮检测：有文字但没有工具调用 ──
+        if content and not tool_calls:
+            logger.warning(
+                f"AI {agent.name}({agent.id}) 返回了文字但没有工具调用（嘴炮），"
+                f"内容: {content[:100]}"
+            )
+            # 注入错误反馈，让 LLM 知道这样不行
+            messages.append({
+                "role": "assistant",
+                "content": content,
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": "system_discipline",
+                "content": json.dumps({
+                    "error": True,
+                    "message": (
+                        "你刚才返回了文字但没有调用任何工具。"
+                        "文字不能自动发送！"
+                        "如果你想说话，请调用 send_message 工具。"
+                        "如果你想切换状态，请调用 switch_state 工具。"
+                        "所有操作都必须通过工具调用来完成。"
+                        "请现在就调用正确的工具。"
+                    ),
+                }, ensure_ascii=False),
+            })
+            # 给 LLM 一次改正机会，继续循环
+            await asyncio.sleep(0.3)
+            continue
 
-                msg_data = message_to_dict(message, sender_name=agent.name)
-                await manager.broadcast_to_group(
-                    group_id,
-                    {"type": "message", "data": msg_data},
-                )
-
-                # 推入队列触发其他 AI 回复（对话链）
-                next_depth = chain_depth + 1
-                try:
-                    message_queue.put_nowait({
-                        "group_id": group_id,
-                        "message_id": message.id,
-                        "content": content,
-                        "sender_type": "ai",
-                        "sender_id": agent.id,
-                        "chain_depth": next_depth,
-                    })
-                except asyncio.QueueFull:
-                    pass
-
-                # 自动提取关键信息存储为记忆（安全网：AI 忘了调用 store_memory 工具时兜底）
-                try:
-                    from app.services.memory_service import auto_extract_key_facts
-                    await auto_extract_key_facts(
-                        db, agent.id, group_id, content,
-                        sender_name=agent.name,
-                        api_base_url=api_base_url,
-                        api_key=api_key,
-                    )
-                except Exception:
-                    pass  # 自动提取失败不影响主流程
-
-                logger.info(f"AI {agent.name}({agent.id}) 回复: {content[:80]}...")
-            except Exception as e:
-                logger.error(f"AI {agent.name} 消息发送失败: {e}")
-
-        # 无工具调用 → 退出
+        # ── 无工具调用也没有文字 → 退出 ──
         if not tool_calls:
             return
 
-        # 处理工具调用
-        # 将 assistant 消息（含 tool_calls）追加到 messages
-        assistant_msg = {"role": "assistant", "content": content}
+        # ── 有工具调用 → 执行（文字只作为附加上下文，不自动发送） ──
+        assistant_msg: dict = {"role": "assistant", "content": content}
         assistant_msg["tool_calls"] = tool_calls
         messages.append(assistant_msg)
 

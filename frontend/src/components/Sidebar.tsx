@@ -139,7 +139,7 @@ export default function Sidebar() {
 
       {/* 折叠时的最小导航 */}
       {collapsed && (
-        <nav className="flex-1 py-3 space-y-0.5">
+        <nav className="flex-1 py-3 space-y-0.5 flex flex-col items-center">
           {[
             { to: '/chat', label: '聊天', icon: MessageCircle },
             { to: '/agents', label: 'AI', icon: Bot },
@@ -149,7 +149,7 @@ export default function Sidebar() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
+                `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-300'
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
@@ -162,7 +162,7 @@ export default function Sidebar() {
           ))}
           <button
             onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
-            className="flex items-center justify-center w-full py-2.5 mx-2 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
+            className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
             title="好友"
           >
             <Users size={18} />
@@ -171,7 +171,7 @@ export default function Sidebar() {
             <NavLink
               to="/admin"
               className={({ isActive }) =>
-                `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
+                `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-300'
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
@@ -189,7 +189,9 @@ export default function Sidebar() {
       <div className="p-2 border-t border-border shrink-0">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-textSecondary hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm"
+          className={`flex items-center rounded-xl text-textSecondary hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm ${
+            collapsed ? 'justify-center w-10 h-10' : 'gap-3 w-full px-3 py-2.5'
+          }`}
           title={collapsed ? '退出登录' : undefined}
         >
           <LogOut size={18} />

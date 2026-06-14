@@ -154,14 +154,27 @@ async def _maybe_trigger_ai_reply(
 
     logger.info(f"🔍 检查 AI {agent.name}({agent_id}), state={agent.state}")
 
-    # 1. 离线/blocked → 跳过
-    if agent.state in ("offline", "blocked"):
-        logger.info(f"AI {agent.name}({agent_id}) 状态为 {agent.state}，跳过")
+    # 1. blocked → 硬屏蔽，任何情况不回复
+    if agent.state == "blocked":
+        logger.info(f"AI {agent.name}({agent_id}) 状态为 blocked，跳过")
         return
 
-    # 2. DND 检查 + @提及检测
-    in_dnd = await is_member_in_dnd(db, agent_id, group_id)
+    # 2. @提及检测（需要在离线/DND 判断前执行，因为 @提及可以唤醒离线 AI）
     is_mentioned = _check_mention(content, agent.name)
+
+    # 3. 离线 + 未被 @ → 跳过；离线 + 被 @ → 唤醒为 active
+    if agent.state == "offline":
+        if not is_mentioned:
+            logger.info(f"AI {agent.name}({agent_id}) 状态为 offline，跳过")
+            return
+        # @提及唤醒离线 AI
+        logger.info(f"AI {agent.name}({agent_id}) 被 @提及，从 offline 唤醒为 active")
+        from app.services.agent_service import switch_agent_state
+        await switch_agent_state(db, agent_id=agent_id, target_state="active", reason="被 @提及唤醒")
+        await db.flush()
+
+    # 4. DND 检查
+    in_dnd = await is_member_in_dnd(db, agent_id, group_id)
     logger.info(f"🔍 AI {agent.name}({agent_id}): in_dnd={in_dnd}, is_mentioned={is_mentioned}")
 
     if in_dnd and not is_mentioned:

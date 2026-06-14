@@ -120,6 +120,24 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           return next
         })
       }
+    } else if (lastMessage.type === 'dm_notification') {
+      // AI 发来私信 → 刷新群列表（显示新 DM 群 + 未读数）
+      api.get('/groups').then(setGroups).catch(console.error)
+      const d = lastMessage.data
+      // 如果当前正在查看该 DM 群，消息已通过 broadcast_to_group 收到，无需重复添加
+      if (d.group_id !== groupId) {
+        // 提示用户有新私信（简单 toast）
+        setMessages((prev) => [...prev, {
+          id: -Date.now(),
+          group_id: -1,
+          sender_type: 'system',
+          sender_id: 0,
+          sender_name: '📬 私信',
+          content: `**${d.sender_name}** 给你发了一条私信：[${d.group_name}] — ${d.content?.slice(0, 80) || ''}`,
+          reply_to: null,
+          created_at: new Date().toISOString(),
+        } as Message])
+      }
     } else if (lastMessage.type === 'unread_update') {
       // 其他群聊的未读更新 → 刷新群列表
       api.get('/groups').then(setGroups).catch(console.error)

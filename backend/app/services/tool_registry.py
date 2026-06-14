@@ -651,10 +651,42 @@ async def _handle_send_dm(
     msg_data = message_to_dict(message, sender_name=agent_name)
     manager = context.get("manager")
     if manager:
+        # 1. 广播到 DM 群聊（订阅了该群的人能收到）
         await manager.broadcast_to_group(
             dm["group_id"],
             {"type": "message", "data": msg_data},
         )
+        # 2. 推送给人类用户本人（即使他没订阅 DM 群也能收到）
+        #    触发前端刷新群列表，显示 DM 消息泡
+        if friend_type == "human":
+            await manager.send_to_user(friend_id, {
+                "type": "dm_notification",
+                "data": {
+                    "message_id": message.id,
+                    "group_id": dm["group_id"],
+                    "group_name": dm["group_name"],
+                    "sender_name": agent_name,
+                    "content": content[:200],
+                    "is_new_dm": dm.get("is_new", False),
+                },
+            })
+        elif friend_type == "ai":
+            # AI→AI DM：通知目标 AI 的 owner
+            target_agent = (await db.execute(
+                select(AgentModel).where(AgentModel.id == friend_id)
+            )).scalar_one_or_none()
+            if target_agent:
+                await manager.send_to_user(target_agent.owner_id, {
+                    "type": "dm_notification",
+                    "data": {
+                        "message_id": message.id,
+                        "group_id": dm["group_id"],
+                        "group_name": dm["group_name"],
+                        "sender_name": agent_name,
+                        "content": content[:200],
+                        "is_new_dm": dm.get("is_new", False),
+                    },
+                })
 
     # 推入消息队列触发对话链
     from app.services.ai_response_worker import message_queue

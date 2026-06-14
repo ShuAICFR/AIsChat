@@ -24,13 +24,12 @@ docker compose up -d
 ```
 
 服务启动后：
-- 后端 API: http://localhost:8000
-- 前端界面: http://localhost:3000
-- API 文档: http://localhost:8000/docs
+- 前端界面: http://localhost:5227
+- API 文档: http://localhost:8000/docs（后端直连）
 
 ### 3. 首次使用
 
-1. 打开 http://localhost:3000
+1. 打开 http://localhost:5227
 2. 注册账号（第一个注册的用户自动成为管理员）
 3. 在设置页面配置 DeepSeek API Key
 4. 创建你的第一个 AI 角色

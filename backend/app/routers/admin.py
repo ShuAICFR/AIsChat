@@ -5,7 +5,8 @@
 import secrets
 import logging
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from pydantic import BaseModel, Field
@@ -396,6 +397,69 @@ async def system_logs(
             for log in logs
         ],
     }
+
+
+
+# ============================================================
+# 数据库备份/恢复
+# ============================================================
+
+@router.get("/backup/download")
+async def download_backup(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """下载数据库完整备份（.sql 文件）"""
+    from app.services.backup_service import create_backup
+
+    try:
+        sql_bytes = await create_backup()
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    await _log_admin_action(
+        db, admin["user_id"],
+        "db_backup", "system", 0,
+        {"size_bytes": len(sql_bytes)},
+    )
+
+    return Response(
+        content=sql_bytes,
+        media_type="application/sql",
+        headers={
+            "Content-Disposition": f'attachment; filename="aischat_backup_{timestamp}.sql"',
+        },
+    )
+
+
+@router.post("/backup/restore")
+async def upload_restore(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传 .sql 备份文件并恢复数据库（⚠️ 覆盖当前所有数据）"""
+    from app.services.backup_service import restore_backup
+
+    if not file.filename or not file.filename.endswith(".sql"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 .sql 文件",
+        )
+
+    try:
+        content = await file.read()
+        result = await restore_backup(content)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    await _log_admin_action(
+        db, admin["user_id"], "db_restore", "system", 0,
+        {"filename": file.filename, "size_bytes": len(content)},
+    )
+
+    return result
 
 
 # ============================================================

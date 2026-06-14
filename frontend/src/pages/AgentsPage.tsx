@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, ApiError } from '../api/client'
-import { Bot, Plus, Edit3, History, Power, X, RotateCcw } from 'lucide-react'
+import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface Agent {
@@ -51,6 +51,7 @@ const stateColors: Record<string, string> = {
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([])
   const [showCreate, setShowCreate] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editAgent, setEditAgent] = useState<Agent | null>(null)
   const [historyAgent, setHistoryAgent] = useState<Agent | null>(null)
   const [stateAgent, setStateAgent] = useState<Agent | null>(null)
@@ -69,6 +70,29 @@ export default function AgentsPage() {
     loadAgents()
   }, [])
 
+  const handleExport = async (agent: Agent) => {
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`/api/agents/${agent.id}/export`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '导出失败')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `soul_${agent.name}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error('导出失败:', err)
+      alert(err.message || '导出失败')
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 bg-canvas">
       <div className="max-w-4xl mx-auto">
@@ -80,13 +104,22 @@ export default function AgentsPage() {
               创建和管理你的 AI 角色
             </p>
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
-          >
-            <Plus size={16} />
-            创建 AI
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowImport(true)}
+              className="flex items-center gap-2 px-4 py-2.5 border border-border text-textSecondary rounded-xl hover:bg-elevated text-sm font-medium transition-colors"
+            >
+              <Upload size={16} />
+              导入灵魂
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
+            >
+              <Plus size={16} />
+              创建 AI
+            </button>
+          </div>
         </div>
 
         {/* AI 卡片列表 */}
@@ -165,6 +198,12 @@ export default function AgentsPage() {
                     >
                       <Power size={12} /> 状态
                     </button>
+                    <button
+                      onClick={() => handleExport(agent)}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-mint-400 rounded-lg hover:bg-elevated transition-colors"
+                    >
+                      <Download size={12} /> 导出
+                    </button>
                   </div>
                 </div>
               )
@@ -216,6 +255,18 @@ export default function AgentsPage() {
             onUpdated={() => {
               setStateAgent(null)
               loadAgents()
+            }}
+          />
+        )}
+
+        {/* 导入灵魂弹窗 */}
+        {showImport && (
+          <ImportSoulModal
+            onClose={() => setShowImport(false)}
+            onImported={() => {
+              setShowImport(false)
+              loadAgents()
+              refreshUser()
             }}
           />
         )}
@@ -565,6 +616,111 @@ function StateModal({ agent, onClose, onUpdated }: {
 /* ================================================================
    创建 AI 弹窗
    ================================================================ */
+/* ================================================================
+   导入 AI 灵魂档案弹窗
+   ================================================================ */
+function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [importMemories, setImportMemories] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [preview, setPreview] = useState<any>(null)
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setFile(f)
+    setError('')
+    try {
+      const text = await f.text()
+      const data = JSON.parse(text)
+      setPreview(data)
+    } catch {
+      setError('文件格式无效，请选择 JSON 文件')
+      setPreview(null)
+    }
+  }
+
+  const handleImport = async () => {
+    if (!file) return
+    setLoading(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/agents/import?import_memories=${importMemories}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '导入失败')
+      }
+      onImported()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-textPrimary">导入 AI 灵魂档案</h2>
+          <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
+            <X size={18} />
+          </button>
+        </div>
+
+        <input
+          type="file"
+          accept=".json"
+          onChange={handleFileChange}
+          className="block w-full text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border mb-3"
+        />
+
+        {preview && (
+          <div className="bg-canvas rounded-xl p-3 mb-3 text-sm space-y-1">
+            <p className="font-medium text-textPrimary">{preview.agent_name || '未命名'}</p>
+            <p className="text-xs text-textSecondary">记忆数: {preview.memories?.length || 0}</p>
+            <p className="text-xs text-textSecondary">好友数: {preview.friends?.length || 0}</p>
+            <p className="text-xs text-textSecondary">配置历史: {preview.config_history?.length || 0} 条</p>
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 mb-4 text-sm text-textSecondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={importMemories}
+            onChange={(e) => setImportMemories(e.target.checked)}
+            className="rounded"
+          />
+          导入记忆
+        </label>
+
+        {error && <div className="text-sm text-rose-400 mb-3">{error}</div>}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium">
+            取消
+          </button>
+          <button
+            onClick={handleImport}
+            disabled={!file || loading}
+            className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
+          >
+            {loading ? '导入中...' : '导入'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [name, setName] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database } from 'lucide-react'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: '概览', icon: Activity },
@@ -11,6 +11,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'groups', label: '群聊审查', icon: MessageCircle },
   { key: 'codes', label: '兑换码', icon: Ticket },
   { key: 'opencli', label: 'OpenCLI', icon: Terminal },
+  { key: 'backup', label: '备份', icon: Database },
   { key: 'logs', label: '日志', icon: FileText },
 ]
 
@@ -51,6 +52,7 @@ export default function AdminPage() {
         {activeTab === 'groups' && <GroupsTab />}
         {activeTab === 'codes' && <CodesTab />}
         {activeTab === 'opencli' && <OpenCLITab />}
+        {activeTab === 'backup' && <BackupTab />}
         {activeTab === 'logs' && <LogsTab />}
       </div>
     </div>
@@ -361,6 +363,115 @@ function CodesTab() {
           </table>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ================================================================
+   数据库备份/恢复
+   ================================================================ */
+function BackupTab() {
+  const [downloading, setDownloading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleBackup = async () => {
+    setDownloading(true)
+    setError('')
+    setMessage('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch('/api/admin/backup/download', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '下载失败')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `aischat_backup_${new Date().toISOString().slice(0, 10)}.sql`
+      a.click()
+      URL.revokeObjectURL(url)
+      setMessage('备份下载成功')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!confirm('⚠️ 确定要恢复数据库？当前所有数据将被覆盖！')) return
+    setRestoring(true)
+    setError('')
+    setMessage('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/admin/backup/restore', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '恢复失败')
+      }
+      setMessage('数据库已恢复，请刷新页面')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRestoring(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-surface rounded-xl border border-border p-5">
+        <h3 className="font-semibold text-textPrimary mb-2">数据库备份</h3>
+        <p className="text-sm text-textSecondary mb-4">
+          导出完整的 .sql 文件，包含所有数据表结构和数据。
+        </p>
+        <button
+          onClick={handleBackup}
+          disabled={downloading}
+          className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
+        >
+          {downloading ? '正在导出...' : '下载备份文件 (.sql)'}
+        </button>
+      </div>
+
+      <div className="bg-surface rounded-xl border border-rose-500/30 p-5">
+        <h3 className="font-semibold text-textPrimary mb-2">数据库恢复</h3>
+        <p className="text-sm text-rose-400 mb-4">
+          ⚠️ 警告：恢复操作将覆盖当前数据库所有数据，请确认后再操作。
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".sql"
+          onChange={handleRestore}
+          disabled={restoring}
+          className="block text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
+        />
+        {restoring && <p className="text-sm text-textMuted mt-2">正在恢复...</p>}
+      </div>
+
+      {message && (
+        <div className="text-sm text-mint-400 bg-mint-400/10 px-3 py-2 rounded-lg">{message}</div>
+      )}
+      {error && (
+        <div className="text-sm text-rose-400 bg-rose-400/10 px-3 py-2 rounded-lg">{error}</div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,9 @@
 """
 AI 代理管理路由
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import Response
+import json
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.agent import (
@@ -30,6 +32,8 @@ from app.services.agent_service import (
     switch_agent_state,
     get_config_history,
     generate_agent_personality,
+    export_agent_soul,
+    import_agent_soul,
     agent_to_dict,
 )
 from app.utils.auth import get_current_user
@@ -275,6 +279,78 @@ async def resume_agent_notifications(
             "pending_count": len(pending),
             "pending_messages": pending,
         }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ---------- 灵魂存档（导出/导入） ----------
+
+@router.get("/{agent_id}/export")
+async def export_soul(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出 AI 灵魂档案（配置 + 历史 + 记忆 + 好友）"""
+    agent = await _require_agent_owner(agent_id, current_user, db)
+    try:
+        data = await export_agent_soul(db, agent_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    json_str = json.dumps(data, ensure_ascii=False, indent=2)
+    safe_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in agent.name)[:30]
+    return Response(
+        content=json_str.encode("utf-8"),
+        media_type="application/json; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="soul_{safe_name}.json"',
+        },
+    )
+
+
+@router.post("/import", status_code=status.HTTP_201_CREATED)
+async def import_soul(
+    file: UploadFile = File(...),
+    import_memories: bool = Query(True),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导入 AI 灵魂档案（JSON 文件）"""
+    from app.schemas.agent_export import AgentSoulArchive
+
+    if not file.filename or not file.filename.endswith(".json"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 .json 文件",
+        )
+
+    try:
+        content = await file.read()
+        data = json.loads(content.decode("utf-8"))
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="JSON 格式无效",
+        )
+
+    # 校验结构
+    errors = AgentSoulArchive.validate(data)
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"文件格式不合法: {'; '.join(errors)}",
+        )
+
+    try:
+        agent = await import_agent_soul(
+            db,
+            data=data,
+            owner_id=current_user["user_id"],
+            import_memories=import_memories,
+            is_admin=current_user["role"] == "admin",
+        )
+        return agent_to_dict(agent)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX } from 'lucide-react'
+import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download } from 'lucide-react'
 
 interface GroupMember {
   type: string
@@ -30,7 +30,7 @@ interface Props {
   onLeave: () => void
 }
 
-type Tab = 'general' | 'members' | 'speak'
+type Tab = 'general' | 'members' | 'speak' | 'export'
 
 export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }: Props) {
   const [tab, setTab] = useState<Tab>('general')
@@ -46,6 +46,13 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
   const [vectorAccel, setVectorAccel] = useState(group?.is_vector_accelerated || false)
   const [dndUntil, setDndUntil] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // 导出状态
+  const [exportFormat, setExportFormat] = useState('json')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   const isOwner = group?.my_role === 'owner'
   const isAdmin = group?.my_role === 'admin' || isOwner
@@ -142,12 +149,44 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     }
   }
 
+  const handleExportChat = async () => {
+    if (!group) return
+    setExporting(true)
+    setExportError('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const params = new URLSearchParams({ fmt: exportFormat })
+      if (dateFrom) params.set('date_from', dateFrom)
+      if (dateTo) params.set('date_to', dateTo)
+      const res = await fetch(`/api/groups/${group.id}/export?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '导出失败')
+      }
+      const blob = await res.blob()
+      const ext = exportFormat === 'txt' ? 'txt' : exportFormat === 'html' ? 'html' : 'json'
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `chat_${group.name}_${new Date().toISOString().slice(0, 10)}.${ext}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) {
+      setExportError(e.message)
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (!group) return null
 
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: 'general', label: '基本设置', show: true },
     { key: 'members', label: '成员管理', show: true },
     { key: 'speak', label: 'AI 发言限制', show: isAdmin },
+    { key: 'export', label: '导出记录', show: true },
   ]
 
   return (
@@ -479,6 +518,65 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   </button>
                 </>
               )}
+            </>
+          )}
+
+          {/* === Tab: 导出记录 === */}
+          {tab === 'export' && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-textSecondary">导出格式</label>
+                <div className="flex gap-2 mt-1">
+                  {[
+                    { key: 'json', label: 'JSON', desc: '结构化数据' },
+                    { key: 'txt', label: '文本', desc: '易读文本' },
+                    { key: 'html', label: 'HTML', desc: '精美网页' },
+                  ].map(f => (
+                    <button
+                      key={f.key}
+                      onClick={() => setExportFormat(f.key)}
+                      className={`flex-1 py-3 px-2 rounded-xl border text-center transition-colors ${
+                        exportFormat === f.key
+                          ? 'border-primary-400 bg-primary-500/10 text-primary-300'
+                          : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
+                      }`}
+                    >
+                      <div className="text-sm font-medium">{f.label}</div>
+                      <div className="text-[10px] text-textMuted">{f.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-textSecondary">日期范围（可选）</label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={e => setDateFrom(e.target.value)}
+                    className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary"
+                  />
+                  <span className="text-textMuted text-xs">至</span>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={e => setDateTo(e.target.value)}
+                    className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary"
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={handleExportChat}
+                disabled={exporting}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-all"
+              >
+                <Download size={16} />
+                {exporting ? '导出中...' : '下载导出文件'}
+              </button>
+
+              {exportError && <div className="text-xs text-rose-400">{exportError}</div>}
             </>
           )}
         </div>

@@ -2,6 +2,7 @@
 群聊与消息路由
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
@@ -389,3 +390,38 @@ async def mark_read(
     """标记当前用户已读该群消息（进入群聊时调用）。"""
     await update_last_read(db, group_id, "human", current_user["user_id"])
     return {"message": "已标记为已读"}
+
+
+# ---------- 聊天记录导出 ----------
+
+@router.get("/groups/{group_id}/export")
+async def export_chat(
+    group_id: int,
+    fmt: str = Query("json", pattern="^(json|txt|html)$"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出群聊记录（json / txt / html）"""
+    from app.services.export_service import export_chat_history
+
+    # 校验群成员身份
+    group = await get_group(db, group_id)
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="群聊不存在")
+
+    try:
+        content, media_type, filename = await export_chat_history(
+            db, group_id, fmt, date_from, date_to
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )

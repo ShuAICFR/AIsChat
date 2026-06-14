@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from app.models.user import User
 from app.models.agent import Agent, AgentConfigHistory
+from app.models.memory import RoughMemory, DetailMemory
+from app.models.friendship import Friendship
 from app.config import settings
 from app.utils.text import extract_mentions
 
@@ -378,6 +380,206 @@ async def calculate_willingness(
 
     # 限制在 0-100
     return max(0, min(100, score))
+
+
+async def export_agent_soul(
+    db: AsyncSession,
+    agent_id: int,
+) -> dict:
+    """
+    导出 AI 灵魂档案：配置 + 历史 + 记忆 + 好友
+    """
+    from datetime import datetime, timezone as tz
+
+    agent = await get_agent(db, agent_id)
+    if agent is None:
+        raise ValueError("AI 代理不存在")
+
+    # 配置历史（最新 100 条）
+    history_result = await db.execute(
+        select(AgentConfigHistory)
+        .where(AgentConfigHistory.agent_id == agent_id)
+        .order_by(AgentConfigHistory.created_at.desc())
+        .limit(100)
+    )
+    history = history_result.scalars().all()
+
+    config_history = [
+        {
+            "system_prompt": h.system_prompt,
+            "temperature": h.temperature,
+            "top_p": h.top_p,
+            "presence_penalty": h.presence_penalty,
+            "frequency_penalty": h.frequency_penalty,
+            "created_at": str(h.created_at) if h.created_at else None,
+        }
+        for h in reversed(history)  # 按时间升序
+    ]
+
+    # 记忆（最新 500 条 rough + detail）
+    rough_result = await db.execute(
+        select(RoughMemory)
+        .where(
+            RoughMemory.owner_type == "ai",
+            RoughMemory.owner_id == agent_id,
+        )
+        .order_by(RoughMemory.created_at.desc())
+        .limit(500)
+    )
+    rough_memories = rough_result.scalars().all()
+
+    memories = []
+    for rm in rough_memories:
+        detail_result = await db.execute(
+            select(DetailMemory)
+            .where(DetailMemory.rough_id == rm.id)
+            .order_by(DetailMemory.created_at.asc())
+        )
+        details = detail_result.scalars().all()
+        for d in details:
+            memories.append({
+                "title": rm.title,
+                "content": d.content,
+                "scope": rm.scope or "private",
+                "group_id": rm.group_id,
+                "created_at": str(d.created_at) if d.created_at else None,
+            })
+
+    # 好友
+    friend_result = await db.execute(
+        select(Friendship)
+        .where(
+            Friendship.user_id == agent.owner_id,
+            Friendship.friend_type == "ai",
+            Friendship.friend_id == agent_id,
+        )
+    )
+    friendships = friend_result.scalars().all()
+
+    friends = []
+    for f in friendships:
+        friends.append({
+            "friend_type": f.friend_type,
+            "friend_id": f.friend_id,
+        })
+
+    return {
+        "export_version": "1.0",
+        "exported_at": datetime.now(tz).isoformat(),
+        "agent_name": agent.name,
+        "agent_config": {
+            "system_prompt": agent.current_system_prompt,
+            "temperature": agent.current_temperature,
+            "top_p": agent.current_top_p,
+            "presence_penalty": agent.current_presence_penalty,
+            "frequency_penalty": agent.current_frequency_penalty,
+            "chat_model": agent.chat_model,
+            "work_model": agent.work_model,
+        },
+        "original_config": {
+            "system_prompt": agent.original_system_prompt,
+            "temperature": agent.original_temperature,
+            "top_p": agent.original_top_p,
+            "presence_penalty": agent.original_presence_penalty,
+            "frequency_penalty": agent.original_frequency_penalty,
+        },
+        "config_history": config_history,
+        "memories": memories,
+        "friends": friends,
+    }
+
+
+async def import_agent_soul(
+    db: AsyncSession,
+    data: dict,
+    owner_id: int,
+    import_memories: bool = True,
+    is_admin: bool = False,
+) -> Agent:
+    """
+    从灵魂档案导入 AI。
+    创建新 Agent + 可选记忆导入。
+    """
+    cfg = data.get("agent_config", {})
+    orig = data.get("original_config", {})
+    name = data.get("agent_name", "未命名")
+
+    # 创建新 Agent（会扣配额，admin 免扣）
+    agent = await create_agent(
+        db,
+        owner_id=owner_id,
+        name=name,
+        system_prompt=orig.get("system_prompt") or cfg.get("system_prompt"),
+        temperature=orig.get("temperature", 0.8),
+        top_p=orig.get("top_p", 0.9),
+        presence_penalty=orig.get("presence_penalty", 0.5),
+        frequency_penalty=orig.get("frequency_penalty", 0.5),
+        chat_model=cfg.get("chat_model"),
+        work_model=cfg.get("work_model"),
+        is_admin=is_admin,
+    )
+
+    # 如果当前配置和原始配置不同，更新为导出时的当前配置
+    cur_temp = cfg.get("temperature")
+    cur_top_p = cfg.get("top_p")
+    cur_pp = cfg.get("presence_penalty")
+    cur_fp = cfg.get("frequency_penalty")
+    cur_sp = cfg.get("system_prompt")
+
+    if any([
+        cur_temp is not None and cur_temp != agent.current_temperature,
+        cur_top_p is not None and cur_top_p != agent.current_top_p,
+        cur_pp is not None and cur_pp != agent.current_presence_penalty,
+        cur_fp is not None and cur_fp != agent.current_frequency_penalty,
+        cur_sp is not None and cur_sp != agent.current_system_prompt,
+    ]):
+        agent.current_system_prompt = cur_sp
+        agent.current_temperature = cur_temp if cur_temp is not None else agent.current_temperature
+        agent.current_top_p = cur_top_p if cur_top_p is not None else agent.current_top_p
+        agent.current_presence_penalty = cur_pp if cur_pp is not None else agent.current_presence_penalty
+        agent.current_frequency_penalty = cur_fp if cur_fp is not None else agent.current_frequency_penalty
+
+    # 导入配置历史
+    config_history = data.get("config_history", [])
+    for h in config_history[:100]:
+        db.add(AgentConfigHistory(
+            agent_id=agent.id,
+            system_prompt=h.get("system_prompt"),
+            temperature=h.get("temperature", 0.8),
+            top_p=h.get("top_p", 0.9),
+            presence_penalty=h.get("presence_penalty", 0.5),
+            frequency_penalty=h.get("frequency_penalty", 0.5),
+        ))
+
+    # 导入记忆（不生成 embedding，使用时自动生成）
+    if import_memories:
+        from app.services.memory_service import auto_store_memory
+
+        memories = data.get("memories", [])
+        for m in memories[:500]:
+            # 直接插入，跳过 API 调用生成 embedding
+            rm = RoughMemory(
+                owner_type="ai",
+                owner_id=agent.id,
+                title=m.get("title", ""),
+                scope=m.get("scope", "private"),
+                group_id=m.get("group_id"),
+            )
+            db.add(rm)
+            await db.flush()
+
+            dm = DetailMemory(
+                rough_id=rm.id,
+                content=m.get("content", ""),
+            )
+            db.add(dm)
+
+    logger.info(
+        f"导入灵魂档案成功: agent_id={agent.id}, name={name}, "
+        f"memories={len(data.get('memories', []))}, "
+        f"friends={len(data.get('friends', []))}"
+    )
+    return agent
 
 
 def agent_to_dict(agent: Agent) -> dict:

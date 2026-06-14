@@ -597,6 +597,7 @@ async def _handle_send_dm(
     arguments: dict, context: dict,
 ) -> dict:
     """工具: send_dm — AI 向好友发送私信"""
+    from sqlalchemy import select
     from app.services.friend_service import get_or_create_dm_group
     from app.services.group_service import create_message, message_to_dict
     from app.models.friendship import Friendship

@@ -19,7 +19,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
       : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
   }`
 
-export default function Sidebar() {
+export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose?: () => void }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
@@ -34,7 +34,7 @@ export default function Sidebar() {
   return (
     <aside
       className={`${
-        collapsed ? 'w-16' : 'w-60'
+        collapsed ? 'w-16' : mobile ? 'w-full h-full' : 'w-60'
       } bg-surface border-r border-border flex flex-col transition-all duration-200 shrink-0`}
     >
       {/* 头部 */}
@@ -47,13 +47,22 @@ export default function Sidebar() {
             <span className="text-base font-bold text-textPrimary tracking-tight">AIsChat</span>
           </div>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
-          title={collapsed ? '展开' : '折叠'}
-        >
-          {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
-        </button>
+        {mobile ? (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors ml-auto"
+          >
+            <X size={20} />
+          </button>
+        ) : (
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
+            title={collapsed ? '展开' : '折叠'}
+          >
+            {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
+          </button>
+        )}
       </div>
 
       {/* 搜索框 */}

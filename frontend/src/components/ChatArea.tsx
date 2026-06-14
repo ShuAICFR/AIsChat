@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { api } from '../api/client'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Send, Loader2, Bell, BellOff, AlertTriangle, X, Plus, UserPlus, MessageSquare, ChevronRight, Settings } from 'lucide-react'
+import { Send, Loader2, Bell, BellOff, AlertTriangle, X, Plus, UserPlus, MessageSquare, ChevronRight, Settings, Menu, ArrowLeft } from 'lucide-react'
 
 interface Message {
   id: number
@@ -59,6 +60,8 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
   const [mentionIdx, setMentionIdx] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
   const { lastMessage, connected, errors, unreadSummary, sendMessage, sendTyping, clearErrors, clearSummary } = useWebSocket(groupId)
 
   // 加载群聊列表
@@ -262,11 +265,22 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 
   return (
     <div className="flex h-full">
-      {/* 群聊列表 + 好友私信 - 始终可见 */}
-      <div className="w-56 bg-surface border-r border-border shrink-0 hidden md:flex flex-col">
+      {/* 群聊列表 + 好友私信 — 桌面端常驻，移动端在无选中群聊时全屏显示 */}
+      <div className={`w-56 bg-surface border-r border-border shrink-0 flex-col md:flex ${
+        groupId ? 'hidden' : 'flex'
+      }`}>
         {/* 群聊标题 */}
-        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary">
-          群聊列表
+        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openDrawer}
+              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="菜单"
+            >
+              <Menu size={18} />
+            </button>
+            群聊列表
+          </div>
           <button
             onClick={() => setShowCreateGroup(true)}
             className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
@@ -389,9 +403,9 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         </div>
       </div>
 
-      {/* 主区域：空状态 or 聊天 */}
+      {/* 主区域：空状态（桌面端）or 聊天 */}
       {!groupId ? (
-        <div className="flex-1 flex items-center justify-center bg-canvas">
+        <div className="hidden md:flex flex-1 items-center justify-center bg-canvas">
           <div className="text-center">
             <MessageBubblePlaceholder />
             <p className="mt-4 text-lg text-textSecondary font-medium">选择一个群聊开始对话</p>
@@ -427,7 +441,21 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 
           {/* 群聊头部 */}
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
-            <h2 className="font-semibold text-textPrimary text-sm">
+            {/* 移动端：返回群列表 + 汉堡菜单 */}
+            <button
+              onClick={() => navigate('/chat')}
+              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <button
+              onClick={openDrawer}
+              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="菜单"
+            >
+              <Menu size={18} />
+            </button>
+            <h2 className="font-semibold text-textPrimary text-sm truncate">
               # {currentGroup?.name || '加载中...'}
             </h2>
             <button

@@ -53,6 +53,56 @@
   }
 }
 
+/* ============================================================
+   移动端全局适配
+   ============================================================ */
+
+/* 安全区变量 */
+:root {
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+}
+
+/* 使用 dvh 回退：iOS Safari 支持 dvh（动态视口高度），避免底部被地址栏遮挡 */
+.h-dvh {
+  height: 100dvh;
+}
+@supports not (height: 100dvh) {
+  .h-dvh {
+    height: 100vh;
+  }
+}
+
+/* 底部安全区 padding 工具类 */
+.pb-safe {
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+/* 移动端触摸优化 — 最小触摸区域 44px */
+@media (max-width: 767px) {
+  button, a, [role="button"] {
+    /* 已有 padding 的元素不受影响 */
+  }
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* 移动端表格：强制横向滚动 */
+@media (max-width: 767px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 移动端管理面板：减小 padding */
+@media (max-width: 767px) {
+  .admin-content-padding {
+    padding: 12px !important;
+  }
+}
+
 /* 自定义滚动条 */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }

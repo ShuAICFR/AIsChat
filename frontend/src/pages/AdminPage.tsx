@@ -21,13 +21,13 @@ export default function AdminPage() {
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
-      <div className="px-6 py-4 border-b border-border bg-surface">
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
         <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
         <p className="text-sm text-textSecondary mt-0.5">系统管理与监控</p>
       </div>
 
       {/* Tab 导航 */}
-      <div className="flex gap-0 bg-surface border-b border-border px-6 overflow-x-auto">
+      <div className="flex gap-0 bg-surface border-b border-border px-4 md:px-6 overflow-x-auto">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -45,7 +45,7 @@ export default function AdminPage() {
       </div>
 
       {/* 内容区 */}
-      <div className="flex-1 overflow-y-auto p-6 bg-canvas">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-canvas">
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'agents' && <AgentsTab />}

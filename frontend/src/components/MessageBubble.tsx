@@ -37,7 +37,7 @@ export default function MessageBubble({
 
   const bubbleBg = isHuman
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
-    : 'bg-surface text-[#EDE9F6] rounded-2xl rounded-tl-md border border-border'
+    : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
 
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isHuman ? 'flex-row-reverse' : ''}`}>
@@ -80,8 +80,8 @@ export default function MessageBubble({
       {/* 消息内容 */}
       <div className={`max-w-[72%] ${isHuman ? 'items-end' : 'items-start'}`}>
         <div className={`flex items-center gap-2 mb-1 ${isHuman ? 'flex-row-reverse' : ''}`}>
-          <span className="text-xs font-medium text-[#9CA3B0]">{senderName}</span>
-          <span className="text-[10px] text-[#6B7280]">{formatTime(createdAt, tz)}</span>
+          <span className="text-xs font-medium text-textSecondary">{senderName}</span>
+          <span className="text-[10px] text-textMuted">{formatTime(createdAt, tz)}</span>
           {thinking && (
             <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>
           )}

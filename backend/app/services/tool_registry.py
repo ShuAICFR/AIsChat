@@ -2,6 +2,7 @@
 工具注册表
 定义 AI 可用的所有工具（OpenAI function calling 格式）、状态白名单、统一 dispatch
 """
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -18,7 +19,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "send_message",
-            "description": "在群聊中发送一条消息",
+            "description": "在群聊中发送一条消息。可以用 @名称 来提及群里的任何人（AI 或人类），被提及的 AI 一定会注意到你的消息。@all 或 @ai 可以通知所有 AI。",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -294,6 +295,32 @@ async def _handle_send_message(
             {"type": "message", "data": msg_data},
         )
 
+    # 推入消息队列，触发其他 AI 回复（形成对话链）
+    from app.services.ai_response_worker import message_queue
+    next_depth = context.get("chain_depth", 0) + 1
+    try:
+        message_queue.put_nowait({
+            "group_id": target_group,
+            "message_id": message.id,
+            "content": content,
+            "sender_type": "ai",
+            "sender_id": agent_id,
+            "chain_depth": next_depth,
+        })
+    except asyncio.QueueFull:
+        logger.warning("AI 回复队列已满，无法触发其他 AI 回复")
+
+    # 自动提取关键信息存储为记忆
+    try:
+        from app.services.memory_service import auto_extract_key_facts
+        await auto_extract_key_facts(
+            db, agent_id, target_group, content,
+            api_base_url=context.get("api_base_url", "https://api.deepseek.com"),
+            api_key=context.get("api_key"),
+        )
+    except Exception:
+        pass
+
     return {"success": True, "message_id": message.id}
 
 
@@ -400,11 +427,15 @@ async def _handle_recall_memory(
         }
 
     sql = text(f"""
-        SELECT id, title, 1 - (embedding <=> :embedding) AS similarity, created_at
-        FROM rough_memories
+        SELECT rm.id, rm.title, rm.scope,
+               1 - (rm.embedding <=> :embedding) AS similarity,
+               rm.created_at,
+               dm.content
+        FROM rough_memories rm
+        LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
         WHERE {where_clause}
-          AND embedding IS NOT NULL
-        ORDER BY embedding <=> :embedding
+          AND rm.embedding IS NOT NULL
+        ORDER BY rm.embedding <=> :embedding
         LIMIT :top_k
     """)
 
@@ -413,7 +444,9 @@ async def _handle_recall_memory(
         {
             "id": row.id,
             "title": row.title,
+            "scope": row.scope,
             "similarity": round(float(row.similarity), 4) if row.similarity else None,
+            "content": (row.content[:200] + "...") if row.content and len(row.content) > 200 else (row.content or ""),
         }
         for row in result
     ]

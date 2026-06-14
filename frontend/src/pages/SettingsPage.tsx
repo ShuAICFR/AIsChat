@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { Settings, Key, Zap, Save, Clock } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -27,6 +28,7 @@ const TIMEZONES = [
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com')
   const [apiKey, setApiKey] = useState('')
   const [autoTimeout, setAutoTimeout] = useState(60)
@@ -71,36 +73,36 @@ export default function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto p-6 bg-canvas">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-[#EDE9F6] mb-6 tracking-tight">设置</h1>
+        <h1 className="text-2xl font-bold text-textPrimary mb-6 tracking-tight">设置</h1>
 
         {/* API 配置 */}
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Key size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-[#EDE9F6]">API 配置</h2>
+            <h2 className="font-semibold text-textPrimary">API 配置</h2>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">Base URL</label>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">Base URL</label>
               <input
                 type="text"
                 value={apiBaseUrl}
                 onChange={(e) => setApiBaseUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 placeholder="https://api.deepseek.com"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">API Key</label>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">API Key</label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 placeholder="留空表示不修改"
               />
-              <p className="text-xs text-[#6B7280] mt-1.5">
+              <p className="text-xs text-textMuted mt-1.5">
                 {user?.has_api_key ? '已设置 API Key（重新输入将覆盖）' : '尚未设置 API Key'}
               </p>
             </div>
@@ -111,19 +113,19 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-[#EDE9F6]">时区</h2>
+            <h2 className="font-semibold text-textPrimary">时区</h2>
           </div>
-          <p className="text-xs text-[#6B7280] mb-3">消息时间将按此时区显示</p>
+          <p className="text-xs text-textMuted mb-3">消息时间将按此时区显示</p>
           <select
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           >
             {TIMEZONES.map((tz) => (
               <option key={tz} value={tz}>{tz}</option>
             ))}
           </select>
-          <p className="text-xs text-[#6B7280] mt-2">
+          <p className="text-xs text-textMuted mt-2">
             当前: {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
           </p>
         </div>
@@ -132,12 +134,12 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-[#EDE9F6]">策略模式</h2>
+            <h2 className="font-semibold text-textPrimary">策略模式</h2>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">
                 自动审批超时（秒）: {autoTimeout}
               </label>
               <input
@@ -158,10 +160,46 @@ export default function SettingsPage() {
                   onChange={(e) => setAutoDefault(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-9 h-5 bg-[#2A2540] peer-focus:ring-2 peer-focus:ring-primary-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all" />
+                <div className="w-9 h-5 bg-border peer-focus:ring-2 peer-focus:ring-primary-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all" />
               </label>
-              <span className="text-sm text-[#9CA3B0]">默认同意向量加速申请</span>
+              <span className="text-sm text-textSecondary">默认同意向量加速申请</span>
             </div>
+          </div>
+        </div>
+
+        {/* 外观主题 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Palette size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">外观</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-textPrimary">界面主题</p>
+              <p className="text-xs text-textMuted mt-0.5">
+                {theme === 'dark' ? '当前：深色模式（深邃紫金）' : '当前：浅色模式'}
+              </p>
+            </div>
+            <button
+              onClick={toggleTheme}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                theme === 'dark'
+                  ? 'bg-primary-600'
+                  : 'bg-[#CBD5E1]'
+              }`}
+            >
+              <span
+                className={`inline-flex items-center justify-center h-6 w-6 rounded-full bg-white shadow-md transition-transform ${
+                  theme === 'dark' ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              >
+                {theme === 'dark' ? (
+                  <Moon size={12} className="text-primary-500" />
+                ) : (
+                  <Sun size={12} className="text-accent-500" />
+                )}
+              </span>
+            </button>
           </div>
         </div>
 

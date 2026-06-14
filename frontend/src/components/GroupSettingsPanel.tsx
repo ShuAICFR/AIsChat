@@ -1,0 +1,488 @@
+import { useState, useEffect } from 'react'
+import { api } from '../api/client'
+import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX } from 'lucide-react'
+
+interface GroupMember {
+  type: string
+  id: number
+  name: string
+  state?: string
+  role: string
+  dnd_until?: string | null
+}
+
+interface GroupSettings {
+  id: number
+  name: string
+  owner_type: string
+  owner_id: number
+  is_vector_accelerated: boolean
+  announcement: string | null
+  speak_limit_per_minute: number
+  speak_limit_window_seconds: number
+  my_role: string
+}
+
+interface Props {
+  group: GroupSettings | null
+  onClose: () => void
+  onUpdate: (updated: Partial<GroupSettings>) => void
+  onLeave: () => void
+}
+
+type Tab = 'general' | 'members' | 'speak'
+
+export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }: Props) {
+  const [tab, setTab] = useState<Tab>('general')
+  const [members, setMembers] = useState<GroupMember[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  // 表单状态
+  const [name, setName] = useState(group?.name || '')
+  const [announcement, setAnnouncement] = useState(group?.announcement || '')
+  const [speakLimit, setSpeakLimit] = useState(group?.speak_limit_per_minute || 0)
+  const [speakWindow, setSpeakWindow] = useState(group?.speak_limit_window_seconds || 120)
+  const [vectorAccel, setVectorAccel] = useState(group?.is_vector_accelerated || false)
+  const [dndUntil, setDndUntil] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const isOwner = group?.my_role === 'owner'
+  const isAdmin = group?.my_role === 'admin' || isOwner
+  const isAiOwned = group?.owner_type === 'ai'
+
+  useEffect(() => {
+    if (!group) return
+    setName(group.name)
+    setAnnouncement(group.announcement || '')
+    setSpeakLimit(group.speak_limit_per_minute || 0)
+    setSpeakWindow(group.speak_limit_window_seconds || 120)
+    setVectorAccel(group.is_vector_accelerated || false)
+    loadMembers()
+    loadDndStatus()
+  }, [group?.id])
+
+  const loadMembers = async () => {
+    if (!group) return
+    try {
+      const data = await api.get(`/groups/${group.id}/members`)
+      setMembers(data)
+    } catch { /* ignore */ }
+  }
+
+  const loadDndStatus = async () => {
+    if (!group) return
+    try {
+      // DND 状态从群列表中的 dnd_until 获取
+      // 这里通过重新获取群列表来刷新
+      const groups = await api.get('/groups')
+      const g = groups.find((g: any) => g.id === group.id)
+      if (g) setDndUntil(g.dnd_until || null)
+    } catch { /* ignore */ }
+  }
+
+  const saveSettings = async (updates: Record<string, any>) => {
+    if (!group) return
+    setSaving(true)
+    setError('')
+    try {
+      await api.patch(`/groups/${group.id}`, updates)
+      onUpdate(updates)
+    } catch (e: any) {
+      setError(e?.detail || '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleToggleDnd = async () => {
+    if (!group) return
+    try {
+      if (dndUntil) {
+        await api.post(`/groups/${group.id}/dnd/cancel`)
+        setDndUntil(null)
+      } else {
+        await api.post(`/groups/${group.id}/dnd`, { group_id: group.id, duration_minutes: null })
+        setDndUntil('permanent')
+      }
+    } catch (e: any) {
+      setError(e?.detail || '操作失败')
+    }
+  }
+
+  const handleRoleChange = async (m: GroupMember, newRole: string) => {
+    if (!group) return
+    try {
+      await api.patch(`/groups/${group.id}/members/${m.type}/${m.id}/role`, { role: newRole })
+      setMembers(prev => prev.map(x => x.id === m.id && x.type === m.type ? { ...x, role: newRole } : x))
+    } catch (e: any) {
+      setError(e?.detail || '操作失败')
+    }
+  }
+
+  const handleKick = async (m: GroupMember) => {
+    if (!group) return
+    if (!confirm(`确定要将 ${m.name} 移出群聊？`)) return
+    try {
+      await api.delete(`/groups/${group.id}/members/${m.type}/${m.id}`)
+      setMembers(prev => prev.filter(x => !(x.id === m.id && x.type === m.type)))
+    } catch (e: any) {
+      setError(e?.detail || '操作失败')
+    }
+  }
+
+  const handleLeave = async () => {
+    if (!group) return
+    if (!confirm('确定要退出此群聊？')) return
+    try {
+      await api.post(`/groups/${group.id}/leave`)
+      onLeave()
+    } catch (e: any) {
+      setError(e?.detail || '退出失败')
+    }
+  }
+
+  if (!group) return null
+
+  const tabs: { key: Tab; label: string; show: boolean }[] = [
+    { key: 'general', label: '基本设置', show: true },
+    { key: 'members', label: '成员管理', show: true },
+    { key: 'speak', label: 'AI 发言限制', show: isAdmin },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      {/* 点击外部关闭 */}
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+
+      <div className="relative w-96 max-w-full h-full bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in">
+        {/* 头部 */}
+        <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0">
+          <h2 className="font-semibold text-sm text-textPrimary">群聊设置</h2>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-elevated text-textMuted">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Tab 切换 */}
+        <div className="flex border-b border-border shrink-0">
+          {tabs.filter(t => t.show).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
+                tab === t.key
+                  ? 'text-primary-400 border-b-2 border-primary-400'
+                  : 'text-textMuted hover:text-textSecondary'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 内容区 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {error && (
+            <div className="text-xs text-rose-400 bg-rose-400/10 rounded-lg px-3 py-2">{error}</div>
+          )}
+
+          {/* === Tab: 基本设置 === */}
+          {tab === 'general' && (
+            <>
+              {/* 群名称 */}
+              <div>
+                <label className="text-xs font-medium text-textSecondary">群聊名称</label>
+                <div className="flex gap-2 mt-1">
+                  <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    disabled={!isAdmin}
+                    className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary disabled:opacity-50 outline-none focus:border-primary-400"
+                  />
+                  {isAdmin && (
+                    <button
+                      onClick={() => saveSettings({ name })}
+                      disabled={saving || name === group.name}
+                      className="px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
+                    >
+                      保存
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 群公告 */}
+              <div>
+                <label className="text-xs font-medium text-textSecondary">群公告</label>
+                {isAdmin ? (
+                  <div className="mt-1 space-y-2">
+                    <textarea
+                      value={announcement}
+                      onChange={e => setAnnouncement(e.target.value)}
+                      placeholder="输入群公告..."
+                      rows={3}
+                      className="w-full bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary outline-none focus:border-primary-400 resize-none"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => saveSettings({ announcement })}
+                        disabled={saving}
+                        className="px-3 py-1.5 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
+                      >
+                        更新公告
+                      </button>
+                      {group.announcement && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await api.delete(`/groups/${group.id}/announcement`)
+                              setAnnouncement('')
+                              onUpdate({ announcement: null })
+                            } catch (e: any) { setError(e?.detail || '操作失败') }
+                          }}
+                          className="px-3 py-1.5 bg-rose-400/10 text-rose-400 rounded-lg text-xs font-medium hover:bg-rose-400/20 transition-colors"
+                        >
+                          删除公告
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-sm text-textSecondary bg-elevated rounded-lg px-3 py-2">
+                    {group.announcement || '暂无公告'}
+                  </p>
+                )}
+              </div>
+
+              <hr className="border-border" />
+
+              {/* 免打扰 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-textPrimary font-medium">消息免打扰</div>
+                  <div className="text-xs text-textMuted">
+                    {dndUntil ? '已开启免打扰' : '正常接收消息'}
+                  </div>
+                </div>
+                <button
+                  onClick={handleToggleDnd}
+                  className={`p-2 rounded-lg transition-colors ${
+                    dndUntil
+                      ? 'bg-rose-400/10 text-rose-400 hover:bg-rose-400/20'
+                      : 'bg-elevated text-textMuted hover:text-textSecondary'
+                  }`}
+                >
+                  {dndUntil ? <BellOff size={18} /> : <Bell size={18} />}
+                </button>
+              </div>
+
+              {/* 向量加速（仅管理员可见） */}
+              {isAdmin && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-textPrimary font-medium">向量加速</div>
+                    <div className="text-xs text-textMuted">
+                      {isAiOwned ? 'AI 群自动启用' : '混合检索历史消息'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !vectorAccel
+                      setVectorAccel(next)
+                      saveSettings({ is_vector_accelerated: next })
+                    }}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      vectorAccel ? 'bg-primary-500' : 'bg-border'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                      vectorAccel ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              )}
+
+              <hr className="border-border" />
+
+              {/* 退群 */}
+              <button
+                onClick={handleLeave}
+                disabled={isOwner && !group.name.startsWith('DM:')}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-400/10 text-rose-400 rounded-lg text-sm font-medium hover:bg-rose-400/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                title={isOwner && !group.name.startsWith('DM:') ? '群主需先转让群主身份' : '退出群聊'}
+              >
+                <LogOut size={16} />
+                {isOwner && !group.name.startsWith('DM:') ? '群主无法退群（需先转让）' : '退出群聊'}
+              </button>
+            </>
+          )}
+
+          {/* === Tab: 成员管理 === */}
+          {tab === 'members' && (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-textPrimary font-medium">
+                  成员 ({members.length})
+                </span>
+                <button
+                  onClick={() => {
+                    // 触发父组件的邀请弹窗
+                    const event = new CustomEvent('open-invite-modal')
+                    window.dispatchEvent(event)
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-primary-400 hover:bg-primary-400/10 rounded-lg transition-colors"
+                >
+                  <UserPlus size={14} />
+                  邀请
+                </button>
+              </div>
+
+              <div className="space-y-1">
+                {members.map(m => (
+                  <div
+                    key={`${m.type}:${m.id}`}
+                    className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-elevated transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {/* 状态圆点 */}
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${
+                        m.state === 'active' ? 'bg-mint-400' :
+                        m.state === 'dnd' ? 'bg-rose-400' :
+                        m.state === 'offline' ? 'bg-border' : 'bg-border'
+                      }`} />
+                      <div className="min-w-0">
+                        <div className="text-sm text-textPrimary truncate flex items-center gap-1.5">
+                          {m.name}
+                          {m.type === 'ai' && (
+                            <span className="text-[10px] text-primary-400 font-medium">AI</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-textMuted">
+                          {m.role === 'owner' ? '群主' : m.role === 'admin' ? '管理员' : '成员'}
+                          {m.dnd_until && ' · 免打扰'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 操作按钮（群主/管理员可见，不可操作自己） */}
+                    {isAdmin && m.role !== 'owner' && (
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {isOwner && (
+                          <button
+                            onClick={() => handleRoleChange(m, m.role === 'admin' ? 'member' : 'admin')}
+                            className="p-1 rounded hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
+                            title={m.role === 'admin' ? '降级为成员' : '提拔为管理员'}
+                          >
+                            {m.role === 'admin' ? <ShieldOff size={14} /> : <Shield size={14} />}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleKick(m)}
+                          className="p-1 rounded hover:bg-rose-400/10 text-textMuted hover:text-rose-400 transition-colors"
+                          title="移出群聊"
+                        >
+                          <UserX size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* === Tab: AI 发言限制（仅管理员） === */}
+          {tab === 'speak' && isAdmin && (
+            <>
+              {isAiOwned ? (
+                <div className="text-center py-8">
+                  <Volume2 size={32} className="mx-auto text-mint-400 mb-3" />
+                  <p className="text-sm text-textPrimary font-medium">AI 自建群聊</p>
+                  <p className="text-xs text-textMuted mt-1">
+                    此群由 AI 管理，不设发言限制。<br />
+                    AI 之间可自由交流协作。
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-textSecondary">
+                        每分钟最多发言次数
+                      </label>
+                      <span className="text-xs text-primary-400 font-medium">
+                        {speakLimit === 0 ? '不限制' : `${speakLimit} 条/分钟`}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={30}
+                      value={speakLimit}
+                      onChange={e => setSpeakLimit(Number(e.target.value))}
+                      className="w-full accent-primary-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-textMuted">
+                      <span>0（不限）</span>
+                      <span>30</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium text-textSecondary">
+                        统计时间窗口（秒）
+                      </label>
+                      <span className="text-xs text-primary-400 font-medium">{speakWindow}s</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={30}
+                      max={600}
+                      step={30}
+                      value={speakWindow}
+                      onChange={e => setSpeakWindow(Number(e.target.value))}
+                      className="w-full accent-primary-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-textMuted">
+                      <span>30s</span>
+                      <span>600s</span>
+                    </div>
+                  </div>
+
+                  {/* 预览 */}
+                  <div className="bg-elevated rounded-lg px-3 py-2.5 text-xs text-textSecondary space-y-1">
+                    <div className="font-medium text-textPrimary">效果预览</div>
+                    {speakLimit > 0 ? (
+                      <div>
+                        每 {speakWindow} 秒内最多允许 <span className="text-primary-400 font-medium">{speakLimit * 2}</span> 轮 AI 对话
+                        <br />
+                        <span className="text-textMuted">
+                          （每轮包含一次 AI 发言，预留 2x 余量保证对话完整）
+                        </span>
+                      </div>
+                    ) : (
+                      <div>不限制 AI 发言频率，对话链仅靠意愿分自然终结</div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => saveSettings({
+                      speak_limit_per_minute: speakLimit,
+                      speak_limit_window_seconds: speakWindow,
+                    })}
+                    disabled={saving}
+                    className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
+                  >
+                    {saving ? '保存中...' : '保存发言限制'}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

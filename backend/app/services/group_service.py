@@ -5,7 +5,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, and_, update
+from sqlalchemy import select, desc, and_, update, func as sqlfunc
 from app.models.group import Group, GroupMember
 from app.models.message import Message, PendingMessage
 from app.models.agent import Agent
@@ -62,7 +62,10 @@ async def get_group(db: AsyncSession, group_id: int) -> Group | None:
 
 
 async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
-    """列出用户所属的群聊"""
+    """列出用户所属的群聊（含未读信息、公告摘要等）"""
+    from app.models.user import User
+    from app.models.agent import Agent as AgentModel
+
     result = await db.execute(
         select(GroupMember).where(
             GroupMember.member_type == "human",
@@ -71,19 +74,97 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
     )
     memberships = result.scalars().all()
 
+    # 获取用户名（用于 @提及检测）
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    username = user.username if user else ""
+
     groups = []
     for m in memberships:
-        group = await get_group(db, m.group_id)
-        if group:
-            groups.append({
-                "id": group.id,
-                "name": group.name,
-                "owner_type": group.owner_type,
-                "owner_id": group.owner_id,
-                "is_vector_accelerated": group.is_vector_accelerated,
-                "my_role": m.role,
-                "created_at": str(group.created_at) if group.created_at else None,
-            })
+        group = await db.get(Group, m.group_id)
+        if not group:
+            continue
+
+        # 公告摘要（截断）
+        announcement = None
+        if group.announcement:
+            announcement = group.announcement[:100] if len(group.announcement) > 100 else group.announcement
+
+        # DND 状态
+        dnd_until = str(m.dnd_until) if m.dnd_until else None
+
+        # 未读计数和最后消息
+        unread_count = 0
+        has_mention = False
+        last_message_preview = None
+
+        if m.last_read_at:
+            # 统计 last_read_at 之后的消息
+            count_result = await db.execute(
+                select(sqlfunc.count(Message.id)).where(
+                    Message.group_id == group.id,
+                    Message.created_at > m.last_read_at,
+                    ~((Message.sender_type == "human") & (Message.sender_id == user_id)),
+                )
+            )
+            unread_count = count_result.scalar() or 0
+
+            # 最后一条消息预览
+            last_msg_result = await db.execute(
+                select(Message).where(
+                    Message.group_id == group.id,
+                ).order_by(Message.created_at.desc()).limit(1)
+            )
+            last_msg = last_msg_result.scalar_one_or_none()
+            if last_msg and (m.last_read_at is None or last_msg.created_at > m.last_read_at):
+                preview = last_msg.content[:50]
+                if len(last_msg.content) > 50:
+                    preview += "..."
+                # 解析发送者名称
+                if last_msg.sender_type == "ai":
+                    a = await db.get(AgentModel, last_msg.sender_id)
+                    sender = a.name if a else "AI"
+                else:
+                    u = await db.get(User, last_msg.sender_id)
+                    sender = u.username if u else "用户"
+                last_message_preview = f"{sender}: {preview}"
+
+            # @提及检测
+            if username and unread_count > 0:
+                mention_result = await db.execute(
+                    select(Message).where(
+                        Message.group_id == group.id,
+                        Message.created_at > m.last_read_at,
+                        Message.content.contains(f"@{username}"),
+                    ).limit(1)
+                )
+                has_mention = mention_result.scalar_one_or_none() is not None
+        else:
+            # 从未读过 → 简单统计
+            count_result = await db.execute(
+                select(sqlfunc.count(Message.id)).where(
+                    Message.group_id == group.id,
+                    ~((Message.sender_type == "human") & (Message.sender_id == user_id)),
+                )
+            )
+            unread_count = count_result.scalar() or 0
+
+        groups.append({
+            "id": group.id,
+            "name": group.name,
+            "owner_type": group.owner_type,
+            "owner_id": group.owner_id,
+            "is_vector_accelerated": group.is_vector_accelerated,
+            "announcement": announcement,
+            "speak_limit_per_minute": group.speak_limit_per_minute or 0,
+            "speak_limit_window_seconds": group.speak_limit_window_seconds or 120,
+            "my_role": m.role,
+            "unread_count": unread_count,
+            "has_mention": has_mention,
+            "last_message_preview": last_message_preview,
+            "dnd_until": dnd_until,
+            "created_at": str(group.created_at) if group.created_at else None,
+        })
     return groups
 
 
@@ -363,8 +444,6 @@ async def check_unread(
     获取 AI 各群聊的未读消息摘要（按群分组）。
     返回: [{group_id, group_name, unread_count, last_message_preview, last_message_at}, ...]
     """
-    from sqlalchemy import func as sqlfunc
-
     result = await db.execute(
         select(
             PendingMessage.group_id,
@@ -480,3 +559,338 @@ async def resume_and_fetch(
 
     logger.info(f"AI {agent_id} 已恢复通知，返回 {len(pending)} 条暂存消息")
     return agent, pending
+
+
+async def is_ai_only_group(
+    db: AsyncSession,
+    group_id: int,
+    group: Group | None = None,
+) -> bool:
+    """
+    检查群聊是否全部由 AI 成员组成（无人类成员）。
+
+    用于判断是否启用向量加速混合检索——该功能仅对 AI 内部协作群有意义，
+    普通人类群聊使用常规历史窗口即可。
+
+    如果调用方已持有 group 对象，通过 group 参数传入可省一次 DB 查询。
+    """
+    human_count_result = await db.execute(
+        select(sqlfunc.count(GroupMember.member_id)).where(
+            GroupMember.group_id == group_id,
+            GroupMember.member_type == "human",
+        )
+    )
+    human_count = human_count_result.scalar() or 0
+
+    # 复用调用方传入的 group 对象，或按需查询
+    if group is None:
+        group = await db.get(Group, group_id)
+    if group is None:
+        return False
+
+    return human_count == 0 and group.owner_type == "ai"
+
+
+# ============================================================
+# Phase 4: 群聊治理函数
+# ============================================================
+
+
+async def update_group_settings(
+    db: AsyncSession,
+    group_id: int,
+    operator_id: int,
+    updates: dict,
+) -> Group:
+    """
+    更新群聊设置（名称、公告、发言限制、向量加速等）。
+    仅群主或管理员可操作。
+
+    updates 支持字段: name, announcement, speak_limit_per_minute,
+                     speak_limit_window_seconds, is_vector_accelerated
+    """
+    group = await db.get(Group, group_id)
+    if group is None:
+        raise ValueError("群聊不存在")
+
+    # 权限检查
+    member = await _get_member(db, group_id, "human", operator_id)
+    if member is None or member.role not in ("owner", "admin"):
+        raise ValueError("仅群主或管理员可修改群设置")
+
+    allowed_fields = {
+        "name", "announcement",
+        "speak_limit_per_minute", "speak_limit_window_seconds",
+        "is_vector_accelerated",
+    }
+
+    for key, value in updates.items():
+        if key not in allowed_fields:
+            continue
+        if key == "announcement" and value is not None:
+            group.announcement = value
+            group.announcement_updated_at = datetime.now(timezone.utc)
+        elif hasattr(group, key):
+            setattr(group, key, value)
+
+    await db.flush()
+    logger.info(f"群聊 {group_id} 设置已更新: {list(updates.keys())}")
+    return group
+
+
+async def set_announcement(
+    db: AsyncSession,
+    group_id: int,
+    content: str,
+    operator_id: int,
+) -> str:
+    """
+    设置群公告，返回公告内容。
+    仅群主或管理员可操作。
+    """
+    group = await db.get(Group, group_id)
+    if group is None:
+        raise ValueError("群聊不存在")
+
+    member = await _get_member(db, group_id, "human", operator_id)
+    if member is None or member.role not in ("owner", "admin"):
+        raise ValueError("仅群主或管理员可设置群公告")
+
+    group.announcement = content
+    group.announcement_updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    logger.info(f"群聊 {group_id} 公告已更新")
+    return content
+
+
+async def delete_announcement(
+    db: AsyncSession,
+    group_id: int,
+    operator_id: int,
+) -> None:
+    """删除群公告"""
+    group = await db.get(Group, group_id)
+    if group is None:
+        raise ValueError("群聊不存在")
+
+    member = await _get_member(db, group_id, "human", operator_id)
+    if member is None or member.role not in ("owner", "admin"):
+        raise ValueError("仅群主或管理员可删除群公告")
+
+    group.announcement = None
+    group.announcement_updated_at = None
+    await db.flush()
+
+
+async def change_member_role(
+    db: AsyncSession,
+    group_id: int,
+    operator_id: int,
+    target_type: str,
+    target_id: int,
+    new_role: str,
+) -> GroupMember:
+    """
+    修改成员角色（提拔/降级）。
+
+    规则：
+    - 仅群主可提拔他人为 admin 或降级 admin
+    - 不能修改自己的角色
+    - 不能修改群主的角色
+    """
+    if new_role not in ("admin", "member"):
+        raise ValueError("角色只能是 admin 或 member")
+
+    operator = await _get_member(db, group_id, "human", operator_id)
+    if operator is None or operator.role != "owner":
+        raise ValueError("仅群主可修改成员角色")
+
+    if target_type == operator.member_type and target_id == operator_id:
+        raise ValueError("不能修改自己的角色")
+
+    target = await _get_member(db, group_id, target_type, target_id)
+    if target is None:
+        raise ValueError("该成员不在群内")
+
+    if target.role == "owner":
+        raise ValueError("不能修改群主的角色")
+
+    target.role = new_role
+    await db.flush()
+    logger.info(f"群 {group_id} 成员 {target_type}:{target_id} 角色变更为 {new_role}")
+    return target
+
+
+async def remove_member(
+    db: AsyncSession,
+    group_id: int,
+    operator_id: int,
+    target_type: str,
+    target_id: int,
+) -> None:
+    """
+    将成员踢出群聊。
+
+    规则：
+    - 仅群主或管理员可踢人
+    - 不能踢自己
+    - 管理员不能踢群主或其他管理员
+    """
+    operator = await _get_member(db, group_id, "human", operator_id)
+    if operator is None or operator.role not in ("owner", "admin"):
+        raise ValueError("仅群主或管理员可踢人")
+
+    if target_type == operator.member_type and target_id == operator_id:
+        raise ValueError("不能踢自己")
+
+    target = await _get_member(db, group_id, target_type, target_id)
+    if target is None:
+        raise ValueError("该成员不在群内")
+
+    if target.role == "owner":
+        raise ValueError("不能踢群主")
+    if operator.role == "admin" and target.role == "admin":
+        raise ValueError("管理员不能踢其他管理员")
+
+    await db.delete(target)
+    await db.flush()
+    logger.info(f"成员 {target_type}:{target_id} 已被踢出群聊 {group_id}")
+
+
+async def leave_group(
+    db: AsyncSession,
+    group_id: int,
+    member_type: str,
+    member_id: int,
+) -> None:
+    """
+    退出群聊。
+
+    规则：
+    - 群主不能退群，需先转让群主
+    - DM 群聊（群名以 DM: 开头）允许退出
+    """
+    member = await _get_member(db, group_id, member_type, member_id)
+    if member is None:
+        raise ValueError("你不在该群聊中")
+
+    if member.role == "owner":
+        # 检查是否为 DM 群聊（DM 群主可以退出）
+        group = await db.get(Group, group_id)
+        if group and not group.name.startswith("DM:"):
+            raise ValueError("群主不能退群，请先将群主转让给其他成员")
+
+    await db.delete(member)
+    await db.flush()
+    logger.info(f"成员 {member_type}:{member_id} 已退出群聊 {group_id}")
+
+
+async def get_unread_info(
+    db: AsyncSession,
+    group_id: int,
+    user_id: int,
+) -> dict:
+    """
+    获取用户在指定群聊的未读信息。
+
+    返回: {unread_count, has_mention, has_announcement, last_message}
+    """
+    from app.models.agent import Agent as AgentModel
+
+    # 获取成员记录，查 last_read_at
+    member = await _get_member(db, group_id, "human", user_id)
+    last_read = member.last_read_at if member else None
+
+    # 统计未读消息数
+    base_query = select(Message).where(Message.group_id == group_id)
+    if last_read:
+        base_query = base_query.where(Message.created_at > last_read)
+    else:
+        # 从未读过 → 全部算未读
+        pass
+
+    # 排除自己的消息
+    base_query = base_query.where(
+        ~((Message.sender_type == "human") & (Message.sender_id == user_id))
+    )
+
+    unread_result = await db.execute(base_query.order_by(Message.created_at.desc()))
+    unread_messages = unread_result.scalars().all()
+
+    unread_count = len(unread_messages)
+
+    # 检查是否有 @提及
+    has_mention = False
+    user_name = None
+    from app.models.user import User
+    user = await db.get(User, user_id)
+    if user:
+        user_name = user.username
+        for msg in unread_messages:
+            if f"@{user_name}" in msg.content:
+                has_mention = True
+                break
+
+    # 检查是否有未读公告
+    group = await db.get(Group, group_id)
+    has_announcement = False
+    if group and group.announcement and group.announcement_updated_at:
+        if last_read is None or group.announcement_updated_at > last_read:
+            has_announcement = True
+
+    # 最后一条消息
+    last_msg = unread_messages[0] if unread_messages else None
+    last_message = None
+    if last_msg:
+        sender_name = "未知"
+        if last_msg.sender_type == "human":
+            u = await db.get(User, last_msg.sender_id)
+            if u:
+                sender_name = u.username
+        else:
+            a = await db.get(AgentModel, last_msg.sender_id)
+            if a:
+                sender_name = a.name
+
+        last_message = {
+            "content": last_msg.content[:100],
+            "sender_name": sender_name,
+            "created_at": str(last_msg.created_at) if last_msg.created_at else None,
+        }
+
+    return {
+        "unread_count": unread_count,
+        "has_mention": has_mention,
+        "has_announcement": has_announcement,
+        "last_message": last_message,
+    }
+
+
+async def update_last_read(
+    db: AsyncSession,
+    group_id: int,
+    member_type: str,
+    member_id: int,
+) -> None:
+    """更新成员的最后阅读时间（进入群聊时调用）"""
+    member = await _get_member(db, group_id, member_type, member_id)
+    if member:
+        member.last_read_at = datetime.now(timezone.utc)
+        await db.flush()
+
+
+async def _get_member(
+    db: AsyncSession,
+    group_id: int,
+    member_type: str,
+    member_id: int,
+) -> GroupMember | None:
+    """获取群成员记录（内部辅助函数）"""
+    result = await db.execute(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.member_type == member_type,
+            GroupMember.member_id == member_id,
+        )
+    )
+    return result.scalar_one_or_none()

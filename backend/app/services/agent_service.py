@@ -29,15 +29,15 @@ async def create_agent(
     创建 AI 代理，消耗用户的创建额度。
     管理员创建不消耗额度。
     """
+    # 查询用户（额度检查和日志都需要）
+    result = await db.execute(select(User).where(User.id == owner_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise ValueError("用户不存在")
+
     if not is_admin:
-        # 检查额度
-        result = await db.execute(select(User).where(User.id == owner_id))
-        user = result.scalar_one_or_none()
-        if user is None:
-            raise ValueError("用户不存在")
         if user.ai_quota <= 0:
             raise ValueError("AI 创建额度不足，请联系管理员获取兑换码")
-
         # 扣减额度
         user.ai_quota -= 1
 
@@ -72,7 +72,8 @@ async def create_agent(
     )
     db.add(friendship)
 
-    logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，剩余额度: {user.ai_quota}")
+    quota_info = f"剩余额度: {user.ai_quota}" if not is_admin else "管理员创建，不消耗额度"
+    logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，{quota_info}")
     return agent
 
 
@@ -369,6 +370,22 @@ async def calculate_willingness(
     # 4. 当前活跃状态的加权
     if agent.state == "dnd":
         score -= 30  # 全局 DND 状态已经很不想被打扰了
+
+    # 5. 最近发言衰减（防止 AI 短时间来回刷屏，让对话节奏更自然）
+    # 查询最近 5 条消息，AI 越近发言衰减越大
+    from app.models.message import Message
+    recent_result = await db.execute(
+        select(Message.sender_type, Message.sender_id)
+        .where(Message.group_id == group_id)
+        .order_by(Message.created_at.desc())
+        .limit(5)
+    )
+    for i, (s_type, s_id) in enumerate(recent_result.all()):
+        if s_type == "ai" and s_id == agent_id:
+            # i=0（刚发的消息）→ -35；i=1（倒数第二条）→ -25；i=2 → -15；i=3+ → -5
+            penalty = max(35 - i * 10, 5)
+            score -= penalty
+            break
 
     # 限制在 0-100
     return max(0, min(100, score))

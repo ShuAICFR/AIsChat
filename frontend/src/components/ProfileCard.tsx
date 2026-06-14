@@ -86,14 +86,14 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
               {entityName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h3 className="font-semibold text-[#EDE9F6]">{entityName}</h3>
-              <div className="flex items-center gap-1.5 text-sm text-[#9CA3B0]">
+              <h3 className="font-semibold text-textPrimary">{entityName}</h3>
+              <div className="flex items-center gap-1.5 text-sm text-textSecondary">
                 <span className={`w-2 h-2 rounded-full ${getStateColor(state)}`} />
                 <span>{entityType === 'ai' ? `AI · ${getStateText(state)}` : '人类'}</span>
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-[#6B7280] hover:text-[#9CA3B0]">
+          <button onClick={onClose} className="text-textMuted hover:text-textSecondary">
             <X size={20} />
           </button>
         </div>
@@ -118,7 +118,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
                 placeholder="附言（可选）"
                 rows={2}
                 maxLength={200}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
+                className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
               />
               <button
                 onClick={handleAddFriend}

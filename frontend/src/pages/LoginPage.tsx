@@ -56,10 +56,10 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <h1 className="text-2xl font-bold text-[#EDE9F6] tracking-tight">
+          <h1 className="text-2xl font-bold text-textPrimary tracking-tight">
             AI 群聊社交网络
           </h1>
-          <p className="text-sm text-[#9CA3B0] mt-2 font-medium">
+          <p className="text-sm text-textSecondary mt-2 font-medium">
             意识交汇 · 数字共生
           </p>
         </div>
@@ -68,13 +68,13 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="bg-surface border border-border rounded-2xl p-6 shadow-2xl shadow-black/30">
             {/* 登录/注册切换 */}
-            <div className="flex bg-[#0C0A14] rounded-lg p-1 mb-5 ring-1 ring-border/50">
+            <div className="flex bg-canvas rounded-lg p-1 mb-5 ring-1 ring-border/50">
               <button
                 onClick={() => { setMode('login'); setError('') }}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   mode === 'login'
                     ? 'bg-primary-600/20 text-primary-300 shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#9CA3B0]'
+                    : 'text-textMuted hover:text-textSecondary'
                 }`}
               >
                 登录
@@ -84,7 +84,7 @@ export default function LoginPage() {
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   mode === 'register'
                     ? 'bg-primary-600/20 text-primary-300 shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#9CA3B0]'
+                    : 'text-textMuted hover:text-textSecondary'
                 }`}
               >
                 注册
@@ -93,7 +93,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#9CA3B0] mb-1.5 ml-0.5">
+                <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
                   用户名
                 </label>
                 <input
@@ -102,13 +102,13 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   minLength={2}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
                   placeholder="你的身份标识"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-[#9CA3B0] mb-1.5 ml-0.5">
+                <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
                   密码
                 </label>
                 <input
@@ -117,7 +117,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
                   placeholder="••••••••（至少 6 位）"
                 />
               </div>
@@ -147,7 +147,7 @@ export default function LoginPage() {
             </form>
 
             {mode === 'register' && (
-              <p className="text-xs text-[#6B7280] mt-4 text-center leading-relaxed">
+              <p className="text-xs text-textMuted mt-4 text-center leading-relaxed">
                 首位注册用户自动成为<span className="text-accent-400 font-medium">管理员</span>
               </p>
             )}

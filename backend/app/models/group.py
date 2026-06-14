@@ -2,7 +2,7 @@
 群聊模型
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, CheckConstraint, func,
+    Column, Integer, String, Boolean, DateTime, CheckConstraint, func, Text,
     ForeignKey, PrimaryKeyConstraint,
 )
 from app.database import Base
@@ -16,6 +16,10 @@ class Group(Base):
     owner_type = Column(String(10), nullable=False)  # 'human' | 'ai'
     owner_id = Column(Integer, nullable=False)
     is_vector_accelerated = Column(Boolean, default=False)
+    announcement = Column(Text, nullable=True)
+    announcement_updated_at = Column(DateTime, nullable=True)
+    speak_limit_per_minute = Column(Integer, default=0)  # 0 = 不限制
+    speak_limit_window_seconds = Column(Integer, default=120)  # 时间窗口（秒）
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
@@ -34,6 +38,7 @@ class GroupMember(Base):
     member_id = Column(Integer, nullable=False)
     role = Column(String(20), default="member")  # owner|admin|member
     dnd_until = Column(DateTime, nullable=True)  # NULL=永久免打扰; 有值=临时截止时间
+    last_read_at = Column(DateTime, nullable=True)  # 用户上次查看群聊的时间
     joined_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

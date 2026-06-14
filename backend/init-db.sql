@@ -71,6 +71,10 @@ CREATE TABLE IF NOT EXISTS groups (
     owner_type VARCHAR(10) CHECK (owner_type IN ('human', 'ai')),
     owner_id INT,
     is_vector_accelerated BOOLEAN DEFAULT FALSE,
+    announcement TEXT,
+    announcement_updated_at TIMESTAMP,
+    speak_limit_per_minute INT DEFAULT 0,
+    speak_limit_window_seconds INT DEFAULT 120,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -82,6 +86,8 @@ CREATE TABLE IF NOT EXISTS group_members (
     member_type VARCHAR(10) CHECK (member_type IN ('human', 'ai')),
     member_id INT,
     role VARCHAR(20) DEFAULT 'member',
+    dnd_until TIMESTAMP,
+    last_read_at TIMESTAMP,
     joined_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (group_id, member_type, member_id)
 );

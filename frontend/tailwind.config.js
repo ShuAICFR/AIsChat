@@ -12,11 +12,17 @@ export default {
         mono: ['JetBrains Mono', 'SF Mono', 'Fira Code', 'Consolas', 'monospace'],
       },
       colors: {
-        // 深邃紫金 — AIsChat 品牌色
-        canvas: '#0C0A14',        // 最深底色（body）
-        surface: '#151223',       // 卡片/侧栏
-        elevated: '#1E1A30',      // 弹窗/悬浮层
-        border:   '#2A2540',      // 分割线
+        // 深邃紫金 — AIsChat 品牌色（深浅主题共用）
+        // 结构色通过 CSS 变量切换，支持浅色/深色双主题
+        canvas: 'rgb(var(--tw-canvas) / <alpha-value>)',
+        surface: 'rgb(var(--tw-surface) / <alpha-value>)',
+        elevated: 'rgb(var(--tw-elevated) / <alpha-value>)',
+        border: 'rgb(var(--tw-border) / <alpha-value>)',
+        // 文本色
+        textPrimary: 'rgb(var(--tw-text-primary) / <alpha-value>)',
+        textSecondary: 'rgb(var(--tw-text-secondary) / <alpha-value>)',
+        textMuted: 'rgb(var(--tw-text-muted) / <alpha-value>)',
+        // 主题色（深浅通用）
         primary: {
           50:  '#F8F6FF',
           100: '#EDE9FE',

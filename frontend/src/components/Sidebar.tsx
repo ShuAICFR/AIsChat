@@ -16,7 +16,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 ${
     isActive
       ? 'bg-primary-500/15 text-primary-300'
-      : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
+      : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
   }`
 
 export default function Sidebar() {
@@ -44,12 +44,12 @@ export default function Sidebar() {
             <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow shadow-primary-500/30">
               <MessageCircle size={12} className="text-white" strokeWidth={2.5} />
             </div>
-            <span className="text-base font-bold text-[#EDE9F6] tracking-tight">AIsChat</span>
+            <span className="text-base font-bold text-textPrimary tracking-tight">AIsChat</span>
           </div>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-[#9CA3B0] transition-colors"
+          className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
           title={collapsed ? '展开' : '折叠'}
         >
           {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
@@ -67,8 +67,8 @@ export default function Sidebar() {
       {!collapsed && user && (
         <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-[#EDE9F6] truncate">{user.username}</p>
-            <p className="text-xs text-[#6B7280]">
+            <p className="text-sm font-medium text-textPrimary truncate">{user.username}</p>
+            <p className="text-xs text-textMuted">
               {user.role === 'admin' ? (
                 <span className="text-accent-400">管理员</span>
               ) : (
@@ -90,7 +90,7 @@ export default function Sidebar() {
 
           <button
             onClick={() => { setShowFriendList(true); setFriendRefresh(Date.now()) }}
-            className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30] text-left"
+            className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated text-left"
           >
             <Users size={18} />
             <span>好友</span>
@@ -122,10 +122,10 @@ export default function Sidebar() {
       {!collapsed && showFriendList && (
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-            <span className="text-sm font-medium text-[#EDE9F6]">好友列表</span>
+            <span className="text-sm font-medium text-textPrimary">好友列表</span>
             <button
               onClick={() => setShowFriendList(false)}
-              className="p-1 rounded hover:bg-[#1E1A30] text-[#6B7280] hover:text-[#9CA3B0]"
+              className="p-1 rounded hover:bg-elevated text-textMuted hover:text-textSecondary"
               title="返回导航"
             >
               <X size={14} />
@@ -152,7 +152,7 @@ export default function Sidebar() {
                 `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-300'
-                    : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
+                    : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }
               title={item.label}
@@ -162,7 +162,7 @@ export default function Sidebar() {
           ))}
           <button
             onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
-            className="flex items-center justify-center w-full py-2.5 mx-2 rounded-xl transition-all duration-200 text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]"
+            className="flex items-center justify-center w-full py-2.5 mx-2 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
             title="好友"
           >
             <Users size={18} />
@@ -174,7 +174,7 @@ export default function Sidebar() {
                 `flex items-center justify-center py-2.5 mx-2 rounded-xl transition-all duration-200 ${
                   isActive
                     ? 'bg-primary-500/15 text-primary-300'
-                    : 'text-[#9CA3B0] hover:text-[#EDE9F6] hover:bg-[#1E1A30]'
+                    : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }
               title="管理面板"
@@ -189,7 +189,7 @@ export default function Sidebar() {
       <div className="p-2 border-t border-border shrink-0">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[#9CA3B0] hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-textSecondary hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm"
           title={collapsed ? '退出登录' : undefined}
         >
           <LogOut size={18} />

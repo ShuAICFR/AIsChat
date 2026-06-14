@@ -55,21 +55,46 @@ async def _process_event(db, event: dict):
     处理单条消息事件。
 
     event 字段:
-        group_id, message_id, content, sender_type, sender_id
+        group_id, message_id, content, sender_type, sender_id, chain_depth
+
+    触发规则:
+    - 人类消息 → 所有 AI 成员检查回复意愿（chain_depth=0）
+    - AI 消息 → 所有其他 AI 成员检查回复意愿（靠意愿分自然筛选）
+    - 对话链深度限制：chain_depth > 2 时停止，防止无限循环
     """
     group_id = event["group_id"]
     message_id = event["message_id"]
     content = event["content"]
     sender_type = event.get("sender_type", "human")
-
-    # 只处理人类消息（AI 之间不互相触发，避免无限对话）
-    if sender_type != "human":
-        return
+    sender_id = event.get("sender_id")
+    chain_depth = event.get("chain_depth", 0)
 
     # 获取群聊信息
     group_result = await db.execute(select(Group).where(Group.id == group_id))
     group = group_result.scalar_one_or_none()
     if group is None:
+        return
+
+    # 对话链深度限制：根据群设置动态计算
+    if group.owner_type == "ai":
+        # AI 自建群不限制发言频率（安全上限 50）
+        effective_max_depth = 50
+    else:
+        # 人类群聊：根据群设置计算
+        limit_per_min = group.speak_limit_per_minute or 0
+        window_sec = group.speak_limit_window_seconds or 120
+        if limit_per_min > 0:
+            # 时间窗口内最多 limit_per_min 条，每条至少引发一轮对话，预留 2x 余量
+            effective_max_depth = max(limit_per_min * 2, 5)
+        else:
+            # 不限 → 使用安全上限
+            effective_max_depth = 50
+
+    if chain_depth > effective_max_depth:
+        logger.info(
+            f"群 {group_id} 对话链深度 {chain_depth} > {effective_max_depth}"
+            f"(owner={group.owner_type}, limit={group.speak_limit_per_minute}/min)，停止触发"
+        )
         return
 
     # 获取群聊中所有 AI 成员
@@ -84,16 +109,39 @@ async def _process_event(db, event: dict):
     if not ai_members:
         return
 
-    logger.info(f"群聊 {group_id} 收到消息，检查 {len(ai_members)} 个 AI 成员回复意愿...")
+    # 确定需要触发的 AI 列表
+    target_ai_ids: set[int] = set()
 
-    for member in ai_members:
+    if sender_type == "human":
+        # 人类消息 → 所有 AI 都检查
+        target_ai_ids = {m.member_id for m in ai_members}
+    else:
+        # AI 消息 → 触发所有其他 AI（靠意愿分自然筛选）
+        # @提及 会在意愿分中给予 +40 加成，而非 @ 的 AI 也有基础分参与
+        target_ai_ids = {
+            m.member_id for m in ai_members
+            if m.member_id != sender_id  # 排除自己
+        }
+
+    if not target_ai_ids:
+        return
+
+    logger.info(
+        f"群聊 {group_id} 收到消息 (sender={sender_type}:{sender_id}, depth={chain_depth})，"
+        f"触发 {len(target_ai_ids)} 个 AI: {target_ai_ids}"
+    )
+
+    next_depth = chain_depth + 1
+    for ai_id in target_ai_ids:
         await _maybe_trigger_ai_reply(
-            db, member.member_id, group_id, group, content, message_id,
+            db, ai_id, group_id, group, content, message_id,
+            chain_depth=next_depth,
         )
 
 
 async def _maybe_trigger_ai_reply(
     db, agent_id: int, group_id: int, group, content: str, trigger_message_id: int,
+    chain_depth: int = 0,
 ):
     """检查单个 AI 是否应该回复，如果是则调用 LLM 生成回复"""
     from app.services.agent_service import get_agent, calculate_willingness
@@ -159,9 +207,16 @@ async def _maybe_trigger_ai_reply(
 
     # 6. 构建消息
     from app.services.llm_service import build_messages, resolve_model
+    # 向量加速混合检索仅在 AI 全群启用（AI 内部协作场景）
+    # 普通人类群聊使用常规历史窗口，避免不必要的向量化开销
+    from app.services.group_service import is_ai_only_group
+    ai_only = await is_ai_only_group(db, group_id, group=group)
+    use_vector = group.is_vector_accelerated and ai_only
+    if group.is_vector_accelerated and not ai_only:
+        logger.info(f"群 {group_id} 含人类成员，跳过向量加速（使用常规历史窗口）")
     messages = await build_messages(
         db, agent, group_id,
-        vector_accelerated=group.is_vector_accelerated,
+        vector_accelerated=use_vector,
         api_base_url=api_base,
         api_key=api_key,
     )
@@ -173,18 +228,42 @@ async def _maybe_trigger_ai_reply(
     model = resolve_model(agent)
     logger.info(f"🔍 AI {agent.name}: model={model}, tools={len(tools)}")
 
-    # 8. 工具调用循环
+    # 8. 工具调用循环（含思考状态广播）
     logger.info(f"🚀 AI {agent.name}: 开始调用 LLM...")
-    await _tool_call_loop(
-        db=db,
-        agent=agent,
-        group_id=group_id,
-        messages=messages,
-        tools=tools,
-        model=model,
-        api_base_url=api_base,
-        api_key=api_key,
-    )
+    try:
+        await manager.broadcast_to_group(
+            group_id,
+            {
+                "type": "ai_thinking",
+                "data": {
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "group_id": group_id,
+                },
+            },
+        )
+        await _tool_call_loop(
+            db=db,
+            agent=agent,
+            group_id=group_id,
+            messages=messages,
+            tools=tools,
+            model=model,
+            api_base_url=api_base,
+            api_key=api_key,
+            chain_depth=chain_depth,
+        )
+    finally:
+        await manager.broadcast_to_group(
+            group_id,
+            {
+                "type": "ai_thinking_end",
+                "data": {
+                    "agent_id": agent.id,
+                    "group_id": group_id,
+                },
+            },
+        )
     logger.info(f"✅ AI {agent.name}: LLM 调用完成")
 
     # 9. 标记未读消息已处理
@@ -203,6 +282,7 @@ async def _tool_call_loop(
     api_base_url: str,
     api_key: str | None,
     max_loops: int = 5,
+    chain_depth: int = 0,
 ):
     """
     工具调用循环：LLM 返回 tool_calls → 执行 → 将结果回传 → LLM 再决定
@@ -221,6 +301,7 @@ async def _tool_call_loop(
         "api_base_url": api_base_url,
         "manager": manager,
         "agent_name": agent.name,
+        "chain_depth": chain_depth,
     }
 
     for loop_idx in range(max_loops):
@@ -244,7 +325,7 @@ async def _tool_call_loop(
         tool_calls = response.get("tool_calls")
         finish_reason = response.get("finish_reason", "stop")
 
-        # 有文本内容 → 发送消息
+        # 有文本内容 → 发送消息 + 触发其他 AI
         if content:
             from app.services.group_service import create_message, message_to_dict
             try:
@@ -259,6 +340,33 @@ async def _tool_call_loop(
                     group_id,
                     {"type": "message", "data": msg_data},
                 )
+
+                # 推入队列触发其他 AI 回复（对话链）
+                next_depth = chain_depth + 1
+                try:
+                    message_queue.put_nowait({
+                        "group_id": group_id,
+                        "message_id": message.id,
+                        "content": content,
+                        "sender_type": "ai",
+                        "sender_id": agent.id,
+                        "chain_depth": next_depth,
+                    })
+                except asyncio.QueueFull:
+                    pass
+
+                # 自动提取关键信息存储为记忆（安全网：AI 忘了调用 store_memory 工具时兜底）
+                try:
+                    from app.services.memory_service import auto_extract_key_facts
+                    await auto_extract_key_facts(
+                        db, agent.id, group_id, content,
+                        sender_name=agent.name,
+                        api_base_url=api_base_url,
+                        api_key=api_key,
+                    )
+                except Exception:
+                    pass  # 自动提取失败不影响主流程
+
                 logger.info(f"AI {agent.name}({agent.id}) 回复: {content[:80]}...")
             except Exception as e:
                 logger.error(f"AI {agent.name} 消息发送失败: {e}")
@@ -305,17 +413,7 @@ async def _tool_call_loop(
         await asyncio.sleep(0.5)
 
 
-def _check_mention(content: str, agent_name: str) -> bool:
-    """检查消息中是否 @ 提及了该 AI"""
-    if not agent_name:
-        return False
-    # 检查 @agent_name 或 @all 或 @ai
-    if f"@{agent_name}" in content:
-        return True
-    content_lower = content.lower()
-    if "@all" in content_lower or "@ai" in content_lower:
-        return True
-    return False
+from app.utils.text import extract_mentions as _extract_mentions, check_mention as _check_mention
 
 
 def _check_rate_limit(agent_id: int) -> bool:

@@ -199,19 +199,16 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         dnd_map: dict[int, datetime | None] = {row[0]: row[1] for row in dnd_result.all()}
 
                         # 广播：DND 成员暂存消息，但 @提及 强制推送
-                        # 先检测 @提及的 AI 名称（用于强制推送）
+                        from app.utils.text import extract_mentions
+                        mentioned_names = extract_mentions(content)
+                        is_all_call = "@all" in content.lower() or "@ai" in content.lower()
                         mentioned_agents = set()
                         for uid in online_ids:
-                            # 从在线 AI 中检测是否被 @提及
                             agent_name_result = await db.execute(
                                 select(AgentModel.name).where(AgentModel.id == uid)
                             )
                             agent_name = agent_name_result.scalar_one_or_none()
-                            if agent_name and (
-                                f"@{agent_name}" in content
-                                or "@all" in content.lower()
-                                or "@ai" in content.lower()
-                            ):
+                            if agent_name and (agent_name in mentioned_names or is_all_call):
                                 mentioned_agents.add(uid)
 
                         for uid, user_ws in manager.group_connections[group_id].items():
@@ -259,6 +256,7 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                                 "content": content,
                                 "sender_type": sender_type,
                                 "sender_id": user_id,
+                                "chain_depth": 0,  # 人类消息为链起点
                             })
                             logger.info(f"📨 消息已推入 AI 队列: group={group_id}, msg={message.id}, queue_size={message_queue.qsize()}")
                         except asyncio.QueueFull:

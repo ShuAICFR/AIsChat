@@ -3,7 +3,8 @@ import { useWebSocket } from '../hooks/useWebSocket'
 import { api } from '../api/client'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
-import { Send, Loader2, Bell, BellOff, AlertTriangle, X, Plus, UserPlus, MessageSquare, ChevronRight } from 'lucide-react'
+import GroupSettingsPanel from './GroupSettingsPanel'
+import { Send, Loader2, Bell, BellOff, AlertTriangle, X, Plus, UserPlus, MessageSquare, ChevronRight, Settings } from 'lucide-react'
 
 interface Message {
   id: number
@@ -22,7 +23,15 @@ interface Group {
   owner_type: string
   owner_id: number
   is_vector_accelerated: boolean
+  announcement: string | null
+  speak_limit_per_minute: number
+  speak_limit_window_seconds: number
   my_role: string
+  unread_count: number
+  has_mention: boolean
+  last_message_preview: string | null
+  dnd_until: string | null
+  created_at: string | null
 }
 
 interface ChatAreaProps {
@@ -41,6 +50,14 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
   const [profileCard, setProfileCard] = useState<{
     type: string; id: number; name: string; state?: string
   } | null>(null)
+  const [thinkingAgents, setThinkingAgents] = useState<Map<number, string>>(new Map())
+  const [showSettings, setShowSettings] = useState(false)
+  // @提及 自动补全
+  const [groupMembers, setGroupMembers] = useState<Array<{ type: string; id: number; name: string; state?: string }>>([])
+  const [mentionActive, setMentionActive] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const { lastMessage, connected, errors, unreadSummary, sendMessage, sendTyping, clearErrors, clearSummary } = useWebSocket(groupId)
 
@@ -57,33 +74,152 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
   // 加载消息
   useEffect(() => {
     if (!groupId) return
+    setThinkingAgents(new Map())
     setLoading(true)
-    api.get(`/groups/${groupId}/messages?limit=50`)
-      .then(setMessages)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    // 并行请求：标记已读、加载成员、加载消息
+    Promise.all([
+      api.post(`/groups/${groupId}/read`)
+        .then(() => api.get('/groups').then(setGroups).catch(() => {}))
+        .catch(() => {}),
+      api.get(`/groups/${groupId}/members`).then(setGroupMembers).catch(console.error),
+      api.get(`/groups/${groupId}/messages?limit=50`)
+        .then(setMessages)
+        .catch(console.error),
+    ]).finally(() => setLoading(false))
   }, [groupId])
 
   // 处理收到的 WebSocket 消息
   useEffect(() => {
     if (!lastMessage) return
     if (lastMessage.type === 'message') {
-      setMessages((prev) => [...prev, lastMessage.data])
+      const msg = lastMessage.data
+      setMessages((prev) => [...prev, msg])
+      // AI 消息到达 → 清除该 AI 的思考状态
+      if (msg.sender_type === 'ai' && msg.sender_id) {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(msg.sender_id)
+          return next
+        })
+      }
+    } else if (lastMessage.type === 'ai_thinking') {
+      const d = lastMessage.data
+      if (d.group_id === groupId) {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.set(d.agent_id, d.agent_name)
+          return next
+        })
+      }
+    } else if (lastMessage.type === 'ai_thinking_end') {
+      const d = lastMessage.data
+      if (d.group_id === groupId) {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(d.agent_id)
+          return next
+        })
+      }
+    } else if (lastMessage.type === 'unread_update') {
+      // 其他群聊的未读更新 → 刷新群列表
+      api.get('/groups').then(setGroups).catch(console.error)
+    } else if (lastMessage.type === 'announcement') {
+      const d = lastMessage.data
+      if (d.group_id === groupId) {
+        setMessages((prev) => [...prev, {
+          id: -Date.now(),
+          group_id: groupId,
+          sender_type: 'system',
+          sender_id: 0,
+          sender_name: '📢 群公告',
+          content: d.content,
+          reply_to: null,
+          created_at: new Date().toISOString(),
+        } as Message])
+      }
     }
-  }, [lastMessage])
+  }, [lastMessage, groupId])
 
   // 滚动到底部
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // @提及 过滤后的成员列表
+  const mentionFiltered = mentionQuery
+    ? groupMembers.filter((m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+    : groupMembers
+
+  // 检测输入框中 @ 位置，触发自动补全
+  const detectMention = (value: string, cursorPos: number) => {
+    // 找光标前最近的 @
+    const beforeCursor = value.slice(0, cursorPos)
+    const atIdx = beforeCursor.lastIndexOf('@')
+    if (atIdx === -1) { setMentionActive(false); return }
+    // 确保 @ 是文本开头或前面是空格
+    if (atIdx > 0 && beforeCursor[atIdx - 1] !== ' ') { setMentionActive(false); return }
+    // 提取 @ 后的查询文本（直到光标）
+    const query = beforeCursor.slice(atIdx + 1, cursorPos)
+    // 如果查询包含空格，说明已完成输入，关闭补全
+    if (query.includes(' ')) { setMentionActive(false); return }
+    setMentionQuery(query)
+    setMentionIdx(0)
+    setMentionActive(true)
+  }
+
+  const insertMention = (name: string) => {
+    const ta = textareaRef.current
+    if (!ta) return
+    const value = input
+    const cursorPos = ta.selectionStart
+    const beforeCursor = value.slice(0, cursorPos)
+    const atIdx = beforeCursor.lastIndexOf('@')
+    if (atIdx === -1) return
+    // 替换 @query → @name（带尾部空格）
+    const newBefore = beforeCursor.slice(0, atIdx) + '@' + name + ' '
+    const newValue = newBefore + value.slice(cursorPos)
+    setInput(newValue)
+    setMentionActive(false)
+    // 恢复焦点并移动光标到插入名称后
+    requestAnimationFrame(() => {
+      ta.focus()
+      const newPos = newBefore.length
+      ta.setSelectionRange(newPos, newPos)
+    })
+  }
+
   const handleSend = () => {
     if (!input.trim() || !groupId) return
     sendMessage(input.trim())
     setInput('')
+    setMentionActive(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // @提及 下拉导航
+    if (mentionActive && mentionFiltered.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIdx((prev) => (prev + 1) % mentionFiltered.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIdx((prev) => (prev - 1 + mentionFiltered.length) % mentionFiltered.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insertMention(mentionFiltered[mentionIdx].name)
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionActive(false)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -97,7 +233,15 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         // 确保群聊列表包含这个 DM
         setGroups((prev) => {
           if (prev.find((g) => g.id === dm.group_id)) return prev
-          return [...prev, { id: dm.group_id, name: dm.group_name, owner_type: 'human', owner_id: 0, is_vector_accelerated: false, my_role: 'owner' }]
+          return [...prev, {
+            id: dm.group_id, name: dm.group_name,
+            owner_type: 'human', owner_id: 0,
+            is_vector_accelerated: false, my_role: 'owner',
+            announcement: null, speak_limit_per_minute: 0,
+            speak_limit_window_seconds: 120,
+            unread_count: 0, has_mention: false,
+            last_message_preview: null, dnd_until: null, created_at: null,
+          }]
         })
         onSelectGroup(dm.group_id)
       }
@@ -117,11 +261,11 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
       {/* 群聊列表 + 好友私信 - 始终可见 */}
       <div className="w-56 bg-surface border-r border-border shrink-0 hidden md:flex flex-col">
         {/* 群聊标题 */}
-        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-[#EDE9F6]">
+        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary">
           群聊列表
           <button
             onClick={() => setShowCreateGroup(true)}
-            className="p-1 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-primary-400 transition-colors"
+            className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
             title="创建群聊"
           >
             <Plus size={16} />
@@ -131,7 +275,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         <div className="flex-1 overflow-y-auto py-1">
           {/* 群聊 */}
           {regularGroups.length === 0 ? (
-            <div className="px-3 py-8 text-center text-xs text-[#6B7280]">
+            <div className="px-3 py-8 text-center text-xs text-textMuted">
               暂无群聊，点击 + 创建
             </div>
           ) : (
@@ -139,16 +283,33 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
               <button
                 key={g.id}
                 onClick={() => onSelectGroup(g.id)}
-                className={`w-full text-left px-3 py-2.5 text-sm transition-all duration-150 ${
+                className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                   g.id === groupId
                     ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                    : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
+                    : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
                 }`}
               >
-                <div className="font-medium truncate"># {g.name}</div>
-                {g.is_vector_accelerated && (
-                  <span className="text-[10px] text-mint-400 font-medium">⚡ 加速</span>
-                )}
+                <div className="flex items-center justify-between">
+                  <div className="font-medium truncate flex items-center gap-1">
+                    <span className="truncate"># {g.name}</span>
+                  </div>
+                  {g.unread_count > 0 && (
+                    <span className={`shrink-0 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+                      g.has_mention
+                        ? 'bg-rose-500 shadow-sm shadow-rose-500/30'
+                        : 'bg-primary-500/80'
+                    }`}>
+                      {g.unread_count > 99 ? '99+' : g.unread_count}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-textMuted truncate mt-0.5">
+                  {g.dnd_until && <BellOff size={10} className="inline mr-1 text-rose-400" />}
+                  {g.has_mention && !g.dnd_until && (
+                    <span className="text-rose-400 font-medium">[@你] </span>
+                  )}
+                  {g.last_message_preview || '暂无消息'}
+                </div>
               </button>
             ))
           )}
@@ -156,7 +317,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           {/* 已有 DM 列表 */}
           {dmGroups.length > 0 && (
             <>
-              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
                 私信
               </div>
               {dmGroups.map((g) => (
@@ -166,11 +327,11 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                   className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                     g.id === groupId
                       ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                      : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
+                      : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
                   }`}
                 >
                   <div className="truncate flex items-center gap-1.5">
-                    <MessageSquare size={12} className="shrink-0 text-[#6B7280]" />
+                    <MessageSquare size={12} className="shrink-0 text-textMuted" />
                     <span className="font-medium">
                       {g.name.replace(/^DM:\s*/, '')}
                     </span>
@@ -183,7 +344,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           {/* 好友列表（可点击发起 DM） */}
           {friends.length > 0 && (
             <>
-              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
                 好友
               </div>
               {friends.map((f) => {
@@ -207,7 +368,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                     className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 flex items-center gap-2 ${
                       isActive
                         ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                        : 'hover:bg-[#1E1A30] text-[#9CA3B0] border-l-2 border-transparent'
+                        : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full shrink-0 ${
@@ -215,7 +376,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                       f.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
                     }`} />
                     <span className="truncate flex-1">{f.friend_name}</span>
-                    <ChevronRight size={12} className="text-[#6B7280] shrink-0" />
+                    <ChevronRight size={12} className="text-textMuted shrink-0" />
                   </button>
                 )
               })}
@@ -229,7 +390,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         <div className="flex-1 flex items-center justify-center bg-canvas">
           <div className="text-center">
             <MessageBubblePlaceholder />
-            <p className="mt-4 text-lg text-[#9CA3B0] font-medium">选择一个群聊开始对话</p>
+            <p className="mt-4 text-lg text-textSecondary font-medium">选择一个群聊开始对话</p>
             {groups.length === 0 && (
               <button
                 onClick={() => setShowCreateGroup(true)}
@@ -262,12 +423,12 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 
           {/* 群聊头部 */}
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
-            <h2 className="font-semibold text-[#EDE9F6] text-sm">
+            <h2 className="font-semibold text-textPrimary text-sm">
               # {currentGroup?.name || '加载中...'}
             </h2>
             <button
               onClick={() => setShowInvite(true)}
-              className="p-1 rounded-lg hover:bg-[#1E1A30] text-[#6B7280] hover:text-primary-400 transition-colors"
+              className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
               title="邀请成员"
             >
               <UserPlus size={16} />
@@ -277,16 +438,41 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                 <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-[#6B7280]">
+              <span className="inline-flex items-center gap-1 text-[10px] text-textMuted">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280]" /> 离线
               </span>
             )}
-            <span
-              className="inline-flex items-center gap-1 text-xs text-[#6B7280] cursor-pointer hover:text-rose-400 ml-auto transition-colors"
-              title="点击切换免打扰"
+            <button
+              onClick={async () => {
+                if (!currentGroup) return
+                try {
+                  if (currentGroup.dnd_until) {
+                    await api.post(`/groups/${currentGroup.id}/dnd/cancel`)
+                    setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, dnd_until: null } : g))
+                  } else {
+                    await api.post(`/groups/${currentGroup.id}/dnd`, { group_id: currentGroup.id, duration_minutes: null })
+                    setGroups(prev => prev.map(g => g.id === currentGroup.id ? { ...g, dnd_until: 'permanent' } : g))
+                  }
+                } catch { /* ignore */ }
+              }}
+              className={`p-1 rounded-lg transition-colors ml-auto ${
+                currentGroup?.dnd_until
+                  ? 'text-rose-400 hover:bg-rose-400/10'
+                  : 'text-textMuted hover:text-rose-400 hover:bg-elevated'
+              }`}
+              title={currentGroup?.dnd_until ? '点击取消免打扰' : '点击开启免打扰'}
             >
-              <Bell size={14} />
-            </span>
+              {currentGroup?.dnd_until ? <BellOff size={14} /> : <Bell size={14} />}
+            </button>
+            {currentGroup && (
+              <button
+                onClick={() => setShowSettings(true)}
+                className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
+                title="群聊设置"
+              >
+                <Settings size={14} />
+              </button>
+            )}
           </div>
 
           {/* 未读摘要提示 */}
@@ -314,10 +500,10 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           <div className="flex-1 overflow-y-auto px-4 py-4 bg-canvas">
             {loading ? (
               <div className="flex items-center justify-center h-full">
-                <Loader2 className="animate-spin text-[#6B7280]" size={24} />
+                <Loader2 className="animate-spin text-textMuted" size={24} />
               </div>
             ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-[#6B7280] text-sm">
+              <div className="flex items-center justify-center h-full text-textMuted text-sm">
                 暂无消息，发送第一条消息吧
               </div>
             ) : (
@@ -336,23 +522,79 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                 />
               ))
             )}
+            {/* AI 思考中占位气泡 */}
+            {Array.from(thinkingAgents.entries()).map(([agentId, agentName]) => (
+              <MessageBubble
+                key={`thinking-${agentId}`}
+                senderName={agentName}
+                content="..."
+                isHuman={false}
+                createdAt={new Date().toISOString()}
+                senderType="ai"
+                senderId={agentId}
+                thinking={true}
+                onAvatarClick={(type, id, name, state) =>
+                  setProfileCard({ type, id, name, state })
+                }
+              />
+            ))}
             <div ref={messagesEndRef} />
           </div>
 
           {/* 输入框 */}
-          <div className="p-3 bg-surface border-t border-border">
+          <div className="p-3 bg-surface border-t border-border relative">
+            {/* @提及 自动补全下拉 */}
+            {mentionActive && mentionFiltered.length > 0 && (
+              <div className="absolute bottom-full left-3 right-3 mb-1 bg-elevated border border-border rounded-xl shadow-2xl shadow-black/20 z-50 max-h-48 overflow-y-auto">
+                {mentionFiltered.map((m, i) => (
+                  <button
+                    key={`${m.type}:${m.id}`}
+                    onClick={() => insertMention(m.name)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                      i === mentionIdx
+                        ? 'bg-primary-500/15 text-primary-300'
+                        : 'text-textPrimary hover:bg-elevated'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${
+                      m.state === 'active' ? 'bg-mint-400' :
+                      m.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
+                    }`} />
+                    <span className="font-medium">{m.name}</span>
+                    <span className="text-textMuted text-xs ml-auto">
+                      {m.type === 'ai' ? '🤖 AI' : '👤'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-end gap-2">
               <textarea
+                ref={textareaRef}
                 value={input}
                 onChange={(e) => {
                   setInput(e.target.value)
+                  const pos = e.target.selectionStart
+                  detectMention(e.target.value, pos)
                   if (e.target.value && !input) sendTyping(true)
                   if (!e.target.value && input) sendTyping(false)
                 }}
+                onKeyUp={(e) => {
+                  // 方向键移动光标后重新检测 @提及
+                  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)) {
+                    const ta = e.currentTarget
+                    detectMention(ta.value, ta.selectionStart)
+                  }
+                }}
+                onClick={(e) => {
+                  const ta = e.currentTarget
+                  setTimeout(() => detectMention(ta.value, ta.selectionStart), 0)
+                }}
                 onKeyDown={handleKeyDown}
-                placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+                placeholder="输入消息... @AI名称 提及, Enter 发送, Shift+Enter 换行"
                 rows={1}
-                className="flex-1 resize-none rounded-xl border border-border bg-[#0C0A14] px-4 py-2.5 text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"
+                className="flex-1 resize-none rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"
               />
               <button
                 onClick={handleSend}
@@ -396,6 +638,34 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           onClose={() => setProfileCard(null)}
         />
       )}
+
+      {/* 群设置面板 */}
+      {showSettings && currentGroup && (
+        <GroupSettingsPanel
+          group={{
+            id: currentGroup.id,
+            name: currentGroup.name,
+            owner_type: currentGroup.owner_type,
+            owner_id: currentGroup.owner_id,
+            is_vector_accelerated: currentGroup.is_vector_accelerated,
+            announcement: currentGroup.announcement,
+            speak_limit_per_minute: currentGroup.speak_limit_per_minute,
+            speak_limit_window_seconds: currentGroup.speak_limit_window_seconds,
+            my_role: currentGroup.my_role,
+          }}
+          onClose={() => setShowSettings(false)}
+          onUpdate={(updated) => {
+            setGroups((prev) =>
+              prev.map((g) => (g.id === currentGroup.id ? { ...g, ...updated } : g))
+            )
+          }}
+          onLeave={() => {
+            setShowSettings(false)
+            setGroups((prev) => prev.filter((g) => g.id !== currentGroup.id))
+            onSelectGroup(groups.find(g => g.id !== currentGroup.id)?.id || 0)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -403,9 +673,9 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
 function MessageBubblePlaceholder() {
   return (
     <svg className="mx-auto" width="80" height="80" viewBox="0 0 80 80" fill="none">
-      <rect x="10" y="15" width="60" height="45" rx="12" className="fill-[#1E1A30]" />
-      <circle cx="30" cy="37" r="8" className="fill-[#2A2540]" />
-      <circle cx="50" cy="37" r="8" className="fill-[#2A2540]" />
+      <rect x="10" y="15" width="60" height="45" rx="12" className="fill-elevated" />
+      <circle cx="30" cy="37" r="8" className="fill-border" />
+      <circle cx="50" cy="37" r="8" className="fill-border" />
     </svg>
   )
 }
@@ -441,15 +711,15 @@ function CreateGroupModal({
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4 text-[#EDE9F6]">创建新群聊</h2>
+        <h2 className="text-lg font-semibold mb-4 text-textPrimary">创建新群聊</h2>
         <div>
-          <label className="block text-xs font-medium mb-1.5 text-[#9CA3B0]">群聊名称 *</label>
+          <label className="block text-xs font-medium mb-1.5 text-textSecondary">群聊名称 *</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-[#0C0A14] text-[#EDE9F6] placeholder:text-[#6B7280] text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             placeholder="给群聊起个名字"
             autoFocus
           />
@@ -458,7 +728,7 @@ function CreateGroupModal({
         <div className="flex gap-2 mt-4">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium"
+            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
           >
             取消
           </button>
@@ -587,16 +857,16 @@ function InviteMemberModal({
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-1 text-[#EDE9F6]">邀请成员</h2>
-        <p className="text-xs text-[#6B7280] mb-4">从好友列表勾选要邀请的成员</p>
+        <h2 className="text-lg font-semibold mb-1 text-textPrimary">邀请成员</h2>
+        <p className="text-xs text-textMuted mb-4">从好友列表勾选要邀请的成员</p>
 
         {/* 好友列表 */}
         {friendsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="animate-spin text-[#6B7280]" size={20} />
+            <Loader2 className="animate-spin text-textMuted" size={20} />
           </div>
         ) : friends.length === 0 ? (
-          <div className="py-8 text-center text-sm text-[#6B7280]">
+          <div className="py-8 text-center text-sm text-textMuted">
             暂无好友，请先在搜索框中添加好友
           </div>
         ) : (
@@ -620,18 +890,18 @@ function InviteMemberModal({
                     className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
                       checked
                         ? 'bg-primary-500/10'
-                        : 'hover:bg-[#1E1A30]'
+                        : 'hover:bg-elevated'
                     }`}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleFriend(f.friend_type, f.friend_id)}
-                      className="w-4 h-4 rounded border-border bg-[#0C0A14] text-primary-500 focus:ring-primary-500/50"
+                      className="w-4 h-4 rounded border-border bg-canvas text-primary-500 focus:ring-primary-500/50"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[#EDE9F6] truncate">
+                        <span className="text-sm font-medium text-textPrimary truncate">
                           {f.friend_name}
                         </span>
                         <span className="text-xs">
@@ -639,7 +909,7 @@ function InviteMemberModal({
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs text-[#6B7280] shrink-0">
+                    <span className="text-xs text-textMuted shrink-0">
                       {f.friend_type === 'ai' ? '🤖 AI' : '👤'}
                     </span>
                   </label>
@@ -653,7 +923,7 @@ function InviteMemberModal({
         {!showManual ? (
           <button
             onClick={() => setShowManual(true)}
-            className="text-xs text-[#6B7280] hover:text-primary-400 mb-3 self-start"
+            className="text-xs text-textMuted hover:text-primary-400 mb-3 self-start"
           >
             + 手动输入 ID
           </button>
@@ -667,7 +937,7 @@ function InviteMemberModal({
                   className={`flex-1 py-1.5 text-xs rounded-lg border transition-colors ${
                     manualType === t
                       ? 'bg-primary-500/15 border-primary-500/40 text-primary-300'
-                      : 'border-border text-[#9CA3B0] hover:bg-[#1E1A30]'
+                      : 'border-border text-textSecondary hover:bg-elevated'
                   }`}
                 >
                   {t === 'ai' ? '🤖 AI' : '👤 人类'}
@@ -680,21 +950,21 @@ function InviteMemberModal({
                 value={manualId}
                 onChange={(e) => setManualId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleManualInvite()}
-                className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-[#0C0A14] text-sm text-[#EDE9F6] placeholder:text-[#6B7280] focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 placeholder="输入 ID"
                 min={1}
               />
               <button
                 onClick={handleManualInvite}
                 disabled={!manualId.trim() || loading}
-                className="px-3 py-1.5 text-xs bg-[#1E1A30] text-[#9CA3B0] rounded-lg hover:bg-[#2A2540] disabled:opacity-30"
+                className="px-3 py-1.5 text-xs bg-elevated text-textSecondary rounded-lg hover:bg-border disabled:opacity-30"
               >
                 邀请
               </button>
             </div>
             <button
               onClick={() => setShowManual(false)}
-              className="text-xs text-[#6B7280] hover:text-[#9CA3B0]"
+              className="text-xs text-textMuted hover:text-textSecondary"
             >
               收起
             </button>
@@ -711,7 +981,7 @@ function InviteMemberModal({
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-[#1E1A30] text-[#9CA3B0] transition-colors font-medium"
+            className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
           >
             取消
           </button>

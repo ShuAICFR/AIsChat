@@ -21,8 +21,8 @@ export default function AdminPage() {
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
       <div className="px-6 py-4 border-b border-border bg-surface">
-        <h1 className="text-xl font-bold text-[#EDE9F6] tracking-tight">管理员面板</h1>
-        <p className="text-sm text-[#9CA3B0] mt-0.5">系统管理与监控</p>
+        <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
+        <p className="text-sm text-textSecondary mt-0.5">系统管理与监控</p>
       </div>
 
       {/* Tab 导航 */}
@@ -34,7 +34,7 @@ export default function AdminPage() {
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-primary-400 text-primary-300'
-                : 'border-transparent text-[#6B7280] hover:text-[#9CA3B0]'
+                : 'border-transparent text-textMuted hover:text-textSecondary'
             }`}
           >
             <tab.icon size={16} />
@@ -63,7 +63,7 @@ function OverviewTab() {
     api.get('/admin/overview').then(setStats).catch(console.error)
   }, [])
 
-  if (!stats) return <p className="text-[#6B7280]">加载中...</p>
+  if (!stats) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -83,8 +83,8 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
           <Icon size={20} className="text-primary-400" />
         </div>
         <div>
-          <p className="text-2xl font-bold text-[#EDE9F6]">{value}</p>
-          <p className="text-xs text-[#9CA3B0]">{label}</p>
+          <p className="text-2xl font-bold text-textPrimary">{value}</p>
+          <p className="text-xs text-textSecondary">{label}</p>
         </div>
       </div>
     </div>
@@ -99,7 +99,7 @@ function UsersTab() {
     api.get(`/admin/users?page=${page}`).then(setData).catch(console.error)
   }, [page])
 
-  if (!data) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div>
@@ -107,12 +107,12 @@ function UsersTab() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">ID</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">用户名</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">角色</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">额度</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">状态</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">用户名</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">角色</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -153,14 +153,14 @@ function UsersTab() {
         <button
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1}
-          className="text-sm px-3 py-1 border border-border bg-[#0C0A14] rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40"
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
         >
           上一页
         </button>
         <button
           onClick={() => setPage((p) => p + 1)}
           disabled={data.items.length < data.page_size}
-          className="text-sm px-3 py-1 border border-border bg-[#0C0A14] rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40"
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
         >
           下一页
         </button>
@@ -175,19 +175,19 @@ function AgentsTab() {
     api.get('/admin/agents').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">ID</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">名称</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">所属用户</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">状态</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">自修改</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">所属用户</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">自修改</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -229,18 +229,18 @@ function GroupsTab() {
     api.get('/admin/groups').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">ID</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">名称</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">群主</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">向量加速</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">群主</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">向量加速</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -309,12 +309,12 @@ function CodesTab() {
           <div>
             <label className="block text-xs mb-1">额度</label>
             <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value))}
-              className="w-20 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm" />
+              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded text-sm" />
           </div>
           <div>
             <label className="block text-xs mb-1">有效期（天）</label>
             <input type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))}
-              className="w-20 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm" />
+              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded text-sm" />
           </div>
           <button onClick={handleGenerate}
             className="px-4 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
@@ -336,10 +336,10 @@ function CodesTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">兑换码</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">额度</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">到期时间</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">状态</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">兑换码</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">到期时间</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
               </tr>
             </thead>
             <tbody>
@@ -350,7 +350,7 @@ function CodesTab() {
                   <td className="py-2 px-3">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
                     {c.used_by ? (
-                      <span className="text-xs text-[#6B7280]">已使用 (uid:{c.used_by})</span>
+                      <span className="text-xs text-textMuted">已使用 (uid:{c.used_by})</span>
                     ) : (
                       <span className="text-xs text-mint-400">可用</span>
                     )}
@@ -371,18 +371,18 @@ function LogsTab() {
     api.get('/admin/logs?page_size=50').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">时间</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">类型</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作者</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">目标</th>
-            <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">详情</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作者</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">目标</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">详情</th>
           </tr>
         </thead>
         <tbody>
@@ -392,11 +392,11 @@ function LogsTab() {
                 {log.created_at ? new Date(log.created_at).toLocaleString('zh-CN') : '-'}
               </td>
               <td className="py-2 px-3">
-                <span className="text-xs px-2 py-0.5 rounded bg-gray-100 bg-[#1E1A30]">{log.log_type}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-elevated">{log.log_type}</span>
               </td>
               <td className="py-2 px-3">{log.operator_type}:{log.operator_id}</td>
               <td className="py-2 px-3">{log.target_type}:{log.target_id}</td>
-              <td className="py-2 px-3 text-xs text-[#9CA3B0] max-w-[200px] truncate">
+              <td className="py-2 px-3 text-xs text-textSecondary max-w-[200px] truncate">
                 {JSON.stringify(log.details)}
               </td>
             </tr>
@@ -431,7 +431,7 @@ function OpenCLITab() {
             className={`px-3 py-1.5 text-sm rounded-xl transition-colors ${
               tab === t.key
                 ? 'bg-primary-500 text-white'
-                : 'bg-gray-100 bg-[#1E1A30] text-gray-600 dark:text-[#6B7280] hover:bg-gray-200 dark:hover:bg-gray-600'
+                : 'bg-elevated text-textMuted hover:bg-border'
             }`}
           >
             {t.label}
@@ -476,7 +476,7 @@ function OpenCLIConfigSection() {
     setSaving(false)
   }
 
-  if (!config) return <p className="text-[#6B7280]">加载中...</p>
+  if (!config) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
@@ -486,7 +486,7 @@ function OpenCLIConfigSection() {
           <label className="text-sm font-medium">启用 OpenCLI</label>
           <button
             onClick={() => setEnabled(!enabled)}
-            className={`w-12 h-6 rounded-full transition-colors ${enabled ? 'bg-mint-400' : 'bg-[#2A2540]'}`}
+            className={`w-12 h-6 rounded-full transition-colors ${enabled ? 'bg-mint-400' : 'bg-border'}`}
           >
             <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
@@ -494,12 +494,12 @@ function OpenCLIConfigSection() {
         <div>
           <label className="block text-sm font-medium mb-1">默认速率限制（次/分钟）</label>
           <input type="number" value={rate} onChange={(e) => setRate(parseInt(e.target.value))}
-            className="w-24 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm" />
+            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded text-sm" />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">超时时间（秒）</label>
           <input type="number" value={timeout} onChange={(e) => setTimeout_(parseInt(e.target.value))}
-            className="w-24 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm" />
+            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded text-sm" />
         </div>
         <button onClick={handleSave} disabled={saving}
           className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
@@ -523,7 +523,7 @@ function OpenCLIAgentsSection() {
     setData(newData)
   }
 
-  if (!data.length) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data.length) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
@@ -532,12 +532,12 @@ function OpenCLIAgentsSection() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">ID</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">名称</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">所属用户</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">OpenCLI</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">速率限制</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">所属用户</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">OpenCLI</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">速率限制</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -547,7 +547,7 @@ function OpenCLIAgentsSection() {
                 <td className="py-2 px-3 font-medium">{a.agent_name}</td>
                 <td className="py-2 px-3">{a.owner_id}</td>
                 <td className="py-2 px-3">
-                  <span className={a.enabled ? 'text-mint-400' : 'text-[#6B7280]'}>
+                  <span className={a.enabled ? 'text-mint-400' : 'text-textMuted'}>
                     {a.enabled ? '已启用' : '未启用'}
                   </span>
                 </td>
@@ -610,7 +610,7 @@ function OpenCLICommandsSection() {
           <div>
             <label className="block text-xs mb-1">命令/正则</label>
             <input value={pattern} onChange={(e) => setPattern(e.target.value)}
-              className="w-40 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm"
+              className="w-40 px-2 py-1.5 border border-border bg-canvas rounded text-sm"
               placeholder="bilibili 或 gh .*" />
           </div>
           <div className="flex items-center gap-1.5 mb-1">
@@ -621,7 +621,7 @@ function OpenCLICommandsSection() {
           <div>
             <label className="block text-xs mb-1">描述</label>
             <input value={desc} onChange={(e) => setDesc(e.target.value)}
-              className="w-32 px-2 py-1.5 border border-border bg-[#0C0A14] rounded text-sm"
+              className="w-32 px-2 py-1.5 border border-border bg-canvas rounded text-sm"
               placeholder="可选" />
           </div>
           <button onClick={handleAdd}
@@ -638,11 +638,11 @@ function OpenCLICommandsSection() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">模式</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">类型</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">描述</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">状态</th>
-                <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">操作</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">模式</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">描述</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -650,9 +650,9 @@ function OpenCLICommandsSection() {
                 <tr key={c.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs">{c.pattern}</td>
                   <td className="py-2 px-3 text-xs">{c.is_regex ? '正则' : '精确'}</td>
-                  <td className="py-2 px-3 text-xs text-[#9CA3B0]">{c.description || '-'}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{c.description || '-'}</td>
                   <td className="py-2 px-3">
-                    <span className={c.enabled ? 'text-mint-400 text-xs' : 'text-[#6B7280] text-xs'}>
+                    <span className={c.enabled ? 'text-mint-400 text-xs' : 'text-textMuted text-xs'}>
                       {c.enabled ? '启用' : '禁用'}
                     </span>
                   </td>
@@ -669,7 +669,7 @@ function OpenCLICommandsSection() {
                 </tr>
               ))}
               {data.length === 0 && (
-                <tr><td colSpan={5} className="py-4 text-center text-[#6B7280]">暂无命令白名单</td></tr>
+                <tr><td colSpan={5} className="py-4 text-center text-textMuted">暂无命令白名单</td></tr>
               )}
             </tbody>
           </table>
@@ -688,7 +688,7 @@ function OpenCLILogsSection() {
     api.get(`/admin/opencli/logs?page=${page}&page_size=30`).then(setData).catch(console.error)
   }, [page])
 
-  if (!data) return <p className="text-[#6B7280]">加载中...</p>
+  if (!data) return <p className="text-textMuted">加载中...</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
@@ -697,12 +697,12 @@ function OpenCLILogsSection() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">时间</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">AI</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">命令</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">退出码</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">耗时</th>
-              <th className="text-left py-2 px-3 font-medium text-[#9CA3B0]">输出预览</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">AI</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">命令</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">退出码</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">耗时</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">输出预览</th>
             </tr>
           </thead>
           <tbody>
@@ -721,7 +721,7 @@ function OpenCLILogsSection() {
                   </span>
                 </td>
                 <td className="py-2 px-3 text-xs">{log.duration_ms}ms</td>
-                <td className="py-2 px-3 text-xs text-[#9CA3B0] max-w-[250px] truncate">
+                <td className="py-2 px-3 text-xs text-textSecondary max-w-[250px] truncate">
                   {log.stdout_truncated || log.stderr_truncated || '-'}
                 </td>
               </tr>
@@ -731,11 +731,11 @@ function OpenCLILogsSection() {
       </div>
       <div className="flex gap-2 mt-3">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-          className="text-sm px-3 py-1 border border-border bg-[#0C0A14] rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40">
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
           上一页
         </button>
         <button onClick={() => setPage(p => p + 1)} disabled={data.items.length < data.page_size}
-          className="text-sm px-3 py-1 border border-border bg-[#0C0A14] rounded hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40">
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
           下一页
         </button>
       </div>

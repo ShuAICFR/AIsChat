@@ -2,12 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   主题 CSS 变量定义
+   浅色（默认） / 深色（.dark 类名）
+   ============================================================ */
+:root {
+  /* 结构色 — 浅色主题 */
+  --tw-canvas: 248 250 252;        /* slate-50 */
+  --tw-surface: 255 255 255;       /* white */
+  --tw-elevated: 255 255 255;      /* white */
+  --tw-border: 226 232 240;        /* slate-200 */
+  /* 文本色 — 浅色主题 */
+  --tw-text-primary: 17 24 39;     /* gray-900 */
+  --tw-text-secondary: 75 85 99;   /* gray-600 */
+  --tw-text-muted: 107 114 128;    /* gray-500 */
+  /* 滚动条 */
+  --tw-scrollbar-thumb: 203 213 225;  /* slate-300 */
+  --tw-scrollbar-thumb-hover: 148 163 184; /* slate-400 */
+}
+
+.dark {
+  /* 结构色 — 深邃紫金深色主题 */
+  --tw-canvas: 12 10 20;           /* #0C0A14 */
+  --tw-surface: 21 18 35;          /* #151223 */
+  --tw-elevated: 30 26 48;         /* #1E1A30 */
+  --tw-border: 42 37 64;           /* #2A2540 */
+  /* 文本色 — 深色主题 */
+  --tw-text-primary: 237 233 246;  /* #EDE9F6 */
+  --tw-text-secondary: 156 163 175;/* #9CA3B0 */
+  --tw-text-muted: 107 114 128;    /* #6B7280 */
+  /* 滚动条 */
+  --tw-scrollbar-thumb: 42 37 64;  /* #2A2540 */
+  --tw-scrollbar-thumb-hover: 61 53 96; /* #3D3560 */
+}
+
 @layer base {
   * {
     @apply border-border;
   }
   body {
-    @apply bg-canvas text-[#EDE9F6];
+    @apply bg-canvas text-textPrimary;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -19,22 +53,23 @@
   }
 }
 
-/* 自定义滚动条 — 暗色主题一体化 */
+/* 自定义滚动条 */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
 ::-webkit-scrollbar-thumb {
-  @apply bg-[#2A2540] rounded-full;
+  background-color: rgb(var(--tw-scrollbar-thumb) / 1);
+  @apply rounded-full;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-[#3D3560];
+  background-color: rgb(var(--tw-scrollbar-thumb-hover) / 1);
 }
 
-/* KaTeX 暗色适配 */
+/* KaTeX 颜色适配 */
 .katex {
-  @apply text-[#EDE9F6];
+  @apply text-textPrimary;
 }
 .katex .mathnormal {
-  @apply text-[#C4B5FD];
+  @apply text-primary-300;
 }
 
 /* AI 脉动光环 — 标志性视觉元素 */
@@ -61,5 +96,18 @@
   /* 消息入场动画 */
   .msg-enter {
     animation: fadeIn 0.3s ease-out;
+  }
+
+  /* 面板滑入动画 */
+  @keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+  .animate-slide-in {
+    animation: slideInRight 0.25s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 }

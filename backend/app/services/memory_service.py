@@ -16,12 +16,17 @@ async def recall_relevant_memories(
     api_base_url: str = "https://api.deepseek.com",
     api_key: str | None = None,
     top_k: int = 5,
-    similarity_threshold: float = 0.5,
+    similarity_threshold: float = 0.35,
+    group_id: int | None = None,
 ) -> list[dict]:
     """
     检索与当前对话相关的记忆（向量相似度搜索）。
 
-    返回: [{id, title, content, similarity}]
+    检索范围：
+    - 该 AI 的私有记忆（scope='private'）
+    - 群共享记忆（scope='group'，群内任何 AI 存储的）
+
+    返回: [{id, title, content, scope, similarity}]
     """
     from app.utils.embedding import get_embedding
 
@@ -34,27 +39,51 @@ async def recall_relevant_memories(
 
     embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
-    # 检索该 AI 的私有记忆 + 群聊记忆
-    sql = text("""
-        SELECT rm.id, rm.title, rm.scope,
-               1 - (rm.embedding <=> :embedding) AS similarity,
-               dm.content
-        FROM rough_memories rm
-        LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
-        WHERE rm.owner_type = 'ai'
-          AND rm.owner_id = :agent_id
-          AND rm.embedding IS NOT NULL
-          AND 1 - (rm.embedding <=> :embedding) > :threshold
-        ORDER BY rm.embedding <=> :embedding
-        LIMIT :top_k
-    """)
-
-    result = await db.execute(sql, {
-        "embedding": embedding_str,
-        "agent_id": agent_id,
-        "threshold": similarity_threshold,
-        "top_k": top_k,
-    })
+    # 检索范围：该 AI 的私有记忆 + 群内共享记忆（其他 AI 在群中存储的 group scope）
+    if group_id:
+        sql = text("""
+            SELECT rm.id, rm.title, rm.scope,
+                   1 - (rm.embedding <=> :embedding) AS similarity,
+                   dm.content
+            FROM rough_memories rm
+            LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+            WHERE rm.embedding IS NOT NULL
+              AND 1 - (rm.embedding <=> :embedding) > :threshold
+              AND (
+                  (rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private')
+                  OR
+                  (rm.scope = 'group' AND rm.group_id = :group_id)
+              )
+            ORDER BY rm.embedding <=> :embedding
+            LIMIT :top_k
+        """)
+        result = await db.execute(sql, {
+            "embedding": embedding_str,
+            "agent_id": agent_id,
+            "group_id": group_id,
+            "threshold": similarity_threshold,
+            "top_k": top_k,
+        })
+    else:
+        sql = text("""
+            SELECT rm.id, rm.title, rm.scope,
+                   1 - (rm.embedding <=> :embedding) AS similarity,
+                   dm.content
+            FROM rough_memories rm
+            LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+            WHERE rm.owner_type = 'ai'
+              AND rm.owner_id = :agent_id
+              AND rm.embedding IS NOT NULL
+              AND 1 - (rm.embedding <=> :embedding) > :threshold
+            ORDER BY rm.embedding <=> :embedding
+            LIMIT :top_k
+        """)
+        result = await db.execute(sql, {
+            "embedding": embedding_str,
+            "agent_id": agent_id,
+            "threshold": similarity_threshold,
+            "top_k": top_k,
+        })
 
     memories = []
     for row in result:
@@ -117,6 +146,69 @@ async def auto_store_memory(
 
     logger.info(f"💾 AI agent_id={agent_id} 自动存储记忆: {title}")
     return {"success": True, "rough_id": rough.id, "title": title}
+
+
+async def auto_extract_key_facts(
+    db: AsyncSession,
+    agent_id: int,
+    group_id: int,
+    content: str,
+    sender_name: str = "",
+    api_base_url: str = "https://api.deepseek.com",
+    api_key: str | None = None,
+) -> bool:
+    """
+    从消息内容中自动提取关键信息并存储为记忆。
+
+    触发条件（满足任一）：
+    - 明确记忆指令：「记住」「记下」「别忘了」「提醒我」
+    - 偏好表达：「我喜欢」「我不喜欢」「我讨厌」「我偏好」
+    - 决定声明：「决定了」「就这样」「定下来」「确认」
+    - 个人信息：「我是」「我的」「我叫」
+    - 任务分配：「你来负责」「交给你」「你的任务是」
+
+    返回: True 如果存储了记忆，False 如果跳过。
+    """
+    import re
+
+    triggers = [
+        (r'(记住|记下|别忘了|提醒我|记住这个)', "显式记忆请求"),
+        (r'我(喜欢|不喜欢|讨厌|偏好|爱|恨)', "偏好表达"),
+        (r'(决定了|就这样|定下来|确认了|说定了)', "决定"),
+        (r'我(是|叫|的|在|做|从事)', "个人信息"),
+        (r'(你来负责|交给你|你的任务是|你负责)', "任务分配"),
+        (r'(目标|计划是|下一步|里程碑)', "目标/计划"),
+    ]
+
+    triggered_category = None
+    for pattern, category in triggers:
+        if re.search(pattern, content):
+            triggered_category = category
+            break
+
+    if not triggered_category:
+        return False
+
+    # 生成标题（取内容前 60 字符）
+    clean_content = content.strip()
+    title = clean_content[:60]
+    if len(clean_content) > 60:
+        title += "..."
+
+    try:
+        await auto_store_memory(
+            db, agent_id, group_id,
+            title=f"[{triggered_category}] {title}",
+            content=clean_content[:500],
+            scope="private",
+            api_base_url=api_base_url,
+            api_key=api_key,
+        )
+        logger.info(f"📝 自动提取记忆成功: [{triggered_category}] {title[:50]}")
+        return True
+    except Exception as e:
+        logger.warning(f"自动提取记忆失败: {e}")
+        return False
 
 
 def format_memories_for_prompt(memories: list[dict]) -> str:

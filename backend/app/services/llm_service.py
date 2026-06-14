@@ -117,17 +117,58 @@ async def build_messages(
 
     messages = []
 
-    # 1. System prompt（基础）
-    system_prompt = agent.current_system_prompt or (
+    # ═══════════════════════════════════════════════════
+    # 固定前缀块（所有 AI 共享，最大化 prompt cache 命中）
+    # ═══════════════════════════════════════════════════
+    fixed_prefix = (
+        "## 对话风格\n"
+        "除非工作需要或特殊情况，回答尽量单句或单行，不建议发送长篇大段消息。\n"
+        "以下情况可以不受此限：解释复杂信息、输出系统资料、强烈表达所思所想、"
+        "多人同时对话需要分别回应等。\n"
+        "你也可以一次发送多条消息泡、递进式表达——拆分长内容到多条短消息里，"
+        "让对话更鲜活自然。但具体聊天形式不必死板，灵活把握节奏。\n"
+        "\n"
+        "## 提及（@）能力\n"
+        "你可以用 @名称 来提及群里的任何人（AI 或人类）。\n"
+        "- @某个AI → 那个 AI 一定会注意到你的消息（即使它在免打扰状态）\n"
+        "- @某个用户 → 提醒那个人类查看\n"
+        "- @all 或 @ai → 通知所有 AI 成员\n"
+        "善用提及来引导对话、呼叫特定的人、或在需要某人注意时使用。\n"
+        "\n"
+        "## 长期记忆系统\n"
+        "你拥有 store_memory 和 recall_memory 两个工具来管理长期记忆。"
+        "记忆是你与用户长期关系的基石——**不存储就等于遗忘**。\n\n"
+        "### 必须在以下情况调用 store_memory（不调用视为失职）：\n"
+        "1. **个人信息**：有人告诉你姓名、职业、爱好、生日、联系方式等\n"
+        "2. **偏好表达**：有人明确说喜欢/不喜欢/讨厌/想要什么\n"
+        "3. **决定与约定**：群内做出决定、定下计划、分配任务、约定时间\n"
+        "4. **重要事实**：讨论中出现的专业知识、关键数据、项目里程碑\n"
+        "5. **关系变化**：加好友、建群、角色变更等社交事件\n\n"
+        "### 记忆存储规范：\n"
+        "- `title`：简短可检索的标题（如「张三的职业偏好」「项目死线 6-20」）\n"
+        "- `content`：完整记录相关细节，包含上下文和来源\n"
+        "- `scope`：个人私事用 `private`，群内约定/共享知识用 `group`\n\n"
+        "### recall_memory 使用时机：\n"
+        "- 讨论涉及过去话题时，主动调用 recall_memory 查找相关记忆\n"
+        "- 系统已自动注入了最相关的记忆，但你可以主动检索更多"
+    )
+
+    # ═══════════════════════════════════════════════════
+    # 变动块（每个 AI / 每次请求不同，附加在固定前缀之后）
+    # ═══════════════════════════════════════════════════
+    # 1. AI 人格 prompt
+    custom_prompt = agent.current_system_prompt or (
         f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
         "可以调用工具来发送消息、存储记忆、切换状态等。"
     )
+
+    system_prompt = fixed_prefix + "\n\n" + custom_prompt
 
     # 1b. 先获取最近消息片段，用作记忆检索的查询
     recent_for_query = await get_recent_messages(db, group_id, limit=5)
     query_text = " ".join([m.content[:200] for m in recent_for_query if m.content])
 
-    # 1c. 注入相关记忆（用最近消息内容作为检索查询）
+    # 1c. 注入相关记忆（用最近消息内容作为检索查询，含私有+群共享）
     if query_text.strip():
         try:
             from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
@@ -137,18 +178,13 @@ async def build_messages(
                 api_base_url=api_base_url or "https://api.deepseek.com",
                 api_key=api_key,
                 top_k=5,
+                group_id=group_id,  # 同时检索群共享记忆
             )
             if memories:
                 memory_text = format_memories_for_prompt(memories)
                 system_prompt = system_prompt + "\n\n" + memory_text
         except Exception as e:
             logger.warning(f"记忆注入失败（非致命）: {e}")
-
-    # 鼓励 AI 使用 store_memory 工具
-    system_prompt += (
-        "\n\n你有 store_memory 工具，可以在对话中遇到值得记住的信息时主动存储。"
-        "存储标题应简洁概括内容，内容应包含关键细节。"
-    )
 
     messages.append({"role": "system", "content": system_prompt})
 

@@ -2,11 +2,13 @@
 群聊与消息路由
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.group import (
     GroupCreateRequest, GroupInviteRequest, GroupResponse,
-    SetDndRequest, UnreadSummaryItem, UnreadSummaryResponse,
+    GroupUpdateRequest, AnnouncementRequest, RoleChangeRequest,
+    SetDndRequest, UnreadSummaryItem, UnreadSummaryResponse, UnreadResponse,
 )
 from app.schemas.message import MessageResponse
 from app.services.group_service import (
@@ -20,6 +22,14 @@ from app.services.group_service import (
     set_group_dnd,
     cancel_group_dnd,
     is_member_in_dnd,
+    update_group_settings,
+    set_announcement,
+    delete_announcement,
+    change_member_role,
+    remove_member,
+    leave_group,
+    get_unread_info,
+    update_last_read,
 )
 from app.utils.auth import get_current_user
 
@@ -109,19 +119,32 @@ async def list_members(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取群成员列表"""
+    """获取群成员列表（含名称和在线状态，用于 @提及自动补全）"""
+    from app.models.user import User
+    from app.models.agent import Agent as AgentModel
     members = await get_group_members(db, group_id)
-    return [
-        {
-            "group_id": m.group_id,
-            "member_type": m.member_type,
-            "member_id": m.member_id,
+    result = []
+    for m in members:
+        name = None
+        state = None
+        if m.member_type == "human":
+            u = await db.get(User, m.member_id)
+            if u:
+                name = u.username
+        elif m.member_type == "ai":
+            a = await db.get(AgentModel, m.member_id)
+            if a:
+                name = a.name
+                state = a.state
+        result.append({
+            "type": m.member_type,
+            "id": m.member_id,
+            "name": name or f"{m.member_type}:{m.member_id}",
+            "state": state,
             "role": m.role,
             "dnd_until": str(m.dnd_until) if m.dnd_until else None,
-            "joined_at": str(m.joined_at) if m.joined_at else None,
-        }
-        for m in members
-    ]
+        })
+    return result
 
 
 @router.get("/groups/{group_id}/messages", response_model=list[MessageResponse])
@@ -209,3 +232,160 @@ async def check_dnd(
     """检查指定 AI 在群聊中是否处于免打扰状态"""
     in_dnd = await is_member_in_dnd(db, agent_id, group_id)
     return {"agent_id": agent_id, "group_id": group_id, "in_dnd": in_dnd}
+
+
+# ============================================================
+# Phase 4: 群聊治理端点
+# ============================================================
+
+
+@router.patch("/groups/{group_id}")
+async def update_group(
+    group_id: int,
+    req: GroupUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新群聊设置（名称、公告、发言限制等）。仅群主/管理员可操作。"""
+    try:
+        updates = req.model_dump(exclude_none=True)
+
+        group = await update_group_settings(
+            db, group_id, current_user["user_id"], updates,
+        )
+        return {
+            "id": group.id,
+            "name": group.name,
+            "owner_type": group.owner_type,
+            "owner_id": group.owner_id,
+            "is_vector_accelerated": group.is_vector_accelerated,
+            "announcement": group.announcement,
+            "speak_limit_per_minute": group.speak_limit_per_minute or 0,
+            "speak_limit_window_seconds": group.speak_limit_window_seconds or 120,
+            "created_at": str(group.created_at) if group.created_at else None,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/groups/{group_id}/announcement")
+async def create_announcement(
+    group_id: int,
+    req: AnnouncementRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """设置群公告。仅群主/管理员可操作。"""
+    try:
+        content = await set_announcement(
+            db, group_id, req.content, current_user["user_id"],
+        )
+        # 广播公告到群聊（作为系统消息）
+        from app.routers.ws import manager
+        await manager.broadcast_to_group(
+            group_id,
+            {
+                "type": "announcement",
+                "data": {
+                    "group_id": group_id,
+                    "content": content[:200],
+                    "operator": current_user["username"],
+                },
+            },
+        )
+        return {"message": "公告已更新", "content": content}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/groups/{group_id}/announcement")
+async def remove_announcement(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除群公告。仅群主/管理员可操作。"""
+    try:
+        await delete_announcement(db, group_id, current_user["user_id"])
+        return {"message": "公告已删除"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/groups/{group_id}/members/{member_type}/{member_id}/role")
+async def update_member_role(
+    group_id: int,
+    member_type: str,
+    member_id: int,
+    req: RoleChangeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改成员角色（提拔/降级）。仅群主可操作。"""
+    try:
+        member = await change_member_role(
+            db, group_id, current_user["user_id"],
+            member_type, member_id, req.role,
+        )
+        return {
+            "message": f"角色已更新为 {req.role}",
+            "member_type": member.member_type,
+            "member_id": member.member_id,
+            "role": member.role,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/groups/{group_id}/members/{member_type}/{member_id}")
+async def kick_member(
+    group_id: int,
+    member_type: str,
+    member_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """将成员踢出群聊。仅群主/管理员可操作。"""
+    try:
+        await remove_member(
+            db, group_id, current_user["user_id"],
+            member_type, member_id,
+        )
+        return {"message": "成员已移出群聊"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/groups/{group_id}/leave")
+async def leave(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """退出群聊。群主需先转让。"""
+    try:
+        await leave_group(db, group_id, "human", current_user["user_id"])
+        return {"message": "已退出群聊"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/groups/{group_id}/unread")
+async def unread_info(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前用户在该群的未读信息。"""
+    return await get_unread_info(db, group_id, current_user["user_id"])
+
+
+@router.post("/groups/{group_id}/read")
+async def mark_read(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """标记当前用户已读该群消息（进入群聊时调用）。"""
+    await update_last_read(db, group_id, "human", current_user["user_id"])
+    return {"message": "已标记为已读"}

@@ -16,6 +16,15 @@ class GroupInviteRequest(BaseModel):
     member_id: int
 
 
+class GroupUpdateRequest(BaseModel):
+    """更新群聊设置请求"""
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    announcement: str | None = None
+    speak_limit_per_minute: int | None = Field(default=None, ge=0, le=30)
+    speak_limit_window_seconds: int | None = Field(default=None, ge=30, le=600)
+    is_vector_accelerated: bool | None = None
+
+
 class GroupResponse(BaseModel):
     """群聊响应"""
     id: int
@@ -23,6 +32,14 @@ class GroupResponse(BaseModel):
     owner_type: str
     owner_id: int
     is_vector_accelerated: bool
+    announcement: str | None = None
+    speak_limit_per_minute: int = 0
+    speak_limit_window_seconds: int = 120
+    my_role: str | None = None
+    unread_count: int = 0
+    has_mention: bool = False
+    last_message_preview: str | None = None
+    dnd_until: str | None = None
     created_at: str | None
 
 
@@ -40,6 +57,24 @@ class SetDndRequest(BaseModel):
     """设置群聊免打扰请求"""
     group_id: int = Field(..., description="群聊 ID")
     duration_minutes: int | None = Field(default=None, description="免打扰时长（分钟），0 或 null 表示永久")
+
+
+class AnnouncementRequest(BaseModel):
+    """设置群公告请求"""
+    content: str = Field(..., min_length=1, max_length=2000)
+
+
+class RoleChangeRequest(BaseModel):
+    """修改成员角色请求"""
+    role: str = Field(..., description="admin | member")
+
+
+class UnreadResponse(BaseModel):
+    """单个群聊的未读信息"""
+    unread_count: int
+    has_mention: bool
+    has_announcement: bool
+    last_message: dict | None = None  # {content, sender_name, created_at}
 
 
 class UnreadSummaryItem(BaseModel):

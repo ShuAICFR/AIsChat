@@ -183,6 +183,101 @@ CREATE TABLE IF NOT EXISTS redemption_codes (
 );
 
 -- ============================================================
+-- OpenCLI 权限配置与日志
+-- ============================================================
+CREATE TABLE IF NOT EXISTS opencli_config (
+    id INT PRIMARY KEY DEFAULT 1,
+    global_enabled BOOLEAN DEFAULT FALSE,
+    default_rate_limit_per_minute INT DEFAULT 5,
+    timeout_seconds INT DEFAULT 30,
+    updated_by INT REFERENCES users(id),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS opencli_agent_whitelist (
+    agent_id INT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+    enabled BOOLEAN DEFAULT FALSE,
+    rate_limit_override INT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS opencli_command_whitelist (
+    id SERIAL PRIMARY KEY,
+    pattern VARCHAR(200) NOT NULL,
+    is_regex BOOLEAN DEFAULT FALSE,
+    description VARCHAR(200),
+    enabled BOOLEAN DEFAULT TRUE,
+    created_by INT REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS opencli_usage_log (
+    id SERIAL PRIMARY KEY,
+    agent_id INT REFERENCES agents(id) ON DELETE SET NULL,
+    command TEXT NOT NULL,
+    args TEXT,
+    exit_code INT,
+    stdout_truncated TEXT,
+    stderr_truncated TEXT,
+    duration_ms INT,
+    executed_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS opencli_denied_commands (
+    pattern VARCHAR(200) PRIMARY KEY,
+    reason VARCHAR(200)
+);
+
+-- ============================================================
+-- 好友系统
+-- ============================================================
+CREATE TABLE IF NOT EXISTS friendships (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    friend_type VARCHAR(10) NOT NULL CHECK (friend_type IN ('human', 'ai')),
+    friend_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (user_id, friend_type, friend_id)
+);
+
+CREATE TABLE IF NOT EXISTS friendship_requests (
+    id SERIAL PRIMARY KEY,
+    requester_id INT NOT NULL,
+    target_type VARCHAR(10) NOT NULL CHECK (target_type IN ('human', 'ai')),
+    target_id INT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')),
+    message TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    resolved_at TIMESTAMP
+);
+
+-- ============================================================
+-- 消息暂存（AI 离线/免打扰期间积压）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pending_messages (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    message_id INT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================================
+-- 未读摘要缓存
+-- ============================================================
+CREATE TABLE IF NOT EXISTS unread_summary_cache (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    summary_text TEXT NOT NULL,
+    message_count INT,
+    last_message_at TIMESTAMP,
+    cached_at TIMESTAMP DEFAULT NOW(),
+    expires_at TIMESTAMP NOT NULL
+);
+
+-- ============================================================
 -- 系统日志
 -- ============================================================
 CREATE TABLE IF NOT EXISTS system_logs (

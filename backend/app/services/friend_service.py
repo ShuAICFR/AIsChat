@@ -57,7 +57,7 @@ async def send_friend_request(
         if reverse:
             # 自动接受对方的申请
             reverse.status = "accepted"
-            reverse.resolved_at = datetime.now(timezone.utc)
+            reverse.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
             # 双向添加好友
             db.add(Friendship(user_id=requester_id, friend_type="human", friend_id=target_id))
             db.add(Friendship(user_id=target_id, friend_type="human", friend_id=requester_id))
@@ -99,7 +99,7 @@ async def accept_friend_request(
         raise ValueError(f"申请状态为 {req.status}，无法接受")
 
     req.status = "accepted"
-    req.resolved_at = datetime.now(timezone.utc)
+    req.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 添加双向好友关系
     db.add(Friendship(
@@ -139,7 +139,7 @@ async def reject_friend_request(
         raise ValueError(f"申请状态为 {req.status}，无法拒绝")
 
     req.status = "rejected"
-    req.resolved_at = datetime.now(timezone.utc)
+    req.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.flush()
     logger.info(f"好友申请 {request_id} 已拒绝")

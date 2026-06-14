@@ -388,7 +388,8 @@ async def mark_read(
     db: AsyncSession = Depends(get_db),
 ):
     """标记当前用户已读该群消息（进入群聊时调用）。"""
-    await update_last_read(db, group_id, "human", current_user["user_id"])
+    updated = await update_last_read(db, group_id, "human", current_user["user_id"])
+    return {"ok": True, "updated": updated}
     return {"message": "已标记为已读"}
 
 

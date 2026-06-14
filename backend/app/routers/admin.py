@@ -47,6 +47,10 @@ class GenerateCodeRequest(BaseModel):
     expires_in_days: int = Field(..., ge=1, le=365)
 
 
+class UpdateUserRoleRequest(BaseModel):
+    role: str = Field(..., pattern="^(admin|user)$")
+
+
 class UpdateAgentEditableRequest(BaseModel):
     is_ai_editable: bool
 
@@ -181,6 +185,34 @@ async def update_user_quota(
     await db.flush()
 
     return {"message": "额度已更新", "user_id": user_id, "ai_quota": quota}
+
+
+@router.put("/users/{user_id}/role")
+async def update_user_role(
+    user_id: int,
+    req: UpdateUserRoleRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """提升/降级用户角色（admin ↔ user）"""
+    if user_id == admin["user_id"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不能修改自己的角色")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    old_role = user.role
+    user.role = req.role
+
+    await _log_admin_action(
+        db, admin["user_id"], "change_role", "user", user_id,
+        {"old_role": old_role, "new_role": req.role},
+    )
+    await db.flush()
+
+    return {"message": f"用户角色已从 {old_role} 更新为 {req.role}", "user_id": user_id, "role": req.role}
 
 
 # ---------- AI 管理 ----------

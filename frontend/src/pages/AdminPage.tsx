@@ -136,15 +136,40 @@ function UsersTab() {
                   </span>
                 </td>
                 <td className="py-2 px-3">
-                  <button
-                    onClick={async () => {
-                      await api.post(`/admin/users/${u.id}/ban`, {})
-                      setPage(page) // 触发刷新
-                    }}
-                    className="text-xs text-primary-400 hover:text-primary-300"
-                  >
-                    {u.is_active ? '封禁' : '解封'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        await api.post(`/admin/users/${u.id}/ban`, {})
+                        setPage(page) // 触发刷新
+                      }}
+                      className="text-xs text-primary-400 hover:text-primary-300"
+                    >
+                      {u.is_active ? '封禁' : '解封'}
+                    </button>
+                    {u.role !== 'admin' ? (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`确定将 ${u.username} 提升为管理员？`)) return
+                          await api.put(`/admin/users/${u.id}/role`, { role: 'admin' })
+                          setPage(page)
+                        }}
+                        className="text-xs text-mint-400 hover:text-mint-300"
+                      >
+                        提升
+                      </button>
+                    ) : (
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`确定撤销 ${u.username} 的管理员权限？`)) return
+                          await api.put(`/admin/users/${u.id}/role`, { role: 'user' })
+                          setPage(page)
+                        }}
+                        className="text-xs text-rose-400 hover:text-red-600"
+                      >
+                        降级
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

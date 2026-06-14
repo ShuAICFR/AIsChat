@@ -629,7 +629,7 @@ async def update_group_settings(
             continue
         if key == "announcement" and value is not None:
             group.announcement = value
-            group.announcement_updated_at = datetime.now(timezone.utc)
+            group.announcement_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         elif hasattr(group, key):
             setattr(group, key, value)
 
@@ -657,7 +657,7 @@ async def set_announcement(
         raise ValueError("仅群主或管理员可设置群公告")
 
     group.announcement = content
-    group.announcement_updated_at = datetime.now(timezone.utc)
+    group.announcement_updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     logger.info(f"群聊 {group_id} 公告已更新")
     return content
@@ -871,12 +871,17 @@ async def update_last_read(
     group_id: int,
     member_type: str,
     member_id: int,
-) -> None:
-    """更新成员的最后阅读时间（进入群聊时调用）"""
+) -> bool:
+    """更新成员的最后阅读时间（进入群聊时调用），返回是否成功更新"""
     member = await _get_member(db, group_id, member_type, member_id)
     if member:
-        member.last_read_at = datetime.now(timezone.utc)
+        # 注意：last_read_at 字段类型是 TIMESTAMP WITHOUT TIME ZONE，
+        # 必须用无时区的 UTC 时间，否则 asyncpg 会报错
+        member.last_read_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.flush()
+        return True
+    logger.warning(f"update_last_read: member not found group={group_id} {member_type}={member_id}")
+    return False
 
 
 async def _get_member(

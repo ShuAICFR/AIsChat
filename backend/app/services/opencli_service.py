@@ -268,7 +268,7 @@ async def update_opencli_config(
     if timeout_seconds is not None:
         config.timeout_seconds = timeout_seconds
     config.updated_by = updated_by
-    config.updated_at = datetime.now(timezone.utc)
+    config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.flush()
     return await get_opencli_config(db)
 

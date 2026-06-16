@@ -50,6 +50,9 @@ class Agent(Base):
     # 深度推理模式（DeepSeek thinking），AI 可自行切换
     thinking_enabled = Column(Boolean, default=False)
 
+    # AI 在 users 表中的身份（统一 ID 空间，用于私信等场景）
+    user_id = Column(Integer, ForeignKey("users.id"))
+
     created_at = Column(DateTime, server_default=func.now())
 
 

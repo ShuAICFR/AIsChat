@@ -6,6 +6,7 @@ interface Friend {
   id: number
   friend_type: string
   friend_id: number
+  friend_user_id?: number  // v1.1.2: 好友在 users 表中的统一 ID
   friend_name: string
   state: string | null
   created_at: string | null

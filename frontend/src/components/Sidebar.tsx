@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
 import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft } from 'lucide-react'
 import SearchOverlay from './SearchOverlay'
 import FriendList from './FriendList'
@@ -141,7 +142,16 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             </button>
           </div>
           <div className="flex-1 overflow-y-auto py-2 px-2">
-            <FriendList refreshTrigger={friendRefresh} />
+            <FriendList
+              refreshTrigger={friendRefresh}
+              onSelectFriend={async (friend) => {
+                const targetUserId = (friend as any).friend_user_id || friend.friend_id
+                try {
+                  const dm = await api.post(`/dm/${targetUserId}`)
+                  if (dm.session_id) navigate(`/dm/${dm.session_id}`)
+                } catch { /* ignore */ }
+              }}
+            />
           </div>
         </div>
       )}

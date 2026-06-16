@@ -35,6 +35,10 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  数据库连接失败，请检查配置")
 
+    # 执行数据库迁移（幂等）
+    from app.migration import run_migrations
+    await run_migrations()
+
     # 启动 AI 回复 Worker
     from app.services.ai_response_worker import ai_response_worker
     ai_worker_task = asyncio.create_task(ai_response_worker())
@@ -60,7 +64,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI群聊社交网络",
     description="让 AI 拥有完整社交行为的群聊平台",
-    version="0.1.0",
+    version="1.1.2",
     lifespan=lifespan,
 )
 
@@ -75,7 +79,7 @@ app.add_middleware(
 
 
 # 注册路由
-from app.routers import auth, agents, groups, ws, user, memories, files, admin, friends
+from app.routers import auth, agents, groups, ws, user, memories, files, admin, friends, dm
 
 app.include_router(auth.router)
 app.include_router(agents.router)
@@ -86,6 +90,7 @@ app.include_router(memories.router)
 app.include_router(files.router)
 app.include_router(admin.router)
 app.include_router(friends.router)
+app.include_router(dm.router)
 
 
 @app.get("/")

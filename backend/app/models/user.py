@@ -26,4 +26,7 @@ class User(Base):
     # 时区（IANA 格式，如 Asia/Shanghai）
     timezone = Column(String(50), default="Asia/Shanghai")
 
+    # 用户类型：human / ai（统一 ID 空间，AI 通过 agent.user_id 关联）
+    type = Column(String(10), default="human")
+
     created_at = Column(DateTime, server_default=func.now())

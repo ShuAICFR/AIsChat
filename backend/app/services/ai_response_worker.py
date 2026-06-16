@@ -55,13 +55,72 @@ async def _process_event(db, event: dict):
     处理单条消息事件。
 
     event 字段:
-        group_id, message_id, content, sender_type, sender_id, chain_depth
-
-    触发规则:
-    - 人类消息 → 所有 AI 成员检查回复意愿（chain_depth=0）
-    - AI 消息 → 所有其他 AI 成员检查回复意愿（靠意愿分自然筛选）
-    - 对话链深度限制：chain_depth > 2 时停止，防止无限循环
+        conversation_type ("group" | "dm"), group_id (群聊), session_id (私信),
+        message_id, content, sender_type, sender_id, chain_depth
     """
+    conversation_type = event.get("conversation_type", "group")
+
+    if conversation_type == "dm":
+        await _process_dm_event(db, event)
+    else:
+        await _process_group_event(db, event)
+
+
+async def _process_dm_event(db, event: dict):
+    """处理私信事件：检查对方是否是 AI，如果是则触发回复"""
+    session_id = event["session_id"]
+    message_id = event["message_id"]
+    content = event["content"]
+    sender_id = event.get("sender_id")
+    chain_depth = event.get("chain_depth", 0)
+
+    from app.models.dm import DMSession
+    from app.models.user import User
+    from app.models.agent import Agent as AgentModel
+
+    # 找到会话
+    sess_result = await db.execute(
+        select(DMSession).where(DMSession.session_id == session_id)
+    )
+    session = sess_result.scalar_one_or_none()
+    if session is None:
+        return
+
+    # 找到接收方
+    receiver_id = session.user2_id if session.user1_id == sender_id else session.user1_id
+
+    # 检查是否是 AI
+    user_result = await db.execute(
+        select(User).where(User.id == receiver_id, User.type == "ai")
+    )
+    ai_user = user_result.scalar_one_or_none()
+    if ai_user is None:
+        return
+
+    # 找到对应的 agent
+    agent_result = await db.execute(
+        select(AgentModel).where(AgentModel.user_id == receiver_id)
+    )
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        return
+
+    logger.info(f"私信 {session_id} 触发 AI {agent.name}({agent.id}) 回复")
+
+    # DM 链条深度限制
+    if chain_depth > 10:
+        logger.info(f"DM {session_id} 对话链深度 {chain_depth} > 10，停止")
+        return
+
+    # 简化的 DM 回复触发（不需要群聊那样的 DND/意愿检查）
+    await _trigger_dm_ai_reply(
+        db, agent, session_id, content, message_id,
+        chain_depth=chain_depth + 1,
+    )
+
+
+async def _process_group_event(db, event: dict):
+    """处理群聊事件（原有逻辑）"""
     group_id = event["group_id"]
     message_id = event["message_id"]
     content = event["content"]
@@ -77,17 +136,13 @@ async def _process_event(db, event: dict):
 
     # 对话链深度限制：根据群设置动态计算
     if group.owner_type == "ai":
-        # AI 自建群不限制发言频率（安全上限 50）
         effective_max_depth = 50
     else:
-        # 人类群聊：根据群设置计算
         limit_per_min = group.speak_limit_per_minute or 0
         window_sec = group.speak_limit_window_seconds or 120
         if limit_per_min > 0:
-            # 时间窗口内最多 limit_per_min 条，每条至少引发一轮对话，预留 2x 余量
             effective_max_depth = max(limit_per_min * 2, 5)
         else:
-            # 不限 → 使用安全上限
             effective_max_depth = 50
 
     if chain_depth > effective_max_depth:
@@ -113,14 +168,11 @@ async def _process_event(db, event: dict):
     target_ai_ids: set[int] = set()
 
     if sender_type == "human":
-        # 人类消息 → 所有 AI 都检查
         target_ai_ids = {m.member_id for m in ai_members}
     else:
-        # AI 消息 → 触发所有其他 AI（靠意愿分自然筛选）
-        # @提及 会在意愿分中给予 +40 加成，而非 @ 的 AI 也有基础分参与
         target_ai_ids = {
             m.member_id for m in ai_members
-            if m.member_id != sender_id  # 排除自己
+            if m.member_id != sender_id
         }
 
     if not target_ai_ids:
@@ -265,6 +317,7 @@ async def _maybe_trigger_ai_reply(
             api_base_url=api_base,
             api_key=api_key,
             chain_depth=chain_depth,
+            conversation_type="group",
         )
     finally:
         await manager.broadcast_to_group(
@@ -288,7 +341,7 @@ async def _maybe_trigger_ai_reply(
 async def _tool_call_loop(
     db,
     agent,
-    group_id: int,
+    group_id: int | None,
     messages: list[dict],
     tools: list[dict],
     model: str,
@@ -296,16 +349,13 @@ async def _tool_call_loop(
     api_key: str | None,
     max_loops: int = 5,
     chain_depth: int = 0,
+    conversation_type: str = "group",
+    session_id: str | None = None,
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
 
     铁律：文字不能自动发出去。想说话必须调 send_message。
-    流程：
-    1. 调用 LLM
-    2. 如果有 text content 但没有 tool_calls → 注入错误提示，让 LLM 重试
-    3. 如果有 tool_calls → 执行工具（不自动发送文字），结果回传，回到步骤 1
-    4. 如果都没有 → 退出循环
     """
     from app.services.llm_service import chat_completion
     from app.services.tool_registry import dispatch_tool_call
@@ -316,6 +366,8 @@ async def _tool_call_loop(
         "manager": manager,
         "agent_name": agent.name,
         "chain_depth": chain_depth,
+        "conversation_type": conversation_type,
+        "session_id": session_id,
     }
 
     for loop_idx in range(max_loops):
@@ -428,6 +480,87 @@ async def _tool_call_loop(
 
 
 from app.utils.text import extract_mentions as _extract_mentions, check_mention as _check_mention
+
+
+async def _trigger_dm_ai_reply(
+    db,
+    agent,
+    session_id: str,
+    content: str,
+    trigger_message_id: int,
+    chain_depth: int = 0,
+):
+    """触发 AI 对私信的自动回复"""
+    from app.services.agent_service import get_agent
+    from app.models.user import User as UserModel
+
+    # 状态检查
+    if agent.state == "blocked":
+        logger.info(f"AI {agent.name}({agent.id}) 状态为 blocked，跳过 DM 回复")
+        return
+
+    # 速率限制
+    if not _check_rate_limit(agent.id):
+        logger.info(f"AI {agent.name}({agent.id}) 速率限制，跳过 DM 回复")
+        return
+
+    # 获取 API 配置
+    user_result = await db.execute(select(User).where(User.id == agent.owner_id))
+    user = user_result.scalar_one_or_none()
+    from app.utils.crypto import decrypt_api_key
+    api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
+    api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+
+    # 构建消息
+    from app.services.llm_service import build_dm_messages, resolve_model
+    messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key)
+
+    # 获取工具
+    from app.services.tool_registry import get_allowed_tools
+    tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
+    model = resolve_model(agent)
+
+    logger.info(f"🚀 AI {agent.name}: 开始 DM 回复 (session={session_id})")
+
+    try:
+        await manager.broadcast_to_dm(
+            session_id,
+            {
+                "type": "ai_thinking",
+                "conversation_type": "dm",
+                "data": {
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "session_id": session_id,
+                },
+            },
+        )
+        await _tool_call_loop(
+            db=db,
+            agent=agent,
+            group_id=None,  # DM 不使用 group_id
+            messages=messages,
+            tools=tools,
+            model=model,
+            api_base_url=api_base,
+            api_key=api_key,
+            chain_depth=chain_depth,
+            conversation_type="dm",
+            session_id=session_id,
+        )
+    finally:
+        await manager.broadcast_to_dm(
+            session_id,
+            {
+                "type": "ai_thinking_end",
+                "conversation_type": "dm",
+                "data": {
+                    "agent_id": agent.id,
+                    "session_id": session_id,
+                },
+            },
+        )
+    logger.info(f"✅ AI {agent.name}: DM 回复完成")
 
 
 def _check_rate_limit(agent_id: int) -> bool:

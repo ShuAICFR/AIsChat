@@ -199,25 +199,20 @@ TOOL_DEFINITIONS = [
         "segment": "chat_social",
         "function": {
             "name": "send_dm",
-            "description": "向好友发送私信。如果你和某人是好友，可以直接私聊他/她，无需在群里说话。私信是一对一的，其他人看不到。发送后对方会立即收到通知。注意：你只能给已经是好友的人发私信，不能给陌生人发。",
+            "description": "向好友发送私信。如果你和某人是好友，可以直接私聊他/她。私信是一对一的，其他人看不到。发送后对方会立即收到通知。你需要知道对方的 user_id（可通过好友列表查询）。",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "friend_type": {
-                        "type": "string",
-                        "enum": ["human", "ai"],
-                        "description": "好友类型：human（人类用户）或 ai（AI 角色）",
-                    },
-                    "friend_id": {
+                    "target_user_id": {
                         "type": "integer",
-                        "description": "好友的用户 ID（人类）或 AI ID。如果你不知道对方的 ID，可以先回忆或查看之前的对话。",
+                        "description": "对方的 users.id（统一 ID，人类和 AI 都在 users 表中）。可通过好友列表或之前的对话获知。",
                     },
                     "content": {
                         "type": "string",
                         "description": "消息内容（支持 Markdown）",
                     },
                 },
-                "required": ["friend_type", "friend_id", "content"],
+                "required": ["target_user_id", "content"],
             },
         },
     },
@@ -819,118 +814,58 @@ async def _handle_send_dm(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
 ) -> dict:
-    """工具: send_dm — AI 向好友发送私信"""
+    """工具: send_dm — AI 向好友发送私信（v1.1.2: 使用统一 ID）"""
     from sqlalchemy import select
-    from app.services.friend_service import get_or_create_dm_group
-    from app.services.group_service import create_message, message_to_dict
-    from app.models.friendship import Friendship
+    from app.services.dm_service import (
+        get_or_create_dm_session, send_dm_message, generate_dm_session_id,
+    )
     from app.models.agent import Agent as AgentModel
 
-    friend_type = arguments["friend_type"]
-    friend_id = arguments["friend_id"]
+    target_user_id = arguments["target_user_id"]
     content = arguments["content"]
 
-    try:
-        if friend_type == "human":
-            # AI → 人类好友：验证好友关系（从人类视角）
-            result = await db.execute(
-                select(Friendship).where(
-                    Friendship.user_id == friend_id,
-                    Friendship.friend_type == "ai",
-                    Friendship.friend_id == agent_id,
-                )
-            )
-            if result.scalar_one_or_none() is None:
-                return {"error": True, "message": "你们还不是好友，无法发送私信。请先让对方加你为好友。"}
+    # 获取当前 AI 的 user_id
+    agent_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        return {"error": True, "message": "AI 不存在"}
+    if agent.user_id is None:
+        return {"error": True, "message": "AI 尚未初始化统一 ID，请稍后再试"}
 
-            dm = await get_or_create_dm_group(
-                db, user_id=friend_id, friend_type="ai", friend_id=agent_id,
-            )
-        elif friend_type == "ai":
-            # AI → AI：通过当前 AI 的 owner 视角建立 DM
-            agent_result = await db.execute(
-                select(AgentModel).where(AgentModel.id == agent_id)
-            )
-            agent = agent_result.scalar_one_or_none()
-            if agent is None:
-                return {"error": True, "message": "AI 不存在"}
-            dm = await get_or_create_dm_group(
-                db, user_id=agent.owner_id, friend_type="ai", friend_id=friend_id,
-            )
-        else:
-            return {"error": True, "message": f"不支持的好友类型: {friend_type}"}
+    try:
+        # 获取或创建私信会话
+        dm = await get_or_create_dm_session(
+            db,
+            current_user_id=agent.user_id,
+            target_user_id=target_user_id,
+        )
+        session_id = dm["session_id"]
+
+        # 发送消息
+        msg = await send_dm_message(
+            db, session_id,
+            sender_id=agent.user_id,
+            content=content,
+        )
+        await db.commit()
     except ValueError as e:
         return {"error": True, "message": str(e)}
 
-    # 在 DM 群聊中发送消息
-    message = await create_message(
-        db, group_id=dm["group_id"], sender_type="ai",
-        sender_id=agent_id, content=content,
-    )
-    await db.commit()
-
     # WebSocket 广播
     agent_name = context.get("agent_name", f"AI:{agent_id}")
-    msg_data = message_to_dict(message, sender_name=agent_name)
     manager = context.get("manager")
     if manager:
-        # 1. 广播到 DM 群聊（订阅了该群的人能收到）
-        await manager.broadcast_to_group(
-            dm["group_id"],
-            {"type": "message", "data": msg_data},
+        # 推送给对方
+        await manager.broadcast_to_dm(
+            session_id,
+            {"type": "message", "conversation_type": "dm", "data": {**msg, "sender_name": agent_name}},
         )
-        # 2. 推送给人类用户本人（即使他没订阅 DM 群也能收到）
-        #    触发前端刷新群列表，显示 DM 消息泡
-        if friend_type == "human":
-            await manager.send_to_user(friend_id, {
-                "type": "dm_notification",
-                "data": {
-                    "message_id": message.id,
-                    "group_id": dm["group_id"],
-                    "group_name": dm["group_name"],
-                    "sender_name": agent_name,
-                    "content": content[:200],
-                    "is_new_dm": dm.get("is_new", False),
-                },
-            })
-        elif friend_type == "ai":
-            # AI→AI DM：通知目标 AI 的 owner
-            target_agent = (await db.execute(
-                select(AgentModel).where(AgentModel.id == friend_id)
-            )).scalar_one_or_none()
-            if target_agent:
-                await manager.send_to_user(target_agent.owner_id, {
-                    "type": "dm_notification",
-                    "data": {
-                        "message_id": message.id,
-                        "group_id": dm["group_id"],
-                        "group_name": dm["group_name"],
-                        "sender_name": agent_name,
-                        "content": content[:200],
-                        "is_new_dm": dm.get("is_new", False),
-                    },
-                })
-
-    # 推入消息队列触发对话链
-    from app.services.ai_response_worker import message_queue
-    try:
-        message_queue.put_nowait({
-            "group_id": dm["group_id"],
-            "message_id": message.id,
-            "content": content,
-            "sender_type": "ai",
-            "sender_id": agent_id,
-            "chain_depth": 0,
-        })
-    except asyncio.QueueFull:
-        pass
 
     return {
         "success": True,
-        "message_id": message.id,
-        "group_id": dm["group_id"],
-        "group_name": dm["group_name"],
-        "is_new_dm": dm.get("is_new", False),
+        "session_id": session_id,
+        "message_id": msg["id"],
+        "content": content,
     }
 
 

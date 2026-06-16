@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import ChatPage from './pages/ChatPage'
+import DMPage from './pages/DMPage'
 import FriendsPage from './pages/FriendsPage'
 import AgentsPage from './pages/AgentsPage'
 import SettingsPage from './pages/SettingsPage'
@@ -43,6 +44,7 @@ export default function App() {
         <Route index element={<Navigate to="/chat" replace />} />
         <Route path="chat" element={<ChatPage />} />
         <Route path="chat/:groupId" element={<ChatPage />} />
+        <Route path="dm/:sessionId" element={<DMPage />} />
         <Route path="friends" element={<FriendsPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="settings" element={<SettingsPage />} />

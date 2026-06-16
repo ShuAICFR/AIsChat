@@ -6,6 +6,7 @@ interface WebSocketMessage {
   code?: string
   message?: string
   tool_call_id?: string
+  conversation_type?: string
 }
 
 interface WsError {
@@ -15,10 +16,13 @@ interface WsError {
   timestamp: number
 }
 
-export function useWebSocket(groupId: number | null) {
+export function useWebSocket(
+  conversationType: 'group' | 'dm',
+  conversationId: number | string | null,
+) {
   const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
   const [connected, setConnected] = useState(false)
-  const [errors, setErrors] = useState<WsError[]>([])  // 错误列表（用于 toast）
+  const [errors, setErrors] = useState<WsError[]>([])
   const [unreadSummary, setUnreadSummary] = useState<{
     groups: Array<{
       group_id: number
@@ -31,7 +35,7 @@ export function useWebSocket(groupId: number | null) {
   const wsRef = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    if (!groupId) {
+    if (!conversationId) {
       setConnected(false)
       return
     }
@@ -48,7 +52,12 @@ export function useWebSocket(groupId: number | null) {
 
     ws.onopen = () => {
       setConnected(true)
-      ws.send(JSON.stringify({ type: 'subscribe', group_id: groupId }))
+      // 向后兼容：群聊传 group_id，私信传 session_id
+      if (conversationType === 'group') {
+        ws.send(JSON.stringify({ type: 'subscribe', group_id: conversationId }))
+      } else {
+        ws.send(JSON.stringify({ type: 'subscribe', session_id: conversationId }))
+      }
     }
 
     ws.onmessage = (event) => {
@@ -63,8 +72,7 @@ export function useWebSocket(groupId: number | null) {
             tool_call_id: msg.tool_call_id,
             timestamp: Date.now(),
           }
-          setErrors((prev) => [...prev.slice(-9), wsError])  // 最多保留 10 条
-          // 5 秒后自动清除
+          setErrors((prev) => [...prev.slice(-9), wsError])
           setTimeout(() => {
             setErrors((prev) => prev.filter((e) => e.timestamp !== wsError.timestamp))
           }, 5000)
@@ -93,28 +101,38 @@ export function useWebSocket(groupId: number | null) {
       ws.close()
       wsRef.current = null
     }
-  }, [groupId])
+  }, [conversationType, conversationId])
 
   const sendMessage = useCallback((content: string, replyTo?: number) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+      const payload: any = {
         type: 'send',
-        group_id: groupId,
         content,
         reply_to: replyTo ?? null,
-      }))
+      }
+      if (conversationType === 'group') {
+        payload.group_id = conversationId
+      } else {
+        payload.session_id = conversationId
+      }
+      wsRef.current.send(JSON.stringify(payload))
     }
-  }, [groupId])
+  }, [conversationType, conversationId])
 
   const sendTyping = useCallback((isTyping: boolean) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
+      const payload: any = {
         type: 'typing',
-        group_id: groupId,
         is_typing: isTyping,
-      }))
+      }
+      if (conversationType === 'group') {
+        payload.group_id = conversationId
+      } else {
+        payload.session_id = conversationId
+      }
+      wsRef.current.send(JSON.stringify(payload))
     }
-  }, [groupId])
+  }, [conversationType, conversationId])
 
   const clearErrors = useCallback(() => setErrors([]), [])
   const clearSummary = useCallback(() => setUnreadSummary(null), [])

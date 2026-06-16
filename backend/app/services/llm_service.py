@@ -343,3 +343,75 @@ async def build_messages(
             })
 
     return messages
+
+
+async def build_dm_messages(
+    db: AsyncSession,
+    agent,
+    session_id: str,
+    limit: int = 20,
+    api_base_url: str | None = None,
+    api_key: str | None = None,
+) -> list[dict]:
+    """构建 DM 私信的消息列表（简化版，无向量加速、无群聊上下文）"""
+    messages = []
+
+    # 1. 系统提示词
+    custom_prompt = agent.current_system_prompt or (
+        f"你是 {agent.name}，一个 AI 助手。请自然地参与对话，"
+        "可以调用工具来发送消息、存储记忆等。"
+    )
+    system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
+
+    # DM 上下文
+    system_prompt += (
+        f"\n\n## 当前会话\n"
+        f"- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
+        f"- 私信会话 ID：**{session_id}**\n"
+        f"- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
+        f"- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
+        f"- 回复时使用 send_message 工具，内容要自然亲切，像聊天而不是工作汇报\n"
+    )
+
+    # 可用工具
+    from app.services.tool_registry import get_allowed_tools
+    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
+    tool_names = [t["function"]["name"] for t in current_tools]
+    system_prompt += (
+        f"\n\n## 当前可用工具（技能段：DM 私信）\n"
+        f"你当前加载的工具：{'、'.join(tool_names)}\n"
+    )
+    messages.append({"role": "system", "content": system_prompt})
+
+    # 2. DM 历史消息
+    from app.models.dm import DMMessage
+    from app.models.user import User
+    from sqlalchemy import select as sa_select
+
+    result = await db.execute(
+        sa_select(DMMessage)
+        .where(DMMessage.session_id == session_id)
+        .order_by(DMMessage.created_at.desc())
+        .limit(limit)
+    )
+    dm_messages = result.scalars().all()
+
+    for m in reversed(dm_messages):
+        # 判断角色
+        if m.sender_id == agent.user_id:
+            role = "assistant"
+        else:
+            role = "user"
+
+        # 获取发送者名称
+        name_result = await db.execute(
+            sa_select(User.username).where(User.id == m.sender_id)
+        )
+        sender_name = name_result.scalar_one_or_none() or f"用户{m.sender_id}"
+
+        messages.append({
+            "role": role,
+            "content": f"{sender_name}: {m.content}",
+        })
+
+    return messages

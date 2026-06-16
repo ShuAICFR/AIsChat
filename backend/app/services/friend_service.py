@@ -211,22 +211,26 @@ async def list_friends(
     for f in friendships:
         name = f"未知:{f.friend_id}"
         state = None
+        friend_user_id = None
         if f.friend_type == "human":
             user_result = await db.execute(select(User).where(User.id == f.friend_id))
             user = user_result.scalar_one_or_none()
             if user:
                 name = user.username
+                friend_user_id = user.id  # human: friend_id 即 users.id
         elif f.friend_type == "ai":
             agent_result = await db.execute(select(Agent).where(Agent.id == f.friend_id))
             agent = agent_result.scalar_one_or_none()
             if agent:
                 name = agent.name
                 state = agent.state
+                friend_user_id = agent.user_id  # ai: 查 agent.user_id
 
         friends.append({
             "id": f.id,
             "friend_type": f.friend_type,
             "friend_id": f.friend_id,
+            "friend_user_id": friend_user_id,
             "friend_name": name,
             "state": state,
             "created_at": str(f.created_at) if f.created_at else None,

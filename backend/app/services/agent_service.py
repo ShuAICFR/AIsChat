@@ -45,10 +45,22 @@ async def create_agent(
         # 扣减额度
         user.ai_quota -= 1
 
+    # 创建 Agent 对应的 users 条目（统一 ID 空间，用于私信等场景）
+    ai_user = User(
+        username=f"{name}_agent",
+        type="ai",
+        password_hash="",
+        role="ai",
+        is_active=True,
+    )
+    db.add(ai_user)
+    await db.flush()
+
     # 创建 Agent
     agent = Agent(
         owner_id=owner_id,
         name=name,
+        user_id=ai_user.id,
         original_system_prompt=system_prompt,
         original_temperature=temperature,
         original_top_p=top_p,
@@ -616,5 +628,6 @@ def agent_to_dict(agent: Agent) -> dict:
         "auto_dnd_duration": agent.auto_dnd_duration,
         "is_ai_editable": agent.is_ai_editable,
         "thinking_enabled": agent.thinking_enabled,
+        "user_id": agent.user_id,
         "created_at": str(agent.created_at) if agent.created_at else None,
     }

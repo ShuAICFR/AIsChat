@@ -29,7 +29,9 @@ class FriendResponse(BaseModel):
     id: int
     friend_type: str
     friend_id: int
+    friend_user_id: int | None = None  # 好友在 users 表中的 id（用于私信）
     friend_name: str
+    state: str | None = None  # AI 在线状态
     created_at: str | None = None
 
 

@@ -12,6 +12,7 @@ from app.models.redemption import RedemptionCode
 from app.models.system_log import SystemLog
 from app.models.summary_cache import UnreadSummaryCache
 from app.models.friendship import Friendship, FriendshipRequest
+from app.models.dm import DMSession, DMMessage
 from app.models.opencli import (
     OpenCLIConfig,
     OpenCLIAgentWhitelist,
@@ -43,4 +44,6 @@ __all__ = [
     "SystemLog",
     "Friendship",
     "FriendshipRequest",
+    "DMSession",
+    "DMMessage",
 ]

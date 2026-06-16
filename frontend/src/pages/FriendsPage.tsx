@@ -52,11 +52,12 @@ export default function FriendsPage() {
     }
   }
 
-  const handleStartDM = async (friendType: string, friendId: number) => {
+  const handleStartDM = async (friendType: string, friendId: number, friendUserId?: number) => {
     try {
-      const dm = await api.post(`/dm/${friendType}/${friendId}`)
-      if (dm.group_id) {
-        navigate(`/chat/${dm.group_id}`)
+      const targetUserId = friendUserId || friendId
+      const dm = await api.post(`/dm/${targetUserId}`)
+      if (dm.session_id) {
+        navigate(`/dm/${dm.session_id}`)
       }
     } catch (err: any) {
       console.error('创建私信失败:', err)
@@ -156,7 +157,7 @@ export default function FriendsPage() {
               {friends.map((f) => (
                 <button
                   key={`${f.friend_type}:${f.friend_id}`}
-                  onClick={() => handleStartDM(f.friend_type, f.friend_id)}
+                  onClick={() => handleStartDM(f.friend_type, f.friend_id, (f as any).friend_user_id)}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors text-left"
                 >
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-lg shrink-0">

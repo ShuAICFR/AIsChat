@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     api_base_url TEXT,
     api_key_encrypted TEXT,
     timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
+    type VARCHAR(10) DEFAULT 'human' CHECK (type IN ('human', 'ai')),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS agents (
     offline_until TIMESTAMP,
     is_ai_editable BOOLEAN DEFAULT TRUE,
     thinking_enabled BOOLEAN DEFAULT FALSE,
+    user_id INT REFERENCES users(id),
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -118,6 +120,37 @@ CREATE TABLE IF NOT EXISTS group_message_embeddings (
     embedding vector(1536),
     created_at TIMESTAMP DEFAULT NOW(),
     metadata JSONB
+);
+
+-- ============================================================
+-- 私信会话表
+-- session_id 格式: "min_id_max_id"（排序拼接，双向可推导）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dm_sessions (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64) UNIQUE NOT NULL,
+    user1_id INT NOT NULL REFERENCES users(id),
+    user2_id INT NOT NULL REFERENCES users(id),
+    user1_dnd_until TIMESTAMP,
+    user2_dnd_until TIMESTAMP,
+    last_message_id INT,
+    last_message_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user1_id, user2_id)
+);
+
+-- ============================================================
+-- 私信消息表
+-- read_at: 对方阅读时间，发送时为 NULL，用户查看会话后批量标记
+-- ============================================================
+CREATE TABLE IF NOT EXISTS dm_messages (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL REFERENCES dm_sessions(session_id) ON DELETE CASCADE,
+    sender_id INT NOT NULL REFERENCES users(id),
+    content TEXT NOT NULL,
+    reply_to INT,
+    read_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ============================================================
@@ -297,6 +330,8 @@ CREATE TABLE IF NOT EXISTS system_logs (
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_messages_group_id ON messages(group_id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_session ON dm_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_dm_messages_created_at ON dm_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_rough_memories_owner ON rough_memories(owner_type, owner_id);
 CREATE INDEX IF NOT EXISTS idx_file_metadata_path ON file_metadata(path);
 CREATE INDEX IF NOT EXISTS idx_system_logs_type ON system_logs(log_type);

@@ -1,23 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import { useWebSocket } from '../hooks/useWebSocket'
 import { api } from '../api/client'
-import { useAuth } from '../context/AuthContext'
-import MessageBubble from './MessageBubble'
-import ProfileCard from './ProfileCard'
+import ChatView from './ChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Send, Loader2, Bell, BellOff, AlertTriangle, X, Plus, UserPlus, MessageSquare, ChevronRight, Settings, Menu, ArrowLeft } from 'lucide-react'
-
-interface Message {
-  id: number
-  group_id: number
-  sender_type: string
-  sender_id: number
-  sender_name: string | null
-  content: string
-  reply_to: number | null
-  created_at: string
-}
+import { Bell, BellOff, Plus, UserPlus, MessageSquare, ChevronRight, Settings, Menu, ArrowLeft } from 'lucide-react'
 
 interface Group {
   id: number
@@ -42,29 +28,14 @@ interface ChatAreaProps {
 }
 
 export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
-  const { user } = useAuth()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
   const [groups, setGroups] = useState<Group[]>([])
   const [friends, setFriends] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
-  const [profileCard, setProfileCard] = useState<{
-    type: string; id: number; name: string; state?: string
-  } | null>(null)
-  const [thinkingAgents, setThinkingAgents] = useState<Map<number, string>>(new Map())
   const [showSettings, setShowSettings] = useState(false)
-  // @提及 自动补全
-  const [groupMembers, setGroupMembers] = useState<Array<{ type: string; id: number; name: string; state?: string }>>([])
-  const [mentionActive, setMentionActive] = useState(false)
-  const [mentionQuery, setMentionQuery] = useState('')
-  const [mentionIdx, setMentionIdx] = useState(0)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [unreadSummary, setUnreadSummary] = useState<any>(null)
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
-  const { lastMessage, connected, errors, unreadSummary, sendMessage, sendTyping, clearErrors, clearSummary } = useWebSocket(groupId)
 
   // 加载群聊列表
   useEffect(() => {
@@ -76,183 +47,35 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
     api.get('/friends').then(setFriends).catch(console.error)
   }, [])
 
-  // 加载消息
+  // 加载群聊列表（群聊选中变化时刷新未读）
   useEffect(() => {
-    if (!groupId) return
-    setThinkingAgents(new Map())
-    setLoading(true)
-    // 并行请求：标记已读、加载成员、加载消息
-    Promise.all([
+    if (groupId) {
       api.post(`/groups/${groupId}/read`)
         .then(() => api.get('/groups').then(setGroups).catch(() => {}))
-        .catch(() => {}),
-      api.get(`/groups/${groupId}/members`).then(setGroupMembers).catch(console.error),
-      api.get(`/groups/${groupId}/messages?limit=50`)
-        .then(setMessages)
-        .catch(console.error),
-    ]).finally(() => setLoading(false))
+        .catch(() => {})
+    }
   }, [groupId])
 
-  // 处理收到的 WebSocket 消息
+  // DM 通知 / 未读更新 → 刷新群列表
   useEffect(() => {
-    if (!lastMessage) return
-    if (lastMessage.type === 'message') {
-      const msg = lastMessage.data
-      setMessages((prev) => [...prev, msg])
-      // AI 消息到达 → 清除该 AI 的思考状态
-      if (msg.sender_type === 'ai' && msg.sender_id) {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(msg.sender_id)
-          return next
-        })
-      }
-    } else if (lastMessage.type === 'ai_thinking') {
-      const d = lastMessage.data
-      if (d.group_id === groupId) {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.set(d.agent_id, d.agent_name)
-          return next
-        })
-      }
-    } else if (lastMessage.type === 'ai_thinking_end') {
-      const d = lastMessage.data
-      if (d.group_id === groupId) {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(d.agent_id)
-          return next
-        })
-      }
-    } else if (lastMessage.type === 'dm_notification') {
-      // AI 发来私信 → 刷新群列表（侧边栏 DM 分区会显示新消息 + 未读数）
-      api.get('/groups').then(setGroups).catch(console.error)
-      // 不再插入系统消息到当前群聊——用户去左侧私信分区查看即可
-    } else if (lastMessage.type === 'unread_update') {
-      // 其他群聊的未读更新 → 刷新群列表
-      api.get('/groups').then(setGroups).catch(console.error)
-    } else if (lastMessage.type === 'announcement') {
-      const d = lastMessage.data
-      if (d.group_id === groupId) {
-        setMessages((prev) => [...prev, {
-          id: -Date.now(),
-          group_id: groupId,
-          sender_type: 'system',
-          sender_id: 0,
-          sender_name: '📢 群公告',
-          content: d.content,
-          reply_to: null,
-          created_at: new Date().toISOString(),
-        } as Message])
+    const handler = (e: CustomEvent) => {
+      if (e.detail?.type === 'unread_update' || e.detail?.type === 'dm_notification') {
+        api.get('/groups').then(setGroups).catch(() => {})
       }
     }
-  }, [lastMessage, groupId])
+    window.addEventListener('chat-refresh', handler as EventListener)
+    return () => window.removeEventListener('chat-refresh', handler as EventListener)
+  }, [])
 
-  // 滚动到底部
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  // @提及 过滤后的成员列表
-  const mentionFiltered = mentionQuery
-    ? groupMembers.filter((m) => m.name.toLowerCase().includes(mentionQuery.toLowerCase()))
-    : groupMembers
-
-  // 检测输入框中 @ 位置，触发自动补全
-  const detectMention = (value: string, cursorPos: number) => {
-    // 找光标前最近的 @
-    const beforeCursor = value.slice(0, cursorPos)
-    const atIdx = beforeCursor.lastIndexOf('@')
-    if (atIdx === -1) { setMentionActive(false); return }
-    // 确保 @ 是文本开头或前面是空格
-    if (atIdx > 0 && beforeCursor[atIdx - 1] !== ' ') { setMentionActive(false); return }
-    // 提取 @ 后的查询文本（直到光标）
-    const query = beforeCursor.slice(atIdx + 1, cursorPos)
-    // 如果查询包含空格，说明已完成输入，关闭补全
-    if (query.includes(' ')) { setMentionActive(false); return }
-    setMentionQuery(query)
-    setMentionIdx(0)
-    setMentionActive(true)
-  }
-
-  const insertMention = (name: string) => {
-    const ta = textareaRef.current
-    if (!ta) return
-    const value = input
-    const cursorPos = ta.selectionStart
-    const beforeCursor = value.slice(0, cursorPos)
-    const atIdx = beforeCursor.lastIndexOf('@')
-    if (atIdx === -1) return
-    // 替换 @query → @name（带尾部空格）
-    const newBefore = beforeCursor.slice(0, atIdx) + '@' + name + ' '
-    const newValue = newBefore + value.slice(cursorPos)
-    setInput(newValue)
-    setMentionActive(false)
-    // 恢复焦点并移动光标到插入名称后
-    requestAnimationFrame(() => {
-      ta.focus()
-      const newPos = newBefore.length
-      ta.setSelectionRange(newPos, newPos)
-    })
-  }
-
-  const handleSend = () => {
-    if (!input.trim() || !groupId) return
-    sendMessage(input.trim())
-    setInput('')
-    setMentionActive(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // @提及 下拉导航
-    if (mentionActive && mentionFiltered.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        setMentionIdx((prev) => (prev + 1) % mentionFiltered.length)
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        setMentionIdx((prev) => (prev - 1 + mentionFiltered.length) % mentionFiltered.length)
-        return
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault()
-        insertMention(mentionFiltered[mentionIdx].name)
-        return
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        setMentionActive(false)
-        return
-      }
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  const handleStartDM = async (friendType: string, friendId: number) => {
+  const handleStartDM = async (friendType: string, friendId: number, friendUserId?: number) => {
     try {
-      const dm = await api.post(`/dm/${friendType}/${friendId}`)
-      if (dm.group_id) {
-        // 确保群聊列表包含这个 DM
-        setGroups((prev) => {
-          if (prev.find((g) => g.id === dm.group_id)) return prev
-          return [...prev, {
-            id: dm.group_id, name: dm.group_name,
-            owner_type: 'human', owner_id: 0,
-            is_vector_accelerated: false, my_role: 'owner',
-            announcement: null, speak_limit_per_minute: 0,
-            speak_limit_window_seconds: 120,
-            unread_count: 0, has_mention: false,
-            last_message_preview: null, dnd_until: null, created_at: null,
-          }]
-        })
-        onSelectGroup(dm.group_id)
+      const friend: any = friends.find((f: any) => f.friend_type === friendType && f.friend_id === friendId)
+      const targetUserId = friendUserId || friend?.friend_user_id
+      if (targetUserId) {
+        const dm = await api.post(`/dm/${targetUserId}`)
+        if (dm.session_id) {
+          navigate(`/dm/${dm.session_id}`)
+        }
       }
     } catch (err: any) {
       console.error('创建私信失败:', err)
@@ -423,24 +246,6 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         </div>
       ) : (
         <div className="flex-1 flex flex-col min-w-0">
-          {/* 错误 Toast */}
-          {errors.length > 0 && (
-            <div className="absolute top-4 right-4 z-50 space-y-1 max-w-sm">
-              {errors.map((err) => (
-                <div
-                  key={err.timestamp}
-                  className="flex items-start gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl px-3 py-2 text-sm shadow-lg shadow-black/20"
-                >
-                  <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                  <span className="flex-1">{err.message}</span>
-                  <button onClick={clearErrors} className="shrink-0 text-rose-400/60 hover:text-rose-400">
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* 群聊头部 */}
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
             {/* 移动端：返回群列表 + 汉堡菜单 */}
@@ -467,15 +272,9 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
             >
               <UserPlus size={16} />
             </button>
-            {connected ? (
-              <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 text-[10px] text-textMuted">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#6B7280]" /> 离线
-              </span>
-            )}
+            <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线
+            </span>
             <button
               onClick={async () => {
                 if (!currentGroup) return
@@ -509,136 +308,8 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
             )}
           </div>
 
-          {/* 未读摘要提示 */}
-          {unreadSummary && (
-            <div className="px-4 py-2.5 bg-primary-500/10 border-b border-primary-500/20">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-primary-300 font-medium">
-                  📋 未读消息摘要
-                </span>
-                <button onClick={clearSummary} className="text-primary-400/60 hover:text-primary-400">
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="mt-1 space-y-1">
-                {unreadSummary.groups?.map((g) => (
-                  <div key={g.group_id} className="text-xs text-primary-300/80">
-                    <span className="font-medium">{g.group_name}</span>：{g.unread_count} 条新消息 — {g.last_message_preview}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 消息列表 */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 bg-canvas">
-            {loading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="animate-spin text-textMuted" size={24} />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-textMuted text-sm">
-                暂无消息，发送第一条消息吧
-              </div>
-            ) : (
-              messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  senderName={msg.sender_name || `${msg.sender_type}:${msg.sender_id}`}
-                  content={msg.content}
-                  isMine={msg.sender_type === 'human' && msg.sender_id === user?.id}
-                  createdAt={msg.created_at}
-                  senderType={msg.sender_type}
-                  senderId={msg.sender_id}
-                  onAvatarClick={(type, id, name, state) =>
-                    setProfileCard({ type, id, name, state })
-                  }
-                />
-              ))
-            )}
-            {/* AI 思考中占位气泡 */}
-            {Array.from(thinkingAgents.entries()).map(([agentId, agentName]) => (
-              <MessageBubble
-                key={`thinking-${agentId}`}
-                senderName={agentName}
-                content="..."
-                isMine={false}
-                createdAt={new Date().toISOString()}
-                senderType="ai"
-                senderId={agentId}
-                thinking={true}
-                onAvatarClick={(type, id, name, state) =>
-                  setProfileCard({ type, id, name, state })
-                }
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* 输入框 */}
-          <div className="p-3 bg-surface border-t border-border relative">
-            {/* @提及 自动补全下拉 */}
-            {mentionActive && mentionFiltered.length > 0 && (
-              <div className="absolute bottom-full left-3 right-3 mb-1 bg-elevated border border-border rounded-xl shadow-2xl shadow-black/20 z-50 max-h-48 overflow-y-auto">
-                {mentionFiltered.map((m, i) => (
-                  <button
-                    key={`${m.type}:${m.id}`}
-                    onClick={() => insertMention(m.name)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                      i === mentionIdx
-                        ? 'bg-primary-500/15 text-primary-300'
-                        : 'text-textPrimary hover:bg-elevated'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${
-                      m.state === 'active' ? 'bg-mint-400' :
-                      m.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
-                    }`} />
-                    <span className="font-medium">{m.name}</span>
-                    <span className="text-textMuted text-xs ml-auto">
-                      {m.type === 'ai' ? '🤖 AI' : '👤'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-end gap-2">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => {
-                  setInput(e.target.value)
-                  const pos = e.target.selectionStart
-                  detectMention(e.target.value, pos)
-                  if (e.target.value && !input) sendTyping(true)
-                  if (!e.target.value && input) sendTyping(false)
-                }}
-                onKeyUp={(e) => {
-                  // 方向键移动光标后重新检测 @提及
-                  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)) {
-                    const ta = e.currentTarget
-                    detectMention(ta.value, ta.selectionStart)
-                  }
-                }}
-                onClick={(e) => {
-                  const ta = e.currentTarget
-                  setTimeout(() => detectMention(ta.value, ta.selectionStart), 0)
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="输入消息... @AI名称 提及, Enter 发送, Shift+Enter 换行"
-                rows={1}
-                className="flex-1 resize-none rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim()}
-                className="p-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-500/20"
-              >
-                <Send size={18} />
-              </button>
-            </div>
-          </div>
+          {/* ChatView: 共享消息 + 输入框 */}
+          <ChatView conversationType="group" conversationId={groupId} />
         </div>
       )}
 
@@ -659,17 +330,6 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
         <InviteMemberModal
           groupId={groupId!}
           onClose={() => setShowInvite(false)}
-        />
-      )}
-
-      {/* 资料卡 */}
-      {profileCard && (
-        <ProfileCard
-          entityType={profileCard.type as 'human' | 'ai'}
-          entityId={profileCard.id}
-          entityName={profileCard.name}
-          state={profileCard.state}
-          onClose={() => setProfileCard(null)}
         />
       )}
 

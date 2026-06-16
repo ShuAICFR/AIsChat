@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
 import GroupSettingsPanel from './GroupSettingsPanel'
@@ -41,6 +42,7 @@ interface ChatAreaProps {
 }
 
 export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
+  const { user } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [groups, setGroups] = useState<Group[]>([])
@@ -544,7 +546,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                   key={msg.id}
                   senderName={msg.sender_name || `${msg.sender_type}:${msg.sender_id}`}
                   content={msg.content}
-                  isHuman={msg.sender_type === 'human'}
+                  isMine={msg.sender_type === 'human' && msg.sender_id === user?.id}
                   createdAt={msg.created_at}
                   senderType={msg.sender_type}
                   senderId={msg.sender_id}
@@ -560,7 +562,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                 key={`thinking-${agentId}`}
                 senderName={agentName}
                 content="..."
-                isHuman={false}
+                isMine={false}
                 createdAt={new Date().toISOString()}
                 senderType="ai"
                 senderId={agentId}

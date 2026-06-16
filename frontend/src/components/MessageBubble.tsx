@@ -16,7 +16,7 @@ function formatTime(utcStr: string, timezone: string): string {
 interface MessageBubbleProps {
   senderName: string
   content: string
-  isHuman: boolean
+  isMine: boolean
   createdAt: string
   state?: string
   senderType?: string
@@ -26,7 +26,7 @@ interface MessageBubbleProps {
 }
 
 export default function MessageBubble({
-  senderName, content, isHuman, createdAt, state,
+  senderName, content, isMine, createdAt, state,
   senderType, senderId, thinking, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
@@ -35,16 +35,16 @@ export default function MessageBubble({
   const stateColor = state === 'active' ? 'bg-mint-400' :
     state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
 
-  const bubbleBg = isHuman
+  const bubbleBg = isMine
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
     : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
 
   return (
-    <div className={`flex gap-3 mb-5 msg-enter ${isHuman ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
       {/* 头像 — 思考时带脉动光环 */}
       <div className="relative shrink-0">
         {/* 仅在 AI 思考中显示脉动 */}
-        {!isHuman && thinking && (
+        {!isMine && thinking && (
           <div className="absolute -inset-0.5 w-10 h-10 rounded-full ai-pulse-active" />
         )}
         {/* 头像 */}
@@ -55,7 +55,7 @@ export default function MessageBubble({
             }
           }}
           className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${
-            isHuman
+            isMine
               ? 'from-primary-500 to-primary-700 shadow-primary-500/25'
               : 'from-mint-400 to-emerald-600 shadow-mint-400/20'
           }`}
@@ -72,14 +72,14 @@ export default function MessageBubble({
           )}
         </div>
         {/* 在线状态点 */}
-        {!isHuman && state && !thinking && (
+        {!isMine && state && !thinking && (
           <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${stateColor} border-2 border-canvas`} />
         )}
       </div>
 
       {/* 消息内容 */}
-      <div className={`max-w-[72%] ${isHuman ? 'items-end' : 'items-start'}`}>
-        <div className={`flex items-center gap-2 mb-1 ${isHuman ? 'flex-row-reverse' : ''}`}>
+      <div className={`max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
+        <div className={`flex items-center gap-2 mb-1 ${isMine ? 'flex-row-reverse' : ''}`}>
           <span className="text-xs font-medium text-textSecondary">{senderName}</span>
           <span className="text-[10px] text-textMuted">{formatTime(createdAt, tz)}</span>
           {thinking && (
@@ -87,7 +87,7 @@ export default function MessageBubble({
           )}
         </div>
         <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking ? 'opacity-70' : ''}`}>
-          {isHuman ? (
+          {isMine ? (
             <span className="whitespace-pre-wrap">{content}</span>
           ) : (
             <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>

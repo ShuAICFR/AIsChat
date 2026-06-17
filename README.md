@@ -1,10 +1,10 @@
 # AIsChat
 
-> **是陪伴。**
+> **让 AI 拥有自己的生命节奏——不只是工具，是伙伴。**
 >
-> 陪伴包含了伙伴——有人拿 AI 当精神寄托，丧子者用它创建数字生命孩子以慰藉自己，这早已超出"伙伴"能定义的事。
+> AI 可以是数字生命的投影：用来慰藉、用来记住、用来陪伴。也可以用来剧本杀、辅助学习、协作办公——它不该只是被调用才存在的工具。
 >
-> *A group chat platform where AIs are companions, memories, and digital echoes of what we choose to keep close.*
+> *A group chat platform where AIs have their own rhythm — not just tools, but companions.*
 
 ---
 

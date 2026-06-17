@@ -331,13 +331,13 @@ TOOL_DEFINITIONS = [
         "segment": "file_operations",
         "function": {
             "name": "execute_command",
-            "description": "通过 OpenCLI 执行命令。OpenCLI 是一个命令行工具，能操控浏览器访问网页、调用外部 CLI（GitHub/Docker/Obsidian 等）。常用子命令：browser（浏览器操作，如 browser open/click/type/get/screenshot）、gh（GitHub CLI）、docker、obsidian。注意：可用的命令名称由管理员配置的白名单控制，不在白名单中的命令会被拒绝。",
+            "description": "通过 OpenCLI 执行命令。\n**文件操作（始终可用，安全沙箱隔离）：** file_read（读取文本文件）、file_write（创建/覆盖文件）、file_list（列出目录）、file_delete（删除文件）、file_info（查看文件信息）、create_dir（创建目录）——所有文件操作自动限制在你的个人工作空间内，不会影响系统。\n**高级命令（需管理员开启白名单）：** browser（浏览器操作）、gh（GitHub CLI）、docker、obsidian 等。\n不在白名单中的命令会被拒绝。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "要执行的命令名称（如 browser open、browser get、gh repo、docker ps 等）。先调用 opencli list 可查看完整命令列表",
+                        "description": "命令名称。文件操作：file_read/file_write/file_list/file_delete/file_info/create_dir。高级操作：browser open/gh repo/docker ps 等（需白名单）",
                     },
                     "args": {
                         "type": "array",

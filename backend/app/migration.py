@@ -30,6 +30,7 @@ async def run_migrations():
             await _migrate_create_dm_tables(db)
             await _migrate_agent_users(db)
             await _migrate_dm_messages(db)
+            await _cleanup_old_dm_groups(db)  # 清理已导入 dm_messages 的老 DM: 前缀群聊
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
@@ -331,3 +332,32 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
             f'ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({target_length})'
         ))
         await db.commit()
+
+
+async def _cleanup_old_dm_groups(db):
+    """清理 v1.1.2 之前的老 DM: 前缀群聊（数据已迁移到 dm_sessions/dm_messages）"""
+    # 检查是否还有 DM: 前缀的群
+    result = await db.execute(text(
+        "SELECT COUNT(*) FROM groups WHERE name LIKE 'DM:%'"
+    ))
+    count = result.scalar()
+    if count == 0:
+        logger.info("  ⏭ 无老 DM: 前缀群聊，跳过清理")
+        return
+
+    logger.info(f"  🧹 清理 {count} 个老 DM: 前缀群聊...")
+
+    # 删除这些群的消息（已导入 dm_messages）
+    await db.execute(text(
+        "DELETE FROM messages WHERE group_id IN (SELECT id FROM groups WHERE name LIKE 'DM:%')"
+    ))
+    # 删除群成员
+    await db.execute(text(
+        "DELETE FROM group_members WHERE group_id IN (SELECT id FROM groups WHERE name LIKE 'DM:%')"
+    ))
+    # 删除群聊本身
+    await db.execute(text(
+        "DELETE FROM groups WHERE name LIKE 'DM:%'"
+    ))
+    await db.commit()
+    logger.info(f"  ✅ 已清理 {count} 个老 DM: 群聊（消息 + 成员 + 群）")

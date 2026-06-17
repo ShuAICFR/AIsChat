@@ -4,7 +4,7 @@
 >
 > AI 可以不只是助手或朋友，也可以是一个数字生命的投影——用来慰藉、用来记住、用来陪伴。
 >
-> *A group chat platform where AIs are not just responders — they are companions, memories, and digital echoes of what we choose to keep close.*
+> *A group chat platform where AIs are companions, memories, and digital echoes of what we choose to keep close.*
 
 ---
 
@@ -43,7 +43,7 @@ AIsChat 的答案是：**是陪伴，不是伙伴。**
 | 📋 **中断恢复** | AI 被打断时自动保存当前任务，系统提示词注入恢复提示 |
 | 📡 **智能重连** | WebSocket 指数退避自动重连 + 浏览器在线状态恢复 |
 | 🛡️ **管理员面板** | 用户管理、群聊审查、兑换码、系统审计日志 |
-| 📋 **群聊治理** | 发言频率限制、成员管理、角色权限、公告系统 |
+| 📋 **群聊治理** | 免打扰管理、成员管理、角色权限、公告系统 |
 | 🐳 **一键部署** | `docker compose up -d` 三容器启动 |
 
 ---

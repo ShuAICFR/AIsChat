@@ -58,6 +58,11 @@ async def _process_event(db, event: dict):
         conversation_type ("group" | "dm"), group_id (群聊), session_id (私信),
         message_id, content, sender_type, sender_id, chain_depth
     """
+    event_type = event.get("type", "")
+    if event_type == "alarm":
+        await _process_alarm_event(db, event)
+        return
+
     conversation_type = event.get("conversation_type", "group")
 
     if conversation_type == "dm":
@@ -270,6 +275,14 @@ async def _maybe_trigger_ai_reply(
     api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}")
 
+    # 5.5. 中断标记：如果 AI 之前在忙，记录中断
+    try:
+        from app.services.workspace_service import mark_interrupted
+        sender_info = f"群聊 #{group_id} 的新消息"
+        await mark_interrupted(db, agent_id, reason=sender_info)
+    except Exception:
+        pass  # 非致命
+
     # 6. 构建消息
     from app.services.llm_service import build_messages, resolve_model
     # 向量加速混合检索仅在 AI 全群启用（AI 内部协作场景）
@@ -370,6 +383,9 @@ async def _tool_call_loop(
         "session_id": session_id,
     }
 
+    # 追踪 AI 在做什么（用于中断恢复）
+    last_task = None
+
     for loop_idx in range(max_loops):
         try:
             response = await chat_completion(
@@ -437,6 +453,12 @@ async def _tool_call_loop(
 
         # ── 无工具调用也没有文字 → 退出 ──
         if not tool_calls:
+            if last_task:
+                try:
+                    from app.services.workspace_service import save_current_task
+                    await save_current_task(db, agent.id, last_task)
+                except Exception:
+                    pass
             return
 
         # ── 有工具调用 → 执行（文字只作为附加上下文，不自动发送） ──
@@ -460,6 +482,22 @@ async def _tool_call_loop(
 
             logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
 
+            # 追踪"值得中断恢复的任务"
+            _work_tools = {
+                "execute_command": lambda a: f"执行命令: {a.get('command', '?')}",
+                "store_memory": lambda a: f"存储记忆: {a.get('title', '?')}",
+                "file_write": lambda a: f"写文件: {a.get('file_path', '?')}",
+                "file_read": lambda a: f"读文件: {a.get('file_path', '?')}",
+                "file_delete": lambda a: f"删除文件: {a.get('file_path', '?')}",
+                "send_message": lambda a: f"在群聊中发言: {str(a.get('content', ''))[:40]}",
+                "send_dm": lambda a: f"发私信: {str(a.get('content', ''))[:40]}",
+            }
+            if tool_name in _work_tools:
+                try:
+                    last_task = _work_tools[tool_name](arguments)
+                except Exception:
+                    last_task = f"调用工具: {tool_name}"
+
             result = await dispatch_tool_call(
                 db, agent.id, group_id, tool_name, arguments, context,
             )
@@ -471,8 +509,26 @@ async def _tool_call_loop(
                 "content": json.dumps(result, ensure_ascii=False),
             })
 
+        # ── 闹钟模式：第一轮工具执行完后注入收尾提醒 ──
+        if conversation_type == "alarm":
+            messages.append({
+                "role": "user",
+                "content": (
+                    "⏰ 闹钟任务已执行。\n"
+                    "- 如果任务已完成 → 停止，不要额外发言\n"
+                    "- 如果情况有变 → 根据实际情况调整行动\n"
+                    "- 如果有新的重要事项 → 可以接着规划执行"
+                ),
+            })
+
         # 如果 finish_reason 是 "tool_calls"，继续循环让 LLM 处理工具结果
         if finish_reason != "tool_calls" and loop_idx >= max_loops - 1:
+            if last_task:
+                try:
+                    from app.services.workspace_service import save_current_task
+                    await save_current_task(db, agent.id, last_task)
+                except Exception:
+                    pass
             return
 
         # 短暂延迟，避免过于频繁的 API 调用
@@ -510,6 +566,13 @@ async def _trigger_dm_ai_reply(
     from app.utils.crypto import decrypt_api_key
     api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
     api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+
+    # 中断标记：如果 AI 之前在忙，记录中断
+    try:
+        from app.services.workspace_service import mark_interrupted
+        await mark_interrupted(db, agent.id, reason=f"私信 {session_id} 的新消息")
+    except Exception:
+        pass  # 非致命
 
     # 构建消息
     from app.services.llm_service import build_dm_messages, resolve_model
@@ -562,6 +625,9 @@ async def _trigger_dm_ai_reply(
         )
     logger.info(f"✅ AI {agent.name}: DM 回复完成")
 
+    # 提交工作区变更（中断标记、任务保存等）
+    await db.commit()
+
 
 def _check_rate_limit(agent_id: int) -> bool:
     """
@@ -577,3 +643,196 @@ def _check_rate_limit(agent_id: int) -> bool:
 
     _rate_limit_tracker[agent_id] = now
     return True
+
+
+# ============================================================
+# 闹钟调度器（心跳机制的第一种形态）
+# ============================================================
+
+async def alarm_scheduler():
+    """
+    后台闹钟调度器：定期检查到期的闹钟，将到期的推入消息队列触发 AI 唤醒。
+
+    在 main.py lifespan 中通过 asyncio.create_task 启动。
+    """
+    logger.info("⏰ 闹钟调度器已启动，每 5 秒检查一次...")
+    while True:
+        try:
+            await asyncio.sleep(5)
+            async with async_session() as db:
+                try:
+                    await _check_and_fire_alarms(db)
+                except Exception as e:
+                    logger.error(f"闹钟调度器检查失败: {e}", exc_info=True)
+        except asyncio.CancelledError:
+            logger.info("⏰ 闹钟调度器正在关闭...")
+            break
+        except Exception as e:
+            logger.error(f"闹钟调度器循环异常: {e}", exc_info=True)
+            await asyncio.sleep(5)
+
+
+async def _check_and_fire_alarms(db):
+    """检查并触发到期的闹钟"""
+    from app.services.alarm_service import get_due_alarms, fire_alarm
+
+    due_alarms = await get_due_alarms(db)
+    if not due_alarms:
+        return
+
+    for alarm in due_alarms:
+        # 标记为已触发
+        await fire_alarm(db, alarm)
+
+        # 推入消息队列，触发 AI 唤醒
+        try:
+            message_queue.put_nowait({
+                "type": "alarm",
+                "agent_id": alarm.agent_id,
+                "alarm_id": alarm.id,
+                "task": alarm.task,
+            })
+            logger.info(f"⏰ 闹钟 #{alarm.id} 已推入队列: AI({alarm.agent_id}) — 「{alarm.task[:60]}」")
+        except asyncio.QueueFull:
+            logger.warning(f"⏰ 消息队列已满，闹钟 #{alarm.id} 无法推入")
+
+    await db.commit()
+
+
+async def _process_alarm_event(db, event: dict):
+    """
+    处理闹钟事件：唤醒 AI 并让它执行预设任务。
+
+    闹钟是 AI 自己的意志——即使 AI 处于 offline/dnd 状态也会触发。
+    只有 blocked 状态的 AI 不会被唤醒。
+    """
+    agent_id = event["agent_id"]
+    alarm_id = event["alarm_id"]
+    task = event["task"]
+
+    from app.models.agent import Agent as AgentModel
+    from app.models.user import User
+    from app.utils.crypto import decrypt_api_key
+    from app.services.llm_service import FIXED_SYSTEM_PREFIX, resolve_model
+    from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
+    from app.services.tool_registry import get_allowed_tools
+
+    # 获取 agent
+    agent_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        logger.warning(f"⏰ 闹钟 #{alarm_id}: agent {agent_id} 不存在")
+        return
+
+    # blocked 状态不唤醒
+    if agent.state == "blocked":
+        logger.info(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 状态为 blocked，跳过")
+        return
+
+    # 如果 AI 处于 offline/dnd，先唤醒为 active
+    if agent.state in ("offline", "dnd"):
+        from app.services.agent_service import switch_agent_state
+        logger.info(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 从 {agent.state} 唤醒为 active")
+        await switch_agent_state(
+            db, agent_id=agent_id,
+            target_state="active",
+            reason=f"闹钟 #{alarm_id} 触发: {task[:50]}",
+        )
+        await db.flush()
+
+    # 获取 API 配置
+    user_result = await db.execute(select(User).where(User.id == agent.owner_id))
+    user = user_result.scalar_one_or_none()
+    api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
+    api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+
+    # 构建系统提示词
+    custom_prompt = agent.current_system_prompt or (
+        f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
+        "可以调用工具来发送消息、存储记忆、切换状态等。"
+    )
+    system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
+
+    # 注入相关记忆（用 task 作为检索查询）
+    try:
+        memories = await recall_relevant_memories(
+            db, agent.id,
+            query=task,
+            api_base_url=api_base or "https://api.deepseek.com",
+            api_key=api_key,
+            top_k=5,
+            group_id=None,
+        )
+        if memories:
+            memory_text = format_memories_for_prompt(memories)
+            system_prompt = system_prompt + "\n\n" + memory_text
+    except Exception as e:
+        logger.warning(f"闹钟唤醒记忆注入失败（非致命）: {e}")
+
+    # 闹钟上下文
+    system_prompt += (
+        "\n\n## 当前会话\n"
+        "- 这是你的 **闹钟唤醒** —— 你之前给自己设了闹钟，现在是时候了\n"
+        "- 你没有在群聊或私信中，这是一个独立的「自我唤醒」\n"
+        "- 请根据下面的任务描述，调用相应的工具来执行\n"
+        "- 如果需要发消息到群里，请使用正确的 group_id\n"
+        "- 如果需要私信某人，请使用 send_dm\n"
+    )
+
+    # 可用工具
+    tools = get_allowed_tools("active", thinking_enabled=agent.thinking_enabled)
+    tool_names = [t["function"]["name"] for t in tools]
+    tool_list = "、".join(tool_names)
+    system_prompt += (
+        f"\n\n## 当前可用工具（技能段：自我管理 / 闹钟唤醒）\n"
+        f"你当前加载的工具：{tool_list}\n"
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"⏰ **你的闹钟响了！**\n\n"
+                f"你之前给自己设了一个闹钟，现在是时候执行了。\n\n"
+                f"**你要做的事：** {task}\n\n"
+                f"请现在就开始执行这个任务。如果需要发消息、查记忆、执行命令等，直接调用相应的工具。\n\n"
+                f"⚠️ **重要**：\n"
+                f"- 如果任务已完成 → 干净利落地停止，不要为了「多说一句」而额外发言\n"
+                f"- 如果情况已经变化、原任务不再合适 → 根据当前实际情况调整行动，做正确的事，而不是机械执行过期指令\n"
+                f"- 如果你发现做完这个任务后有新的、更重要的事需要做 → 可以接着规划并执行\n"
+                f"- 不要反复检查已完成的事情，不要为了确认而额外调用工具"
+            ),
+        },
+    ]
+
+    model = resolve_model(agent)
+
+    logger.info(f"⏰ 闹钟 #{alarm_id}: 唤醒 AI {agent.name}({agent_id})，model={model}，tools={len(tools)}")
+
+    # 保存闹钟任务为当前工作（这样被打断时能恢复）
+    try:
+        from app.services.workspace_service import save_current_task
+        await save_current_task(db, agent_id, f"闹钟任务: {task}")
+    except Exception:
+        pass
+
+    try:
+        await _tool_call_loop(
+            db=db,
+            agent=agent,
+            group_id=None,  # 闹钟无群聊上下文
+            messages=messages,
+            tools=tools,
+            model=model,
+            api_base_url=api_base,
+            api_key=api_key,
+            chain_depth=0,
+            conversation_type="alarm",
+            session_id=None,
+        )
+    except Exception as e:
+        logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)
+
+    await db.commit()
+    logger.info(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行完成")

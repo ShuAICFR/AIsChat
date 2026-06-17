@@ -5,6 +5,7 @@ LLM 调用抽象层
 import json
 import logging
 import httpx
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
@@ -107,7 +108,17 @@ FIXED_SYSTEM_PREFIX = (
     "- `scope`：个人私事用 `private`，群内约定/共享知识用 `group`\n\n"
     "### recall_memory 使用时机：\n"
     "- 讨论涉及过去话题时，主动调用 recall_memory 查找相关记忆\n"
-    "- 系统已自动注入了最相关的记忆，但你可以主动检索更多"
+    "- 系统已自动注入了最相关的记忆，但你可以主动检索更多\n"
+    "\n"
+    "## 跨对话记忆共享\n"
+    "你的记忆（scope=private）是**跨所有对话共享的**——无论在哪个群聊或私信中，你都可以访问全部私有记忆。\n"
+    "- 在群 A 学到的东西，进入群 B 时自动可用——系统会在上下文中注入相关记忆\n"
+    "- 你可以用 recall_memory 随时检索，不受当前所在对话的限制\n"
+    "- 群共享记忆（scope=group）仅在该群内可见，但私有记忆在所有地方都可见\n"
+    "- **cross_post 工具**：如果你想把某个群聊的结论主动传递给另一个群聊或私信，"
+    "用 cross_post(source_type='group', source_id=来源群ID, target_type='group', target_id=目标群ID, content='...')。"
+    "跨对话发消息的前提是你同时是来源和目标的成员。\n"
+    "- 私信中学到的重要信息，也可以通过 cross_post 带到相关群聊（如果合适的话——注意隐私）"
 )
 
 
@@ -270,7 +281,9 @@ async def build_messages(
     except Exception:
         pass
 
-    context_section = f"\n\n## 当前会话\n- 群聊名称：**{group_name}**\n- 群聊 ID：**{group_id}**\n"
+    now = datetime.utcnow()
+    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
+    context_section = f"\n\n## 当前会话\n- 当前时间：**{now_str}**\n- 群聊名称：**{group_name}**\n- 群聊 ID：**{group_id}**\n"
     if is_dm:
         context_section += (
             "- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
@@ -303,6 +316,15 @@ async def build_messages(
         f"这些是你现在能直接用的能力。如果上述列表中不包含某个工具（比如 execute_command），"
         f"说明该能力在当前模式下不可用，需要切换到对应的技能段。"
     )
+
+    # ✨ 工作区：始终显示当前任务（像待办条一样挂在上下文里）
+    try:
+        from app.services.workspace_service import get_current_task_text
+        task_text = await get_current_task_text(db, agent.id)
+        if task_text:
+            system_prompt += task_text
+    except Exception as e:
+        logger.warning(f"工作区上下文注入失败（非致命）: {e}")
 
     messages.append({"role": "system", "content": system_prompt})
 
@@ -363,14 +385,42 @@ async def build_dm_messages(
     )
     system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
 
+    # 获取对方的 user_id（send_dm 需要）
+    partner_user_id = None
+    partner_name = "对方"
+    try:
+        from app.models.dm import DMSession
+        from sqlalchemy import select as sa_select
+        dm_sess_result = await db.execute(
+            sa_select(DMSession).where(DMSession.session_id == session_id)
+        )
+        dm_sess = dm_sess_result.scalar_one_or_none()
+        if dm_sess and agent.user_id:
+            partner_user_id = dm_sess.user2_id if dm_sess.user1_id == agent.user_id else dm_sess.user1_id
+            # 获取对方名称
+            from app.models.user import User
+            name_result = await db.execute(
+                sa_select(User.username).where(User.id == partner_user_id)
+            )
+            partner_name = name_result.scalar_one_or_none() or f"用户{partner_user_id}"
+    except Exception:
+        pass
+
+    now = datetime.utcnow()
+    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
+
     # DM 上下文
     system_prompt += (
         f"\n\n## 当前会话\n"
+        f"- 当前时间：**{now_str}**\n"
         f"- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
         f"- 私信会话 ID：**{session_id}**\n"
+        f"- 对方是 **{partner_name}**（users.id = {partner_user_id}）\n"
         f"- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
         f"- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
-        f"- 回复时使用 send_message 工具，内容要自然亲切，像聊天而不是工作汇报\n"
+        f"- **回复时必须调用 send_dm(target_user_id={partner_user_id}, content=\"...\")**"
+        f"——不是 send_message（send_message 是群聊工具，send_dm 才是私信工具）\n"
+        f"- 内容要自然亲切，像聊天而不是工作汇报\n"
     )
 
     # 可用工具
@@ -381,13 +431,50 @@ async def build_dm_messages(
         f"\n\n## 当前可用工具（技能段：DM 私信）\n"
         f"你当前加载的工具：{'、'.join(tool_names)}\n"
     )
-    messages.append({"role": "system", "content": system_prompt})
 
-    # 2. DM 历史消息
+    # ✨ 注入相关记忆（用最近 DM 消息作为检索查询 + 最近私有记忆）
     from app.models.dm import DMMessage
     from app.models.user import User
     from sqlalchemy import select as sa_select
 
+    recent_dm = await db.execute(
+        sa_select(DMMessage)
+        .where(DMMessage.session_id == session_id)
+        .order_by(DMMessage.created_at.desc())
+        .limit(5)
+    )
+    recent_dm_list = recent_dm.scalars().all()
+    query_text = " ".join([m.content[:200] for m in reversed(recent_dm_list) if m.content])
+
+    if query_text.strip():
+        try:
+            from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
+            memories = await recall_relevant_memories(
+                db, agent.id,
+                query=query_text,
+                api_base_url=api_base_url or "https://api.deepseek.com",
+                api_key=api_key,
+                top_k=5,
+                group_id=None,  # 私有记忆
+            )
+            if memories:
+                memory_text = format_memories_for_prompt(memories)
+                system_prompt = system_prompt + "\n\n" + memory_text
+        except Exception as e:
+            logger.warning(f"DM 记忆注入失败（非致命）: {e}")
+
+    # ✨ 工作区：始终显示当前任务
+    try:
+        from app.services.workspace_service import get_current_task_text
+        task_text = await get_current_task_text(db, agent.id)
+        if task_text:
+            system_prompt += task_text
+    except Exception as e:
+        logger.warning(f"DM 工作区上下文注入失败（非致命）: {e}")
+
+    messages.append({"role": "system", "content": system_prompt})
+
+    # 2. DM 历史消息
     result = await db.execute(
         sa_select(DMMessage)
         .where(DMMessage.session_id == session_id)

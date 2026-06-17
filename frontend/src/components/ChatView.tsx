@@ -70,7 +70,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     }
   }, [conversationId, conversationType])
 
-  const { lastMessage, connected, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(conversationType, conversationId)
+  const { lastMessage, connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(conversationType, conversationId)
 
   // ============================================================
   // 消息加载器
@@ -477,6 +477,14 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+      {/* 重连提示条 */}
+      {reconnecting && (
+        <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/20 text-amber-400 px-4 py-1.5 text-xs font-medium backdrop-blur-sm">
+          <Loader2 size={12} className="animate-spin" />
+          连接断开，正在重新连接…
+        </div>
+      )}
+
       {/* 错误 Toast */}
       {errors.length > 0 && (
         <div className="absolute top-4 right-4 z-50 space-y-1 max-w-sm">

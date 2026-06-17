@@ -351,6 +351,25 @@ async def is_member_in_dnd(db: AsyncSession, agent_id: int, group_id: int) -> bo
     return member.dnd_until > now
 
 
+async def is_member_of_group(
+    db: AsyncSession,
+    member_id: int,
+    member_type: str,
+    group_id: int,
+) -> bool:
+    """检查成员是否在指定群聊中"""
+    result = await db.execute(
+        select(GroupMember).where(
+            and_(
+                GroupMember.group_id == group_id,
+                GroupMember.member_type == member_type,
+                GroupMember.member_id == member_id,
+            )
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def cancel_group_dnd(
     db: AsyncSession,
     agent_id: int,

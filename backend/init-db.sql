@@ -342,6 +342,31 @@ CREATE TABLE IF NOT EXISTS unread_summary_cache (
 );
 
 -- ============================================================
+-- Agent 闹钟
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_alarms (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    wake_at TIMESTAMPTZ NOT NULL,
+    task TEXT NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'fired', 'cancelled')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    fired_at TIMESTAMPTZ
+);
+
+-- ============================================================
+-- AI 个人工作区（当前任务追踪、中断恢复）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_workspace (
+    agent_id INT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+    current_task TEXT,
+    current_task_at TIMESTAMP,
+    interrupted_at TIMESTAMP,
+    interruption_reason TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================================
 -- 系统日志
 -- ============================================================
 CREATE TABLE IF NOT EXISTS system_logs (

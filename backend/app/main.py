@@ -47,12 +47,16 @@ async def lifespan(app: FastAPI):
     from app.services.vector_pipeline import vector_pipeline_worker
     vector_worker_task = asyncio.create_task(vector_pipeline_worker())
 
+    # 启动闹钟调度器（心跳机制）
+    from app.services.ai_response_worker import alarm_scheduler
+    alarm_scheduler_task = asyncio.create_task(alarm_scheduler())
+
     logger.info("✅ 后台 worker 已全部启动")
 
     yield
 
     logger.info("👋 系统关闭，正在停止后台 worker...")
-    for task in [ai_worker_task, vector_worker_task]:
+    for task in [ai_worker_task, vector_worker_task, alarm_scheduler_task]:
         task.cancel()
         try:
             await task

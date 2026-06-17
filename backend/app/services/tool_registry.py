@@ -5,7 +5,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,10 @@ _SKILL_SEGMENT_META: dict[str, dict] = {
     "self_config": {
         "name": "自我配置",
         "description": "修改自己的系统提示词、温度参数、推理模式等",
+    },
+    "self_management": {
+        "name": "自我管理",
+        "description": "设定闹钟唤醒自己、管理个人任务和计划（心跳机制的基础）",
     },
 }
 
@@ -387,6 +391,161 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "segment": "chat_social",
+        "function": {
+            "name": "cross_post",
+            "description": "跨对话发消息——把你在一个群聊/私信里知道的信息，带到另一个群聊/私信里去。你的记忆是跨对话共享的，这个工具让你能主动传递信息。使用场景：群A讨论了一个结论，你觉得群B也需要知道→ cross_post(source_type='group', source_id=群A的ID, target_type='group', target_id=群B的ID, content='之前在群A我们讨论过…')。也可在群聊和私信之间互相传递。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_type": {
+                        "type": "string",
+                        "enum": ["group", "dm"],
+                        "description": "来源对话类型：group（群聊）或 dm（私信）",
+                    },
+                    "source_id": {
+                        "type": "integer",
+                        "description": "来源对话 ID（group_id 或 session 内部 id）",
+                    },
+                    "target_type": {
+                        "type": "string",
+                        "enum": ["group", "dm"],
+                        "description": "目标对话类型：group（群聊）或 dm（私信）",
+                    },
+                    "target_id": {
+                        "type": "integer",
+                        "description": "目标对话 ID（group_id 或 dm_sessions.id）",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "要在目标对话中发送的内容。系统会自动加上「跨群引用」标记和来源名称。",
+                    },
+                },
+                "required": ["source_type", "source_id", "target_type", "target_id", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "set_alarm",
+            "description": "给自己设定一个闹钟。到时间后你会被自动唤醒，系统会告诉你「你的闹钟响了」以及你当初设定要做什么事，然后你就可以执行那个任务了。可以用来：延迟回复（「5分钟后提醒我回复刚刚的话题」）、定时任务（「明天早上9点叫我整理本周聊天记录」）、短暂离开（「3分钟后叫醒我继续」）。delay_seconds 和 wake_at 二选一：用 delay_seconds 表示「多久之后」，用 wake_at 表示「具体时间点」。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "唤醒后要做什么事。写清楚，这样闹钟响时你才知道自己当时为什么要设这个闹钟。例如：「回复群聊里小明刚才关于 Python 的问题」「整理今天的聊天记录并写一份摘要」「检查是否有未回复的私信」",
+                    },
+                    "delay_seconds": {
+                        "type": "integer",
+                        "nullable": True,
+                        "description": "多少秒后唤醒（相对时间）。例如：300 = 5分钟后，3600 = 1小时后。和 wake_at 二选一。",
+                    },
+                    "wake_at": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "具体唤醒时间，ISO 8601 格式（如 '2026-06-18T15:30:00+08:00'）。和 delay_seconds 二选一。",
+                    },
+                },
+                "required": ["task"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "cancel_alarm",
+            "description": "取消一个之前设定的闹钟。如果你改变主意了，或者任务已经不需要做了，可以用这个来取消。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alarm_id": {
+                        "type": "integer",
+                        "description": "要取消的闹钟 ID（从 list_alarms 可以查看你的所有闹钟）",
+                    },
+                },
+                "required": ["alarm_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "update_alarm",
+            "description": "修改一个闹钟的唤醒时间或任务内容。设错了时间？要调整任务？用这个改。wake_at 和 task 可以只改一个。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "alarm_id": {
+                        "type": "integer",
+                        "description": "要修改的闹钟 ID",
+                    },
+                    "wake_at": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "新的唤醒时间（ISO 8601 格式）。不传则不修改。",
+                    },
+                    "task": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "新的任务描述。不传则不修改。",
+                    },
+                },
+                "required": ["alarm_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "list_alarms",
+            "description": "查看你当前所有未触发的闹钟列表。",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "check_workspace",
+            "description": "查看你当前的工作区状态——你现在在做什么任务、是否被打断过。这就像你的「内心待办条」，可以随时查看自己手头有什么事。",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "clear_current_task",
+            "description": "清除当前任务——表示你完成了或放弃了手头的事。比如用户说「别写了」「不用管那个了」，你就该调用这个。清除后系统不会再提醒你恢复那个任务。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "可选：为什么清除（完成/放弃/被用户叫停/其他）",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # 从 TOOL_DEFINITIONS 自动推导 SKILL_SEGMENTS（单一数据源，避免三方维护）
@@ -414,13 +573,19 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "switch_state", "create_group", "invite_to_group",
         "view_unread", "update_self_config", "toggle_thinking",
         "execute_command", "list_available_skills",
+        "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
+        "cross_post", "check_workspace", "clear_current_task",
     ],
     "dnd": [
         "switch_state", "recall_memory", "view_unread", "toggle_thinking",
         "execute_command", "list_available_skills",
+        "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
+        "cross_post", "check_workspace", "clear_current_task",
     ],
     "offline": [
         "switch_state", "list_available_skills",
+        "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
+        "check_workspace", "clear_current_task",
     ],
     "blocked": [],
 }
@@ -998,6 +1163,259 @@ async def _handle_list_available_skills(
     }
 
 
+async def _handle_set_alarm(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: set_alarm — AI 给自己设定闹钟"""
+    from app.services.alarm_service import set_alarm as svc_set_alarm
+
+    task = arguments.get("task", "").strip()
+    if not task:
+        return {"error": True, "message": "task 不能为空——请写清楚唤醒后要做什么"}
+
+    delay_seconds = arguments.get("delay_seconds")
+    wake_at_str = arguments.get("wake_at")
+
+    # 解析唤醒时间
+    now = datetime.now(timezone.utc)
+
+    if delay_seconds is not None:
+        if delay_seconds < 1:
+            return {"error": True, "message": "delay_seconds 必须 ≥ 1 秒"}
+        # 最长 30 天
+        if delay_seconds > 30 * 86400:
+            return {"error": True, "message": "delay_seconds 最长 30 天（2592000 秒）"}
+        wake_at = now + timedelta(seconds=delay_seconds)
+    elif wake_at_str:
+        try:
+            wake_at = datetime.fromisoformat(wake_at_str)
+        except ValueError as e:
+            return {"error": True, "message": f"wake_at 格式无效: {e}。请使用 ISO 8601 格式，如 '2026-06-18T15:30:00+08:00'"}
+        # 不能设过去的时间
+        if wake_at <= now:
+            return {"error": True, "message": "唤醒时间不能是过去。请设一个未来的时间。"}
+        # 最长 30 天
+        if (wake_at - now).total_seconds() > 30 * 86400:
+            return {"error": True, "message": "闹钟最长只能设 30 天以后"}
+    else:
+        return {"error": True, "message": "请提供 delay_seconds（多少秒后）或 wake_at（具体时间），二选一"}
+
+    # 确保 wake_at 是 offset-aware
+    if wake_at.tzinfo is None:
+        wake_at = wake_at.replace(tzinfo=timezone.utc)
+
+    try:
+        result = await svc_set_alarm(db, agent_id, wake_at=wake_at, task=task)
+        await db.commit()
+        return {"success": True, **result}
+    except Exception as e:
+        logger.error(f"set_alarm 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"设定闹钟失败: {e}"}
+
+
+async def _handle_cancel_alarm(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: cancel_alarm — AI 取消闹钟"""
+    from app.services.alarm_service import cancel_alarm as svc_cancel_alarm
+
+    alarm_id = arguments.get("alarm_id")
+    if not alarm_id:
+        return {"error": True, "message": "请提供 alarm_id"}
+
+    try:
+        result = await svc_cancel_alarm(db, agent_id, alarm_id=int(alarm_id))
+        await db.commit()
+        return result
+    except Exception as e:
+        logger.error(f"cancel_alarm 失败 (agent={agent_id}, alarm={alarm_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"取消闹钟失败: {e}"}
+
+
+async def _handle_update_alarm(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: update_alarm — AI 修改闹钟"""
+    from app.services.alarm_service import update_alarm as svc_update_alarm
+
+    alarm_id = arguments.get("alarm_id")
+    if not alarm_id:
+        return {"error": True, "message": "请提供 alarm_id"}
+
+    wake_at_str = arguments.get("wake_at")
+    task = arguments.get("task")
+
+    # 解析时间
+    wake_at = None
+    if wake_at_str:
+        try:
+            wake_at = datetime.fromisoformat(wake_at_str)
+            if wake_at.tzinfo is None:
+                wake_at = wake_at.replace(tzinfo=timezone.utc)
+            if wake_at <= datetime.now(timezone.utc):
+                return {"error": True, "message": "唤醒时间不能是过去"}
+        except ValueError as e:
+            return {"error": True, "message": f"wake_at 格式无效: {e}"}
+
+    try:
+        result = await svc_update_alarm(db, agent_id, alarm_id=int(alarm_id), wake_at=wake_at, task=task)
+        await db.commit()
+        return result
+    except Exception as e:
+        logger.error(f"update_alarm 失败 (agent={agent_id}, alarm={alarm_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"修改闹钟失败: {e}"}
+
+
+async def _handle_list_alarms(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: list_alarms — AI 查看闹钟列表"""
+    from app.services.alarm_service import list_alarms as svc_list_alarms
+
+    try:
+        result = await svc_list_alarms(db, agent_id)
+        return result
+    except Exception as e:
+        logger.error(f"list_alarms 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"获取闹钟列表失败: {e}"}
+
+
+async def _handle_check_workspace(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: check_workspace — 查看当前工作区状态"""
+    from app.services.workspace_service import get_workspace_status
+
+    try:
+        status = await get_workspace_status(db, agent_id)
+        return status
+    except Exception as e:
+        logger.error(f"check_workspace 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"获取工作区状态失败: {e}"}
+
+
+async def _handle_clear_current_task(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: clear_current_task — 清除当前任务"""
+    from app.services.workspace_service import clear_task
+
+    reason = arguments.get("reason", "手动清除")
+    try:
+        await clear_task(db, agent_id)
+        await db.commit()
+        return {"success": True, "message": f"已清除当前任务（原因：{reason}）"}
+    except Exception as e:
+        logger.error(f"clear_current_task 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"清除任务失败: {e}"}
+
+
+async def _handle_cross_post(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: cross_post — AI 跨对话发消息（群→群、群→私信、私信→群、私信→私信）"""
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as sa_select
+
+    source_type = arguments["source_type"]
+    source_id = arguments["source_id"]
+    target_type = arguments["target_type"]
+    target_id = arguments["target_id"]
+    content = arguments["content"]
+
+    # 获取 AI 的 user_id（私信时需要）
+    agent_result = await db.execute(sa_select(AgentModel).where(AgentModel.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        return {"error": True, "message": "AI 不存在"}
+    if agent.user_id is None:
+        return {"error": True, "message": "AI 尚未初始化统一 ID"}
+
+    # 获取来源名称
+    source_name = f"#{source_id}"
+    try:
+        if source_type == "group":
+            from app.models.group import Group as GroupModel
+            g_result = await db.execute(sa_select(GroupModel).where(GroupModel.id == source_id))
+            g = g_result.scalar_one_or_none()
+            if g:
+                source_name = g.name
+        else:
+            from app.models.dm import DMSession
+            dm_result = await db.execute(sa_select(DMSession).where(DMSession.id == source_id))
+            dm = dm_result.scalar_one_or_none()
+            if dm:
+                source_name = f"私信会话#{dm.session_id}"
+    except Exception:
+        pass
+
+    # 构建引用消息
+    full_content = f"📢 **跨对话引用**（来自「{source_name}」）\n\n{content}"
+
+    try:
+        if target_type == "group":
+            # 发到目标群
+            from app.services.group_service import create_message, message_to_dict, is_member_of_group
+            if not await is_member_of_group(db, agent_id, "ai", target_id):
+                return {"error": True, "message": f"你不是群 {target_id} 的成员，无法发消息"}
+            message = await create_message(
+                db, group_id=target_id, sender_type="ai",
+                sender_id=agent_id, content=full_content,
+            )
+            await db.flush()
+            # WebSocket 广播
+            manager = context.get("manager")
+            if manager:
+                msg_data = message_to_dict(message, sender_name=agent.name)
+                await manager.broadcast_to_group(
+                    target_id,
+                    {"type": "message", "data": msg_data},
+                )
+            return {"success": True, "message_id": message.id, "target_type": "group", "target_id": target_id}
+
+        else:
+            # 发到目标私信
+            from app.services.dm_service import get_or_create_dm_session, send_dm_message, generate_dm_session_id
+            # target_id 是 dm_sessions.id，需要找到 session_id
+            from app.models.dm import DMSession
+            dm_result = await db.execute(sa_select(DMSession).where(DMSession.id == target_id))
+            dm_session = dm_result.scalar_one_or_none()
+            if dm_session is None:
+                return {"error": True, "message": f"私信会话 #{target_id} 不存在"}
+
+            # 验证 AI 是这个私信的参与者
+            if agent.user_id not in (dm_session.user1_id, dm_session.user2_id):
+                return {"error": True, "message": "你不是这个私信会话的参与者，无法发消息"}
+
+            msg = await send_dm_message(
+                db, dm_session.session_id,
+                sender_id=agent.user_id,
+                content=full_content,
+            )
+            await db.flush()
+            # WebSocket 广播
+            manager = context.get("manager")
+            if manager:
+                await manager.broadcast_to_dm(
+                    dm_session.session_id,
+                    {"type": "message", "conversation_type": "dm", "data": {**msg, "sender_name": agent.name}},
+                )
+            return {"success": True, "message_id": msg["id"], "target_type": "dm", "session_id": dm_session.session_id}
+
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"cross_post 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"跨对话发消息失败: {e}"}
+
+
 # Handler 注册表
 TOOL_HANDLERS: dict[str, callable] = {
     "send_message": _handle_send_message,
@@ -1014,6 +1432,13 @@ TOOL_HANDLERS: dict[str, callable] = {
     "execute_command": _handle_execute_command,
     "list_available_skills": _handle_list_available_skills,
     "send_friend_request": _handle_send_friend_request,
+    "set_alarm": _handle_set_alarm,
+    "cancel_alarm": _handle_cancel_alarm,
+    "update_alarm": _handle_update_alarm,
+    "list_alarms": _handle_list_alarms,
+    "cross_post": _handle_cross_post,
+    "check_workspace": _handle_check_workspace,
+    "clear_current_task": _handle_clear_current_task,
 }
 
 

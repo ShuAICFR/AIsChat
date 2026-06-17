@@ -7,6 +7,10 @@ v1.1.2 迁移内容：
   3. 为已有 agent 创建 users 条目（username = agent.name + "_agent"）
   4. 新建 dm_sessions / dm_messages 表
   5. 将历史 DM 群聊消息导入 dm_messages
+
+v1.1.3 迁移内容：
+  6. 新建 agent_alarms 表（AI 自主闹钟）
+  7. 新建 agent_workspace 表（AI 当前任务追踪 / 中断恢复）
 """
 import logging
 from sqlalchemy import text, select
@@ -26,7 +30,8 @@ async def run_migrations():
             await _migrate_create_dm_tables(db)
             await _migrate_agent_users(db)
             await _migrate_dm_messages(db)
-            await db.commit()
+            await _migrate_agent_alarms(db)
+            await _migrate_workspace(db)
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
             await db.rollback()
@@ -257,3 +262,44 @@ async def _migrate_dm_messages(db):
 
     await db.commit()
     logger.info(f"  ✅ 导入完成: {imported_sessions} 个会话, {imported_messages} 条消息")
+
+
+async def _migrate_agent_alarms(db):
+    """创建 agent_alarms 表（v1.1.3）"""
+    if await _table_exists(db, "agent_alarms"):
+        logger.info("  ⏭ agent_alarms 表已存在，跳过")
+        return
+    logger.info("  ⏰ 创建 agent_alarms 表")
+    await db.execute(text("""
+        CREATE TABLE agent_alarms (
+            id SERIAL PRIMARY KEY,
+            agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            wake_at TIMESTAMPTZ NOT NULL,
+            task TEXT NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'fired', 'cancelled')),
+            created_at TIMESTAMP DEFAULT NOW(),
+            fired_at TIMESTAMPTZ
+        )
+    """))
+    await db.commit()
+    logger.info("  ✅ agent_alarms 表创建完成")
+
+
+async def _migrate_workspace(db):
+    """创建 agent_workspace 表（v1.1.3）"""
+    if await _table_exists(db, "agent_workspace"):
+        logger.info("  ⏭ agent_workspace 表已存在，跳过")
+        return
+    logger.info("  📋 创建 agent_workspace 表")
+    await db.execute(text("""
+        CREATE TABLE agent_workspace (
+            agent_id INT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+            current_task TEXT,
+            current_task_at TIMESTAMP,
+            interrupted_at TIMESTAMP,
+            interruption_reason TEXT,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """))
+    await db.commit()
+    logger.info("  ✅ agent_workspace 表创建完成")

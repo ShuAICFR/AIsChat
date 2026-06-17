@@ -32,6 +32,7 @@ async def run_migrations():
             await _migrate_dm_messages(db)
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
+            await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
             await db.rollback()
@@ -303,3 +304,30 @@ async def _migrate_workspace(db):
     """))
     await db.commit()
     logger.info("  ✅ agent_workspace 表创建完成")
+
+
+async def _fix_column_types(db):
+    """修复老部署中列类型与新代码不匹配的问题（幂等：按需 ALTER）"""
+    # system_logs.log_type：老版本可能是 VARCHAR(10)，代码写 "add_opencli_presets"（21 字符）
+    await _widen_varchar(db, "system_logs", "log_type", 50)
+    # system_logs.target_type：同上
+    await _widen_varchar(db, "system_logs", "target_type", 50)
+
+
+async def _widen_varchar(db, table: str, column: str, target_length: int):
+    """如果 VARCHAR 列小于目标长度，则 ALTER 扩展它"""
+    result = await db.execute(text("""
+        SELECT character_maximum_length
+        FROM information_schema.columns
+        WHERE table_name = :table AND column_name = :column
+    """), {"table": table, "column": column})
+    row = result.fetchone()
+    if row is None:
+        return  # 列不存在，跳过
+    current = row[0]
+    if current is not None and current < target_length:
+        logger.info(f"  🔧 ALTER {table}.{column} VARCHAR({current}) → VARCHAR({target_length})")
+        await db.execute(text(
+            f'ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({target_length})'
+        ))
+        await db.commit()

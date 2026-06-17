@@ -220,11 +220,19 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     const init = async () => {
       try {
         if (conversationType === 'group') {
-          api.post(`/groups/${conversationId}/read`).catch(() => {})
+          api.post(`/groups/${conversationId}/read`)
+            .then(() => {
+              window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'unread_update' } }))
+            })
+            .catch(() => {})
           const membersData = await api.get(`/groups/${conversationId}/members`)
           setGroupMembers(membersData)
         }
         await loadMessages({ mode: 'initial' })
+        // DM 消息加载同时标记已读，触发 sidebar 刷新未读计数
+        if (conversationType === 'dm') {
+          window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'unread_update' } }))
+        }
       } catch (err) {
         console.error('初始化失败:', err)
       }
@@ -232,10 +240,15 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     init()
   }, [conversationId, conversationType])
 
-  // 初始加载后定位：有未读→首个未读置顶，否则→底部（内容不溢出则不滚）
+  // 初始加载后定位 + 立即保存已读位置（不等卸载，防止刷新时红线残留）
   useEffect(() => {
     if (loadingState === null && messages.length > 0 && prevMessageCount.current === 0) {
       prevMessageCount.current = messages.length
+      // 立即保存已读位置：初始加载完成即视为用户已看到最新消息
+      if (newestIdRef.current && conversationId) {
+        const key = `lastRead_${conversationType}_${conversationId}`
+        localStorage.setItem(key, String(newestIdRef.current))
+      }
       setTimeout(() => {
         const container = containerRef.current
         if (!container) return

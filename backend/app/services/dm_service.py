@@ -236,13 +236,19 @@ async def send_dm_message(
     await db.flush()
     await db.refresh(msg)
 
-    # 构建返回的消息字典
-    sender_name = await _get_user_name(db, sender_id)
+    # 构建返回的消息字典（含 sender_type，前端阵营判断需要）
+    result = await db.execute(
+        select(User.username, User.type).where(User.id == sender_id)
+    )
+    row = result.one_or_none()
+    sender_name = row[0] if row else f"用户{sender_id}"
+    sender_type = (row[1] or "human") if row else "human"
     return {
         "id": msg.id,
         "session_id": msg.session_id,
         "sender_id": msg.sender_id,
         "sender_name": sender_name,
+        "sender_type": sender_type,
         "content": msg.content,
         "reply_to": msg.reply_to,
         "read_at": str(msg.read_at) if msg.read_at else None,

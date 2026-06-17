@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -34,8 +34,18 @@ export default function SettingsPage() {
   const [autoTimeout, setAutoTimeout] = useState(60)
   const [autoDefault, setAutoDefault] = useState(false)
   const [timezone, setTimezone] = useState('Asia/Shanghai')
+  const [notifications, setNotifications] = useState<boolean>(() => {
+    const stored = localStorage.getItem('notifications_enabled')
+    return stored === null ? true : stored === 'true'
+  })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+
+  // 通知开关立即生效，不需点保存
+  const handleNotificationToggle = (enabled: boolean) => {
+    setNotifications(enabled)
+    localStorage.setItem('notifications_enabled', enabled ? 'true' : 'false')
+  }
 
   useEffect(() => {
     if (user) {
@@ -199,6 +209,36 @@ export default function SettingsPage() {
                   <Sun size={12} className="text-accent-500" />
                 )}
               </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 桌面通知 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Bell size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">桌面通知</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-textPrimary">标签页未读标记</p>
+              <p className="text-xs text-textMuted mt-0.5">
+                切换标签页时在标题栏显示未读消息数，有新消息时任务栏闪烁（免打扰的群和私信不计入）
+              </p>
+            </div>
+            <button
+              onClick={() => handleNotificationToggle(!notifications)}
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                notifications
+                  ? 'bg-primary-600'
+                  : 'bg-[#CBD5E1]'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 rounded-full bg-white shadow-md transition-transform ${
+                  notifications ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
             </button>
           </div>
         </div>

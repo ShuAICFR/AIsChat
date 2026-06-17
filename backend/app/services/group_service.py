@@ -284,33 +284,37 @@ async def set_group_dnd(
     agent_id: int,
     group_id: int,
     duration_minutes: int | None = None,
+    member_type: str = "ai",
 ) -> GroupMember:
     """
-    为 AI 设置某个群聊的免打扰。
+    为群成员设置免打扰（支持 human 和 ai）。
     - duration_minutes = 0 或 None → 永久免打扰 (dnd_until = 2099-12-31)
     - duration_minutes > 0 → 临时免打扰 (dnd_until = NOW() + interval)
-    """
-    from datetime import timezone as tz
 
+    ⚠️ member_type 默认为 "ai"（向后兼容 AI worker），前端路由调用时必须显式传 "human"，
+    否则 human 用户设 DND 会因 member_type 不匹配找不到记录。
+    ⚠️ dnd_until 必须用 offset-naive datetime（无 tzinfo），因为 DB 列是 TIMESTAMP WITHOUT TIME ZONE。
+    混用 offset-aware datetime 会导致 asyncpg DataError。
+    """
     result = await db.execute(
         select(GroupMember).where(
             and_(
                 GroupMember.group_id == group_id,
-                GroupMember.member_type == "ai",
+                GroupMember.member_type == member_type,
                 GroupMember.member_id == agent_id,
             )
         )
     )
     member = result.scalar_one_or_none()
     if member is None:
-        raise ValueError(f"AI {agent_id} 不在群聊 {group_id} 中")
+        raise ValueError(f"用户 {agent_id} 不在群聊 {group_id} 中")
 
     if duration_minutes is not None and duration_minutes > 0:
         member.dnd_until = datetime.utcnow() + timedelta(minutes=duration_minutes)
-        logger.info(f"AI {agent_id} 在群聊 {group_id} 设置临时免打扰 {duration_minutes} 分钟")
+        logger.info(f"用户 {agent_id} 在群聊 {group_id} 设置临时免打扰 {duration_minutes} 分钟")
     else:
         member.dnd_until = datetime(2099, 12, 31, 23, 59, 59)  # 永久免打扰
-        logger.info(f"AI {agent_id} 在群聊 {group_id} 设置永久免打扰")
+        logger.info(f"用户 {agent_id} 在群聊 {group_id} 设置永久免打扰")
 
     await db.flush()
     return member
@@ -351,25 +355,32 @@ async def cancel_group_dnd(
     db: AsyncSession,
     agent_id: int,
     group_id: int,
+    member_type: str = "ai",
 ) -> GroupMember:
-    """取消 AI 在某个群聊的免打扰（设为正常接收消息）"""
+    """
+    取消群聊免打扰（设为正常接收消息），支持 human 和 ai。
+
+    ⚠️ 此处 dnd_until 设为 datetime(2000,1,1) 必须无 tzinfo（DB 列是 TIMESTAMP WITHOUT TIME ZONE），
+    不可加 tzinfo=timezone.utc，否则 asyncpg 抛 DataError。
+    ⚠️ 同样，member_type 默认为 "ai"，前端路由调用时必须传 "human"。
+    """
     result = await db.execute(
         select(GroupMember).where(
             and_(
                 GroupMember.group_id == group_id,
-                GroupMember.member_type == "ai",
+                GroupMember.member_type == member_type,
                 GroupMember.member_id == agent_id,
             )
         )
     )
     member = result.scalar_one_or_none()
     if member is None:
-        raise ValueError(f"AI {agent_id} 不在群聊 {group_id} 中")
+        raise ValueError(f"用户 {agent_id} 不在群聊 {group_id} 中")
 
-    # 设为一个过去的时间表示正常状态
-    member.dnd_until = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    # 设为一个过去的时间表示正常状态（不带 tzinfo，与 DB 列 TIMESTAMP WITHOUT TIME ZONE 一致）
+    member.dnd_until = datetime(2000, 1, 1)
     await db.flush()
-    logger.info(f"AI {agent_id} 在群聊 {group_id} 已取消免打扰")
+    logger.info(f"用户 {agent_id} 在群聊 {group_id} 已取消免打扰")
     return member
 
 

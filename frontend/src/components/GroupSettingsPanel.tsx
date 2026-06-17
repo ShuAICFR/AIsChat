@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download } from 'lucide-react'
+import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock } from 'lucide-react'
 
 interface GroupMember {
   type: string
@@ -45,6 +45,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
   const [speakWindow, setSpeakWindow] = useState(group?.speak_limit_window_seconds || 120)
   const [vectorAccel, setVectorAccel] = useState(group?.is_vector_accelerated || false)
   const [dndUntil, setDndUntil] = useState<string | null>(null)
+  const [customDndMinutes, setCustomDndMinutes] = useState('')
   const [saving, setSaving] = useState(false)
 
   // 导出状态
@@ -102,16 +103,37 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     }
   }
 
-  const handleToggleDnd = async () => {
+  const handleSetDnd = async (minutes: number | null) => {
     if (!group) return
     try {
-      if (dndUntil) {
-        await api.post(`/groups/${group.id}/dnd/cancel`)
-        setDndUntil(null)
-      } else {
-        await api.post(`/groups/${group.id}/dnd`, { group_id: group.id, duration_minutes: null })
-        setDndUntil('permanent')
-      }
+      await api.post(`/groups/${group.id}/dnd`, { group_id: group.id, duration_minutes: minutes })
+      const until = minutes === null ? 'permanent' : new Date(Date.now() + minutes * 60_000).toISOString()
+      setDndUntil(until)
+    } catch (e: any) {
+      setError(e?.detail || '操作失败')
+    }
+  }
+
+  const handleCustomDnd = async () => {
+    if (!group) return
+    const mins = parseInt(customDndMinutes, 10)
+    if (isNaN(mins) || mins <= 0) {
+      setError('请输入有效的分钟数')
+      return
+    }
+    if (mins > 10080) {
+      setError('单次免打扰最长 7 天（10080 分钟）')
+      return
+    }
+    await handleSetDnd(mins)
+    setCustomDndMinutes('')
+  }
+
+  const handleCancelDnd = async () => {
+    if (!group) return
+    try {
+      await api.post(`/groups/${group.id}/dnd/cancel`)
+      setDndUntil(null)
     } catch (e: any) {
       setError(e?.detail || '操作失败')
     }
@@ -297,23 +319,67 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               <hr className="border-border" />
 
               {/* 免打扰 */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-textPrimary font-medium">消息免打扰</div>
-                  <div className="text-xs text-textMuted">
-                    {dndUntil ? '已开启免打扰' : '正常接收消息'}
+              <div>
+                <h3 className="text-sm font-medium text-textPrimary flex items-center gap-2 mb-3">
+                  <Bell size={14} className="text-textMuted" />
+                  消息免打扰
+                </h3>
+                {dndUntil ? (
+                  <div className="space-y-3">
+                    <div className="bg-mint-400/10 text-mint-400 rounded-lg px-3 py-2 text-xs flex items-center gap-2">
+                      <BellOff size={14} />
+                      免打扰已开启
+                    </div>
+                    <button
+                      onClick={handleCancelDnd}
+                      className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-400 transition-colors"
+                    >
+                      取消免打扰
+                    </button>
                   </div>
-                </div>
-                <button
-                  onClick={handleToggleDnd}
-                  className={`p-2 rounded-lg transition-colors ${
-                    dndUntil
-                      ? 'bg-rose-400/10 text-rose-400 hover:bg-rose-400/20'
-                      : 'bg-elevated text-textMuted hover:text-textSecondary'
-                  }`}
-                >
-                  {dndUntil ? <BellOff size={18} /> : <Bell size={18} />}
-                </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-textMuted">选择免打扰时长，期间不会收到该群消息通知</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { label: '15 分钟', minutes: 15 },
+                        { label: '30 分钟', minutes: 30 },
+                        { label: '1 小时', minutes: 60 },
+                        { label: '4 小时', minutes: 240 },
+                        { label: '8 小时', minutes: 480 },
+                        { label: '永久', minutes: null as unknown as number },
+                      ].map((d) => (
+                        <button
+                          key={d.label}
+                          onClick={() => handleSetDnd(d.minutes)}
+                          className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-elevated hover:bg-primary-500/10 hover:text-primary-400 text-textSecondary border border-border rounded-lg text-xs font-medium transition-colors"
+                        >
+                          <Clock size={12} />
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        value={customDndMinutes}
+                        onChange={(e) => setCustomDndMinutes(e.target.value)}
+                        placeholder="自定义分钟数..."
+                        min={1}
+                        max={10080}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleCustomDnd() }}
+                        className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary outline-none focus:border-primary-400 placeholder:text-textMuted"
+                      />
+                      <button
+                        onClick={handleCustomDnd}
+                        disabled={!customDndMinutes.trim()}
+                        className="px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        设置
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* 向量加速（仅管理员可见） */}

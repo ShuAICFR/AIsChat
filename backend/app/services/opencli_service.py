@@ -125,7 +125,9 @@ async def check_rate_limit(
         rate_limit = agent_wl.rate_limit_override
 
     # 查询最近 1 分钟的调用次数
-    one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
+    # ⚠️ executed_at 是 TIMESTAMP WITHOUT TIME ZONE，比较值必须去掉时区，
+    #    否则 asyncpg 报错: can't subtract offset-naive and offset-aware datetimes
+    one_minute_ago = (datetime.now(timezone.utc) - timedelta(minutes=1)).replace(tzinfo=None)
     count_result = await db.execute(
         select(func.count(OpenCLIUsageLog.id)).where(
             OpenCLIUsageLog.agent_id == agent_id,
@@ -141,6 +143,182 @@ async def check_rate_limit(
 
 
 # ============================================================
+# AI 文件空间操作（在进程内执行，不走 opencli 子进程）
+# ============================================================
+# 每个 AI 拥有独立沙箱目录 /app/data/agents/{agent_id}/
+# 所有路径均解析到此目录下，禁止路径穿越（..）
+
+import os
+import shutil
+from pathlib import Path
+
+AGENTS_DATA_DIR = Path("/app/data/agents")
+
+
+def _resolve_agent_path(agent_id: int, file_path: str) -> Path:
+    """
+    将 AI 请求的文件路径解析到其沙箱目录下。
+    阻止路径穿越（如 ../ 企图越狱到上级目录）。
+
+    Args:
+        agent_id: AI 的 ID
+        file_path: AI 指定的相对路径（如 "notes/thoughts.txt"）
+
+    Returns:
+        绝对路径 Path 对象
+
+    Raises:
+        ValueError: 路径穿越或非法路径
+    """
+    workspace = AGENTS_DATA_DIR / str(agent_id)
+    # 用 resolve() 消除 .. 和符号链接
+    try:
+        resolved = (workspace / file_path).resolve()
+        workspace_resolved = workspace.resolve()
+        # 确保解析后的路径仍在 workspace 下
+        if not str(resolved).startswith(str(workspace_resolved) + os.sep) and resolved != workspace_resolved:
+            raise ValueError(f"路径穿越被阻止: '{file_path}' 试图访问沙箱外路径")
+        return resolved
+    except (ValueError, OSError) as e:
+        if "路径穿越" in str(e):
+            raise
+        raise ValueError(f"无效路径 '{file_path}': {e}")
+
+
+async def _handle_file_read(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """读取文件内容"""
+    if not args:
+        return 1, "", "用法: file_read <文件路径>"
+    file_path = _resolve_agent_path(agent_id, args[0])
+    if not file_path.exists():
+        return 1, "", f"文件不存在: {args[0]}"
+    if not file_path.is_file():
+        return 1, "", f"不是文件: {args[0]}"
+    try:
+        content = file_path.read_text(encoding="utf-8")
+        # 截断过长内容
+        if len(content) > STDOUT_MAX_CHARS:
+            content = content[:STDOUT_MAX_CHARS] + f"\n... (截断，共 {len(content)} 字符)"
+        return 0, content, ""
+    except UnicodeDecodeError:
+        return 1, "", f"文件不是 UTF-8 文本: {args[0]}"
+    except Exception as e:
+        return 1, "", f"读取失败: {e}"
+
+
+async def _handle_file_write(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """写入/创建文件"""
+    if len(args) < 2:
+        return 1, "", "用法: file_write <文件路径> <内容>"
+    file_path = args[0]
+    content = " ".join(args[1:])  # 后面所有参数拼接为内容
+    resolved = _resolve_agent_path(agent_id, file_path)
+    try:
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_text(content, encoding="utf-8")
+        return 0, f"已写入 {len(content)} 字符 → {file_path}", ""
+    except Exception as e:
+        return 1, "", f"写入失败: {e}"
+
+
+async def _handle_file_list(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """列出目录文件"""
+    dir_path = args[0] if args else "."
+    resolved = _resolve_agent_path(agent_id, dir_path)
+    if not resolved.exists():
+        return 1, "", f"目录不存在: {dir_path}"
+    if not resolved.is_dir():
+        return 1, "", f"不是目录: {dir_path}"
+    try:
+        items = sorted(resolved.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+        lines = []
+        for item in items:
+            if item.is_dir():
+                lines.append(f"📁 {item.name}/")
+            else:
+                size = item.stat().st_size
+                if size < 1024:
+                    size_str = f"{size}B"
+                elif size < 1024 * 1024:
+                    size_str = f"{size / 1024:.1f}KB"
+                else:
+                    size_str = f"{size / (1024 * 1024):.1f}MB"
+                lines.append(f"📄 {item.name}  ({size_str})")
+        if not lines:
+            return 0, f"目录为空: {dir_path}", ""
+        return 0, "\n".join(lines), ""
+    except Exception as e:
+        return 1, "", f"列出失败: {e}"
+
+
+async def _handle_file_delete(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """删除文件"""
+    if not args:
+        return 1, "", "用法: file_delete <文件路径>"
+    resolved = _resolve_agent_path(agent_id, args[0])
+    if not resolved.exists():
+        return 1, "", f"文件不存在: {args[0]}"
+    if resolved.is_dir():
+        return 1, "", f"是目录而非文件，请用 create_dir 操作: {args[0]}"
+    try:
+        resolved.unlink()
+        return 0, f"已删除: {args[0]}", ""
+    except Exception as e:
+        return 1, "", f"删除失败: {e}"
+
+
+async def _handle_file_info(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """查看文件元信息"""
+    if not args:
+        return 1, "", "用法: file_info <文件路径>"
+    resolved = _resolve_agent_path(agent_id, args[0])
+    if not resolved.exists():
+        return 1, "", f"文件不存在: {args[0]}"
+    try:
+        stat = resolved.stat()
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        size = stat.st_size
+        if size < 1024:
+            size_str = f"{size} B"
+        elif size < 1024 * 1024:
+            size_str = f"{size / 1024:.1f} KB"
+        else:
+            size_str = f"{size / (1024 * 1024):.1f} MB"
+        lines = [
+            f"路径: {args[0]}",
+            f"类型: {'目录' if resolved.is_dir() else '文件'}",
+            f"大小: {size_str} ({stat.st_size} 字节)",
+            f"修改时间: {mtime}",
+        ]
+        return 0, "\n".join(lines), ""
+    except Exception as e:
+        return 1, "", f"获取信息失败: {e}"
+
+
+async def _handle_create_dir(agent_id: int, args: list[str]) -> tuple[int, str, str]:
+    """创建目录"""
+    if not args:
+        return 1, "", "用法: create_dir <目录路径>"
+    resolved = _resolve_agent_path(agent_id, args[0])
+    try:
+        resolved.mkdir(parents=True, exist_ok=True)
+        return 0, f"目录已创建: {args[0]}", ""
+    except Exception as e:
+        return 1, "", f"创建目录失败: {e}"
+
+
+# 文件操作 handler 注册表
+_FILE_HANDLERS: dict[str, callable] = {
+    "file_read": _handle_file_read,
+    "file_write": _handle_file_write,
+    "file_list": _handle_file_list,
+    "file_delete": _handle_file_delete,
+    "file_info": _handle_file_info,
+    "create_dir": _handle_create_dir,
+}
+
+
+# ============================================================
 # 命令执行
 # ============================================================
 
@@ -152,7 +330,7 @@ async def execute_opencli(
     timeout: int | None = None,
 ) -> dict:
     """
-    执行 OpenCLI 命令并返回结果。
+    执行命令（文件操作走进程内 Python，其他走 opencli 子进程）。
     返回:
         {command, args, exit_code, stdout, stderr, duration_ms}
     失败时 raise ValueError（由调用方转为工具错误格式）
@@ -173,7 +351,31 @@ async def execute_opencli(
     # 3. 记录开始时间
     start_time = datetime.now(timezone.utc)
 
-    # 4. 执行命令
+    # 4. 执行命令 —— 文件操作在进程内直接处理
+    file_handler = _FILE_HANDLERS.get(command)
+    if file_handler:
+        try:
+            exit_code, stdout, stderr = await file_handler(agent_id, args)
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            await _log_usage(db, agent_id, command, args, exit_code, stdout, stderr, duration_ms)
+            logger.info(
+                f"OpenCLI(file): agent={agent_id} cmd={command} exit={exit_code} duration={duration_ms}ms"
+            )
+            return {
+                "command": command,
+                "args": args,
+                "exit_code": exit_code,
+                "stdout": stdout,
+                "stderr": stderr,
+                "duration_ms": duration_ms,
+            }
+        except ValueError as e:
+            # 路径校验失败等
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            await _log_usage(db, agent_id, command, args, -1, "", str(e), duration_ms)
+            raise
+
+    # 5. 非文件命令 —— 走 opencli 子进程
     try:
         proc = await asyncio.create_subprocess_exec(
             "opencli", command, *args,
@@ -197,7 +399,7 @@ async def execute_opencli(
     stdout = stdout_bytes.decode("utf-8", errors="replace")[:STDOUT_MAX_CHARS]
     stderr = stderr_bytes.decode("utf-8", errors="replace")[:STDOUT_MAX_CHARS]
 
-    # 5. 写入使用日志
+    # 6. 写入使用日志
     await _log_usage(db, agent_id, command, args, exit_code, stdout, stderr, duration_ms)
 
     logger.info(

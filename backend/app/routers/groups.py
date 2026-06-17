@@ -197,11 +197,14 @@ async def set_dnd(
     """
     try:
         actual_group_id = group_id
+        # ⚠️ 必须显式传 member_type="human"，因为 set_group_dnd 默认是 "ai"
+        #（向后兼容 AI worker/tool_registry）。如果漏传，human 用户查不到记录会报错。
         member = await set_group_dnd(
             db,
-            agent_id=current_user["user_id"],  # human 用户也可设 DND
+            agent_id=current_user["user_id"],
             group_id=actual_group_id,
             duration_minutes=req.duration_minutes,
+            member_type="human",
         )
         return {
             "message": "免打扰已设置",
@@ -220,7 +223,7 @@ async def cancel_dnd(
 ):
     """取消指定群聊的免打扰"""
     try:
-        await cancel_group_dnd(db, current_user["user_id"], group_id)
+        await cancel_group_dnd(db, current_user["user_id"], group_id, member_type="human")
         return {"message": "免打扰已取消", "group_id": group_id}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

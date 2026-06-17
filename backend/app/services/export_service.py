@@ -278,6 +278,93 @@ def _escape_html(text: str) -> str:
     )
 
 
+async def query_all_dm_messages(
+    db: AsyncSession,
+    session_id: str,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> list[dict]:
+    """查询私信会话内所有消息，按时间升序排列"""
+    from app.models.dm import DMMessage
+
+    stmt = select(DMMessage).where(DMMessage.session_id == session_id)
+
+    if date_from:
+        try:
+            dt_from = datetime.fromisoformat(date_from)
+            stmt = stmt.where(DMMessage.created_at >= dt_from)
+        except ValueError:
+            pass
+
+    if date_to:
+        try:
+            dt_to = datetime.fromisoformat(date_to)
+            dt_to = dt_to.replace(hour=23, minute=59, second=59)
+            stmt = stmt.where(DMMessage.created_at <= dt_to)
+        except ValueError:
+            pass
+
+    stmt = stmt.order_by(DMMessage.created_at.asc())
+
+    result = await db.execute(stmt)
+    messages = result.scalars().all()
+
+    if not messages:
+        return []
+
+    # 批量查 sender 名称
+    sender_ids = {m.sender_id for m in messages}
+    sender_names: dict[int, str] = {}
+    sender_types: dict[int, str] = {}
+    if sender_ids:
+        r = await db.execute(select(User.id, User.username, User.type).where(User.id.in_(sender_ids)))
+        for uid, uname, utype in r.all():
+            sender_names[uid] = uname
+            sender_types[uid] = utype or "human"
+
+    result_list = []
+    for msg in messages:
+        result_list.append({
+            "id": msg.id,
+            "sender_name": sender_names.get(msg.sender_id, f"用户#{msg.sender_id}"),
+            "sender_type": sender_types.get(msg.sender_id, "human"),
+            "content": msg.content,
+            "created_at": str(msg.created_at) if msg.created_at else "",
+        })
+
+    return result_list
+
+
+async def export_dm_chat_history(
+    db: AsyncSession,
+    session_id: str,
+    fmt: str = "json",
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> tuple[bytes, str, str]:
+    """编排：查询私信消息 → 格式化 → 返回 (content_bytes, media_type, filename)"""
+    messages = await query_all_dm_messages(db, session_id, date_from, date_to)
+    chat_name = f"私信_{session_id}"
+
+    if fmt == "txt":
+        content = format_messages_txt(messages, chat_name)
+        media_type = "text/plain; charset=utf-8"
+        ext = "txt"
+    elif fmt == "html":
+        content = format_messages_html(messages, chat_name)
+        media_type = "text/html; charset=utf-8"
+        ext = "html"
+    else:
+        content = format_messages_json(messages, chat_name)
+        media_type = "application/json; charset=utf-8"
+        ext = "json"
+
+    date_label = datetime.now(timezone.utc).strftime("%Y%m%d")
+    filename = f"dm_{session_id}_{date_label}.{ext}"
+
+    return content.encode("utf-8"), media_type, filename
+
+
 async def export_chat_history(
     db: AsyncSession,
     group_id: int,

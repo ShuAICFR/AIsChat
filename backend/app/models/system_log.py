@@ -13,7 +13,7 @@ class SystemLog(Base):
     log_type = Column(String(50))
     operator_type = Column(String(10))
     operator_id = Column(Integer)
-    target_type = Column(String(10))
+    target_type = Column(String(50))  # ⚠️ 原 VARCHAR(10) 过短，'opencli_command' 15字符会报 value too long
     target_id = Column(Integer)
     details = Column(JSONB)
     created_at = Column(DateTime, server_default=func.now())

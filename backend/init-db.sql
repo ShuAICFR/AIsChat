@@ -262,6 +262,36 @@ CREATE TABLE IF NOT EXISTS opencli_denied_commands (
     reason VARCHAR(200)
 );
 
+-- ⚠️ OpenCLI 预设命令白名单种子数据
+--    文件操作是进程内 Python 实现（不走 opencli 子进程）；
+--    浏览器操作(browser)和外 CLI 桥接(gh/docker/obsidian等)走 opencli。
+--    管理员可以在管理面板中随时增删或开关。
+INSERT INTO opencli_command_whitelist (pattern, is_regex, description, enabled, created_by)
+SELECT v.pattern, v.is_regex, v.description, TRUE, NULL
+FROM (VALUES
+    -- 文件操作（AI 在自己的沙箱目录 /app/data/agents/{id}/ 里读写）
+    ('file_read',   FALSE, '📖 读取文件 — 在自己文件空间里读取文本文件内容'),
+    ('file_write',  FALSE, '✏️ 写入文件 — 创建或覆盖自己文件空间里的文件'),
+    ('file_list',   FALSE, '📂 列出文件 — 浏览自己文件空间里的文件和子目录'),
+    ('file_delete', FALSE, '🗑️ 删除文件 — 删除自己文件空间里不需要的文件'),
+    ('file_info',   FALSE, 'ℹ️ 文件信息 — 查看文件大小、修改时间等元信息'),
+    ('create_dir',  FALSE, '📁 创建目录 — 在自己文件空间里创建新文件夹'),
+    -- 浏览器自动化（操控已登录的 Chrome 浏览器）
+    ('browser',     FALSE, '🌐 浏览器操作 — AI 能打开网页、截图、点击、填表、抓取内容'),
+    ('list',        FALSE, '📋 列出命令 — AI 查看当前可用的所有 OpenCLI 命令'),
+    -- 外部 CLI 桥接（将已有命令行工具接入 OpenCLI）
+    ('gh .*',       TRUE,  '🐙 GitHub CLI — 浏览仓库、PR、Issue（需 gh CLI 已登录）'),
+    ('docker .*',   TRUE,  '🐳 Docker — 管理容器、镜像、查看运行状态'),
+    ('obsidian .*', TRUE,  '📝 Obsidian — 读写笔记、搜索知识库'),
+    ('vercel .*',   TRUE,  '▲ Vercel — 部署、查看项目、管理域名'),
+    ('tg .*',       TRUE,  '📨 Telegram CLI — 收发消息、管理频道'),
+    ('discord .*',  TRUE,  '💬 Discord CLI — 发消息、管理服务器'),
+    ('wx .*',       TRUE,  '💚 微信 CLI — 下载公众号文章、管理消息')
+) AS v(pattern, is_regex, description)
+WHERE NOT EXISTS (
+    SELECT 1 FROM opencli_command_whitelist WHERE opencli_command_whitelist.pattern = v.pattern
+);
+
 -- ============================================================
 -- 好友系统
 -- ============================================================
@@ -319,7 +349,7 @@ CREATE TABLE IF NOT EXISTS system_logs (
     log_type VARCHAR(50),
     operator_type VARCHAR(10),
     operator_id INT,
-    target_type VARCHAR(10),
+    target_type VARCHAR(50),
     target_id INT,
     details JSONB,
     created_at TIMESTAMP DEFAULT NOW()

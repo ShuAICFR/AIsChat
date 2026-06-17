@@ -2,6 +2,7 @@
 私信（DM）路由
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.utils.auth import get_current_user
@@ -116,6 +117,41 @@ async def set_dm_dnd_endpoint(
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/dm/{session_id}/export")
+async def export_dm_chat(
+    session_id: str,
+    fmt: str = Query("json", pattern="^(json|txt|html)$"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出私信记录（json / txt / html）"""
+    from app.services.dm_service import get_dm_session as _get_dm
+    from app.services.export_service import export_dm_chat_history
+
+    # 校验用户是参与者
+    try:
+        await _get_dm(db, session_id, current_user["user_id"], message_limit=1)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    try:
+        content, media_type, filename = await export_dm_chat_history(
+            db, session_id, fmt, date_from, date_to
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @router.post("/dm/{session_id}/dnd/cancel")

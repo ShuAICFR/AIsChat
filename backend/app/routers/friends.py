@@ -112,18 +112,8 @@ async def delete_friend(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/dm/{friend_type}/{friend_id}")
-async def create_or_get_dm(
-    friend_type: str,
-    friend_id: int,
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """创建或获取与好友的私信群聊（1对1）"""
-    if friend_type not in ("human", "ai"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的好友类型")
-    try:
-        from app.services.friend_service import get_or_create_dm_group
-        return await get_or_create_dm_group(db, current_user["user_id"], friend_type, friend_id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+# ⚠️ 旧版 POST /dm/{friend_type}/{friend_id} 已移除（v1.1.2 统一 ID 后不再使用）。
+# 移除原因：该路由与 dm.py 的 POST /dm/{session_id}/dnd 冲突——
+#   FastAPI 将 "dnd" 当作 friend_id 的 int 参数解析，导致 422 错误。
+# 私信请使用 POST /dm/{target_user_id}（见 dm.py）。
+# 新增 /dm/ 子路由时注意：friends.router 先于 dm.router 注册，任何模糊匹配都会优先命中 friends 的路由。

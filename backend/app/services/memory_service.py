@@ -231,5 +231,7 @@ def format_memories_for_prompt(memories: list[dict]) -> str:
             lines.append(f"   {content}")
         lines.append("")
 
-    lines.append("请参考以上记忆来个性化你的回复，但不要刻意提及"记忆库"。\n")
+    # ⚠️ 字符串内如需引用中文名词，用直角引号「」或转义 \"，严禁直接用 ""——
+    #    Python 会把第二个 " 当作字符串终止符，导致 SyntaxError 全局炸（worker 崩溃、AI 不回复）
+    lines.append("请参考以上记忆来个性化你的回复，但不要刻意提及「记忆库」。\n")
     return "\n".join(lines)

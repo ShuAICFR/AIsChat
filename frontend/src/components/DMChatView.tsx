@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
+import DMSettingsPanel from './DMSettingsPanel'
 import { ArrowLeft, Bell, BellOff, Settings, Menu } from 'lucide-react'
 
 interface DMChatViewProps {
@@ -11,6 +12,7 @@ interface DMChatViewProps {
 export default function DMChatView({ sessionId }: DMChatViewProps) {
   const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
@@ -97,7 +99,7 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
 
         {/* 设置按钮（与群聊头部的 Settings 对齐） */}
         <button
-          onClick={handleToggleDnd}
+          onClick={() => setShowSettings(true)}
           className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
           title="私信设置"
         >
@@ -107,6 +109,17 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
 
       {/* 共享对话框 */}
       <ChatView conversationType="dm" conversationId={sessionId} />
+
+      {/* 私信设置面板 */}
+      {showSettings && (
+        <DMSettingsPanel
+          sessionId={sessionId}
+          partner={partner}
+          myDndUntil={myDndUntil}
+          onClose={() => setShowSettings(false)}
+          onDndChange={(dndUntil) => setMyDndUntil(dndUntil)}
+        />
+      )}
     </div>
   )
 }

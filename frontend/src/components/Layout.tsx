@@ -2,9 +2,13 @@ import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
+import { useDesktopNotification } from '../hooks/useDesktopNotification'
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // 桌面通知：标签页标题未读计数 + 任务栏闪烁（所有页面生效）
+  useDesktopNotification()
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">

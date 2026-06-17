@@ -645,6 +645,76 @@ async def delete_opencli_command(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+@router.post("/opencli/commands/presets")
+async def add_opencli_preset_commands(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    一键添加预设命令白名单。
+    已存在的命令会自动跳过（不重复添加），返回新增和跳过的列表。
+    """
+    # ⚠️ 预设命令列表：涵盖文件操作（进程内 Python 实现）、浏览器操作（opencli browser）、
+    #    外部 CLI 桥接（gh/docker/obsidian 等）。管理员可根据实际需要自行增删。
+    #    - is_regex=False 表示精确匹配命令名
+    #    - is_regex=True  表示正则匹配（如 "gh .*" 允许所有 GitHub CLI 子命令）
+    presets = [
+        # ── 文件操作（AI 在自己的沙箱目录里读写，进程内 Python 实现） ──
+        {"pattern": "file_read",   "is_regex": False, "description": "📖 读取文件 — 在自己文件空间里读取文本文件内容"},
+        {"pattern": "file_write",  "is_regex": False, "description": "✏️ 写入文件 — 创建或覆盖自己文件空间里的文件（自动建子目录）"},
+        {"pattern": "file_list",   "is_regex": False, "description": "📂 列出文件 — 浏览自己文件空间里的文件和子目录"},
+        {"pattern": "file_delete", "is_regex": False, "description": "🗑️ 删除文件 — 删除自己文件空间里不需要的文件"},
+        {"pattern": "file_info",   "is_regex": False, "description": "ℹ️ 文件信息 — 查看文件大小、修改时间等元信息"},
+        {"pattern": "create_dir",  "is_regex": False, "description": "📁 创建目录 — 在自己文件空间里创建新文件夹"},
+        # ── 浏览器自动化（操控已登录的 Chrome 浏览器） ──
+        {"pattern": "browser",   "is_regex": False, "description": "🌐 浏览器操作 — AI 能打开网页、截图、点击、填表、抓取内容"},
+        {"pattern": "list",      "is_regex": False, "description": "📋 列出命令 — AI 查看当前可用的所有 OpenCLI 命令"},
+        # ── 外部 CLI 桥接（将已有命令行工具接入 OpenCLI） ──
+        {"pattern": "gh .*",     "is_regex": True,  "description": "🐙 GitHub CLI — 浏览仓库、PR、Issue、搜索（需 gh CLI 已登录）"},
+        {"pattern": "docker .*", "is_regex": True,  "description": "🐳 Docker — 管理容器、镜像、查看运行状态"},
+        {"pattern": "obsidian .*", "is_regex": True, "description": "📝 Obsidian — 读写笔记、搜索知识库"},
+        {"pattern": "vercel .*", "is_regex": True,  "description": "▲ Vercel — 部署、查看项目、管理域名"},
+        {"pattern": "tg .*",     "is_regex": True,  "description": "📨 Telegram CLI — 收发消息、管理频道"},
+        {"pattern": "discord .*", "is_regex": True, "description": "💬 Discord CLI — 发消息、管理服务器"},
+        {"pattern": "wx .*",     "is_regex": True,  "description": "💚 微信 CLI — 下载公众号文章、管理消息"},
+    ]
+
+    added = []
+    skipped = []
+
+    # 先获取已有的白名单，用于去重
+    existing = await list_command_whitelist(db)
+    existing_patterns = {(e["pattern"], e["is_regex"]) for e in existing}
+
+    for p in presets:
+        key = (p["pattern"], p["is_regex"])
+        if key in existing_patterns:
+            skipped.append(p["pattern"])
+            continue
+        try:
+            entry = await add_command_whitelist(
+                db,
+                pattern=p["pattern"],
+                is_regex=p["is_regex"],
+                description=p["description"],
+                created_by=admin["user_id"],
+            )
+            added.append(entry)
+        except Exception:
+            skipped.append(p["pattern"])
+
+    await _log_admin_action(
+        db, admin["user_id"], "add_opencli_presets", "opencli_command", 0,
+        {"added": [a["pattern"] for a in added], "skipped": skipped},
+    )
+
+    return {
+        "message": f"已添加 {len(added)} 个预设命令，跳过 {len(skipped)} 个（已存在）",
+        "added": added,
+        "skipped": skipped,
+    }
+
+
 @router.get("/opencli/logs")
 async def get_opencli_logs(
     agent_id: int | None = Query(None),

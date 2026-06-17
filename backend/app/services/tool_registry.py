@@ -327,13 +327,13 @@ TOOL_DEFINITIONS = [
         "segment": "file_operations",
         "function": {
             "name": "execute_command",
-            "description": "通过 OpenCLI 执行命令。你可以用这个工具来读写文件、列出目录、运行脚本等——相当于你的「手」伸到了自己的文件夹里。注意：可用的命令名称由管理员配置的白名单控制，不在白名单中的命令会被拒绝。",
+            "description": "通过 OpenCLI 执行命令。OpenCLI 是一个命令行工具，能操控浏览器访问网页、调用外部 CLI（GitHub/Docker/Obsidian 等）。常用子命令：browser（浏览器操作，如 browser open/click/type/get/screenshot）、gh（GitHub CLI）、docker、obsidian。注意：可用的命令名称由管理员配置的白名单控制，不在白名单中的命令会被拒绝。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "command": {
                         "type": "string",
-                        "description": "要执行的命令名称（如 file_read, file_write, file_list 等）",
+                        "description": "要执行的命令名称（如 browser open、browser get、gh repo、docker ps 等）。先调用 opencli list 可查看完整命令列表",
                     },
                     "args": {
                         "type": "array",
@@ -945,6 +945,8 @@ async def _handle_execute_command(
     except TimeoutError as e:
         return build_tool_error(ToolErrorCode.OPENCLI_TIMEOUT, str(e))
     except Exception as e:
+        # ⚠️ 记录完整 traceback，避免异常被静默吞掉
+        logger.error(f"execute_command 执行失败 (command={command}, args={args}): {e}", exc_info=True)
         return build_tool_error(ToolErrorCode.OPENCLI_EXEC_FAILED, f"命令执行失败: {str(e)}")
 
 

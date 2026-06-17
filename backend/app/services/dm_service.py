@@ -171,6 +171,7 @@ async def get_dm_messages(
     user_id: int,
     limit: int = 50,
     before_id: int | None = None,
+    after_id: int | None = None,
 ) -> list[dict]:
     """获取私信消息列表（游标分页），同时标记已读"""
     result = await db.execute(
@@ -194,7 +195,7 @@ async def get_dm_messages(
         .values(read_at=datetime.now(timezone.utc).replace(tzinfo=None))
     )
 
-    return await _get_messages(db, session_id, limit=limit, before_id=before_id)
+    return await _get_messages(db, session_id, limit=limit, before_id=before_id, after_id=after_id)
 
 
 async def send_dm_message(
@@ -349,39 +350,49 @@ async def _get_messages(
     session_id: str,
     limit: int = 50,
     before_id: int | None = None,
+    after_id: int | None = None,
 ) -> list[dict]:
-    """获取消息列表（内部函数）"""
+    """获取消息列表（内部函数，支持双向游标分页）"""
     query = select(DMMessage).where(DMMessage.session_id == session_id)
     if before_id:
         query = query.where(DMMessage.id < before_id)
-    query = query.order_by(DMMessage.created_at.desc()).limit(limit)
+        query = query.order_by(DMMessage.created_at.desc())
+    elif after_id:
+        query = query.where(DMMessage.id > after_id)
+        query = query.order_by(DMMessage.created_at.asc())
+    else:
+        query = query.order_by(DMMessage.created_at.desc())
+    query = query.limit(limit)
 
     result = await db.execute(query)
     messages = result.scalars().all()
 
-    # 收集所有发送者 ID，批量查名称
+    # 收集所有发送者 ID，批量查名称和类型
     sender_ids = {m.sender_id for m in messages}
-    sender_names = {}
-    for sid in sender_ids:
-        sender_names[sid] = await _get_user_name(db, sid)
+    sender_info: dict[int, dict] = {}
+    if sender_ids:
+        result = await db.execute(
+            select(User.id, User.username, User.type).where(User.id.in_(sender_ids))
+        )
+        for row in result.all():
+            sender_info[row[0]] = {"name": row[1], "type": row[2] or "human"}
 
     # 按时间升序排列（前端从上到下显示）
-    return sorted(
-        [
-            {
-                "id": m.id,
-                "session_id": m.session_id,
-                "sender_id": m.sender_id,
-                "sender_name": sender_names.get(m.sender_id, f"用户{m.sender_id}"),
-                "content": m.content,
-                "reply_to": m.reply_to,
-                "read_at": str(m.read_at) if m.read_at else None,
-                "created_at": str(m.created_at) if m.created_at else None,
-            }
-            for m in messages
-        ],
-        key=lambda x: x["id"],
-    )
+    sorted_messages = sorted(messages, key=lambda m: m.id) if after_id else list(reversed(messages))
+    return [
+        {
+            "id": m.id,
+            "session_id": m.session_id,
+            "sender_id": m.sender_id,
+            "sender_name": sender_info.get(m.sender_id, {}).get("name", f"用户{m.sender_id}"),
+            "sender_type": sender_info.get(m.sender_id, {}).get("type", "human"),
+            "content": m.content,
+            "reply_to": m.reply_to,
+            "read_at": str(m.read_at) if m.read_at else None,
+            "created_at": str(m.created_at) if m.created_at else None,
+        }
+        for m in sorted_messages
+    ]
 
 
 async def is_user_in_dm_dnd(db: AsyncSession, session_id: str, user_id: int) -> bool:

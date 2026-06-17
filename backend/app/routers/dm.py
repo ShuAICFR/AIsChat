@@ -65,6 +65,7 @@ async def get_dm_message_list(
     session_id: str,
     limit: int = Query(50, ge=1, le=200),
     before_id: int | None = Query(None),
+    after_id: int | None = Query(None),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -72,7 +73,7 @@ async def get_dm_message_list(
     try:
         return await get_dm_messages(
             db, session_id, current_user["user_id"],
-            limit=limit, before_id=before_id,
+            limit=limit, before_id=before_id, after_id=after_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

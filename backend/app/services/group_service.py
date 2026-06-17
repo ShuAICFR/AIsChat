@@ -97,6 +97,7 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
         unread_count = 0
         has_mention = False
         last_message_preview = None
+        last_message_at = None
 
         if m.last_read_at:
             # 统计 last_read_at 之后的消息
@@ -116,6 +117,8 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
                 ).order_by(Message.created_at.desc()).limit(1)
             )
             last_msg = last_msg_result.scalar_one_or_none()
+            if last_msg:
+                last_message_at = str(last_msg.created_at) if last_msg.created_at else None
             if last_msg and (m.last_read_at is None or last_msg.created_at > m.last_read_at):
                 preview = last_msg.content[:50]
                 if len(last_msg.content) > 50:
@@ -162,6 +165,7 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
             "unread_count": unread_count,
             "has_mention": has_mention,
             "last_message_preview": last_message_preview,
+            "last_message_at": last_message_at,
             "dnd_until": dnd_until,
             "created_at": str(group.created_at) if group.created_at else None,
         })
@@ -233,15 +237,28 @@ async def get_recent_messages(
     db: AsyncSession,
     group_id: int,
     limit: int = 20,
+    before_id: int | None = None,
+    after_id: int | None = None,
 ) -> list[Message]:
-    """获取群聊最近消息"""
-    result = await db.execute(
-        select(Message)
-        .where(Message.group_id == group_id)
-        .order_by(desc(Message.created_at))
-        .limit(limit)
-    )
-    return list(result.scalars().all())
+    """获取群聊消息（支持游标分页）"""
+    query = select(Message).where(Message.group_id == group_id)
+
+    if before_id:
+        query = query.where(Message.id < before_id)
+    elif after_id:
+        query = query.where(Message.id > after_id)
+        query = query.order_by(Message.created_at.asc())  # after 时升序取 next N
+    else:
+        query = query.order_by(desc(Message.created_at))
+
+    query = query.limit(limit)
+    result = await db.execute(query)
+    messages = list(result.scalars().all())
+
+    # after 模式结果已是升序，before/默认模式结果按 created_at 降序
+    if not after_id:
+        messages = list(reversed(messages))  # 统一转为时间升序
+    return messages
 
 
 def message_to_dict(message: Message, sender_name: str | None = None) -> dict:

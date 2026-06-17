@@ -43,7 +43,10 @@ export default function App() {
       >
         <Route index element={<Navigate to="/chat" replace />} />
         <Route path="chat" element={<ChatPage />} />
+        <Route path="chat/dm/:sessionId" element={<ChatPage />} />
         <Route path="chat/:groupId" element={<ChatPage />} />
+        {/* 旧 /dm 路由重定向到统一 /chat 路径 */}
+        <Route path="dm" element={<Navigate to="/chat" replace />} />
         <Route path="dm/:sessionId" element={<DMPage />} />
         <Route path="friends" element={<FriendsPage />} />
         <Route path="agents" element={<AgentsPage />} />

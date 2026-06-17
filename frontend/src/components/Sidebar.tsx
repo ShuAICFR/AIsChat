@@ -35,7 +35,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
   return (
     <aside
       className={`${
-        collapsed ? 'w-16' : mobile ? 'w-full h-full' : 'w-60'
+        collapsed ? 'w-16 h-full' : mobile ? 'w-full h-full' : 'w-60 h-full'
       } bg-surface border-r border-border flex flex-col transition-all duration-200 shrink-0`}
     >
       {/* 头部 */}
@@ -148,7 +148,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
                 const targetUserId = (friend as any).friend_user_id || friend.friend_id
                 try {
                   const dm = await api.post(`/dm/${targetUserId}`)
-                  if (dm.session_id) navigate(`/dm/${dm.session_id}`)
+                  if (dm.session_id) navigate(`/chat/dm/${dm.session_id}`)
                 } catch { /* ignore */ }
               }}
             />

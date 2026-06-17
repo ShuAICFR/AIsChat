@@ -1,20 +1,15 @@
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import ChatArea from '../components/ChatArea'
 
 export default function ChatPage() {
-  const { groupId } = useParams<{ groupId: string }>()
-  const navigate = useNavigate()
-
-  // 直接派生，URL 是唯一数据源
-  const selectedGroupId = groupId ? parseInt(groupId) : null
-
-  const handleSelectGroup = (id: number) => {
-    navigate(`/chat/${id}`)
-  }
+  const { groupId, sessionId } = useParams<{ groupId?: string; sessionId?: string }>()
 
   return (
-    <div className="h-full">
-      <ChatArea groupId={selectedGroupId} onSelectGroup={handleSelectGroup} />
+    <div className="h-full overflow-hidden">
+      <ChatArea
+        groupId={groupId ? parseInt(groupId) : null}
+        dmSessionId={sessionId || null}
+      />
     </div>
   )
 }

@@ -1,16 +1,8 @@
-import { useParams } from 'react-router-dom'
-import DMChatView from '../components/DMChatView'
+import { useParams, Navigate } from 'react-router-dom'
 
+/** 旧路由 /dm/:sessionId → /chat/dm/:sessionId 重定向 */
 export default function DMPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
-
-  if (!sessionId) {
-    return (
-      <div className="h-full flex items-center justify-center text-textMuted text-sm">
-        无效的私信会话
-      </div>
-    )
-  }
-
-  return <DMChatView sessionId={sessionId} />
+  if (sessionId) return <Navigate to={`/chat/dm/${sessionId}`} replace />
+  return <Navigate to="/chat" replace />
 }

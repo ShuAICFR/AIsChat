@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
-import { ArrowLeft, Bell, BellOff } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings, Menu } from 'lucide-react'
 
 interface DMChatViewProps {
   sessionId: string
@@ -12,6 +12,7 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
   const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const navigate = useNavigate()
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   useEffect(() => {
     if (!sessionId) return
@@ -37,14 +38,22 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
     partner?.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
 
   return (
-    <div className="h-full flex flex-col">
-      {/* 私信头部 */}
-      <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-3 shrink-0">
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* 私信头部 — 与群聊头部布局对齐 */}
+      <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
+        {/* 移动端：返回 + 抽屉菜单 */}
         <button
           onClick={() => navigate('/chat')}
-          className="p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
         >
           <ArrowLeft size={20} />
+        </button>
+        <button
+          onClick={openDrawer}
+          className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          title="菜单"
+        >
+          <Menu size={18} />
         </button>
 
         {/* 对方头像 */}
@@ -58,7 +67,6 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
             <span className="font-semibold text-textPrimary text-sm truncate">
               {partner?.name || '加载中...'}
             </span>
-            <span className={`w-2 h-2 rounded-full shrink-0 ${stateColor}`} />
           </div>
           <span className="text-[10px] text-textMuted">
             {partner?.type === 'ai' ? '🤖 AI' : '👤 用户'}
@@ -68,17 +76,32 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
           </span>
         </div>
 
+        {/* 在线状态指示 */}
+        <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
+          <span className={`w-1.5 h-1.5 rounded-full ${stateColor}`} />
+          {partner?.state === 'active' ? '在线' : partner?.state === 'dnd' ? '勿扰' : '离线'}
+        </span>
+
         {/* 免打扰按钮 */}
         <button
           onClick={handleToggleDnd}
-          className={`p-1.5 rounded-lg transition-colors ${
+          className={`p-1 rounded-lg transition-colors ${
             myDndUntil
               ? 'text-rose-400 hover:bg-rose-400/10'
-              : 'text-textMuted hover:text-textSecondary hover:bg-elevated'
+              : 'text-textMuted hover:text-rose-400 hover:bg-elevated'
           }`}
           title={myDndUntil ? '取消免打扰' : '开启免打扰'}
         >
-          {myDndUntil ? <BellOff size={16} /> : <Bell size={16} />}
+          {myDndUntil ? <BellOff size={14} /> : <Bell size={14} />}
+        </button>
+
+        {/* 设置按钮（与群聊头部的 Settings 对齐） */}
+        <button
+          onClick={handleToggleDnd}
+          className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
+          title="私信设置"
+        >
+          <Settings size={14} />
         </button>
       </div>
 

@@ -57,7 +57,7 @@ export default function FriendsPage() {
       const targetUserId = friendUserId || friendId
       const dm = await api.post(`/dm/${targetUserId}`)
       if (dm.session_id) {
-        navigate(`/dm/${dm.session_id}`)
+        navigate(`/chat/dm/${dm.session_id}`)
       }
     } catch (err: any) {
       console.error('创建私信失败:', err)

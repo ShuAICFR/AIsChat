@@ -152,14 +152,16 @@ async def list_members(
 async def get_messages(
     group_id: int,
     limit: int = 20,
+    before_id: int | None = Query(None),
+    after_id: int | None = Query(None),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取群聊消息历史"""
+    """获取群聊消息历史（游标分页）"""
     from app.models.user import User
     from app.models.agent import Agent
 
-    messages = await get_recent_messages(db, group_id, limit)
+    messages = await get_recent_messages(db, group_id, limit, before_id=before_id, after_id=after_id)
 
     # 批量解析发送者名称
     human_ids = {m.sender_id for m in messages if m.sender_type == "human"}
@@ -175,9 +177,10 @@ async def get_messages(
         for a in result.scalars().all():
             name_map[("ai", a.id)] = a.name
 
+    # messages 已由 service 层按时间升序排列
     return [
         message_to_dict(m, sender_name=name_map.get((m.sender_type, m.sender_id)))
-        for m in reversed(messages)
+        for m in messages
     ]
 
 

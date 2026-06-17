@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
+import ChatSidebar from './ChatSidebar'
+import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, Plus, UserPlus, MessageSquare, ChevronRight, Settings, Menu, ArrowLeft } from 'lucide-react'
+import { Bell, BellOff, UserPlus, Settings, Menu, ArrowLeft } from 'lucide-react'
 
 interface Group {
   id: number
@@ -24,16 +26,14 @@ interface Group {
 
 interface ChatAreaProps {
   groupId: number | null
-  onSelectGroup: (id: number) => void
+  dmSessionId: string | null
 }
 
-export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
+export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const [groups, setGroups] = useState<Group[]>([])
-  const [friends, setFriends] = useState<any[]>([])
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [unreadSummary, setUnreadSummary] = useState<any>(null)
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
@@ -42,12 +42,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
     api.get('/groups').then(setGroups).catch(console.error)
   }, [])
 
-  // 加载好友列表
-  useEffect(() => {
-    api.get('/friends').then(setFriends).catch(console.error)
-  }, [])
-
-  // 加载群聊列表（群聊选中变化时刷新未读）
+  // 群聊选中变化时刷新未读
   useEffect(() => {
     if (groupId) {
       api.post(`/groups/${groupId}/read`)
@@ -56,184 +51,27 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
     }
   }, [groupId])
 
-  // DM 通知 / 未读更新 → 刷新群列表
-  useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      if (e.detail?.type === 'unread_update' || e.detail?.type === 'dm_notification') {
-        api.get('/groups').then(setGroups).catch(() => {})
-      }
-    }
-    window.addEventListener('chat-refresh', handler as EventListener)
-    return () => window.removeEventListener('chat-refresh', handler as EventListener)
-  }, [])
-
-  const handleStartDM = async (friendType: string, friendId: number, friendUserId?: number) => {
-    try {
-      const friend: any = friends.find((f: any) => f.friend_type === friendType && f.friend_id === friendId)
-      const targetUserId = friendUserId || friend?.friend_user_id
-      if (targetUserId) {
-        const dm = await api.post(`/dm/${targetUserId}`)
-        if (dm.session_id) {
-          navigate(`/dm/${dm.session_id}`)
-        }
-      }
-    } catch (err: any) {
-      console.error('创建私信失败:', err)
-    }
-  }
-
-  // 分离普通群聊和 DM
-  const regularGroups = groups.filter((g) => !g.name.startsWith('DM:'))
-  const dmGroups = groups.filter((g) => g.name.startsWith('DM:'))
-
   const currentGroup = groups.find((g) => g.id === groupId)
+
+  const hasActiveConversation = !!(groupId || dmSessionId)
 
   return (
     <div className="flex h-full">
-      {/* 群聊列表 + 好友私信 — 桌面端常驻，移动端在无选中群聊时全屏显示 */}
-      <div className={`w-56 bg-surface border-r border-border shrink-0 flex-col md:flex ${
-        groupId ? 'hidden' : 'flex'
-      }`}>
-        {/* 群聊标题 */}
-        <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openDrawer}
-              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="菜单"
-            >
-              <Menu size={18} />
-            </button>
-            群聊列表
-          </div>
-          <button
-            onClick={() => setShowCreateGroup(true)}
-            className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
-            title="创建群聊"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
+      {/* 统一侧边栏：群聊 + 私信列表 */}
+      <ChatSidebar
+        activeGroupId={groupId}
+        activeSessionId={dmSessionId}
+        onCreateGroup={() => setShowCreateGroup(true)}
+        openDrawer={openDrawer}
+        hideOnMobile={hasActiveConversation}
+      />
 
-        <div className="flex-1 overflow-y-auto py-1">
-          {/* 群聊 */}
-          {regularGroups.length === 0 ? (
-            <div className="px-3 py-8 text-center text-xs text-textMuted">
-              暂无群聊，点击 + 创建
-            </div>
-          ) : (
-            regularGroups.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => onSelectGroup(g.id)}
-                className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
-                  g.id === groupId
-                    ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                    : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium truncate flex items-center gap-1">
-                    <span className="truncate"># {g.name}</span>
-                  </div>
-                  {g.unread_count > 0 && (
-                    <span className={`shrink-0 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
-                      g.has_mention
-                        ? 'bg-rose-500 shadow-sm shadow-rose-500/30'
-                        : 'bg-primary-500/80'
-                    }`}>
-                      {g.unread_count > 99 ? '99+' : g.unread_count}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-textMuted truncate mt-0.5">
-                  {g.dnd_until && <BellOff size={10} className="inline mr-1 text-rose-400" />}
-                  {g.has_mention && !g.dnd_until && (
-                    <span className="text-rose-400 font-medium">[@你] </span>
-                  )}
-                  {g.last_message_preview || '暂无消息'}
-                </div>
-              </button>
-            ))
-          )}
-
-          {/* 已有 DM 列表 */}
-          {dmGroups.length > 0 && (
-            <>
-              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
-                私信
-              </div>
-              {dmGroups.map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => onSelectGroup(g.id)}
-                  className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
-                    g.id === groupId
-                      ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                      : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
-                  }`}
-                >
-                  <div className="truncate flex items-center gap-1.5">
-                    <MessageSquare size={12} className="shrink-0 text-textMuted" />
-                    <span className="font-medium">
-                      {g.name.replace(/^DM:\s*/, '')}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </>
-          )}
-
-          {/* 好友列表（可点击发起 DM） */}
-          {friends.length > 0 && (
-            <>
-              <div className="px-3 pt-4 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
-                好友
-              </div>
-              {friends.map((f) => {
-                const key = `${f.friend_type}:${f.friend_id}`
-                const isActive = dmGroups.some(
-                  (g) => g.name.includes(f.friend_name) && g.id === groupId
-                )
-                return (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      const existing = dmGroups.find((g) =>
-                        g.name.includes(f.friend_name)
-                      )
-                      if (existing) {
-                        onSelectGroup(existing.id)
-                      } else {
-                        handleStartDM(f.friend_type, f.friend_id)
-                      }
-                    }}
-                    className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 flex items-center gap-2 ${
-                      isActive
-                        ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
-                        : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${
-                      f.state === 'active' ? 'bg-mint-400' :
-                      f.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
-                    }`} />
-                    <span className="truncate flex-1">{f.friend_name}</span>
-                    <ChevronRight size={12} className="text-textMuted shrink-0" />
-                  </button>
-                )
-              })}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 主区域：空状态（桌面端）or 聊天 */}
-      {!groupId ? (
+      {/* ── 右侧主区域 ── */}
+      {!hasActiveConversation ? (
         <div className="hidden md:flex flex-1 items-center justify-center bg-canvas">
           <div className="text-center">
             <MessageBubblePlaceholder />
-            <p className="mt-4 text-lg text-textSecondary font-medium">选择一个群聊开始对话</p>
+            <p className="mt-4 text-lg text-textSecondary font-medium">选择一个对话开始</p>
             {groups.length === 0 && (
               <button
                 onClick={() => setShowCreateGroup(true)}
@@ -244,11 +82,10 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
             )}
           </div>
         </div>
-      ) : (
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* 群聊头部 */}
+      ) : groupId ? (
+        /* ── 群聊 ── */
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
-            {/* 移动端：返回群列表 + 汉堡菜单 */}
             <button
               onClick={() => navigate('/chat')}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
@@ -293,7 +130,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
                   ? 'text-rose-400 hover:bg-rose-400/10'
                   : 'text-textMuted hover:text-rose-400 hover:bg-elevated'
               }`}
-              title={currentGroup?.dnd_until ? '点击取消免打扰' : '点击开启免打扰'}
+              title={currentGroup?.dnd_until ? '取消免打扰' : '开启免打扰'}
             >
               {currentGroup?.dnd_until ? <BellOff size={14} /> : <Bell size={14} />}
             </button>
@@ -307,9 +144,12 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
               </button>
             )}
           </div>
-
-          {/* ChatView: 共享消息 + 输入框 */}
           <ChatView conversationType="group" conversationId={groupId} />
+        </div>
+      ) : (
+        /* ── 私信 ── */
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <DMChatView sessionId={dmSessionId!} />
         </div>
       )}
 
@@ -320,7 +160,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           onCreated={(newGroup) => {
             setShowCreateGroup(false)
             setGroups((prev) => [...prev, newGroup])
-            onSelectGroup(newGroup.id)
+            navigate(`/chat/${newGroup.id}`)
           }}
         />
       )}
@@ -356,7 +196,7 @@ export default function ChatArea({ groupId, onSelectGroup }: ChatAreaProps) {
           onLeave={() => {
             setShowSettings(false)
             setGroups((prev) => prev.filter((g) => g.id !== currentGroup.id))
-            onSelectGroup(groups.find(g => g.id !== currentGroup.id)?.id || 0)
+            navigate('/chat')
           }}
         />
       )}
@@ -463,7 +303,6 @@ function InviteMemberModal({
   const [manualType, setManualType] = useState<'ai' | 'human'>('ai')
   const [manualId, setManualId] = useState('')
 
-  // 加载好友列表
   useEffect(() => {
     api.get<Friend[]>('/friends')
       .then(setFriends)
@@ -502,7 +341,7 @@ function InviteMemberModal({
         await api.post(`/groups/${groupId}/invite`, { member_type, member_id })
         ok.push(key)
       } catch {
-        // 单个失败不中断，继续邀请其他的
+        // 单个失败不中断
       }
     }
     setSuccess(ok)
@@ -554,10 +393,9 @@ function InviteMemberModal({
         <h2 className="text-lg font-semibold mb-1 text-textPrimary">邀请成员</h2>
         <p className="text-xs text-textMuted mb-4">从好友列表勾选要邀请的成员</p>
 
-        {/* 好友列表 */}
         {friendsLoading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="animate-spin text-textMuted" size={20} />
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500" />
           </div>
         ) : friends.length === 0 ? (
           <div className="py-8 text-center text-sm text-textMuted">
@@ -565,15 +403,12 @@ function InviteMemberModal({
           </div>
         ) : (
           <>
-            {/* 全选 */}
             <button
               onClick={selectAll}
               className="text-xs text-primary-400 hover:text-primary-300 mb-2 self-start"
             >
               {selected.size === friends.length ? '取消全选' : '全选'}
             </button>
-
-            {/* 好友勾选列表 */}
             <div className="flex-1 overflow-y-auto border border-border rounded-xl divide-y divide-border/50 mb-4 max-h-64">
               {friends.map((f) => {
                 const key = `${f.friend_type}:${f.friend_id}`
@@ -582,9 +417,7 @@ function InviteMemberModal({
                   <label
                     key={key}
                     className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                      checked
-                        ? 'bg-primary-500/10'
-                        : 'hover:bg-elevated'
+                      checked ? 'bg-primary-500/10' : 'hover:bg-elevated'
                     }`}
                   >
                     <input
@@ -595,12 +428,8 @@ function InviteMemberModal({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-textPrimary truncate">
-                          {f.friend_name}
-                        </span>
-                        <span className="text-xs">
-                          {getStateIcon(f.state)}
-                        </span>
+                        <span className="text-sm font-medium text-textPrimary truncate">{f.friend_name}</span>
+                        <span className="text-xs">{getStateIcon(f.state)}</span>
                       </div>
                     </div>
                     <span className="text-xs text-textMuted shrink-0">
@@ -613,7 +442,6 @@ function InviteMemberModal({
           </>
         )}
 
-        {/* 手动输入（折叠） */}
         {!showManual ? (
           <button
             onClick={() => setShowManual(true)}
@@ -656,10 +484,7 @@ function InviteMemberModal({
                 邀请
               </button>
             </div>
-            <button
-              onClick={() => setShowManual(false)}
-              className="text-xs text-textMuted hover:text-textSecondary"
-            >
+            <button onClick={() => setShowManual(false)} className="text-xs text-textMuted hover:text-textSecondary">
               收起
             </button>
           </div>
@@ -667,9 +492,7 @@ function InviteMemberModal({
 
         {error && <div className="text-sm text-rose-400 mb-2">{error}</div>}
         {success.length > 0 && (
-          <div className="text-sm text-mint-400 mb-2">
-            已成功邀请 {success.length} 位好友
-          </div>
+          <div className="text-sm text-mint-400 mb-2">已成功邀请 {success.length} 位好友</div>
         )}
 
         <div className="flex gap-2">

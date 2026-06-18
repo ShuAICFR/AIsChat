@@ -283,6 +283,24 @@ async def _maybe_trigger_ai_reply(
     except Exception:
         pass  # 非致命
 
+    # 5.6. Skill 引擎评估（延迟回复、打字指示器）
+    from app.services.skill_engine import evaluate_action_skills
+    skill_result = await evaluate_action_skills(db, agent, group_id, context={
+        "content": content,
+        "sender_type": sender_type,
+        "sender_id": sender_id,
+    })
+    # 打字指示器广播
+    if skill_result.show_typing:
+        await manager.broadcast_to_group(group_id, {
+            "type": "ai_typing",
+            "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
+        })
+    # 延迟回复
+    if skill_result.delay_seconds > 0:
+        logger.info(f"🧠 AI {agent.name} 技能延迟 {skill_result.delay_seconds}s")
+        await asyncio.sleep(skill_result.delay_seconds)
+
     # 6. 构建消息
     from app.services.llm_service import build_messages, resolve_model
     # 向量加速混合检索仅在 AI 全群启用（AI 内部协作场景）
@@ -574,6 +592,20 @@ async def _trigger_dm_ai_reply(
     except Exception:
         pass  # 非致命
 
+    # Skill 引擎评估（延迟回复、打字指示器）
+    from app.services.skill_engine import evaluate_action_skills
+    skill_result = await evaluate_action_skills(db, agent, 0, context={
+        "content": content,
+        "sender_type": "human",  # DM 中对方是人类
+    })
+    if skill_result.show_typing:
+        await manager.broadcast_to_dm(session_id, {
+            "type": "ai_typing",
+            "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
+        })
+    if skill_result.delay_seconds > 0:
+        await asyncio.sleep(skill_result.delay_seconds)
+
     # 构建消息
     from app.services.llm_service import build_dm_messages, resolve_model
     messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key)
@@ -713,7 +745,7 @@ async def _process_alarm_event(db, event: dict):
     from app.models.agent import Agent as AgentModel
     from app.models.user import User
     from app.utils.crypto import decrypt_api_key
-    from app.services.llm_service import FIXED_SYSTEM_PREFIX, resolve_model
+    from app.services.llm_service import CORE_IDENTITY, RULES, resolve_model
     from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
     from app.services.tool_registry import get_allowed_tools
 
@@ -751,7 +783,7 @@ async def _process_alarm_event(db, event: dict):
         f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
         "可以调用工具来发送消息、存储记忆、切换状态等。"
     )
-    system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
+    system_prompt = CORE_IDENTITY + "\n\n" + custom_prompt + "\n\n" + RULES
 
     # 注入相关记忆（用 task 作为检索查询）
     try:

@@ -381,6 +381,25 @@ CREATE TABLE IF NOT EXISTS system_logs (
 );
 
 -- ============================================================
+-- AI 思维 Skill 表（延迟回复、打字指示器、场景匹配、提示词注入）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_skills (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    skill_type VARCHAR(30) NOT NULL,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    config JSONB NOT NULL DEFAULT '{}',
+    priority INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT ck_agent_skills_type CHECK (
+        skill_type IN ('delay_reply', 'typing_indicator', 'scene_trigger', 'inject_prompt')
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id);
+
+-- ============================================================
 -- 索引
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_messages_group_id ON messages(group_id);

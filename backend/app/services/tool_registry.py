@@ -328,6 +328,63 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "segment": "self_config",
+        "function": {
+            "name": "manage_skills",
+            "description": "管理自己的思维技能（Skill）。你可以查看、添加、修改、删除、启用/禁用技能。\n\n"
+                           "四种技能类型：\n"
+                           "1. delay_reply - 延迟回复（收到消息后等 N 秒再回），config: {\"delay_seconds\": 3, \"max_delay_seconds\": 30}\n"
+                           "2. typing_indicator - 打字指示器（回复前显示「正在输入…」），config: {\"pattern\": \"always\"}\n"
+                           "3. scene_trigger - 场景匹配（检测到特定关键词/正则时触发行为），config: {\"match_type\": \"keyword\", \"keywords\": [\"你好\"], \"inject_text\": \"用户打招呼了\"}\n"
+                           "4. inject_prompt - 注入提示词（临时追加一段指导到思维中），config: {\"insert_text\": \"表现得温柔一些\", \"duration_seconds\": 300, \"one_shot\": false}\n\n"
+                           "使用场景：你想要调整自己的行为风格时，添加 inject_prompt 技能；你想要在某种场景下做特别的事，添加 scene_trigger 技能；"
+                           "你想让自己的回复更有真实感，添加 delay_reply + typing_indicator。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["list", "add", "update", "delete", "toggle"],
+                        "description": "操作：list 查看所有技能、add 添加、update 修改、delete 删除、toggle 开关",
+                    },
+                    "skill_id": {
+                        "type": "integer",
+                        "description": "技能ID（update/delete/toggle 时提供）",
+                        "nullable": True,
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "技能名称（add 时提供），如「温柔模式」「延迟回复」",
+                        "nullable": True,
+                    },
+                    "skill_type": {
+                        "type": "string",
+                        "enum": ["delay_reply", "typing_indicator", "scene_trigger", "inject_prompt"],
+                        "description": "技能类型（add 时提供）",
+                        "nullable": True,
+                    },
+                    "config": {
+                        "type": "object",
+                        "description": "技能配置（add/update 时提供）。各类型示例见上方 description",
+                        "nullable": True,
+                    },
+                    "is_enabled": {
+                        "type": "boolean",
+                        "description": "是否启用（add/update/toggle 时提供）",
+                        "nullable": True,
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "description": "优先级，数字越大越靠后（add/update 时提供）",
+                        "nullable": True,
+                    },
+                },
+                "required": ["action"],
+            },
+        },
+    },
+    {
+        "type": "function",
         "segment": "file_operations",
         "function": {
             "name": "execute_command",
@@ -572,13 +629,13 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "set_dnd", "store_memory", "recall_memory",
         "switch_state", "create_group", "invite_to_group",
         "view_unread", "update_self_config", "toggle_thinking",
-        "execute_command", "list_available_skills",
+        "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task",
     ],
     "dnd": [
         "switch_state", "recall_memory", "view_unread", "toggle_thinking",
-        "execute_command", "list_available_skills",
+        "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task",
     ],
@@ -1006,6 +1063,73 @@ async def _handle_toggle_thinking(
         "thinking_enabled": enabled,
         "message": f"深度推理模式{status_text}",
     }
+
+
+async def _handle_manage_skills(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: manage_skills — AI 管理自己的思维 Skill"""
+    from app.services.skill_service import (
+        list_skills, add_skill, update_skill, delete_skill, toggle_skill,
+    )
+
+    action = arguments["action"]
+
+    if action == "list":
+        skills = await list_skills(db, agent_id)
+        type_hints = {
+            "delay_reply": "延迟回复 — 收到消息后等 N 秒再回",
+            "typing_indicator": "打字指示器 — 回复前显示「正在输入…」",
+            "scene_trigger": "场景匹配 — 检测关键词/正则时触发行为",
+            "inject_prompt": "注入提示词 — 临时追加指导到思维中",
+        }
+        for s in skills:
+            s["type_hint"] = type_hints.get(s.get("skill_type", ""), "")
+        return {"success": True, "skills": skills, "count": len(skills)}
+
+    elif action == "add":
+        name = arguments.get("name")
+        skill_type = arguments.get("skill_type")
+        if not name or not skill_type:
+            return {"error": True, "message": "add 操作需要 name 和 skill_type"}
+        valid_types = ("delay_reply", "typing_indicator", "scene_trigger", "inject_prompt")
+        if skill_type not in valid_types:
+            return {"error": True, "message": f"skill_type 必须为 {', '.join(valid_types)} 之一"}
+        return await add_skill(
+            db, agent_id,
+            name=name,
+            skill_type=skill_type,
+            config=arguments.get("config", {}),
+            is_enabled=arguments.get("is_enabled", True),
+            priority=arguments.get("priority", 0),
+        )
+
+    elif action == "update":
+        skill_id = arguments.get("skill_id")
+        if not skill_id:
+            return {"error": True, "message": "update 操作需要 skill_id"}
+        return await update_skill(
+            db, agent_id, skill_id,
+            name=arguments.get("name"),
+            config=arguments.get("config"),
+            is_enabled=arguments.get("is_enabled"),
+            priority=arguments.get("priority"),
+        )
+
+    elif action == "delete":
+        skill_id = arguments.get("skill_id")
+        if not skill_id:
+            return {"error": True, "message": "delete 操作需要 skill_id"}
+        return await delete_skill(db, agent_id, skill_id)
+
+    elif action == "toggle":
+        skill_id = arguments.get("skill_id")
+        if not skill_id:
+            return {"error": True, "message": "toggle 操作需要 skill_id"}
+        return await toggle_skill(db, agent_id, skill_id, arguments.get("is_enabled"))
+
+    return {"error": True, "message": f"未知操作: {action}，支持 list/add/update/delete/toggle"}
 
 
 async def _handle_send_dm(
@@ -1462,6 +1586,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "view_unread": _handle_view_unread,
     "update_self_config": _handle_update_self_config,
     "toggle_thinking": _handle_toggle_thinking,
+    "manage_skills": _handle_manage_skills,
     "execute_command": _handle_execute_command,
     "list_available_skills": _handle_list_available_skills,
     "send_friend_request": _handle_send_friend_request,

@@ -32,6 +32,7 @@ async def run_migrations():
             await _migrate_dm_messages(db)
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
+            await _migrate_agent_skills(db)
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -304,6 +305,35 @@ async def _migrate_workspace(db):
     """))
     await db.commit()
     logger.info("  ✅ agent_workspace 表创建完成")
+
+
+async def _migrate_agent_skills(db):
+    """创建 agent_skills 表（v1.1.5 Skill 系统）"""
+    if await _table_exists(db, "agent_skills"):
+        logger.info("  ⏭ agent_skills 表已存在，跳过")
+        return
+    logger.info("  🧠 创建 agent_skills 表")
+    await db.execute(text("""
+        CREATE TABLE agent_skills (
+            id SERIAL PRIMARY KEY,
+            agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            name VARCHAR(100) NOT NULL,
+            skill_type VARCHAR(30) NOT NULL,
+            is_enabled BOOLEAN DEFAULT TRUE,
+            config JSONB NOT NULL DEFAULT '{}',
+            priority INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT ck_agent_skills_type CHECK (
+                skill_type IN ('delay_reply', 'typing_indicator', 'scene_trigger', 'inject_prompt')
+            )
+        )
+    """))
+    await db.execute(text("""
+        CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id)
+    """))
+    await db.commit()
+    logger.info("  ✅ agent_skills 表创建完成")
 
 
 async def _fix_column_types(db):

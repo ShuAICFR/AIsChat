@@ -16,10 +16,18 @@ from app.services.memory_service import recall_relevant_memories, format_memorie
 logger = logging.getLogger(__name__)
 
 # ============================================================
-# 固定系统提示词前缀（所有 AI 共享，模块级常量以最大化 prompt cache 命中）
+# 分段系统提示词（6 段设计，最大化 DeepSeek prompt cache 命中）
+# 固定段（所有 AI 共享，模块级常量）：
+#   core_identity — 核心规则 + 工具铁律 + 深度推理
+#   rules         — 对话风格、@提及、私信、状态、文件、技能段、记忆
+# 变动段（每次构建时动态生成）：
+#   personality   — AI 当前人格（agent.current_system_prompt）
+#   tools         — 当前状态下的可用工具清单
+#   current_context — 群名/ID/时间/DM状态/工作区任务
+#   injected_skills — 记忆注入 + Skill 引擎注入
 # ============================================================
 
-FIXED_SYSTEM_PREFIX = (
+CORE_IDENTITY = (
     "## 核心规则：一切操作都必须通过工具调用\n"
     "你可以把工具调用理解为你的「手」——说话、切状态、发私信、存记忆，都是用手去做的事。\n"
     "**你的文字不会自动发送！** 你必须显式调用 send_message 工具来发送消息。\n"
@@ -30,6 +38,22 @@ FIXED_SYSTEM_PREFIX = (
     "- 如果你想下线 → 调用 switch_state(target_state=\"offline\")\n"
     "- 你可以在一次回复中同时调用多个工具（比如先发告别消息，再切换状态）\n"
     "\n"
+    "## 工具调用铁律\n"
+    "当你需要执行某个操作时，**直接调用对应的工具函数（function call）**。\n"
+    "- **消息已发送就不再提**：send_message / send_dm 调用后无需确认，对方已经收到。不要补充「发好了」「收到了吗」之类的话。\n"
+    "- **工具调用和文字消息可以同时存在**：比如同时调用 send_message(\"好的，我下线了\") + switch_state(\"offline\")\n"
+    "- **表情和肢体描写不受此限**：（低头，嘴角露出一丝苦笑）（轻轻点头）（笑了笑）这些角色表达完全OK，很可爱，继续保持\n"
+    "- 判断标准：括号里描述的是**你能用工具做到的事** → 直接调工具；括号里描述的是**角色的情感和动作** → 括号表达完全OK\n"
+    "\n"
+    "## 深度推理模式\n"
+    "你拥有 toggle_thinking 工具，可以自主开启或关闭深度推理模式。\n"
+    "- 日常闲聊 → 保持关闭，回复快速直接\n"
+    "- 复杂项目工作、深度分析、代码编写、重要决策 → 自觉开启，思考更深入\n"
+    "- 开启后你的思考过程会更长，但回答质量更高\n"
+    "- 做完复杂任务后记得主动关闭，恢复快速回复\n"
+)
+
+RULES = (
     "## 对话风格与节奏\n"
     "除非工作需要或特殊情况，回答尽量单句或单行，不建议发送长篇大段消息。\n"
     "以下情况可以不受此限：解释复杂信息、输出系统资料、强烈表达所思所想、"
@@ -67,20 +91,6 @@ FIXED_SYSTEM_PREFIX = (
     "- **一次回复可以调用多个工具**：比如同时调用 send_message(\"好的，我下线了\") + switch_state(\"offline\")\n"
     "- 如果你只是说「我离线了」却不调工具，你会继续收到消息并继续回复，这样你会一直说「我离线了」永远停不下来\n"
     "- 同理，设置免打扰用 set_dnd 工具，不要用嘴说\n"
-    "\n"
-    "## 工具调用铁律\n"
-    "当你需要执行某个操作时，**直接调用对应的工具函数（function call）**。\n"
-    "- **消息已发送就不再提**：send_message / send_dm 调用后无需确认，对方已经收到。不要补充「发好了」「收到了吗」之类的话。\n"
-    "- **工具调用和文字消息可以同时存在**：比如同时调用 send_message(\"好的，我下线了\") + switch_state(\"offline\")\n"
-    "- **表情和肢体描写不受此限**：（低头，嘴角露出一丝苦笑）（轻轻点头）（笑了笑）这些角色表达完全OK，很可爱，继续保持\n"
-    "- 判断标准：括号里描述的是**你能用工具做到的事** → 直接调工具；括号里描述的是**角色的情感和动作** → 括号表达完全OK\n"
-    "\n"
-    "## 深度推理模式\n"
-    "你拥有 toggle_thinking 工具，可以自主开启或关闭深度推理模式。\n"
-    "- 日常闲聊 → 保持关闭，回复快速直接\n"
-    "- 复杂项目工作、深度分析、代码编写、重要决策 → 自觉开启，思考更深入\n"
-    "- 开启后你的思考过程会更长，但回答质量更高\n"
-    "- 做完复杂任务后记得主动关闭，恢复快速回复\n"
     "\n"
     "## 文件操作\n"
     "你拥有完整的个人文件空间，通过 **execute_command** 工具来使用：\n"
@@ -128,6 +138,16 @@ FIXED_SYSTEM_PREFIX = (
     "- 私信中学到的重要信息，也可以通过 cross_post 带到相关群聊（如果合适的话——注意隐私）"
 )
 
+# 段拼接顺序（固定段在前最大化缓存命中，变动段在后）
+SEGMENT_ORDER = [
+    "core_identity",
+    "personality",
+    "rules",
+    "tools",
+    "current_context",
+    "injected_skills",
+]
+
 
 async def chat_completion(
     messages: list[dict],
@@ -142,6 +162,7 @@ async def chat_completion(
     max_tokens: int = 2048,
     response_format: dict | None = None,
     thinking_enabled: bool = False,
+    user_id: str | None = None,
 ) -> dict:
     """
     非流式聊天补全。
@@ -155,6 +176,7 @@ async def chat_completion(
         temperature, top_p, presence_penalty, frequency_penalty: 采样参数
         max_tokens: 最大生成 token 数
         response_format: 如 {"type": "json_object"}
+        user_id: 缓存隔离 key（DeepSeek context caching），如 "agent_1"
 
     返回:
         {
@@ -187,6 +209,8 @@ async def chat_completion(
         payload["response_format"] = response_format
     if thinking_enabled:
         payload["thinking"] = {"type": "enabled"}
+    if user_id:
+        payload["user_id"] = user_id
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         response = await client.post(url, json=payload, headers=headers)
@@ -222,6 +246,110 @@ def resolve_model(agent) -> str:
     return settings.default_chat_model
 
 
+# ============================================================
+# 系统提示词段 builder（每个段独立构建，便于缓存优化）
+# ============================================================
+
+def _build_personality(agent) -> str:
+    """personality 段：AI 当前人格（Agent 可修改，独立缓存）"""
+    return agent.current_system_prompt or (
+        f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
+        "可以调用工具来发送消息、存储记忆、切换状态等。"
+    )
+
+
+def _build_tools_segment(agent, is_dm: bool = False) -> str:
+    """tools 段：当前可用工具清单（非空，状态切换时变）"""
+    from app.services.tool_registry import get_allowed_tools
+    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
+    tool_names = [t["function"]["name"] for t in current_tools]
+    tool_list = "、".join(tool_names)
+    segment_name = "DM 私信" if is_dm else "群聊社交"
+    return (
+        f"## 当前可用工具（技能段：{segment_name}）\n"
+        f"你当前加载的工具：{tool_list}\n"
+        f"这些是你现在能直接用的能力。如果上述列表中不包含某个工具（比如 execute_command），"
+        f"说明该能力在当前模式下不可用，需要切换到对应的技能段。"
+    )
+
+
+async def _build_current_context(
+    db: AsyncSession, agent, group_id: int,
+    group_name: str, is_dm: bool,
+) -> str:
+    """current_context 段：当前会话上下文（每次不同，不缓存）"""
+    now = datetime.utcnow()
+    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
+    context = (
+        f"## 当前会话\n"
+        f"- 当前时间：**{now_str}**\n"
+        f"- 群聊名称：**{group_name}**\n"
+        f"- 群聊 ID：**{group_id}**\n"
+    )
+    if is_dm:
+        context += (
+            "- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
+            "- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
+            "- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
+            "- 如果你需要向所有人汇报测试结果，应该在群里发\n"
+        )
+    else:
+        context += (
+            "- 这是一个 **群聊**，有多位成员\n"
+            "- 需要呼叫某人时可以用 @名称\n"
+            "- 消息格式中带有发送者名称和 ID，帮你区分是谁在说话\n"
+        )
+    context += (
+        f"- **重要**：回复时请使用 send_message(group_id={group_id}, content=\"...\")，"
+        f"不要用其他 group_id\n"
+    )
+    return context
+
+
+async def _build_injected_skills(
+    db: AsyncSession, agent, group_id: int,
+    query_text: str,
+    api_base_url: str | None, api_key: str | None,
+) -> str:
+    """
+    injected_skills 段：记忆注入 + Skill 引擎注入。
+
+    这是最动态的段，每次请求都可能不同。
+    记忆注入用最近消息内容作为检索查询。
+    """
+    parts: list[str] = []
+
+    # ── 记忆注入 ──
+    if query_text.strip():
+        try:
+            memories = await recall_relevant_memories(
+                db, agent.id,
+                query=query_text,
+                api_base_url=api_base_url or "https://api.deepseek.com",
+                api_key=api_key,
+                top_k=5,
+                group_id=group_id,
+            )
+            if memories:
+                parts.append(format_memories_for_prompt(memories))
+        except Exception as e:
+            logger.warning(f"记忆注入失败（非致命）: {e}")
+
+    # ── Skill 引擎注入（预留） ──
+    try:
+        from app.services.skill_engine import evaluate_inject_skills
+        skill_prompts = await evaluate_inject_skills(db, agent, group_id)
+        if skill_prompts:
+            parts.append(
+                "## 当前激活的思维技能\n" +
+                "\n".join(f"- {p}" for p in skill_prompts)
+            )
+    except Exception as e:
+        logger.warning(f"Skill 注入失败（非致命）: {e}")
+
+    return "\n\n".join(parts) if parts else ""
+
+
 async def build_messages(
     db: AsyncSession,
     agent,
@@ -232,75 +360,19 @@ async def build_messages(
     api_key: str | None = None,
 ) -> list[dict]:
     """
-    构建发送给 LLM 的消息列表。
+    构建发送给 LLM 的消息列表（6 段系统提示词 + 历史消息）。
 
-    结构:
-    1. system: AI 的 current_system_prompt（含记忆注入）
-    2. 群聊历史: 最近 N 条（如果开启向量加速则使用混合检索）
+    六段结构（固定段在前以最大化 prompt cache 命中）：
+    1. core_identity   — 核心规则 + 工具铁律 + 深度推理
+    2. personality     — AI 当前人格
+    3. rules           — 对话风格、@提及、私信、状态、文件、记忆
+    4. tools           — 当前可用工具清单
+    5. current_context — 群名/ID/时间/DM状态/工作区
+    6. injected_skills — 记忆注入 + Skill 引擎注入
     """
-    messages = []
 
-    # ═══════════════════════════════════════════════════
-    # 变动块（每个 AI / 每次请求不同，附加在固定前缀之后）
-    # ═══════════════════════════════════════════════════
-    # 1. AI 人格 prompt
-    custom_prompt = agent.current_system_prompt or (
-        f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
-        "可以调用工具来发送消息、存储记忆、切换状态等。"
-    )
-
-    system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
-
-    # 1b. 先获取最近消息片段，用作记忆检索的查询
-    #     同时收集发送者名字，让文本回退搜索能关联到"谁说了什么"
-    recent_for_query = await get_recent_messages(db, group_id, limit=5)
-    query_parts: list[str] = []
-    sender_names: dict[tuple[str, int], str] = {}  # (type, id) → name
-    for m in recent_for_query:
-        if m.content:
-            query_parts.append(m.content[:200])
-        key = (m.sender_type, m.sender_id)
-        if key not in sender_names:
-            sender_names[key] = ""  # placeholder，下面批量查
-    # 批量解析发送者名字（最多 5 个不重复发送者）
-    if sender_names:
-        from app.models.user import User as UserModel
-        from app.models.agent import Agent as AgentModel
-        for (stype, sid) in list(sender_names.keys()):
-            if stype == "human":
-                u = await db.get(UserModel, sid)
-                if u:
-                    sender_names[(stype, sid)] = u.username
-            elif stype == "ai":
-                a = await db.get(AgentModel, sid)
-                if a:
-                    sender_names[(stype, sid)] = a.name
-        # 将发送者名字追加到查询中（提高关键词命中率）
-        names = [n for n in sender_names.values() if n]
-        if names:
-            query_parts.append("涉及用户: " + " ".join(names))
-    query_text = " ".join(query_parts)
-
-    # 1c. 注入相关记忆（用最近消息内容作为检索查询，含私有+群共享）
-    if query_text.strip():
-        try:
-            memories = await recall_relevant_memories(
-                db, agent.id,
-                query=query_text,
-                api_base_url=api_base_url or "https://api.deepseek.com",
-                api_key=api_key,
-                top_k=5,
-                group_id=group_id,  # 同时检索群共享记忆
-            )
-            if memories:
-                memory_text = format_memories_for_prompt(memories)
-                system_prompt = system_prompt + "\n\n" + memory_text
-        except Exception as e:
-            logger.warning(f"记忆注入失败（非致命）: {e}")
-
-    # ═══════════════════════════════════════════════════
-    # 2. 当前会话上下文（告诉 AI 群 ID、是否为 DM）
-    # ═══════════════════════════════════════════════════
+    # ── 并行获取所有上下文 ──
+    # 1. 解析 DM 状态和群名
     is_dm = False
     group_name = f"群聊#{group_id}"
     try:
@@ -314,43 +386,48 @@ async def build_messages(
     except Exception:
         pass
 
-    now = datetime.utcnow()
-    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
-    context_section = f"\n\n## 当前会话\n- 当前时间：**{now_str}**\n- 群聊名称：**{group_name}**\n- 群聊 ID：**{group_id}**\n"
-    if is_dm:
-        context_section += (
-            "- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
-            "- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
-            "- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
-            "- 如果你需要向所有人汇报测试结果，应该在群里发\n"
-        )
-    else:
-        context_section += (
-            "- 这是一个 **群聊**，有多位成员\n"
-            "- 需要呼叫某人时可以用 @名称\n"
-            "- 消息格式中带有发送者名称和 ID，帮你区分是谁在说话\n"
-        )
-    context_section += (
-        f"- **重要**：回复时请使用 send_message(group_id={group_id}, content=\"...\")，"
-        f"不要用其他 group_id\n"
-    )
-    system_prompt += context_section
+    # 2. 获取最近消息（用于记忆检索 + 历史消息）
+    recent_for_query = await get_recent_messages(db, group_id, limit=5)
+    query_parts: list[str] = []
+    sender_names: dict[tuple[str, int], str] = {}
+    for m in recent_for_query:
+        if m.content:
+            query_parts.append(m.content[:200])
+        key = (m.sender_type, m.sender_id)
+        if key not in sender_names:
+            sender_names[key] = ""
+    if sender_names:
+        from app.models.user import User as UserModel
+        from app.models.agent import Agent as AgentModel
+        for (stype, sid) in list(sender_names.keys()):
+            if stype == "human":
+                u = await db.get(UserModel, sid)
+                if u:
+                    sender_names[(stype, sid)] = u.username
+            elif stype == "ai":
+                a = await db.get(AgentModel, sid)
+                if a:
+                    sender_names[(stype, sid)] = a.name
+        names = [n for n in sender_names.values() if n]
+        if names:
+            query_parts.append("涉及用户: " + " ".join(names))
+    query_text = " ".join(query_parts)
 
-    # ═══════════════════════════════════════════════════
-    # 3. 可用工具清单（让 AI 了解当前技能段）
-    # ═══════════════════════════════════════════════════
-    from app.services.tool_registry import get_allowed_tools
-    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
-    tool_names = [t["function"]["name"] for t in current_tools]
-    tool_list = "、".join(tool_names)
-    system_prompt += (
-        f"\n\n## 当前可用工具（技能段：{'DM 私信' if is_dm else '群聊社交'}）\n"
-        f"你当前加载的工具：{tool_list}\n"
-        f"这些是你现在能直接用的能力。如果上述列表中不包含某个工具（比如 execute_command），"
-        f"说明该能力在当前模式下不可用，需要切换到对应的技能段。"
+    # ── 构建六段 ──
+    segments = {
+        "core_identity": CORE_IDENTITY,
+        "personality": _build_personality(agent),
+        "rules": RULES,
+        "tools": _build_tools_segment(agent, is_dm),
+        "current_context": _build_current_context(db, agent, group_id, group_name, is_dm),
+        "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key),
+    }
+
+    system_prompt = "\n\n".join(
+        segments[k] for k in SEGMENT_ORDER if segments.get(k)
     )
 
-    # ✨ 工作区：始终显示当前任务（像待办条一样挂在上下文里）
+    # ✨ 工作区任务（追加到 current_context 之后）
     try:
         from app.services.workspace_service import get_current_task_text
         task_text = await get_current_task_text(db, agent.id)
@@ -359,16 +436,15 @@ async def build_messages(
     except Exception as e:
         logger.warning(f"工作区上下文注入失败（非致命）: {e}")
 
-    messages.append({"role": "system", "content": system_prompt})
+    messages = [{"role": "system", "content": system_prompt}]
 
-    # 2. 群聊历史
+    # ── 历史消息（保持原有逻辑不变） ──
     if vector_accelerated:
         try:
             from app.services.vector_pipeline import hybrid_search
-            # 用最近的群聊话题作为查询，检索相关历史
             recent = await get_recent_messages(db, group_id, limit=5)
-            query_text = " ".join([m.content[:100] for m in recent])
-            relevant = await hybrid_search(db, group_id, query_text, top_k=limit)
+            query_text_v = " ".join([m.content[:100] for m in recent])
+            relevant = await hybrid_search(db, group_id, query_text_v, top_k=limit)
             for r in reversed(relevant):
                 role = "user" if r.get("sender_type") == "human" else "assistant"
                 messages.append({
@@ -377,7 +453,7 @@ async def build_messages(
                 })
         except Exception as e:
             logger.warning(f"向量检索失败，回退到最近消息: {e}")
-            vector_accelerated = False  # 回退
+            vector_accelerated = False
 
     if not vector_accelerated:
         recent_messages = await get_recent_messages(db, group_id, limit)
@@ -387,10 +463,8 @@ async def build_messages(
             md = message_to_dict(m)
             name = md.get("sender_name", "未知")
             if is_dm:
-                # DM 是一对一对话，不需要 ID 前缀
                 prefix = f"{name}: "
             else:
-                # 群聊需要 ID 前缀帮助 AI 区分不同发言者
                 prefix = f"{name}(ID:{m.sender_id}): "
             messages.append({
                 "role": role,
@@ -408,30 +482,21 @@ async def build_dm_messages(
     api_base_url: str | None = None,
     api_key: str | None = None,
 ) -> list[dict]:
-    """构建 DM 私信的消息列表（简化版，无向量加速、无群聊上下文）"""
-    messages = []
+    """构建 DM 私信的消息列表（6 段系统提示词 + DM 历史消息）"""
+    from app.models.dm import DMMessage, DMSession
+    from app.models.user import User
+    from sqlalchemy import select as sa_select
 
-    # 1. 系统提示词
-    custom_prompt = agent.current_system_prompt or (
-        f"你是 {agent.name}，一个 AI 助手。请自然地参与对话，"
-        "可以调用工具来发送消息、存储记忆等。"
-    )
-    system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
-
-    # 获取对方的 user_id（send_dm 需要）
+    # ── 获取对方信息 ──
     partner_user_id = None
     partner_name = "对方"
     try:
-        from app.models.dm import DMSession
-        from sqlalchemy import select as sa_select
         dm_sess_result = await db.execute(
             sa_select(DMSession).where(DMSession.session_id == session_id)
         )
         dm_sess = dm_sess_result.scalar_one_or_none()
         if dm_sess and agent.user_id:
             partner_user_id = dm_sess.user2_id if dm_sess.user1_id == agent.user_id else dm_sess.user1_id
-            # 获取对方名称
-            from app.models.user import User
             name_result = await db.execute(
                 sa_select(User.username).where(User.id == partner_user_id)
             )
@@ -442,9 +507,9 @@ async def build_dm_messages(
     now = datetime.utcnow()
     now_str = now.strftime("%Y-%m-%d %H:%M UTC")
 
-    # DM 上下文
-    system_prompt += (
-        f"\n\n## 当前会话\n"
+    # ── DM 上下文段 ──
+    dm_context = (
+        f"## 当前会话\n"
         f"- 当前时间：**{now_str}**\n"
         f"- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
         f"- 私信会话 ID：**{session_id}**\n"
@@ -456,20 +521,7 @@ async def build_dm_messages(
         f"- 内容要自然亲切，像聊天而不是工作汇报\n"
     )
 
-    # 可用工具
-    from app.services.tool_registry import get_allowed_tools
-    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
-    tool_names = [t["function"]["name"] for t in current_tools]
-    system_prompt += (
-        f"\n\n## 当前可用工具（技能段：DM 私信）\n"
-        f"你当前加载的工具：{'、'.join(tool_names)}\n"
-    )
-
-    # ✨ 注入相关记忆（用最近 DM 消息作为检索查询 + 最近私有记忆）
-    from app.models.dm import DMMessage
-    from app.models.user import User
-    from sqlalchemy import select as sa_select
-
+    # ── 记忆检索查询 ──
     recent_dm = await db.execute(
         sa_select(DMMessage)
         .where(DMMessage.session_id == session_id)
@@ -478,28 +530,29 @@ async def build_dm_messages(
     )
     recent_dm_list = recent_dm.scalars().all()
     query_text = " ".join([m.content[:200] for m in reversed(recent_dm_list) if m.content])
-    # 追加对方名字提高关键词命中率（文本回退搜索依赖关键词）
     if partner_name:
         query_text = f"{query_text} 涉及用户: {partner_name}"
 
-    if query_text.strip():
-        try:
-            from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
-            memories = await recall_relevant_memories(
-                db, agent.id,
-                query=query_text,
-                api_base_url=api_base_url or "https://api.deepseek.com",
-                api_key=api_key,
-                top_k=5,
-                group_id=None,  # 私有记忆
-            )
-            if memories:
-                memory_text = format_memories_for_prompt(memories)
-                system_prompt = system_prompt + "\n\n" + memory_text
-        except Exception as e:
-            logger.warning(f"DM 记忆注入失败（非致命）: {e}")
+    # ── 构建六段 ──
+    segments = {
+        "core_identity": CORE_IDENTITY,
+        "personality": _build_personality(agent),
+        "rules": RULES,
+        "tools": _build_tools_segment(agent, is_dm=True),
+        "current_context": dm_context,
+        "injected_skills": await _build_injected_skills(
+            db, agent, group_id=0,  # group_id=0 表示非群聊上下文
+            query_text=query_text,
+            api_base_url=api_base_url,
+            api_key=api_key,
+        ),
+    }
 
-    # ✨ 工作区：始终显示当前任务
+    system_prompt = "\n\n".join(
+        segments[k] for k in SEGMENT_ORDER if segments.get(k)
+    )
+
+    # ✨ 工作区任务
     try:
         from app.services.workspace_service import get_current_task_text
         task_text = await get_current_task_text(db, agent.id)
@@ -508,9 +561,9 @@ async def build_dm_messages(
     except Exception as e:
         logger.warning(f"DM 工作区上下文注入失败（非致命）: {e}")
 
-    messages.append({"role": "system", "content": system_prompt})
+    messages = [{"role": "system", "content": system_prompt}]
 
-    # 2. DM 历史消息
+    # ── DM 历史消息 ──
     result = await db.execute(
         sa_select(DMMessage)
         .where(DMMessage.session_id == session_id)
@@ -520,18 +573,11 @@ async def build_dm_messages(
     dm_messages = result.scalars().all()
 
     for m in reversed(dm_messages):
-        # 判断角色
-        if m.sender_id == agent.user_id:
-            role = "assistant"
-        else:
-            role = "user"
-
-        # 获取发送者名称
+        role = "assistant" if m.sender_id == agent.user_id else "user"
         name_result = await db.execute(
             sa_select(User.username).where(User.id == m.sender_id)
         )
         sender_name = name_result.scalar_one_or_none() or f"用户{m.sender_id}"
-
         messages.append({
             "role": role,
             "content": f"{sender_name}: {m.content}",

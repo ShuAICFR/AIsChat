@@ -702,11 +702,16 @@ async def _handle_store_memory(
     api_key = context.get("api_key")
     api_base = context.get("api_base_url", "https://api.deepseek.com")
 
+    embedding_warning = None
     try:
         embedding = await get_embedding(title, api_base_url=api_base, api_key=api_key)
     except Exception as e:
-        logger.warning(f"记忆向量化失败，使用空向量: {e}")
+        logger.warning(f"记忆向量化失败，回退到文本可检（Embedding API 不可用）: {e}")
         embedding = None
+        embedding_warning = (
+            f"⚠️ 向量化失败（Embedding API 不可用），记忆已存储但仅能通过关键词检索。"
+            f"你可放心，用 recall_memory 带关键词仍可搜到。错误: {e}"
+        )
 
     rough = RoughMemory(
         owner_type="ai",
@@ -726,14 +731,17 @@ async def _handle_store_memory(
     db.add(detail)
     await db.commit()
 
-    return {"success": True, "rough_id": rough.id, "title": title}
+    result = {"success": True, "rough_id": rough.id, "title": title}
+    if embedding_warning:
+        result["warning"] = embedding_warning
+    return result
 
 
 async def _handle_recall_memory(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
 ) -> dict:
-    """工具: recall_memory"""
+    """工具: recall_memory（向量搜索 + 文本关键词回退）"""
     from sqlalchemy import text
     from app.utils.embedding import get_embedding
 
@@ -745,59 +753,84 @@ async def _handle_recall_memory(
     api_key = context.get("api_key")
     api_base = context.get("api_base_url", "https://api.deepseek.com")
 
-    # 向量化查询
+    # ═══ 第一轮：向量搜索 ═══
+    memories: list[dict] = []
+    embedding_failed = False
+
     try:
         query_embedding = await get_embedding(query, api_base_url=api_base, api_key=api_key)
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+
+        # pgvector 余弦相似度检索
+        if scope == "private":
+            where_clause = "owner_type = 'ai' AND owner_id = :owner_id"
+            params = {
+                "embedding": embedding_str,
+                "owner_id": agent_id,
+                "top_k": top_k,
+            }
+        else:
+            where_clause = "scope = 'group' AND (group_id = :group_id OR group_id IS NULL)"
+            params = {
+                "embedding": embedding_str,
+                "group_id": mem_group_id,
+                "top_k": top_k,
+            }
+
+        sql = text(f"""
+            SELECT rm.id, rm.title, rm.scope,
+                   1 - (rm.embedding <=> :embedding) AS similarity,
+                   rm.created_at,
+                   dm.content
+            FROM rough_memories rm
+            LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+            WHERE {where_clause}
+              AND rm.embedding IS NOT NULL
+            ORDER BY rm.embedding <=> :embedding
+            LIMIT :top_k
+        """)
+
+        result = await db.execute(sql, params)
+        for row in result:
+            memories.append({
+                "id": row.id,
+                "title": row.title,
+                "scope": row.scope,
+                "similarity": round(float(row.similarity), 4) if row.similarity else None,
+                "content": (row.content[:200] + "...") if row.content and len(row.content) > 200 else (row.content or ""),
+                "source": "vector",
+            })
     except Exception as e:
-        return {"error": True, "message": f"查询向量化失败: {e}"}
+        logger.warning(f"recall_memory 向量搜索失败，回退到文本搜索: {e}")
+        embedding_failed = True
 
-    embedding_str = f"[{','.join(map(str, query_embedding))}]"
-
-    # pgvector 余弦相似度检索
-    if scope == "private":
-        where_clause = "owner_type = 'ai' AND owner_id = :owner_id"
-        params = {
-            "embedding": embedding_str,
-            "owner_id": agent_id,
-            "top_k": top_k,
-        }
-    else:
-        where_clause = "scope = 'group' AND (group_id = :group_id OR group_id IS NULL)"
-        params = {
-            "embedding": embedding_str,
-            "group_id": mem_group_id,
-            "top_k": top_k,
-        }
-
-    sql = text(f"""
-        SELECT rm.id, rm.title, rm.scope,
-               1 - (rm.embedding <=> :embedding) AS similarity,
-               rm.created_at,
-               dm.content
-        FROM rough_memories rm
-        LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
-        WHERE {where_clause}
-          AND rm.embedding IS NOT NULL
-        ORDER BY rm.embedding <=> :embedding
-        LIMIT :top_k
-    """)
-
-    result = await db.execute(sql, params)
-    memories = [
-        {
-            "id": row.id,
-            "title": row.title,
-            "scope": row.scope,
-            "similarity": round(float(row.similarity), 4) if row.similarity else None,
-            "content": (row.content[:200] + "...") if row.content and len(row.content) > 200 else (row.content or ""),
-        }
-        for row in result
-    ]
+    # ═══ 第二轮：文本关键词回退（向量失败或无结果时） ═══
+    if embedding_failed or not memories:
+        from app.services.memory_service import _text_search_memories
+        text_results = await _text_search_memories(
+            db, agent_id, query,
+            top_k=top_k,
+            group_id=mem_group_id if scope == "group" else None,
+            scope=scope,
+        )
+        # 避免重复（已通过向量搜到的 id）
+        vector_ids = {m["id"] for m in memories}
+        for tr in text_results:
+            if tr["id"] not in vector_ids:
+                tr["similarity"] = None
+                tr["content"] = (tr["content"][:200] + "...") if len(tr.get("content", "") or "") > 200 else (tr.get("content", "") or "")
+                tr["source"] = "text"
+                memories.append(tr)
 
     if not memories:
-        return {"memories": [], "message": "未找到相关记忆"}
+        extra = "（Embedding API 不可用，已尝试关键词搜索）" if embedding_failed else ""
+        return {"memories": [], "message": f"未找到相关记忆{extra}"}
 
-    return {"memories": memories}
+    # 如果使用了文本回退，加提示
+    result = {"memories": memories}
+    if embedding_failed:
+        result["notice"] = "⚠️ Embedding API 当前不可用，以上结果为关键词文本匹配（非向量语义搜索）。记忆功能正常但精度略降。"
+    return result
 
 
 async def _handle_switch_state(

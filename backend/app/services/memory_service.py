@@ -2,11 +2,107 @@
 记忆服务
 自动检索相关记忆注入 prompt、自动存储关键信息
 """
+import re
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+
+async def _text_search_memories(
+    db: AsyncSession,
+    agent_id: int,
+    query: str,
+    top_k: int = 5,
+    group_id: int | None = None,
+    scope: str | None = None,
+) -> list[dict]:
+    """
+    文本关键词回退搜索（当 embedding 不可用或记忆向量为 NULL 时使用）。
+
+    使用 PostgreSQL ILIKE 进行全文模糊匹配，支持中英文混合关键词。
+    关键词提取策略：
+    1. 全文作为整体匹配
+    2. 按中英文标点/空格拆分后的各个片段
+    3. 取长度 ≥ 1 的片段去重
+
+    scope 参数：
+    - None：检索私有 + 群共享（auto-injection 用）
+    - "private"：仅检索该 AI 的私有记忆
+    - "group"：仅检索群共享记忆
+    """
+    # 提取关键词：全文 + 拆分片段
+    parts = [query.strip()]
+    # 按中英文标点和空格拆分
+    tokens = re.split(r'[,，。！？、\s\n.!?;；：:()（）""''""【】\[\]]+', query)
+    for t in tokens:
+        t = t.strip()
+        if len(t) >= 1 and t not in parts:
+            parts.append(t)
+
+    # 构建 ILIKE 条件（取前 8 个关键词避免 SQL 过长）
+    conditions = []
+    params: dict = {}
+    for i, kw in enumerate(parts[:8]):
+        param_key = f"kw{i}"
+        conditions.append(
+            f"(rm.title ILIKE :{param_key} OR dm.content ILIKE :{param_key})"
+        )
+        params[param_key] = f"%{kw}%"
+
+    where_parts = ["(" + " OR ".join(conditions) + ")"]
+
+    # 权限过滤
+    if scope == "private":
+        where_parts.append(
+            "(rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private')"
+        )
+        params["agent_id"] = agent_id
+    elif scope == "group":
+        where_parts.append(
+            "(rm.scope = 'group' AND rm.group_id = :group_id)"
+        )
+        params["group_id"] = group_id
+    elif group_id:
+        where_parts.append(
+            "((rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private') "
+            "OR (rm.scope = 'group' AND rm.group_id = :group_id))"
+        )
+        params["agent_id"] = agent_id
+        params["group_id"] = group_id
+    else:
+        where_parts.append("(rm.owner_type = 'ai' AND rm.owner_id = :agent_id)")
+        params["agent_id"] = agent_id
+
+    where_clause = " AND ".join(where_parts)
+
+    sql = text(f"""
+        SELECT rm.id, rm.title, rm.scope, 0.0 AS similarity, dm.content
+        FROM rough_memories rm
+        LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+        WHERE {where_clause}
+        ORDER BY rm.created_at DESC
+        LIMIT :top_k
+    """)
+    params["top_k"] = top_k
+
+    result = await db.execute(sql, params)
+    memories = []
+    for row in result:
+        memories.append({
+            "id": row.id,
+            "title": row.title,
+            "scope": row.scope,
+            "similarity": 0.0,  # 文本匹配，无向量相似度
+            "content": row.content or "",
+            "source": "text",
+        })
+
+    if memories:
+        logger.info(f"📝 文本回退搜索为 AI agent_id={agent_id} 找到 {len(memories)} 条记忆")
+
+    return memories
 
 
 async def recall_relevant_memories(
@@ -20,83 +116,93 @@ async def recall_relevant_memories(
     group_id: int | None = None,
 ) -> list[dict]:
     """
-    检索与当前对话相关的记忆（向量相似度搜索）。
+    检索与当前对话相关的记忆（向量相似度搜索 + 文本关键词回退）。
 
     检索范围：
     - 该 AI 的私有记忆（scope='private'）
     - 群共享记忆（scope='group'，群内任何 AI 存储的）
 
+    策略：
+    1. 优先向量搜索（按余弦相似度排序）
+    2. 向量搜索失败或无结果时，自动回退到文本 ILIKE 搜索
+    3. 文本搜索可以找到 embedding=NULL 的记忆
+
     返回: [{id, title, content, scope, similarity}]
     """
     from app.utils.embedding import get_embedding
 
-    # 向量化查询
+    memories: list[dict] = []
+
+    # ═══ 第一轮：向量搜索 ═══
     try:
         query_embedding = await get_embedding(query, api_base_url=api_base_url, api_key=api_key)
+        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+
+        if group_id:
+            sql = text("""
+                SELECT rm.id, rm.title, rm.scope,
+                       1 - (rm.embedding <=> :embedding) AS similarity,
+                       dm.content
+                FROM rough_memories rm
+                LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+                WHERE rm.embedding IS NOT NULL
+                  AND 1 - (rm.embedding <=> :embedding) > :threshold
+                  AND (
+                      (rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private')
+                      OR
+                      (rm.scope = 'group' AND rm.group_id = :group_id)
+                  )
+                ORDER BY rm.embedding <=> :embedding
+                LIMIT :top_k
+            """)
+            result = await db.execute(sql, {
+                "embedding": embedding_str,
+                "agent_id": agent_id,
+                "group_id": group_id,
+                "threshold": similarity_threshold,
+                "top_k": top_k,
+            })
+        else:
+            sql = text("""
+                SELECT rm.id, rm.title, rm.scope,
+                       1 - (rm.embedding <=> :embedding) AS similarity,
+                       dm.content
+                FROM rough_memories rm
+                LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
+                WHERE rm.owner_type = 'ai'
+                  AND rm.owner_id = :agent_id
+                  AND rm.embedding IS NOT NULL
+                  AND 1 - (rm.embedding <=> :embedding) > :threshold
+                ORDER BY rm.embedding <=> :embedding
+                LIMIT :top_k
+            """)
+            result = await db.execute(sql, {
+                "embedding": embedding_str,
+                "agent_id": agent_id,
+                "threshold": similarity_threshold,
+                "top_k": top_k,
+            })
+
+        for row in result:
+            memories.append({
+                "id": row.id,
+                "title": row.title,
+                "scope": row.scope,
+                "similarity": round(float(row.similarity), 4),
+                "content": row.content or "",
+            })
+
+        if memories:
+            logger.info(f"🔍 向量搜索为 AI agent_id={agent_id} 找到 {len(memories)} 条相关记忆")
+
     except Exception as e:
-        logger.warning(f"记忆检索向量化失败: {e}")
-        return []
+        logger.warning(f"记忆检索向量化失败，回退到文本搜索: {e}")
 
-    embedding_str = f"[{','.join(map(str, query_embedding))}]"
-
-    # 检索范围：该 AI 的私有记忆 + 群内共享记忆（其他 AI 在群中存储的 group scope）
-    if group_id:
-        sql = text("""
-            SELECT rm.id, rm.title, rm.scope,
-                   1 - (rm.embedding <=> :embedding) AS similarity,
-                   dm.content
-            FROM rough_memories rm
-            LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
-            WHERE rm.embedding IS NOT NULL
-              AND 1 - (rm.embedding <=> :embedding) > :threshold
-              AND (
-                  (rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private')
-                  OR
-                  (rm.scope = 'group' AND rm.group_id = :group_id)
-              )
-            ORDER BY rm.embedding <=> :embedding
-            LIMIT :top_k
-        """)
-        result = await db.execute(sql, {
-            "embedding": embedding_str,
-            "agent_id": agent_id,
-            "group_id": group_id,
-            "threshold": similarity_threshold,
-            "top_k": top_k,
-        })
-    else:
-        sql = text("""
-            SELECT rm.id, rm.title, rm.scope,
-                   1 - (rm.embedding <=> :embedding) AS similarity,
-                   dm.content
-            FROM rough_memories rm
-            LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
-            WHERE rm.owner_type = 'ai'
-              AND rm.owner_id = :agent_id
-              AND rm.embedding IS NOT NULL
-              AND 1 - (rm.embedding <=> :embedding) > :threshold
-            ORDER BY rm.embedding <=> :embedding
-            LIMIT :top_k
-        """)
-        result = await db.execute(sql, {
-            "embedding": embedding_str,
-            "agent_id": agent_id,
-            "threshold": similarity_threshold,
-            "top_k": top_k,
-        })
-
-    memories = []
-    for row in result:
-        memories.append({
-            "id": row.id,
-            "title": row.title,
-            "scope": row.scope,
-            "similarity": round(float(row.similarity), 4),
-            "content": row.content or "",
-        })
-
-    if memories:
-        logger.info(f"🔍 为 AI agent_id={agent_id} 检索到 {len(memories)} 条相关记忆")
+    # ═══ 第二轮：文本关键词回退（向量搜索为空或失败时） ═══
+    if not memories:
+        memories = await _text_search_memories(
+            db, agent_id, query, top_k=top_k, group_id=group_id,
+        )
 
     return memories
 
@@ -222,7 +328,14 @@ def format_memories_for_prompt(memories: list[dict]) -> str:
 
     lines = ["## 相关记忆（来自你的长期记忆库）\n"]
     for i, mem in enumerate(memories, 1):
-        lines.append(f"{i}. **{mem['title']}** (相似度: {mem['similarity']})")
+        sim = mem.get("similarity")
+        if sim is not None and sim > 0:
+            sim_text = f"（相似度: {sim}）"
+        elif mem.get("source") == "text":
+            sim_text = "（关键词匹配）"
+        else:
+            sim_text = ""
+        lines.append(f"{i}. **{mem['title']}** {sim_text}".rstrip())
         if mem.get("content"):
             # 截断过长内容
             content = mem["content"]

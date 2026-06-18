@@ -234,7 +234,6 @@ export default function FederationTab() {
         </div>
       )}
       {/* 实例身份 */}
-      {/* 实例身份 */}
       <section className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2">

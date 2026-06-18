@@ -62,6 +62,11 @@ class Settings(BaseSettings):
         "ENCRYPTION_KEY", jwt_secret_key
     )  # 默认复用 JWT key
 
+    # 联邦通信 — GitHub 注册表
+    github_token: str = os.getenv("GITHUB_TOKEN", "")
+    registry_repo: str = os.getenv("REGISTRY_REPO", "ShuAICFR/AIsChat")
+    registry_file: str = os.getenv("REGISTRY_FILE", "federation-registry.json")
+
     class Config:
         env_file = ".env"
         extra = "allow"

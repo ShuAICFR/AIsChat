@@ -7,20 +7,58 @@
 import uuid
 import hmac
 import hashlib
+import os
+import time
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 from app.utils.crypto import encrypt_api_key, decrypt_api_key
+from app.config import settings
+import httpx
 
 logger = logging.getLogger(__name__)
 
 
+# ── ULID 生成（纯 Python，零依赖） ──
+
+# Crockford's Base32 编码表（排除 I L O U 避免混淆）
+_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+def _encode_base32(value: int, length: int) -> str:
+    """将整数编码为指定长度的 Base32 字符串"""
+    chars = []
+    for _ in range(length):
+        chars.append(_BASE32[value & 0x1F])
+        value >>= 5
+    return ''.join(reversed(chars))
+
+def generate_ulid() -> str:
+    """
+    生成 ULID（Universally Unique Lexicographically Sortable Identifier）。
+
+    26 字符: 10 字符时间戳（48-bit ms）+ 16 字符随机数（80-bit）。
+    UUIDv7 碰撞率约为 2.2e-16，ULID 理论上更低（80-bit 随机 vs 74-bit）。
+    """
+    # 48-bit 时间戳（毫秒级 Unix 时间）
+    timestamp = int(time.time() * 1000)
+    # 80-bit 加密级随机数
+    random_bytes = os.urandom(10)
+    random_int = int.from_bytes(random_bytes, 'big')
+
+    ts_part = _encode_base32(timestamp, 10)
+    rand_part = _encode_base32(random_int, 16)
+    return ts_part + rand_part
+
+def generate_public_id() -> str:
+    """生成 AIsChat 公网 ID（AIsChat- + ULID）"""
+    return f"AIsChat-{generate_ulid()}"
+
 # ── 实例身份 ──
 
 async def initialize_instance(db: AsyncSession) -> dict:
-    """首次启动生成子网 UUID v4，后续返回已有身份。返回 InstanceConfig 的 dict。"""
+    """首次启动生成子网 UUID v4 + 公网 ULID，后续返回已有身份。"""
     from app.models.federation import InstanceConfig
 
     result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
@@ -30,13 +68,21 @@ async def initialize_instance(db: AsyncSession) -> dict:
         config = InstanceConfig(
             id=1,
             instance_id=str(uuid.uuid4()),
+            public_id=generate_public_id(),
         )
         db.add(config)
         await db.commit()
         await db.refresh(config)
-        logger.info(f"🌐 首次启动，生成实例子网 ID: {config.instance_id}")
+        logger.info(f"🌐 首次启动，实例子网 ID: {config.instance_id}, 公网 ID: {config.public_id}")
+    elif not config.public_id:
+        # 旧实例没有公网 ID，自动生成
+        config.public_id = generate_public_id()
+        config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        await db.commit()
+        await db.refresh(config)
+        logger.info(f"🌐 补生成公网 ID: {config.public_id}")
     else:
-        logger.info(f"🌐 实例子网 ID: {config.instance_id}")
+        logger.info(f"🌐 实例子网 ID: {config.instance_id}, 公网 ID: {config.public_id}")
 
     return _instance_config_to_dict(config)
 
@@ -81,6 +127,155 @@ async def update_instance_info(
     await db.refresh(config)
     logger.info(f"🌐 更新实例信息: display_name={config.display_name}, public_id={config.public_id}")
     return {"success": True, "instance": _instance_config_to_dict(config)}
+
+
+async def regenerate_public_id(db: AsyncSession) -> dict:
+    """重新生成公网 ID（用于冲突后的补救）"""
+    from app.models.federation import InstanceConfig
+
+    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
+    config = result.scalar_one_or_none()
+    if config is None:
+        return {"error": True, "message": "实例尚未初始化"}
+
+    old_id = config.public_id
+    config.public_id = generate_public_id()
+    config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    await db.refresh(config)
+
+    logger.info(f"🔄 更换公网 ID: {old_id} → {config.public_id}")
+    return {"success": True, "old_public_id": old_id, "public_id": config.public_id}
+
+
+# ── GitHub 注册表 ──
+
+REGISTRY_URL = f"https://api.github.com/repos/{settings.registry_repo}/contents/{settings.registry_file}"
+
+
+async def fetch_github_registry() -> dict:
+    """
+    从 GitHub Contents API 拉取注册表。
+    返回 {"success": True, "registry": ...} 或 {"success": False, "message": ...}
+    """
+    import base64, json
+
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if settings.github_token:
+        headers["Authorization"] = f"Bearer {settings.github_token}"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(REGISTRY_URL, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                content = base64.b64decode(data["content"]).decode("utf-8")
+                registry = json.loads(content)
+                return {
+                    "success": True,
+                    "registry": registry,
+                    "sha": data["sha"],
+                    "updated_at": registry.get("updated_at", ""),
+                }
+            elif resp.status_code == 404:
+                # 注册表文件还不存在，返回空注册表
+                return {
+                    "success": True,
+                    "registry": {"version": 1, "updated_at": "", "instances": {}},
+                    "sha": None,
+                }
+            elif resp.status_code == 403:
+                return {"success": False, "message": "GitHub API 速率限制，请稍后重试或配置 GITHUB_TOKEN"}
+            else:
+                return {"success": False, "message": f"GitHub API 返回 {resp.status_code}: {resp.text[:200]}"}
+    except httpx.HTTPError as e:
+        logger.warning(f"拉取 GitHub 注册表失败: {e}")
+        return {"success": False, "message": f"网络错误: {e}"}
+
+
+async def register_public_id(db: AsyncSession) -> dict:
+    """
+    将当前实例的公网 ID 注册到 GitHub 注册表。
+
+    流程：
+    1. 获取当前实例的 public_id
+    2. 拉取最新注册表 → 冲突检测
+    3. 若 ID 已被占用 → 返回冲突信息
+    4. 若 ID 未被占用 → 写入注册表 → PUT 回 GitHub
+    """
+    import base64, json
+
+    # 1. 获取当前实例信息
+    instance = await get_instance_info(db)
+    public_id = instance.get("public_id")
+    if not public_id:
+        return {"success": False, "message": "实例尚未生成公网 ID，请先初始化"}
+
+    if not settings.github_token:
+        return {"success": False, "message": "未配置 GITHUB_TOKEN，无法写入注册表。请在 .env 中设置 GITHUB_TOKEN"}
+
+    # 2. 拉取注册表 + 冲突检测
+    registry_result = await fetch_github_registry()
+    if not registry_result["success"]:
+        return registry_result
+
+    registry = registry_result["registry"]
+    current_sha = registry_result["sha"]
+
+    # 冲突检测
+    existing = registry.get("instances", {}).get(public_id)
+    if existing:
+        return {
+            "success": False,
+            "conflict": True,
+            "message": (
+                f"公网 ID「{public_id}」已被占用。"
+                f"占用实例: {existing.get('display_name', '未知')}，"
+                f"注册时间: {existing.get('registered_at', '未知')}。"
+                f"请点击「重新生成 ID」更换公网 ID。"
+            ),
+            "existing_entry": existing,
+        }
+
+    # 3. 写入注册表
+    registry["instances"][public_id] = {
+        "display_name": instance.get("display_name", ""),
+        "public_url": instance.get("public_url", ""),
+        "registered_at": datetime.now(timezone.utc).isoformat(),
+    }
+    registry["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"Bearer {settings.github_token}",
+    }
+    body = {
+        "message": f"Register {public_id}",
+        "content": base64.b64encode(
+            json.dumps(registry, indent=2, ensure_ascii=False).encode("utf-8")
+        ).decode("ascii"),
+    }
+    if current_sha:
+        body["sha"] = current_sha  # 乐观锁，防止并发覆盖
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.put(REGISTRY_URL, json=body, headers=headers)
+            if resp.status_code in (200, 201):
+                logger.info(f"✅ 公网 ID {public_id} 已注册到 GitHub 注册表")
+                return {
+                    "success": True,
+                    "message": f"公网 ID「{public_id}」已成功注册到 GitHub 注册表",
+                    "registry_url": f"https://github.com/{settings.registry_repo}/blob/main/{settings.registry_file}",
+                }
+            elif resp.status_code == 409:
+                return {"success": False, "message": "注册表已被他人修改，请重试（SHA 冲突）"}
+            elif resp.status_code == 422:
+                return {"success": False, "message": "GitHub API 参数错误，请检查注册表文件路径"}
+            else:
+                return {"success": False, "message": f"GitHub API 返回 {resp.status_code}: {resp.text[:200]}"}
+    except httpx.HTTPError as e:
+        return {"success": False, "message": f"网络错误: {e}"}
 
 
 # ── 对等端管理 ──

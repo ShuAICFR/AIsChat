@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen } from 'lucide-react'
+import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
-
-const MANUAL_URL = 'https://github.com/ShuAICFR/AIsChat/blob/main/docs/%E7%94%A8%E6%88%B7%E6%89%8B%E5%86%8C.md'
 
 type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation'
 

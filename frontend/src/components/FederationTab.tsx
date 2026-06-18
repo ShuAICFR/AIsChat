@@ -40,6 +40,8 @@ export default function FederationTab() {
   const [peers, setPeers] = useState<Peer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [registerResult, setRegisterResult] = useState('')
+  const [registering, setRegistering] = useState(false)
 
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
@@ -99,6 +101,33 @@ export default function FederationTab() {
     await loadData()
   }
 
+  const handleRegister = async () => {
+    setRegistering(true)
+    setRegisterResult('')
+    try {
+      const result = await api.post<{ success: boolean; message: string; conflict?: boolean }>('/admin/federation/instance/register')
+      setRegisterResult(result.message || (result.success ? '注册成功' : '注册失败'))
+    } catch (e: any) {
+      setRegisterResult(e?.response?.data?.detail || e?.message || '注册失败，请确认已配置 GITHUB_TOKEN')
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  const handleRegenerateId = async () => {
+    if (!confirm('确认重新生成公网 ID？旧 ID 将作废。如果已注册到 GitHub，需要重新注册。')) return
+    try {
+      const result = await api.post<{ success: boolean; public_id: string }>('/admin/federation/instance/regenerate-id')
+      if (result.public_id) {
+        setInstanceForm({ ...instanceForm, public_id: result.public_id })
+        setRegisterResult('')
+        await loadData()
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || '生成失败')
+    }
+  }
+
   const stateBadge = (state: string) => {
     const map: Record<string, { bg: string; text: string; label: string }> = {
       connected: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: '已连接' },
@@ -150,42 +179,90 @@ export default function FederationTab() {
               />
             </div>
             <div>
-              <label className="text-xs text-textMuted">公网 ID（从 GitHub 注册获取）</label>
-              <input
-                value={instanceForm.public_id}
-                onChange={e => setInstanceForm({ ...instanceForm, public_id: e.target.value })}
-                className="w-full mt-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                placeholder="AIsChat-xxxxxxxx"
-              />
+              <label className="text-xs text-textMuted">公网 ID（启动时自动生成 ULID，唯一性 ≈ 1/43亿）</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  value={instanceForm.public_id}
+                  readOnly
+                  className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono cursor-default"
+                />
+                <button
+                  onClick={handleRegenerateId}
+                  className="shrink-0 px-2 py-1.5 text-[10px] text-textMuted hover:text-amber-400 border border-border rounded-lg hover:bg-amber-500/10 transition-colors"
+                  title="重新生成公网 ID（用于冲突补救）"
+                >
+                  重新生成
+                </button>
+              </div>
             </div>
-            <button
-              onClick={handleSaveInstance}
-              className="px-4 py-1.5 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
-            >
-              保存
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveInstance}
+                className="px-4 py-1.5 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
+              >
+                保存
+              </button>
+              <button
+                onClick={handleRegister}
+                disabled={registering}
+                className={`px-4 py-1.5 text-xs rounded-lg transition-colors ${
+                  registering
+                    ? 'bg-canvas text-textMuted cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                }`}
+              >
+                {registering ? '注册中...' : '注册到 GitHub'}
+              </button>
+            </div>
+            {registerResult && (
+              <p className={`text-xs ${registerResult.includes('成功') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {registerResult}
+              </p>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-textMuted text-xs">子网 ID</span>
-              <p className="text-textPrimary font-mono text-xs mt-0.5 truncate">{instance?.instance_id}</p>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <div>
+                <span className="text-textMuted text-xs">子网 ID</span>
+                <p className="text-textPrimary font-mono text-xs mt-0.5 truncate">{instance?.instance_id}</p>
+              </div>
+              <div>
+                <span className="text-textMuted text-xs">公网 ID（ULID 自动生成）</span>
+                <p className="text-textPrimary font-mono text-xs mt-0.5">
+                  {instance?.public_id || <span className="text-textMuted italic">未生成</span>}
+                </p>
+              </div>
+              <div>
+                <span className="text-textMuted text-xs">显示名称</span>
+                <p className="text-textPrimary text-xs mt-0.5">{instance?.display_name || '-'}</p>
+              </div>
+              <div>
+                <span className="text-textMuted text-xs">公网 URL</span>
+                <p className="text-textPrimary text-xs mt-0.5">{instance?.public_url || '-'}</p>
+              </div>
             </div>
-            <div>
-              <span className="text-textMuted text-xs">公网 ID</span>
-              <p className="text-textPrimary font-mono text-xs mt-0.5">
-                {instance?.public_id || <span className="text-textMuted italic">未注册</span>}
-              </p>
-            </div>
-            <div>
-              <span className="text-textMuted text-xs">显示名称</span>
-              <p className="text-textPrimary text-xs mt-0.5">{instance?.display_name || '-'}</p>
-            </div>
-            <div>
-              <span className="text-textMuted text-xs">公网 URL</span>
-              <p className="text-textPrimary text-xs mt-0.5">{instance?.public_url || '-'}</p>
-            </div>
-          </div>
+            {instance?.public_id && (
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={handleRegister}
+                  disabled={registering}
+                  className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                    registering
+                      ? 'bg-canvas text-textMuted cursor-not-allowed'
+                      : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                  }`}
+                >
+                  {registering ? '注册中...' : '注册到 GitHub'}
+                </button>
+                {registerResult && (
+                  <span className={`text-xs self-center ${registerResult.includes('成功') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {registerResult}
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
 

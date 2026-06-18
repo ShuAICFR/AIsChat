@@ -770,6 +770,41 @@ async def update_federation_instance(
     return result
 
 
+@router.post("/federation/instance/regenerate-id")
+async def regenerate_federation_id(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """重新生成公网 ID（用于冲突后的补救）"""
+    result = await fed_svc.regenerate_public_id(db)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/federation/instance/register")
+async def register_federation_public_id(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """将公网 ID 注册到 GitHub 注册表（带冲突检测）"""
+    result = await fed_svc.register_public_id(db)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.get("/federation/registry")
+async def get_federation_registry(
+    admin: dict = Depends(require_admin),
+):
+    """拉取 GitHub 公开注册表"""
+    result = await fed_svc.fetch_github_registry()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
 # ── 对等端管理 ──
 
 @router.get("/federation/peers")

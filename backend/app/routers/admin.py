@@ -725,3 +725,189 @@ async def get_opencli_logs(
 ):
     """获取 OpenCLI 使用日志"""
     return await get_usage_logs(db, agent_id=agent_id, page=page, page_size=page_size)
+
+
+# ════════════════════════════════════════════════════════════
+# 联邦通信管理（v1.2.0）
+# ════════════════════════════════════════════════════════════
+
+from app.schemas.federation import (
+    InstanceConfigUpdate,
+    PeerCreate,
+    PeerUpdate,
+    GroupShareCreate,
+)
+from app.services import federation_service as fed_svc
+
+
+# ── 实例身份 ──
+
+@router.get("/federation/instance")
+async def get_federation_instance(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取本实例身份信息"""
+    info = await fed_svc.get_instance_info(db)
+    return info
+
+
+@router.put("/federation/instance")
+async def update_federation_instance(
+    body: InstanceConfigUpdate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新本实例身份信息"""
+    result = await fed_svc.update_instance_info(
+        db,
+        display_name=body.display_name,
+        public_url=body.public_url,
+        public_id=body.public_id,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+# ── 对等端管理 ──
+
+@router.get("/federation/peers")
+async def list_federation_peers(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有对等端"""
+    return await fed_svc.list_peers(db)
+
+
+@router.post("/federation/peers")
+async def add_federation_peer(
+    body: PeerCreate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加对等端"""
+    result = await fed_svc.add_peer(
+        db,
+        peer_public_id=body.peer_public_id,
+        remote_url=body.remote_url,
+        shared_secret=body.shared_secret,
+        display_name=body.display_name,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.put("/federation/peers/{peer_id}")
+async def update_federation_peer(
+    peer_id: int,
+    body: PeerUpdate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新对等端"""
+    result = await fed_svc.update_peer(
+        db, peer_id,
+        display_name=body.display_name,
+        remote_url=body.remote_url,
+        shared_secret=body.shared_secret,
+        is_enabled=body.is_enabled,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.delete("/federation/peers/{peer_id}")
+async def delete_federation_peer(
+    peer_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """移除对等端"""
+    result = await fed_svc.remove_peer(db, peer_id)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/federation/peers/{peer_id}/connect")
+async def connect_federation_peer(
+    peer_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动触发对等端连接"""
+    from app.models.federation import FederationPeer
+    result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
+    peer = result.scalar_one_or_none()
+    if peer is None:
+        raise HTTPException(status_code=404, detail="对等端不存在")
+
+    from app.services.federation_manager import federation_manager
+    success = await federation_manager.connect_to_peer(peer)
+    if not success:
+        raise HTTPException(status_code=500, detail="连接失败")
+    return {"message": f"已连接到 {peer.peer_public_id}"}
+
+
+@router.post("/federation/peers/{peer_id}/disconnect")
+async def disconnect_federation_peer(
+    peer_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动断开对等端"""
+    from app.models.federation import FederationPeer
+    result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
+    peer = result.scalar_one_or_none()
+    if peer is None:
+        raise HTTPException(status_code=404, detail="对等端不存在")
+
+    from app.services.federation_manager import federation_manager
+    await federation_manager.disconnect_peer(peer.peer_public_id)
+    return {"message": f"已断开 {peer.peer_public_id}"}
+
+
+# ── 群聊共享 ──
+
+@router.get("/federation/groups/{group_id}/shares")
+async def list_group_federation_shares(
+    group_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """查看群聊的联邦共享状态"""
+    return await fed_svc.list_group_shares(db, group_id)
+
+
+@router.post("/federation/groups/{group_id}/shares")
+async def add_group_federation_share(
+    group_id: int,
+    body: GroupShareCreate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """设置群聊联邦共享"""
+    result = await fed_svc.share_group(
+        db, group_id, body.peer_id, body.share_direction,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.delete("/federation/groups/{group_id}/shares/{peer_id}")
+async def delete_group_federation_share(
+    group_id: int,
+    peer_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """取消群聊联邦共享"""
+    result = await fed_svc.unshare_group(db, group_id, peer_id)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result

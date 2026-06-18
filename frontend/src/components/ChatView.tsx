@@ -567,6 +567,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                 createdAt={msg.created_at}
                 senderType={msg.sender_type}
                 senderId={msg.sender_id}
+                sourcePublicId={msg.source_public_id}
                 onAvatarClick={(type, id, name, state) =>
                   setProfileCard({ type, id, name, state })
                 }

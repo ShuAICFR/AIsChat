@@ -33,6 +33,7 @@ async def run_migrations():
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
+            await _migrate_federation_tables(db)
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -334,6 +335,97 @@ async def _migrate_agent_skills(db):
     """))
     await db.commit()
     logger.info("  ✅ agent_skills 表创建完成")
+
+
+async def _migrate_federation_tables(db):
+    """创建联邦通信相关表（v1.2.0 跨实例联邦通信）"""
+    created_any = False
+
+    # 1. instance_config 表（单例，存本实例身份）
+    if not await _table_exists(db, "instance_config"):
+        logger.info("  🌐 创建 instance_config 表")
+        await db.execute(text("""
+            CREATE TABLE instance_config (
+                id INT PRIMARY KEY DEFAULT 1,
+                instance_id VARCHAR(36) UNIQUE NOT NULL,
+                public_id VARCHAR(50) UNIQUE,
+                display_name VARCHAR(100) DEFAULT '',
+                public_url VARCHAR(500) DEFAULT '',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        created_any = True
+    else:
+        logger.info("  ⏭ instance_config 表已存在，跳过")
+
+    # 2. federation_peers 表
+    if not await _table_exists(db, "federation_peers"):
+        logger.info("  🌐 创建 federation_peers 表")
+        await db.execute(text("""
+            CREATE TABLE federation_peers (
+                id SERIAL PRIMARY KEY,
+                peer_public_id VARCHAR(50) NOT NULL,
+                display_name VARCHAR(100) DEFAULT '',
+                remote_url VARCHAR(500) NOT NULL,
+                shared_secret_encrypted TEXT NOT NULL,
+                is_enabled BOOLEAN DEFAULT TRUE,
+                connection_state VARCHAR(20) DEFAULT 'disconnected'
+                    CHECK (connection_state IN ('connecting', 'connected', 'disconnected', 'failed')),
+                last_connected_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_peers 表已存在，跳过")
+
+    # 3. federation_group_shares 表
+    if not await _table_exists(db, "federation_group_shares"):
+        logger.info("  🌐 创建 federation_group_shares 表")
+        await db.execute(text("""
+            CREATE TABLE federation_group_shares (
+                id SERIAL PRIMARY KEY,
+                group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+                is_enabled BOOLEAN DEFAULT TRUE,
+                remote_group_id INT,
+                share_direction VARCHAR(20) DEFAULT 'bidirectional'
+                    CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(group_id, peer_id)
+            )
+        """))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_group_shares 表已存在，跳过")
+
+    # 4. groups.is_federated 反范式化列
+    if not await _column_exists(db, "groups", "is_federated"):
+        logger.info("  🌐 添加 groups.is_federated 列")
+        await db.execute(text(
+            "ALTER TABLE groups ADD COLUMN is_federated BOOLEAN DEFAULT FALSE"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ groups.is_federated 已存在，跳过")
+
+    # 5. messages.source_public_id 远程消息来源标记
+    if not await _column_exists(db, "messages", "source_public_id"):
+        logger.info("  🌐 添加 messages.source_public_id 列")
+        await db.execute(text(
+            "ALTER TABLE messages ADD COLUMN source_public_id VARCHAR(50)"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ messages.source_public_id 已存在，跳过")
+
+    if created_any:
+        await db.commit()
+        logger.info("  ✅ 联邦通信表/列创建完成")
+    else:
+        logger.info("  ⏭ 联邦通信表/列均已存在，跳过")
 
 
 async def _fix_column_types(db):

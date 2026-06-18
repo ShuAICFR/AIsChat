@@ -22,12 +22,13 @@ interface MessageBubbleProps {
   senderType?: string
   senderId?: number
   thinking?: boolean
+  sourcePublicId?: string | null
   onAvatarClick?: (type: string, id: number, name: string, state?: string) => void
 }
 
 export default function MessageBubble({
   senderName, content, isMine, createdAt, state,
-  senderType, senderId, thinking, onAvatarClick,
+  senderType, senderId, thinking, sourcePublicId, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
   const tz = user?.timezone || 'Asia/Shanghai'
@@ -81,6 +82,11 @@ export default function MessageBubble({
       <div className={`max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
         <div className={`flex items-center gap-2 mb-1 ${isMine ? 'flex-row-reverse' : ''}`}>
           <span className="text-xs font-medium text-textSecondary">{senderName}</span>
+          {sourcePublicId && (
+            <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={`来自实例: ${sourcePublicId}`}>
+              🌐 {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}
+            </span>
+          )}
           <span className="text-[10px] text-textMuted">{formatTime(createdAt, tz)}</span>
           {thinking && (
             <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>

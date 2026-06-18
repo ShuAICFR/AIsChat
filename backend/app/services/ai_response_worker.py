@@ -133,6 +133,12 @@ async def _process_group_event(db, event: dict):
     sender_id = event.get("sender_id")
     chain_depth = event.get("chain_depth", 0)
 
+    # 远程消息门控：来自远程实例的 AI 消息不触发本地 AI 回复（防循环）
+    source_public_id = event.get("source_public_id")
+    if source_public_id and sender_type == "ai":
+        logger.info(f"群 {group_id} 收到远程 AI 消息 (source={source_public_id})，跳过本地 AI 回复")
+        return
+
     # 获取群聊信息
     group_result = await db.execute(select(Group).where(Group.id == group_id))
     group = group_result.scalar_one_or_none()

@@ -23,6 +23,7 @@ class GroupUpdateRequest(BaseModel):
     speak_limit_per_minute: int | None = Field(default=None, ge=0, le=30)
     speak_limit_window_seconds: int | None = Field(default=None, ge=30, le=600)
     is_vector_accelerated: bool | None = None
+    is_federated: bool | None = None
 
 
 class GroupResponse(BaseModel):
@@ -32,6 +33,7 @@ class GroupResponse(BaseModel):
     owner_type: str
     owner_id: int
     is_vector_accelerated: bool
+    is_federated: bool = False
     announcement: str | None = None
     speak_limit_per_minute: int = 0
     speak_limit_window_seconds: int = 120

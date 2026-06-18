@@ -51,12 +51,33 @@ async def lifespan(app: FastAPI):
     from app.services.ai_response_worker import alarm_scheduler
     alarm_scheduler_task = asyncio.create_task(alarm_scheduler())
 
-    logger.info("✅ 后台 worker 已全部启动")
+    # 启动联邦通信（v1.2.0 跨实例直连）
+    from app.database import async_session
+    from app.services.federation_service import initialize_instance
+    from app.services.federation_manager import (
+        federation_manager,
+        federation_heartbeat,
+        federation_reconnect,
+    )
+    async with async_session() as db:
+        await initialize_instance(db)
+    # 连接所有已启用的对等端（在后台执行，不阻塞启动）
+    asyncio.create_task(federation_manager.connect_all_enabled_peers())
+    fed_heartbeat_task = asyncio.create_task(federation_heartbeat())
+    fed_reconnect_task = asyncio.create_task(federation_reconnect())
+
+    logger.info("✅ 后台 worker 已全部启动（含联邦通信）")
 
     yield
 
     logger.info("👋 系统关闭，正在停止后台 worker...")
-    for task in [ai_worker_task, vector_worker_task, alarm_scheduler_task]:
+    # 先断开所有联邦连接
+    try:
+        await federation_manager.disconnect_all()
+    except Exception:
+        pass
+    for task in [ai_worker_task, vector_worker_task, alarm_scheduler_task,
+                  fed_heartbeat_task, fed_reconnect_task]:
         task.cancel()
         try:
             await task
@@ -83,7 +104,7 @@ app.add_middleware(
 
 
 # 注册路由
-from app.routers import auth, agents, groups, ws, user, memories, files, admin, friends, dm
+from app.routers import auth, agents, groups, ws, user, memories, files, admin, friends, dm, federation_ws
 
 app.include_router(auth.router)
 app.include_router(agents.router)
@@ -95,6 +116,7 @@ app.include_router(files.router)
 app.include_router(admin.router)
 app.include_router(friends.router)
 app.include_router(dm.router)
+app.include_router(federation_ws.router)
 
 
 @app.get("/")

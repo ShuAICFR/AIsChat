@@ -14,6 +14,7 @@ from app.models.summary_cache import UnreadSummaryCache
 from app.models.friendship import Friendship, FriendshipRequest
 from app.models.dm import DMSession, DMMessage
 from app.models.agent_skill import AgentSkill
+from app.models.federation import InstanceConfig, FederationPeer, FederationGroupShare
 from app.models.opencli import (
     OpenCLIConfig,
     OpenCLIAgentWhitelist,
@@ -48,4 +49,7 @@ __all__ = [
     "DMSession",
     "DMMessage",
     "AgentSkill",
+    "InstanceConfig",
+    "FederationPeer",
+    "FederationGroupShare",
 ]

@@ -400,6 +400,49 @@ CREATE TABLE IF NOT EXISTS agent_skills (
 CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id);
 
 -- ============================================================
+-- 联邦通信表（跨实例直连）
+-- ============================================================
+
+-- 实例身份配置（单例，存本实例的子网ID和公网ID）
+CREATE TABLE IF NOT EXISTS instance_config (
+    id INT PRIMARY KEY DEFAULT 1,
+    instance_id VARCHAR(36) UNIQUE NOT NULL,
+    public_id VARCHAR(50) UNIQUE,
+    display_name VARCHAR(100) DEFAULT '',
+    public_url VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 联邦对等端（其他 AIsChat 实例）
+CREATE TABLE IF NOT EXISTS federation_peers (
+    id SERIAL PRIMARY KEY,
+    peer_public_id VARCHAR(50) NOT NULL,
+    display_name VARCHAR(100) DEFAULT '',
+    remote_url VARCHAR(500) NOT NULL,
+    shared_secret_encrypted TEXT NOT NULL,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    connection_state VARCHAR(20) DEFAULT 'disconnected'
+        CHECK (connection_state IN ('connecting', 'connected', 'disconnected', 'failed')),
+    last_connected_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 联邦群聊共享（哪个本地群聊与哪个对等端共享）
+CREATE TABLE IF NOT EXISTS federation_group_shares (
+    id SERIAL PRIMARY KEY,
+    group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    remote_group_id INT,
+    share_direction VARCHAR(20) DEFAULT 'bidirectional'
+        CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(group_id, peer_id)
+);
+
+-- ============================================================
 -- 索引
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_messages_group_id ON messages(group_id);

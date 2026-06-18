@@ -158,6 +158,7 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
             "owner_type": group.owner_type,
             "owner_id": group.owner_id,
             "is_vector_accelerated": group.is_vector_accelerated,
+            "is_federated": getattr(group, "is_federated", False),
             "announcement": announcement,
             "speak_limit_per_minute": group.speak_limit_per_minute or 0,
             "speak_limit_window_seconds": group.speak_limit_window_seconds or 120,
@@ -271,6 +272,7 @@ def message_to_dict(message: Message, sender_name: str | None = None) -> dict:
         "sender_name": sender_name,
         "content": message.content,
         "reply_to": message.reply_to,
+        "source_public_id": getattr(message, "source_public_id", None),
         "created_at": str(message.created_at) if message.created_at else None,
     }
 
@@ -668,7 +670,7 @@ async def update_group_settings(
     allowed_fields = {
         "name", "announcement",
         "speak_limit_per_minute", "speak_limit_window_seconds",
-        "is_vector_accelerated",
+        "is_vector_accelerated", "is_federated",
     }
 
     for key, value in updates.items():

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe } from 'lucide-react'
+import FederationTab from '../components/FederationTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: '概览', icon: Activity },
@@ -13,6 +14,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'opencli', label: 'OpenCLI', icon: Terminal },
   { key: 'backup', label: '备份', icon: Database },
   { key: 'logs', label: '日志', icon: FileText },
+  { key: 'federation', label: '联邦', icon: Globe },
 ]
 
 export default function AdminPage() {
@@ -54,6 +56,7 @@ export default function AdminPage() {
         {activeTab === 'opencli' && <OpenCLITab />}
         {activeTab === 'backup' && <BackupTab />}
         {activeTab === 'logs' && <LogsTab />}
+        {activeTab === 'federation' && <FederationTab />}
       </div>
     </div>
   )

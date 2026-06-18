@@ -366,6 +366,21 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         # 持久化提交
                         await db.commit()
 
+                        # 联邦通信：异步转发到共享此群的对等端
+                        try:
+                            from app.models.group import Group as GroupModel2
+                            gf_result = await db.execute(
+                                select(GroupModel2.is_federated).where(GroupModel2.id == group_id)
+                            )
+                            is_fed = gf_result.scalar_one_or_none()
+                            if is_fed:
+                                from app.services.federation_manager import federation_manager as fed_mgr
+                                asyncio.create_task(
+                                    fed_mgr.forward_message(group_id, msg_data)
+                                )
+                        except Exception:
+                            pass  # 联邦转发失败不影响本地消息
+
                         # 触发 AI 自动回复 worker（仅人类消息，始终触发不受在线用户数影响）
                         if sender_type == "human":
                             from app.services.ai_response_worker import message_queue

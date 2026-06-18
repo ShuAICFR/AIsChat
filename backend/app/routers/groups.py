@@ -90,6 +90,7 @@ async def get_group_detail(
         "owner_type": group.owner_type,
         "owner_id": group.owner_id,
         "is_vector_accelerated": group.is_vector_accelerated,
+        "is_federated": getattr(group, "is_federated", False),
         "created_at": str(group.created_at) if group.created_at else None,
     }
 
@@ -266,6 +267,7 @@ async def update_group(
             "owner_type": group.owner_type,
             "owner_id": group.owner_id,
             "is_vector_accelerated": group.is_vector_accelerated,
+            "is_federated": getattr(group, "is_federated", False),
             "announcement": group.announcement,
             "speak_limit_per_minute": group.speak_limit_per_minute or 0,
             "speak_limit_window_seconds": group.speak_limit_window_seconds or 120,

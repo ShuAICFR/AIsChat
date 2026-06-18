@@ -20,6 +20,7 @@ interface GroupSettings {
   announcement: string | null
   speak_limit_per_minute: number
   speak_limit_window_seconds: number
+  is_federated: boolean
   my_role: string
 }
 
@@ -44,6 +45,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
   const [speakLimit, setSpeakLimit] = useState(group?.speak_limit_per_minute || 0)
   const [speakWindow, setSpeakWindow] = useState(group?.speak_limit_window_seconds || 120)
   const [vectorAccel, setVectorAccel] = useState(group?.is_vector_accelerated || false)
+  const [federated, setFederated] = useState(group?.is_federated || false)
   const [dndUntil, setDndUntil] = useState<string | null>(null)
   const [customDndMinutes, setCustomDndMinutes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -66,6 +68,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     setSpeakLimit(group.speak_limit_per_minute || 0)
     setSpeakWindow(group.speak_limit_window_seconds || 120)
     setVectorAccel(group.is_vector_accelerated || false)
+    setFederated(group.is_federated || false)
     loadMembers()
     loadDndStatus()
   }, [group?.id])
@@ -403,6 +406,32 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   >
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
                       vectorAccel ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              )}
+
+              {/* 联邦共享开关 */}
+              {isAdmin && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+                    <div className="text-xs text-textMuted">
+                      将此群聊消息转发到已连接的其他 AIsChat 实例
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const next = !federated
+                      setFederated(next)
+                      saveSettings({ is_federated: next })
+                    }}
+                    className={`w-11 h-6 rounded-full transition-colors relative ${
+                      federated ? 'bg-primary-500' : 'bg-border'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                      federated ? 'translate-x-6' : 'translate-x-1'
                     }`} />
                   </button>
                 </div>

@@ -20,6 +20,7 @@ class Group(Base):
     announcement_updated_at = Column(DateTime, nullable=True)
     speak_limit_per_minute = Column(Integer, default=0)  # 0 = 不限制
     speak_limit_window_seconds = Column(Integer, default=120)  # 时间窗口（秒）
+    is_federated = Column(Boolean, default=False)  # 是否启用联邦共享
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

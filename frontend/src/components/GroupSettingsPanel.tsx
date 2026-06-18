@@ -1,6 +1,169 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock } from 'lucide-react'
+import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Check, Loader2 } from 'lucide-react'
+
+// ── 联邦共享子组件 ──
+
+interface ConnectedPeer {
+  id: number
+  peer_public_id: string
+  display_name: string
+  connection_state: string
+}
+
+interface GroupShare {
+  id: number
+  peer_id: number
+  peer_public_id: string
+  peer_display_name: string
+  share_direction: string
+}
+
+function FederationShareSection({ groupId }: { groupId: number }) {
+  const [enabled, setEnabled] = useState(false)
+  const [peers, setPeers] = useState<ConnectedPeer[]>([])
+  const [shares, setShares] = useState<GroupShare[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
+
+  // 加载已连接的 peer 和当前群聊的共享状态
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [allPeers, groupShares] = await Promise.all([
+        api.get<ConnectedPeer[]>('/admin/federation/peers'),
+        api.get<GroupShare[]>(`/admin/federation/groups/${groupId}/shares`),
+      ])
+      // 仅显示已连接的对等端
+      setPeers(allPeers.filter(p => p.connection_state === 'connected'))
+      setShares(groupShares)
+      setEnabled(groupShares.length > 0)
+    } catch {
+      // 静默失败
+    } finally {
+      setLoading(false)
+      setLoaded(true)
+    }
+  }
+
+  // 切换某个 peer 的共享状态
+  const togglePeer = async (peerId: number, currentlyShared: boolean) => {
+    try {
+      if (currentlyShared) {
+        await api.delete(`/admin/federation/groups/${groupId}/shares/${peerId}`)
+      } else {
+        await api.post(`/admin/federation/groups/${groupId}/shares`, {
+          peer_id: peerId,
+          share_direction: 'bidirectional',
+        })
+      }
+      // 重新加载
+      const groupShares = await api.get<GroupShare[]>(`/admin/federation/groups/${groupId}/shares`)
+      setShares(groupShares)
+      setEnabled(groupShares.length > 0)
+    } catch {
+      // 静默失败
+    }
+  }
+
+  // 展开/收起
+  if (!loaded) {
+    return (
+      <button
+        onClick={loadData}
+        disabled={loading}
+        className="w-full flex items-center justify-between py-0.5"
+      >
+        <div className="text-left">
+          <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+          <div className="text-xs text-textMuted">点击加载已连接的对等端</div>
+        </div>
+        {loading ? <Loader2 size={16} className="animate-spin text-textMuted" /> : <span className="text-xs text-primary-400">加载</span>}
+      </button>
+    )
+  }
+
+  if (peers.length === 0) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+            <div className="text-xs text-textMuted">暂无可用的已连接对等端</div>
+          </div>
+        </div>
+        <p className="text-xs text-textMuted">
+          请先在<strong>管理员面板 → 联邦</strong>中添加并连接对等端，然后回到此处共享。
+        </p>
+      </div>
+    )
+  }
+
+  const sharedPeerIds = new Set(shares.map(s => s.peer_id))
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+          <div className="text-xs text-textMuted">
+            已共享给 {shares.length} 个对等端，消息将自动转发
+          </div>
+        </div>
+        <button
+          onClick={loadData}
+          disabled={loading}
+          className="text-xs text-textMuted hover:text-textSecondary transition-colors"
+          title="刷新"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : '刷新'}
+        </button>
+      </div>
+
+      <div className="space-y-1.5">
+        {peers.map(peer => {
+          const isShared = sharedPeerIds.has(peer.id)
+          return (
+            <label
+              key={peer.id}
+              className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                isShared
+                  ? 'border-primary-500/30 bg-primary-500/5'
+                  : 'border-border bg-canvas hover:border-primary-500/20'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={isShared}
+                onChange={() => togglePeer(peer.id, isShared)}
+                className="sr-only"
+              />
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                isShared
+                  ? 'bg-primary-500 border-primary-500'
+                  : 'border-textMuted'
+              }`}>
+                {isShared && <Check size={12} className="text-white" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-textPrimary font-medium truncate">
+                  {peer.display_name || peer.peer_public_id}
+                </p>
+                <p className="text-[10px] text-textMuted font-mono truncate">
+                  {peer.peer_public_id}
+                </p>
+              </div>
+              <span className="flex items-center gap-1 text-[10px] text-emerald-400 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                已连接
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 interface GroupMember {
   type: string
@@ -45,7 +208,6 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
   const [speakLimit, setSpeakLimit] = useState(group?.speak_limit_per_minute || 0)
   const [speakWindow, setSpeakWindow] = useState(group?.speak_limit_window_seconds || 120)
   const [vectorAccel, setVectorAccel] = useState(group?.is_vector_accelerated || false)
-  const [federated, setFederated] = useState(group?.is_federated || false)
   const [dndUntil, setDndUntil] = useState<string | null>(null)
   const [customDndMinutes, setCustomDndMinutes] = useState('')
   const [saving, setSaving] = useState(false)
@@ -68,7 +230,6 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     setSpeakLimit(group.speak_limit_per_minute || 0)
     setSpeakWindow(group.speak_limit_window_seconds || 120)
     setVectorAccel(group.is_vector_accelerated || false)
-    setFederated(group.is_federated || false)
     loadMembers()
     loadDndStatus()
   }, [group?.id])
@@ -411,31 +572,8 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                 </div>
               )}
 
-              {/* 联邦共享开关 */}
-              {isAdmin && (
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
-                    <div className="text-xs text-textMuted">
-                      将此群聊消息转发到已连接的其他 AIsChat 实例
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const next = !federated
-                      setFederated(next)
-                      saveSettings({ is_federated: next })
-                    }}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${
-                      federated ? 'bg-primary-500' : 'bg-border'
-                    }`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                      federated ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
-              )}
+              {/* 联邦共享（仅管理员可见） */}
+              {isAdmin && <FederationShareSection groupId={group!.id} />}
 
               <hr className="border-border" />
 

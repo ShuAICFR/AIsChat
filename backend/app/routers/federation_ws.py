@@ -90,10 +90,11 @@ async def federation_websocket(ws: WebSocket):
 
         # ── 阶段 2: 发送 handshake_ack（回应对方的挑战，给出我方挑战）──
         my_challenge = generate_challenge()
+        my_public_id, my_instance_id = await _get_my_identity()
         await ws.send_json({
             "type": "handshake_ack",
-            "public_id": await _get_my_public_id(),
-            "instance_id": await _get_my_instance_id(),
+            "public_id": my_public_id,
+            "instance_id": my_instance_id,
             "response": hmac_response(secret, their_challenge),
             "challenge": my_challenge,
         })
@@ -129,7 +130,7 @@ async def federation_websocket(ws: WebSocket):
             return
 
         # ── 握手成功 ──
-        await ws.send_json({"type": "handshake_ok", "instance_id": await _get_my_instance_id()})
+        await ws.send_json({"type": "handshake_ok", "instance_id": my_instance_id})
         logger.info(f"🌐 ✅ 接受连接: {peer_public_id}")
 
         # 更新连接状态
@@ -217,17 +218,9 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
         logger.error(f"🌐 处理转发消息失败: {e}", exc_info=True)
 
 
-async def _get_my_public_id() -> str:
-    """获取本实例的公网 ID"""
+async def _get_my_identity() -> tuple[str, str]:
+    """获取本实例的 public_id 和 instance_id（一次 DB 查询）"""
     from app.services.federation_service import get_instance_info
     async with async_session() as db:
         info = await get_instance_info(db)
-        return info.get("public_id", "") or ""
-
-
-async def _get_my_instance_id() -> str:
-    """获取本实例的子网 UUID"""
-    from app.services.federation_service import get_instance_info
-    async with async_session() as db:
-        info = await get_instance_info(db)
-        return info.get("instance_id", "") or ""
+        return (info.get("public_id", "") or "", info.get("instance_id", "") or "")

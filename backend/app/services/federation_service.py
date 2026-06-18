@@ -9,13 +9,18 @@ import hmac
 import hashlib
 import os
 import time
+import base64
+import json
+import secrets
 import logging
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
 from app.utils.crypto import encrypt_api_key, decrypt_api_key
 from app.config import settings
+from app.models.federation import InstanceConfig, FederationPeer, FederationGroupShare
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -46,7 +51,6 @@ def _error(code: str, message: str, **extra) -> dict:
 
 async def _get_instance_config(db: AsyncSession):
     """获取单例 InstanceConfig ORM 对象（复用，消除重复查询）"""
-    from app.models.federation import InstanceConfig
     result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
     return result.scalar_one_or_none()
 
@@ -89,8 +93,6 @@ def generate_public_id() -> str:
 
 async def initialize_instance(db: AsyncSession) -> dict:
     """首次启动生成子网 UUID v4 + 公网 ULID，后续返回已有身份。"""
-    from app.models.federation import InstanceConfig
-
     config = await _get_instance_config(db)
     if config is None:
         config = InstanceConfig(
@@ -129,8 +131,6 @@ async def update_instance_info(
     public_id: str | None = None,
 ) -> dict:
     """更新实例身份信息"""
-    from app.models.federation import InstanceConfig
-
     config = await _get_instance_config(db)
     if config is None:
         config = InstanceConfig(id=1, instance_id=str(uuid.uuid4()))
@@ -201,8 +201,6 @@ async def _validate_public_url(public_url: str, expected_public_id: str) -> str 
     调用远程 /api/federation/identity（无需认证），比对返回的 public_id。
     返回 None 表示验证通过，否则返回错误消息。
     """
-    from urllib.parse import urlparse
-
     parsed = urlparse(public_url)
     host = parsed.hostname
     scheme = parsed.scheme
@@ -249,8 +247,6 @@ async def fetch_github_registry(db: AsyncSession | None = None) -> dict:
     从 GitHub Contents API 拉取注册表。
     优先使用数据库存储的 Token，回退到 .env。
     """
-    import base64, json
-
     # 解析活跃 Token
     token = settings.github_token
     if db:
@@ -299,8 +295,6 @@ async def register_public_id(db: AsyncSession) -> dict:
 
     ① Token 检查 → ② public_url 可达性 + 身份匹配验证 → ③ 冲突检测 → 写入
     """
-    import base64, json
-
     # ① 获取实例 + Token
     config = await _get_instance_config(db)
     if config is None:
@@ -395,8 +389,6 @@ async def register_public_id(db: AsyncSession) -> dict:
 
 async def list_peers(db: AsyncSession) -> list[dict]:
     """列出所有对等端（含连接状态）"""
-    from app.models.federation import FederationPeer
-
     result = await db.execute(select(FederationPeer).order_by(FederationPeer.created_at.asc()))
     peers = result.scalars().all()
     return [_peer_to_dict(p) for p in peers]
@@ -410,8 +402,6 @@ async def add_peer(
     display_name: str = "",
 ) -> dict:
     """添加对等端（加密存储共享密钥）"""
-    from app.models.federation import FederationPeer
-
     # 检查是否已存在同 public_id 的 peer
     existing = await db.execute(
         select(FederationPeer).where(FederationPeer.peer_public_id == peer_public_id)
@@ -443,8 +433,6 @@ async def update_peer(
     is_enabled: bool | None = None,
 ) -> dict:
     """更新对等端配置"""
-    from app.models.federation import FederationPeer
-
     result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
     peer = result.scalar_one_or_none()
     if peer is None:
@@ -469,8 +457,6 @@ async def update_peer(
 
 async def remove_peer(db: AsyncSession, peer_id: int) -> dict:
     """移除对等端（级联删除群聊共享）"""
-    from app.models.federation import FederationPeer
-
     result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
     peer = result.scalar_one_or_none()
     if peer is None:
@@ -486,8 +472,6 @@ async def remove_peer(db: AsyncSession, peer_id: int) -> dict:
 
 async def get_peer_by_public_id(db: AsyncSession, public_id: str):
     """根据公网 ID 查找对等端（返回 ORM 对象或 None）"""
-    from app.models.federation import FederationPeer
-
     result = await db.execute(
         select(FederationPeer).where(FederationPeer.peer_public_id == public_id)
     )
@@ -505,8 +489,6 @@ async def update_peer_connection_state(
     state: str,
 ) -> None:
     """更新对等端连接状态"""
-    from app.models.federation import FederationPeer
-
     result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
     peer = result.scalar_one_or_none()
     if peer is None:
@@ -523,8 +505,6 @@ async def update_peer_connection_state(
 
 async def list_group_shares(db: AsyncSession, group_id: int) -> list[dict]:
     """查看某个群聊的联邦共享状态"""
-    from app.models.federation import FederationGroupShare, FederationPeer
-
     result = await db.execute(
         select(FederationGroupShare, FederationPeer.peer_public_id, FederationPeer.display_name)
         .join(FederationPeer, FederationGroupShare.peer_id == FederationPeer.id)
@@ -548,7 +528,6 @@ async def share_group(
     share_direction: str = "bidirectional",
 ) -> dict:
     """将群聊共享给对等端"""
-    from app.models.federation import FederationGroupShare
     from app.models.group import Group
 
     # 检查是否已存在
@@ -587,7 +566,6 @@ async def unshare_group(
     peer_id: int,
 ) -> dict:
     """取消群聊联邦共享"""
-    from app.models.federation import FederationGroupShare
     from app.models.group import Group
 
     result = await db.execute(
@@ -620,8 +598,6 @@ async def unshare_group(
 
 async def get_connected_peers_for_group(db: AsyncSession, group_id: int) -> list:
     """获取共享此群且已连接的对等端列表（返回 FederationPeer ORM 对象列表）"""
-    from app.models.federation import FederationGroupShare, FederationPeer
-
     result = await db.execute(
         select(FederationPeer)
         .join(FederationGroupShare, FederationGroupShare.peer_id == FederationPeer.id)
@@ -683,7 +659,6 @@ def hmac_response(secret: str, challenge: str) -> str:
 
 def generate_challenge() -> str:
     """生成 256-bit 随机挑战字符串"""
-    import secrets
     return secrets.token_hex(32)
 
 

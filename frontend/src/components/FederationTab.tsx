@@ -41,12 +41,11 @@ export default function FederationTab() {
   const [peers, setPeers] = useState<Peer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  // 注册状态机: idle → verifying → registering → success | error
-  type RegisterState = 'idle' | 'verifying' | 'registering' | 'success' | 'error'
+  // 注册状态机: idle → confirm(风险告知) → loading → success | error
+  type RegisterState = 'idle' | 'confirm' | 'loading' | 'success' | 'error'
   const [registerState, setRegisterState] = useState<RegisterState>('idle')
   const [registerResult, setRegisterResult] = useState('')
   const [registerErrorCode, setRegisterErrorCode] = useState('')
-  const [showRiskDialog, setShowRiskDialog] = useState(false)
   const [githubToken, setGithubToken] = useState('')
   const [tokenSaving, setTokenSaving] = useState(false)
 
@@ -109,15 +108,14 @@ export default function FederationTab() {
   }
 
   const handleRegister = async () => {
-    // 风险告知
-    if (!showRiskDialog) {
-      setShowRiskDialog(true)
+    // 首次点击 → 显示风险告知弹窗
+    if (registerState !== 'confirm') {
+      setRegisterState('confirm')
       return
     }
-    setShowRiskDialog(false)
 
-    // 重置状态
-    setRegisterState('verifying')
+    // 再次点击（已确认风险）→ 执行注册
+    setRegisterState('loading')
     setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
     setRegisterErrorCode('')
 
@@ -196,13 +194,13 @@ export default function FederationTab() {
   if (loading) return <div className="text-textMuted text-sm p-4">加载中...</div>
   if (error) return <div className="text-rose-400 text-sm p-4">{error}</div>
 
-  const isRegistering = registerState === 'verifying' || registerState === 'registering'
+  const isRegistering = registerState === 'loading'
 
   return (
     <div className="space-y-6">
       {/* 风险告知弹窗 */}
-      {showRiskDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowRiskDialog(false)}>
+      {registerState === 'confirm' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRegisterState('idle')}>
           <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-textPrimary mb-3">⚠️ 注册公网 ID 须知</h3>
             <div className="text-sm text-textSecondary space-y-2 mb-5">
@@ -218,7 +216,7 @@ export default function FederationTab() {
             </div>
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => setShowRiskDialog(false)}
+                onClick={() => setRegisterState('idle')}
                 className="px-4 py-1.5 text-xs bg-canvas border border-border text-textSecondary rounded-lg hover:bg-border/20 transition-colors"
               >
                 取消
@@ -352,22 +350,22 @@ export default function FederationTab() {
               </button>
               <button
                 onClick={handleRegister}
-                disabled={registerState === 'verifying' || registerState === 'registering'}
+                disabled={registerState === 'loading'}
                 className={`px-4 py-1.5 text-xs rounded-lg transition-colors ${
-                  registerState === 'verifying' || registerState === 'registering'
+                  registerState === 'loading'
                     ? 'bg-canvas text-textMuted cursor-not-allowed'
                     : registerState === 'success'
                     ? 'bg-emerald-700 text-emerald-300'
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {registerState === 'verifying' ? '验证中...' : registerState === 'registering' ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
+                {registerState === 'loading' ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
               </button>
             </div>
             {registerResult && (
               <p className={`text-xs whitespace-pre-line ${
                 registerState === 'success' ? 'text-emerald-400' :
-                registerState === 'verifying' ? 'text-amber-400' :
+                registerState === 'loading' ? 'text-amber-400' :
                 'text-rose-400'
               }`}>
                 {registerErrorCode && (
@@ -415,9 +413,9 @@ export default function FederationTab() {
               <div className="flex gap-2 mt-3">
                 <button
                   onClick={handleRegister}
-                  disabled={registering}
+                  disabled={isRegistering}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                    registering
+                    isRegistering
                       ? 'bg-canvas text-textMuted cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   }`}
@@ -427,7 +425,7 @@ export default function FederationTab() {
                 {registerResult && (
                   <span className={`text-xs self-center ${
                     registerState === 'success' ? 'text-emerald-400' :
-                    registerState === 'verifying' ? 'text-amber-400' :
+                    registerState === 'loading' ? 'text-amber-400' :
                     'text-rose-400'
                   }`}>
                     {registerErrorCode && <span className="font-mono mr-1">[{registerErrorCode}]</span>}

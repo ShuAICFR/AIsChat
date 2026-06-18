@@ -170,13 +170,38 @@ export default function FederationTab() {
               />
             </div>
             <div>
-              <label className="text-xs text-textMuted">公网 URL</label>
-              <input
-                value={instanceForm.public_url}
-                onChange={e => setInstanceForm({ ...instanceForm, public_url: e.target.value })}
-                className="w-full mt-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary"
-                placeholder="wss://my-aichat.example.com/federation/ws"
-              />
+              <label className="text-xs text-textMuted">
+                公网地址（输入域名或 IP，自动拼接 <code className="text-[10px] bg-canvas px-1 rounded">/federation/ws</code>）
+              </label>
+              <div className="flex items-stretch mt-1">
+                <select
+                  value={(instanceForm.public_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
+                  onChange={e => {
+                    const host = instanceForm.public_url.replace(/^wss?:\/\//, '').replace(/\/federation\/ws$/, '')
+                    setInstanceForm({ ...instanceForm, public_url: `${e.target.value}://${host}/federation/ws` })
+                  }}
+                  className="w-20 px-2 text-sm bg-canvas border border-border rounded-l-lg text-textPrimary shrink-0"
+                >
+                  <option value="wss">wss://</option>
+                  <option value="ws">ws://</option>
+                </select>
+                <input
+                  value={(() => {
+                    const m = instanceForm.public_url.match(/^(wss?):\/\/(.+?)\/federation\/ws$/)
+                    return m ? m[2] : instanceForm.public_url.replace(/^wss?:\/\//, '')
+                  })()}
+                  onChange={e => {
+                    const proto = (instanceForm.public_url.match(/^(wss?):\/\//)?.[1]) || 'wss'
+                    const host = e.target.value.replace(/\/$/, '')
+                    setInstanceForm({ ...instanceForm, public_url: `${proto}://${host}/federation/ws` })
+                  }}
+                  className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border border-x-0 text-textPrimary font-mono"
+                  placeholder="aischat.example.com"
+                />
+                <span className="inline-flex items-center px-2 text-xs text-textMuted bg-canvas border border-border rounded-r-lg shrink-0 font-mono">
+                  /federation/ws
+                </span>
+              </div>
             </div>
             <div>
               <label className="text-xs text-textMuted">公网 ID（启动时自动生成 ULID，唯一性 ≈ 1/43亿）</label>
@@ -303,13 +328,38 @@ export default function FederationTab() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs text-textMuted">WebSocket URL</label>
-                <input
-                  value={newPeer.remote_url}
-                  onChange={e => setNewPeer({ ...newPeer, remote_url: e.target.value })}
-                  className="w-full mt-1 px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-textPrimary font-mono"
-                  placeholder="wss://other-aichat.example.com/federation/ws"
-                />
+                <label className="text-xs text-textMuted">
+                  WebSocket 地址（输入域名或 IP，自动拼接 <code className="text-[10px] bg-canvas px-1 rounded">/federation/ws</code>）
+                </label>
+                <div className="flex items-stretch mt-1">
+                  <select
+                    value={(newPeer.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
+                    onChange={e => {
+                      const host = newPeer.remote_url.replace(/^wss?:\/\//, '').replace(/\/federation\/ws$/, '')
+                      setNewPeer({ ...newPeer, remote_url: `${e.target.value}://${host}/federation/ws` })
+                    }}
+                    className="w-20 px-2 text-sm bg-surface border border-border rounded-l-lg text-textPrimary shrink-0"
+                  >
+                    <option value="wss">wss://</option>
+                    <option value="ws">ws://</option>
+                  </select>
+                  <input
+                    value={(() => {
+                      const m = newPeer.remote_url.match(/^(wss?):\/\/(.+?)\/federation\/ws$/)
+                      return m ? m[2] : newPeer.remote_url.replace(/^wss?:\/\//, '')
+                    })()}
+                    onChange={e => {
+                      const proto = (newPeer.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'
+                      const host = e.target.value.replace(/\/$/, '')
+                      setNewPeer({ ...newPeer, remote_url: `${proto}://${host}/federation/ws` })
+                    }}
+                    className="flex-1 px-3 py-1.5 text-sm bg-surface border border-border border-x-0 text-textPrimary font-mono"
+                    placeholder="other-aichat.example.com"
+                  />
+                  <span className="inline-flex items-center px-2 text-xs text-textMuted bg-surface border border-border rounded-r-lg shrink-0 font-mono">
+                    /federation/ws
+                  </span>
+                </div>
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-textMuted">共享密钥</label>

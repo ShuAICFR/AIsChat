@@ -252,8 +252,34 @@ async def build_messages(
     system_prompt = FIXED_SYSTEM_PREFIX + "\n\n" + custom_prompt
 
     # 1b. 先获取最近消息片段，用作记忆检索的查询
+    #     同时收集发送者名字，让文本回退搜索能关联到"谁说了什么"
     recent_for_query = await get_recent_messages(db, group_id, limit=5)
-    query_text = " ".join([m.content[:200] for m in recent_for_query if m.content])
+    query_parts: list[str] = []
+    sender_names: dict[tuple[str, int], str] = {}  # (type, id) → name
+    for m in recent_for_query:
+        if m.content:
+            query_parts.append(m.content[:200])
+        key = (m.sender_type, m.sender_id)
+        if key not in sender_names:
+            sender_names[key] = ""  # placeholder，下面批量查
+    # 批量解析发送者名字（最多 5 个不重复发送者）
+    if sender_names:
+        from app.models.user import User as UserModel
+        from app.models.agent import Agent as AgentModel
+        for (stype, sid) in list(sender_names.keys()):
+            if stype == "human":
+                u = await db.get(UserModel, sid)
+                if u:
+                    sender_names[(stype, sid)] = u.username
+            elif stype == "ai":
+                a = await db.get(AgentModel, sid)
+                if a:
+                    sender_names[(stype, sid)] = a.name
+        # 将发送者名字追加到查询中（提高关键词命中率）
+        names = [n for n in sender_names.values() if n]
+        if names:
+            query_parts.append("涉及用户: " + " ".join(names))
+    query_text = " ".join(query_parts)
 
     # 1c. 注入相关记忆（用最近消息内容作为检索查询，含私有+群共享）
     if query_text.strip():
@@ -452,6 +478,9 @@ async def build_dm_messages(
     )
     recent_dm_list = recent_dm.scalars().all()
     query_text = " ".join([m.content[:200] for m in reversed(recent_dm_list) if m.content])
+    # 追加对方名字提高关键词命中率（文本回退搜索依赖关键词）
+    if partner_name:
+        query_text = f"{query_text} 涉及用户: {partner_name}"
 
     if query_text.strip():
         try:

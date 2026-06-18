@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
-import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft } from 'lucide-react'
+import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen } from 'lucide-react'
+
+const MANUAL_URL = 'https://github.com/ShuAICFR/AIsChat/blob/main/docs/%E7%94%A8%E6%88%B7%E6%89%8B%E5%86%8C.md'
 import SearchOverlay from './SearchOverlay'
 import FriendList from './FriendList'
 import FriendRequestBadge from './FriendRequestBadge'
@@ -125,6 +127,17 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               <span>管理</span>
             </NavLink>
           )}
+
+          <a
+            href={MANUAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={navLinkClass({ isActive: false })}
+            title={collapsed ? '使用手册' : undefined}
+          >
+            <BookOpen size={18} />
+            <span>手册</span>
+          </a>
         </nav>
       )}
 
@@ -201,6 +214,15 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               <Shield size={18} />
             </NavLink>
           )}
+          <a
+            href={MANUAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
+            title="使用手册"
+          >
+            <BookOpen size={18} />
+          </a>
         </nav>
       )}
 

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen } from 'lucide-react'
 import FederationTab from '../components/FederationTab'
+
+const MANUAL_URL = 'https://github.com/ShuAICFR/AIsChat/blob/main/docs/%E7%94%A8%E6%88%B7%E6%89%8B%E5%86%8C.md'
 
 type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation'
 
@@ -25,7 +27,17 @@ export default function AdminPage() {
       {/* 头部 */}
       <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
         <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
-        <p className="text-sm text-textSecondary mt-0.5">系统管理与监控</p>
+        <p className="text-sm text-textSecondary mt-0.5">
+          系统管理与监控 ·{' '}
+          <a
+            href={MANUAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            <BookOpen size={13} /> 使用手册
+          </a>
+        </p>
       </div>
 
       {/* Tab 导航 */}

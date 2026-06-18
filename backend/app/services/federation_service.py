@@ -21,6 +21,36 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+# ── 错误码（结构化，前端可据此处理 UI 状态） ──
+
+class FedError:
+    """联邦通信错误码常量"""
+    REGISTRY_CONFLICT = "REGISTRY_CONFLICT"         # 公网 ID 已被占用
+    URL_UNREACHABLE = "URL_UNREACHABLE"             # 公网 URL 不可达
+    IDENTITY_MISMATCH = "IDENTITY_MISMATCH"         # URL 端点返回的 ID 与注册 ID 不一致
+    TOKEN_MISSING = "TOKEN_MISSING"                 # 未配置 GitHub Token
+    TOKEN_INVALID = "TOKEN_INVALID"                 # GitHub Token 无效/已过期
+    SHA_CONFLICT = "SHA_CONFLICT"                   # 注册表并发修改冲突
+    NETWORK_ERROR = "NETWORK_ERROR"                 # 网络不可达
+    INSTANCE_NOT_INIT = "INSTANCE_NOT_INIT"         # 实例尚未初始化
+    MISSING_PUBLIC_URL = "MISSING_PUBLIC_URL"       # 未设置公网 URL
+    RATE_LIMITED = "RATE_LIMITED"                   # GitHub API 速率限制
+
+
+def _error(code: str, message: str, **extra) -> dict:
+    """构建结构化错误响应"""
+    return {"success": False, "error_code": code, "message": message, **extra}
+
+
+# ── 实例配置查询辅助 ──
+
+async def _get_instance_config(db: AsyncSession):
+    """获取单例 InstanceConfig ORM 对象（复用，消除重复查询）"""
+    from app.models.federation import InstanceConfig
+    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
+    return result.scalar_one_or_none()
+
+
 # ── ULID 生成（纯 Python，零依赖） ──
 
 # Crockford's Base32 编码表（排除 I L O U 避免混淆）
@@ -61,9 +91,7 @@ async def initialize_instance(db: AsyncSession) -> dict:
     """首次启动生成子网 UUID v4 + 公网 ULID，后续返回已有身份。"""
     from app.models.federation import InstanceConfig
 
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
-
+    config = await _get_instance_config(db)
     if config is None:
         config = InstanceConfig(
             id=1,
@@ -75,7 +103,6 @@ async def initialize_instance(db: AsyncSession) -> dict:
         await db.refresh(config)
         logger.info(f"🌐 首次启动，实例子网 ID: {config.instance_id}, 公网 ID: {config.public_id}")
     elif not config.public_id:
-        # 旧实例没有公网 ID，自动生成
         config.public_id = generate_public_id()
         config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
@@ -89,10 +116,7 @@ async def initialize_instance(db: AsyncSession) -> dict:
 
 async def get_instance_info(db: AsyncSession) -> dict:
     """获取本实例身份信息。若未初始化则自动初始化。"""
-    from app.models.federation import InstanceConfig
-
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
+    config = await _get_instance_config(db)
     if config is None:
         return await initialize_instance(db)
     return _instance_config_to_dict(config)
@@ -107,10 +131,8 @@ async def update_instance_info(
     """更新实例身份信息"""
     from app.models.federation import InstanceConfig
 
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
+    config = await _get_instance_config(db)
     if config is None:
-        # 尚未初始化，先初始化
         config = InstanceConfig(id=1, instance_id=str(uuid.uuid4()))
         db.add(config)
         await db.flush()
@@ -131,12 +153,9 @@ async def update_instance_info(
 
 async def regenerate_public_id(db: AsyncSession) -> dict:
     """重新生成公网 ID（用于冲突后的补救）"""
-    from app.models.federation import InstanceConfig
-
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
+    config = await _get_instance_config(db)
     if config is None:
-        return {"error": True, "message": "实例尚未初始化"}
+        return _error(FedError.INSTANCE_NOT_INIT, "实例尚未初始化")
 
     old_id = config.public_id
     config.public_id = generate_public_id()
@@ -152,18 +171,15 @@ async def regenerate_public_id(db: AsyncSession) -> dict:
 
 async def set_github_token(db: AsyncSession, token: str) -> dict:
     """前端配置 GitHub Token（加密存储到 instance_config）"""
-    from app.models.federation import InstanceConfig
-
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
+    config = await _get_instance_config(db)
     if config is None:
-        return {"error": True, "message": "实例尚未初始化"}
+        return _error(FedError.INSTANCE_NOT_INIT, "实例尚未初始化")
 
     config.github_token_encrypted = encrypt_api_key(token)
     config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     await db.commit()
     logger.info("🔑 GitHub Token 已更新（加密存储）")
-    return {"success": True, "message": "GitHub Token 已保存"}
+    return {"success": True, "message": "GitHub Token 已加密保存"}
 
 
 def _get_active_github_token(config) -> str | None:
@@ -178,12 +194,13 @@ def _get_active_github_token(config) -> str | None:
     return None
 
 
-async def _validate_public_url(public_url: str) -> str | None:
+async def _validate_public_url(public_url: str, expected_public_id: str) -> str | None:
     """
-    验证 public_url 是否可达。
-    返回 None 表示可达，否则返回错误消息。
+    验证 public_url 是否指向运行中的 AIsChat 实例，且登录身份与注册 ID 一致。
+
+    调用远程 /api/federation/identity（无需认证），比对返回的 public_id。
+    返回 None 表示验证通过，否则返回错误消息。
     """
-    import re
     from urllib.parse import urlparse
 
     parsed = urlparse(public_url)
@@ -193,22 +210,32 @@ async def _validate_public_url(public_url: str) -> str | None:
     if not host:
         return f"无法解析公网 URL 中的域名: {public_url}"
 
-    # 构造 HTTP(S) 探测 URL（WebSocket 协议对应的 HTTP 等价物）
+    # 构造 HTTP(S) 探测 URL
     http_scheme = "https" if scheme == "wss" else "http"
-    probe_url = f"{http_scheme}://{host}/"
+    port = f":{parsed.port}" if parsed.port else ""
+    identity_url = f"{http_scheme}://{host}{port}/api/federation/identity"
 
     try:
         async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
-            resp = await client.get(probe_url)
-            # 任何响应（包括 404）都说明服务器在运行
-            logger.info(f"✅ 公网 URL 可达性验证通过: {probe_url} → {resp.status_code}")
+            resp = await client.get(identity_url)
+            if resp.status_code != 200:
+                return f"实例端点返回 {resp.status_code}（期望 200），请确认该地址运行的是 AIsChat"
+            data = resp.json()
+            remote_public_id = data.get("public_id", "")
+            if remote_public_id != expected_public_id:
+                return (
+                    f"身份不匹配：远端实例公网 ID 为「{remote_public_id}」，"
+                    f"而当前注册 ID 为「{expected_public_id}」。"
+                    f"请确认 URL 指向正确的实例。"
+                )
+            logger.info(f"✅ Identity 验证通过: {identity_url} → {remote_public_id}")
             return None
     except httpx.ConnectTimeout:
-        return f"连接超时: 无法在 8 秒内连接到 {host}，请确认服务器在线且端口开放"
+        return f"连接超时: 无法在 8 秒内连接到 {host}{port}，请确认服务器在线且端口开放"
     except httpx.ConnectError as e:
-        return f"连接失败: 无法连接到 {host}，请确认 URL 正确且防火墙已放行端口"
+        return f"连接失败: 无法连接到 {host}{port}，请确认 URL 正确且防火墙已放行端口"
     except Exception as e:
-        logger.warning(f"URL 验证异常: {e}")
+        logger.warning(f"Identity 验证异常: {e}")
         return f"网络探测异常: {e}"
 
 
@@ -223,14 +250,12 @@ async def fetch_github_registry(db: AsyncSession | None = None) -> dict:
     优先使用数据库存储的 Token，回退到 .env。
     """
     import base64, json
-    from app.models.federation import InstanceConfig
 
     # 解析活跃 Token
-    token = settings.github_token  # .env 兜底
+    token = settings.github_token
     if db:
-        result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-        config = result.scalar_one_or_none()
-        active = _get_active_github_token(config)
+        config = await _get_instance_config(db)
+        active = _get_active_github_token(config) if config else None
         if active:
             token = active
 
@@ -251,85 +276,79 @@ async def fetch_github_registry(db: AsyncSession | None = None) -> dict:
                     "sha": data["sha"],
                     "updated_at": registry.get("updated_at", ""),
                 }
+            elif resp.status_code == 401:
+                return _error(FedError.TOKEN_INVALID, "GitHub Token 无效或已过期")
             elif resp.status_code == 404:
-                # 注册表文件还不存在，返回空注册表
                 return {
                     "success": True,
                     "registry": {"version": 1, "updated_at": "", "instances": {}},
                     "sha": None,
                 }
             elif resp.status_code == 403:
-                return {"success": False, "message": "GitHub API 速率限制，请稍后重试或配置 GITHUB_TOKEN"}
+                return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试或配置 Token")
             else:
-                return {"success": False, "message": f"GitHub API 返回 {resp.status_code}: {resp.text[:200]}"}
+                return _error(FedError.NETWORK_ERROR, f"GitHub API 返回 {resp.status_code}")
     except httpx.HTTPError as e:
         logger.warning(f"拉取 GitHub 注册表失败: {e}")
-        return {"success": False, "message": f"网络错误: {e}"}
+        return _error(FedError.NETWORK_ERROR, f"网络错误: {e}")
 
 
 async def register_public_id(db: AsyncSession) -> dict:
     """
-    将当前实例的公网 ID 注册到 GitHub 注册表。
+    将当前实例的公网 ID 注册到 GitHub 注册表（三步验证）。
 
-    流程：
-    1. 获取当前实例信息 + 检查 Token
-    2. 验证 public_url 可达性
-    3. 拉取最新注册表 → 冲突检测
-    4. 写入注册表 → PUT 回 GitHub
+    ① Token 检查 → ② public_url 可达性 + 身份匹配验证 → ③ 冲突检测 → 写入
     """
     import base64, json
-    from app.models.federation import InstanceConfig
 
-    # 1. 获取当前实例 + Token
-    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
-    config = result.scalar_one_or_none()
+    # ① 获取实例 + Token
+    config = await _get_instance_config(db)
     if config is None:
-        return {"success": False, "message": "实例尚未初始化"}
+        return _error(FedError.INSTANCE_NOT_INIT, "实例尚未初始化")
 
     token = _get_active_github_token(config)
     if not token:
-        return {
-            "success": False,
-            "need_token": True,
-            "message": "未配置 GitHub Token。请在下方「GitHub Token」输入框中填入 Token，或设置 GITHUB_TOKEN 环境变量。\n获取 Token: https://github.com/settings/tokens → Generate new token (classic) → 勾选 repo",
-        }
+        return _error(
+            FedError.TOKEN_MISSING,
+            "未配置 GitHub Token。请在下方「GitHub Token」输入框中填入 Token。\n"
+            "获取 Token: https://github.com/settings/tokens → Generate new token (classic) → 勾选 repo",
+        )
 
     if not config.public_id:
-        return {"success": False, "message": "实例尚未生成公网 ID，请先初始化"}
+        return _error(FedError.INSTANCE_NOT_INIT, "实例尚未生成公网 ID，请先保存实例信息")
 
-    # 2. URL 可达性验证
-    public_url = config.public_url or ""
-    if public_url:
-        url_error = await _validate_public_url(public_url)
-        if url_error:
-            return {"success": False, "message": f"公网 URL 可达性验证失败，拒绝注册（防止注册表中出现虚假地址）:\n{url_error}"}
-    else:
-        return {"success": False, "message": "请先设置公网 URL 再进行注册"}
+    # ② URL 可达性 + 身份匹配验证
+    public_url = (config.public_url or "").strip()
+    if not public_url:
+        return _error(FedError.MISSING_PUBLIC_URL, "请先设置公网 URL 再进行注册")
 
-    # 3. 拉取注册表 + 冲突检测
+    url_error = await _validate_public_url(public_url, config.public_id)
+    if url_error:
+        if "身份不匹配" in url_error:
+            return _error(FedError.IDENTITY_MISMATCH, url_error)
+        return _error(FedError.URL_UNREACHABLE, f"公网 URL 验证失败: {url_error}")
+
+    # ③ 拉取注册表 + 冲突检测
     registry_result = await fetch_github_registry(db)
     if not registry_result["success"]:
-        return registry_result
+        error_code = registry_result.get("error_code", FedError.NETWORK_ERROR)
+        return _error(error_code, registry_result["message"])
 
     registry = registry_result["registry"]
     current_sha = registry_result["sha"]
 
-    # 冲突检测
     existing = registry.get("instances", {}).get(config.public_id)
     if existing:
-        return {
-            "success": False,
-            "conflict": True,
-            "message": (
-                f"公网 ID「{config.public_id}」已被占用。"
-                f"占用实例: {existing.get('display_name', '未知')}，"
-                f"注册时间: {existing.get('registered_at', '未知')}。"
-                f"请点击「重新生成 ID」更换公网 ID。"
-            ),
-            "existing_entry": existing,
-        }
+        return _error(
+            FedError.REGISTRY_CONFLICT,
+            f"公网 ID「{config.public_id}」已被占用。\n"
+            f"占用实例: {existing.get('display_name', '未知')}，"
+            f"注册时间: {existing.get('registered_at', '未知')}。\n"
+            f"请点击「重新生成 ID」更换公网 ID。",
+            existing_entry=existing,
+        )
 
-    # 4. 写入注册表
+    # ④ 写入注册表
     registry["instances"][config.public_id] = {
         "display_name": config.display_name or "",
         "public_url": config.public_url or "",
@@ -348,7 +367,7 @@ async def register_public_id(db: AsyncSession) -> dict:
         ).decode("ascii"),
     }
     if current_sha:
-        body["sha"] = current_sha  # 乐观锁，防止并发覆盖
+        body["sha"] = current_sha
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -360,14 +379,16 @@ async def register_public_id(db: AsyncSession) -> dict:
                     "message": f"公网 ID「{config.public_id}」已成功注册到 GitHub 注册表",
                     "registry_url": f"https://github.com/{settings.registry_repo}/blob/main/{settings.registry_file}",
                 }
+            elif resp.status_code == 401:
+                return _error(FedError.TOKEN_INVALID, "GitHub Token 无效或已过期，请重新生成并更新 Token")
+            elif resp.status_code == 403:
+                return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试。配置 Token 可提高限额")
             elif resp.status_code == 409:
-                return {"success": False, "message": "注册表已被他人修改，请重试（SHA 冲突）"}
-            elif resp.status_code == 422:
-                return {"success": False, "message": "GitHub API 参数错误，请检查注册表文件路径"}
+                return _error(FedError.SHA_CONFLICT, "注册表已被他人修改，请重试")
             else:
-                return {"success": False, "message": f"GitHub API 返回 {resp.status_code}: {resp.text[:200]}"}
+                return _error(FedError.NETWORK_ERROR, f"GitHub API 返回 {resp.status_code}")
     except httpx.HTTPError as e:
-        return {"success": False, "message": f"网络错误: {e}"}
+        return _error(FedError.NETWORK_ERROR, f"GitHub API 请求失败: {e}")
 
 
 # ── 对等端管理 ──

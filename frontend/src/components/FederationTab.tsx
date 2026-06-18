@@ -41,8 +41,12 @@ export default function FederationTab() {
   const [peers, setPeers] = useState<Peer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // 注册状态机: idle → verifying → registering → success | error
+  type RegisterState = 'idle' | 'verifying' | 'registering' | 'success' | 'error'
+  const [registerState, setRegisterState] = useState<RegisterState>('idle')
   const [registerResult, setRegisterResult] = useState('')
-  const [registering, setRegistering] = useState(false)
+  const [registerErrorCode, setRegisterErrorCode] = useState('')
+  const [showRiskDialog, setShowRiskDialog] = useState(false)
   const [githubToken, setGithubToken] = useState('')
   const [tokenSaving, setTokenSaving] = useState(false)
 
@@ -105,15 +109,44 @@ export default function FederationTab() {
   }
 
   const handleRegister = async () => {
-    setRegistering(true)
-    setRegisterResult('')
+    // 风险告知
+    if (!showRiskDialog) {
+      setShowRiskDialog(true)
+      return
+    }
+    setShowRiskDialog(false)
+
+    // 重置状态
+    setRegisterState('verifying')
+    setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
+    setRegisterErrorCode('')
+
     try {
-      const result = await api.post<{ success: boolean; message: string; conflict?: boolean }>('/admin/federation/instance/register')
-      setRegisterResult(result.message || (result.success ? '注册成功' : '注册失败'))
+      const result = await api.post<{
+        success: boolean
+        message: string
+        error_code?: string
+        existing_entry?: { display_name: string; registered_at: string }
+      }>('/admin/federation/instance/register')
+
+      if (result.success) {
+        setRegisterState('success')
+        setRegisterResult(result.message)
+        await loadData()
+      } else {
+        setRegisterState('error')
+        setRegisterErrorCode(result.error_code || '')
+        setRegisterResult(result.message || '注册失败')
+      }
     } catch (e: any) {
-      setRegisterResult(e?.response?.data?.detail || e?.message || '注册失败，请确认已配置 GITHUB_TOKEN')
-    } finally {
-      setRegistering(false)
+      setRegisterState('error')
+      const detail = e?.response?.data?.detail
+      if (typeof detail === 'object') {
+        setRegisterErrorCode(detail.error_code || '')
+        setRegisterResult(detail.message || JSON.stringify(detail))
+      } else {
+        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '注册失败'))
+      }
     }
   }
 
@@ -163,8 +196,44 @@ export default function FederationTab() {
   if (loading) return <div className="text-textMuted text-sm p-4">加载中...</div>
   if (error) return <div className="text-rose-400 text-sm p-4">{error}</div>
 
+  const isRegistering = registerState === 'verifying' || registerState === 'registering'
+
   return (
     <div className="space-y-6">
+      {/* 风险告知弹窗 */}
+      {showRiskDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowRiskDialog(false)}>
+          <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-textPrimary mb-3">⚠️ 注册公网 ID 须知</h3>
+            <div className="text-sm text-textSecondary space-y-2 mb-5">
+              <p>将公网 ID 注册到 GitHub 注册表后：</p>
+              <ul className="list-disc pl-5 space-y-1 text-xs">
+                <li>你的 <strong className="text-textPrimary">公网 ID、显示名称、公网 URL</strong> 将公开可见</li>
+                <li>其他 AIsChat 实例可以通过注册表发现并尝试连接你的实例</li>
+                <li>连接请求需要 <strong className="text-textPrimary">双方配置共享密钥</strong> 才能成功握手</li>
+                <li>你可以随时在注册表中 <strong className="text-textPrimary">更新或删除</strong> 自己的条目</li>
+                <li className="text-amber-400">请确保公网 URL 指向的是你自己的实例，不要冒用他人地址</li>
+              </ul>
+              <p className="text-xs text-textMuted mt-2">注册前系统会验证你的公网 URL 确实指向运行中的 AIsChat 实例。</p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setShowRiskDialog(false)}
+                className="px-4 py-1.5 text-xs bg-canvas border border-border text-textSecondary rounded-lg hover:bg-border/20 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRegister}
+                className="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+              >
+                我已知晓，继续注册
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 实例身份 */}
       {/* 实例身份 */}
       <section className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
@@ -284,18 +353,29 @@ export default function FederationTab() {
               </button>
               <button
                 onClick={handleRegister}
-                disabled={registering}
+                disabled={registerState === 'verifying' || registerState === 'registering'}
                 className={`px-4 py-1.5 text-xs rounded-lg transition-colors ${
-                  registering
+                  registerState === 'verifying' || registerState === 'registering'
                     ? 'bg-canvas text-textMuted cursor-not-allowed'
+                    : registerState === 'success'
+                    ? 'bg-emerald-700 text-emerald-300'
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {registering ? '注册中...' : '注册到 GitHub'}
+                {registerState === 'verifying' ? '验证中...' : registerState === 'registering' ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
               </button>
             </div>
             {registerResult && (
-              <p className={`text-xs whitespace-pre-line ${registerResult.includes('成功') || registerResult.includes('✅') ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <p className={`text-xs whitespace-pre-line ${
+                registerState === 'success' ? 'text-emerald-400' :
+                registerState === 'verifying' ? 'text-amber-400' :
+                'text-rose-400'
+              }`}>
+                {registerErrorCode && (
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-rose-500/10 text-rose-400 mr-1 font-mono">
+                    {registerErrorCode}
+                  </span>
+                )}
                 {registerResult}
               </p>
             )}
@@ -343,10 +423,15 @@ export default function FederationTab() {
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   }`}
                 >
-                  {registering ? '注册中...' : '注册到 GitHub'}
+                  {isRegistering ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
                 </button>
                 {registerResult && (
-                  <span className={`text-xs self-center ${registerResult.includes('成功') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <span className={`text-xs self-center ${
+                    registerState === 'success' ? 'text-emerald-400' :
+                    registerState === 'verifying' ? 'text-amber-400' :
+                    'text-rose-400'
+                  }`}>
+                    {registerErrorCode && <span className="font-mono mr-1">[{registerErrorCode}]</span>}
                     {registerResult}
                   </span>
                 )}

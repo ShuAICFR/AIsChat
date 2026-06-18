@@ -1,24 +1,41 @@
 """
-联邦 WebSocket 端点（v1.2.0 跨实例联邦通信）
+联邦端点（v1.2.0 跨实例联邦通信）
 
-接受其他 AIsChat 实例的入站连接。
-出站连接由 services/federation_manager.py 管理。
+- GET /federation/identity — 公开端点，注册表验证实例真实性
+- WS /federation/ws   — 实例间 WebSocket 连接
 """
 import json
 import logging
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.database import async_session
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import async_session, get_db
 from app.services.federation_service import (
     get_peer_by_public_id,
     get_decrypted_secret,
     hmac_response,
     generate_challenge,
     handle_remote_message,
+    get_instance_info,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/federation/identity")
+async def federation_identity(db: AsyncSession = Depends(get_db)):
+    """
+    公开端点，返回本实例的 public_id 和 instance_id。
+    用于注册表验证：第三方请求此端点，比对返回的 public_id 是否与注册声明一致。
+    无需认证。
+    """
+    info = await get_instance_info(db)
+    return {
+        "public_id": info.get("public_id"),
+        "instance_id": info.get("instance_id"),
+        "display_name": info.get("display_name"),
+    }
 
 
 @router.websocket("/federation/ws")

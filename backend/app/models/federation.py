@@ -17,6 +17,7 @@ class InstanceConfig(Base):
     public_id = Column(String(50), unique=True, nullable=True)      # 公网 ID: AIsChat-xxxxxxxx
     display_name = Column(String(100), default="")                   # 人类可读名称
     public_url = Column(String(500), default="")                     # 本实例公网可达 URL
+    github_token_encrypted = Column(String, nullable=True)           # Fernet 加密的 GitHub Token（前端配置，无需 SSH）
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 

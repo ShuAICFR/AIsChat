@@ -148,21 +148,95 @@ async def regenerate_public_id(db: AsyncSession) -> dict:
     return {"success": True, "old_public_id": old_id, "public_id": config.public_id}
 
 
+# ── GitHub Token 管理（存在数据库，前端图形化配置） ──
+
+async def set_github_token(db: AsyncSession, token: str) -> dict:
+    """前端配置 GitHub Token（加密存储到 instance_config）"""
+    from app.models.federation import InstanceConfig
+
+    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
+    config = result.scalar_one_or_none()
+    if config is None:
+        return {"error": True, "message": "实例尚未初始化"}
+
+    config.github_token_encrypted = encrypt_api_key(token)
+    config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    logger.info("🔑 GitHub Token 已更新（加密存储）")
+    return {"success": True, "message": "GitHub Token 已保存"}
+
+
+def _get_active_github_token(config) -> str | None:
+    """获取活跃的 GitHub Token（数据库优先，.env 兜底）"""
+    if config and config.github_token_encrypted:
+        try:
+            return decrypt_api_key(config.github_token_encrypted)
+        except Exception:
+            pass
+    if settings.github_token:
+        return settings.github_token
+    return None
+
+
+async def _validate_public_url(public_url: str) -> str | None:
+    """
+    验证 public_url 是否可达。
+    返回 None 表示可达，否则返回错误消息。
+    """
+    import re
+    from urllib.parse import urlparse
+
+    parsed = urlparse(public_url)
+    host = parsed.hostname
+    scheme = parsed.scheme
+
+    if not host:
+        return f"无法解析公网 URL 中的域名: {public_url}"
+
+    # 构造 HTTP(S) 探测 URL（WebSocket 协议对应的 HTTP 等价物）
+    http_scheme = "https" if scheme == "wss" else "http"
+    probe_url = f"{http_scheme}://{host}/"
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            resp = await client.get(probe_url)
+            # 任何响应（包括 404）都说明服务器在运行
+            logger.info(f"✅ 公网 URL 可达性验证通过: {probe_url} → {resp.status_code}")
+            return None
+    except httpx.ConnectTimeout:
+        return f"连接超时: 无法在 8 秒内连接到 {host}，请确认服务器在线且端口开放"
+    except httpx.ConnectError as e:
+        return f"连接失败: 无法连接到 {host}，请确认 URL 正确且防火墙已放行端口"
+    except Exception as e:
+        logger.warning(f"URL 验证异常: {e}")
+        return f"网络探测异常: {e}"
+
+
 # ── GitHub 注册表 ──
 
 REGISTRY_URL = f"https://api.github.com/repos/{settings.registry_repo}/contents/{settings.registry_file}"
 
 
-async def fetch_github_registry() -> dict:
+async def fetch_github_registry(db: AsyncSession | None = None) -> dict:
     """
     从 GitHub Contents API 拉取注册表。
-    返回 {"success": True, "registry": ...} 或 {"success": False, "message": ...}
+    优先使用数据库存储的 Token，回退到 .env。
     """
     import base64, json
+    from app.models.federation import InstanceConfig
+
+    # 解析活跃 Token
+    token = settings.github_token  # .env 兜底
+    if db:
+        result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
+        config = result.scalar_one_or_none()
+        active = _get_active_github_token(config)
+        if active:
+            token = active
 
     headers = {"Accept": "application/vnd.github.v3+json"}
-    if settings.github_token:
-        headers["Authorization"] = f"Bearer {settings.github_token}"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -198,24 +272,42 @@ async def register_public_id(db: AsyncSession) -> dict:
     将当前实例的公网 ID 注册到 GitHub 注册表。
 
     流程：
-    1. 获取当前实例的 public_id
-    2. 拉取最新注册表 → 冲突检测
-    3. 若 ID 已被占用 → 返回冲突信息
-    4. 若 ID 未被占用 → 写入注册表 → PUT 回 GitHub
+    1. 获取当前实例信息 + 检查 Token
+    2. 验证 public_url 可达性
+    3. 拉取最新注册表 → 冲突检测
+    4. 写入注册表 → PUT 回 GitHub
     """
     import base64, json
+    from app.models.federation import InstanceConfig
 
-    # 1. 获取当前实例信息
-    instance = await get_instance_info(db)
-    public_id = instance.get("public_id")
-    if not public_id:
+    # 1. 获取当前实例 + Token
+    result = await db.execute(select(InstanceConfig).where(InstanceConfig.id == 1))
+    config = result.scalar_one_or_none()
+    if config is None:
+        return {"success": False, "message": "实例尚未初始化"}
+
+    token = _get_active_github_token(config)
+    if not token:
+        return {
+            "success": False,
+            "need_token": True,
+            "message": "未配置 GitHub Token。请在下方「GitHub Token」输入框中填入 Token，或设置 GITHUB_TOKEN 环境变量。\n获取 Token: https://github.com/settings/tokens → Generate new token (classic) → 勾选 repo",
+        }
+
+    if not config.public_id:
         return {"success": False, "message": "实例尚未生成公网 ID，请先初始化"}
 
-    if not settings.github_token:
-        return {"success": False, "message": "未配置 GITHUB_TOKEN，无法写入注册表。请在 .env 中设置 GITHUB_TOKEN"}
+    # 2. URL 可达性验证
+    public_url = config.public_url or ""
+    if public_url:
+        url_error = await _validate_public_url(public_url)
+        if url_error:
+            return {"success": False, "message": f"公网 URL 可达性验证失败，拒绝注册（防止注册表中出现虚假地址）:\n{url_error}"}
+    else:
+        return {"success": False, "message": "请先设置公网 URL 再进行注册"}
 
-    # 2. 拉取注册表 + 冲突检测
-    registry_result = await fetch_github_registry()
+    # 3. 拉取注册表 + 冲突检测
+    registry_result = await fetch_github_registry(db)
     if not registry_result["success"]:
         return registry_result
 
@@ -223,13 +315,13 @@ async def register_public_id(db: AsyncSession) -> dict:
     current_sha = registry_result["sha"]
 
     # 冲突检测
-    existing = registry.get("instances", {}).get(public_id)
+    existing = registry.get("instances", {}).get(config.public_id)
     if existing:
         return {
             "success": False,
             "conflict": True,
             "message": (
-                f"公网 ID「{public_id}」已被占用。"
+                f"公网 ID「{config.public_id}」已被占用。"
                 f"占用实例: {existing.get('display_name', '未知')}，"
                 f"注册时间: {existing.get('registered_at', '未知')}。"
                 f"请点击「重新生成 ID」更换公网 ID。"
@@ -237,20 +329,20 @@ async def register_public_id(db: AsyncSession) -> dict:
             "existing_entry": existing,
         }
 
-    # 3. 写入注册表
-    registry["instances"][public_id] = {
-        "display_name": instance.get("display_name", ""),
-        "public_url": instance.get("public_url", ""),
+    # 4. 写入注册表
+    registry["instances"][config.public_id] = {
+        "display_name": config.display_name or "",
+        "public_url": config.public_url or "",
         "registered_at": datetime.now(timezone.utc).isoformat(),
     }
     registry["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     headers = {
         "Accept": "application/vnd.github.v3+json",
-        "Authorization": f"Bearer {settings.github_token}",
+        "Authorization": f"Bearer {token}",
     }
     body = {
-        "message": f"Register {public_id}",
+        "message": f"Register {config.public_id}",
         "content": base64.b64encode(
             json.dumps(registry, indent=2, ensure_ascii=False).encode("utf-8")
         ).decode("ascii"),
@@ -262,10 +354,10 @@ async def register_public_id(db: AsyncSession) -> dict:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.put(REGISTRY_URL, json=body, headers=headers)
             if resp.status_code in (200, 201):
-                logger.info(f"✅ 公网 ID {public_id} 已注册到 GitHub 注册表")
+                logger.info(f"✅ 公网 ID {config.public_id} 已注册到 GitHub 注册表")
                 return {
                     "success": True,
-                    "message": f"公网 ID「{public_id}」已成功注册到 GitHub 注册表",
+                    "message": f"公网 ID「{config.public_id}」已成功注册到 GitHub 注册表",
                     "registry_url": f"https://github.com/{settings.registry_repo}/blob/main/{settings.registry_file}",
                 }
             elif resp.status_code == 409:
@@ -582,6 +674,7 @@ def _instance_config_to_dict(config) -> dict:
         "public_id": config.public_id,
         "display_name": config.display_name or "",
         "public_url": config.public_url or "",
+        "github_token_configured": bool(config.github_token_encrypted),
         "created_at": str(config.created_at) if config.created_at else None,
         "updated_at": str(config.updated_at) if config.updated_at else None,
     }

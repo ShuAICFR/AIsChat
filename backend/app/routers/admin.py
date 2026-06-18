@@ -794,12 +794,29 @@ async def register_federation_public_id(
     return result
 
 
+@router.put("/federation/instance/github-token")
+async def set_federation_github_token(
+    body: dict,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """在界面中配置 GitHub Token（加密存储，无需 SSH 改 .env）"""
+    token = body.get("token", "")
+    if not token or not token.strip():
+        raise HTTPException(status_code=400, detail="Token 不能为空")
+    result = await fed_svc.set_github_token(db, token.strip())
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return {"success": True, "message": "GitHub Token 已加密保存"}
+
+
 @router.get("/federation/registry")
 async def get_federation_registry(
     admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """拉取 GitHub 公开注册表"""
-    result = await fed_svc.fetch_github_registry()
+    result = await fed_svc.fetch_github_registry(db)
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result["message"])
     return result

@@ -410,6 +410,7 @@ CREATE TABLE IF NOT EXISTS instance_config (
     public_id VARCHAR(50) UNIQUE,
     display_name VARCHAR(100) DEFAULT '',
     public_url VARCHAR(500) DEFAULT '',
+    github_token_encrypted TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

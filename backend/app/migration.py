@@ -421,6 +421,16 @@ async def _migrate_federation_tables(db):
     else:
         logger.info("  ⏭ messages.source_public_id 已存在，跳过")
 
+    # 6. instance_config.github_token_encrypted GitHub Token（前端图形化配置）
+    if not await _column_exists(db, "instance_config", "github_token_encrypted"):
+        logger.info("  🌐 添加 instance_config.github_token_encrypted 列")
+        await db.execute(text(
+            "ALTER TABLE instance_config ADD COLUMN github_token_encrypted TEXT"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ instance_config.github_token_encrypted 已存在，跳过")
+
     if created_any:
         await db.commit()
         logger.info("  ✅ 联邦通信表/列创建完成")

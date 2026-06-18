@@ -7,6 +7,7 @@ interface InstanceInfo {
   public_id: string | null
   display_name: string
   public_url: string
+  github_token_configured: boolean
   created_at: string | null
   updated_at: string | null
 }
@@ -42,6 +43,8 @@ export default function FederationTab() {
   const [error, setError] = useState('')
   const [registerResult, setRegisterResult] = useState('')
   const [registering, setRegistering] = useState(false)
+  const [githubToken, setGithubToken] = useState('')
+  const [tokenSaving, setTokenSaving] = useState(false)
 
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
@@ -125,6 +128,24 @@ export default function FederationTab() {
       }
     } catch (e: any) {
       alert(e?.response?.data?.detail || '生成失败')
+    }
+  }
+
+  const handleSaveToken = async () => {
+    if (!githubToken.trim()) {
+      setRegisterResult('请先填入 GitHub Token')
+      return
+    }
+    setTokenSaving(true)
+    try {
+      await api.put('/admin/federation/instance/github-token', { token: githubToken.trim() })
+      setGithubToken('')
+      setRegisterResult('✅ GitHub Token 已加密保存')
+      await loadData()
+    } catch (e: any) {
+      setRegisterResult(e?.response?.data?.detail || '保存失败')
+    } finally {
+      setTokenSaving(false)
     }
   }
 
@@ -220,12 +241,46 @@ export default function FederationTab() {
                 </button>
               </div>
             </div>
+            <div>
+              <label className="text-xs text-textMuted">
+                GitHub Token{' '}
+                <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                  获取 →
+                </a>
+              </label>
+              <p className="text-[10px] text-textMuted mb-1">
+                点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong> → 复制粘贴到下方
+              </p>
+              <div className="flex gap-2 mt-1">
+                <input
+                  type="password"
+                  value={githubToken}
+                  onChange={e => setGithubToken(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                  placeholder={instance?.github_token_configured ? '已配置（重新输入会覆盖）' : 'ghp_xxxxxxxxxxxxxxxx'}
+                />
+                <button
+                  onClick={handleSaveToken}
+                  disabled={tokenSaving || !githubToken.trim()}
+                  className={`shrink-0 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    tokenSaving || !githubToken.trim()
+                      ? 'bg-canvas text-textMuted cursor-not-allowed'
+                      : 'bg-amber-600 hover:bg-amber-500 text-white'
+                  }`}
+                >
+                  {tokenSaving ? '保存中...' : '保存 Token'}
+                </button>
+              </div>
+              {instance?.github_token_configured && !githubToken && (
+                <p className="text-[10px] text-emerald-400 mt-1">🔑 已配置 Token（加密存储）</p>
+              )}
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={handleSaveInstance}
                 className="px-4 py-1.5 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
               >
-                保存
+                保存实例信息
               </button>
               <button
                 onClick={handleRegister}
@@ -240,7 +295,7 @@ export default function FederationTab() {
               </button>
             </div>
             {registerResult && (
-              <p className={`text-xs ${registerResult.includes('成功') ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <p className={`text-xs whitespace-pre-line ${registerResult.includes('成功') || registerResult.includes('✅') ? 'text-emerald-400' : 'text-rose-400'}`}>
                 {registerResult}
               </p>
             )}
@@ -265,6 +320,16 @@ export default function FederationTab() {
               <div>
                 <span className="text-textMuted text-xs">公网 URL</span>
                 <p className="text-textPrimary text-xs mt-0.5">{instance?.public_url || '-'}</p>
+              </div>
+              <div>
+                <span className="text-textMuted text-xs">GitHub Token</span>
+                <p className="text-xs mt-0.5">
+                  {instance?.github_token_configured ? (
+                    <span className="text-emerald-400">🔑 已配置（加密存储）</span>
+                  ) : (
+                    <span className="text-textMuted italic">未配置</span>
+                  )}
+                </p>
               </div>
             </div>
             {instance?.public_id && (

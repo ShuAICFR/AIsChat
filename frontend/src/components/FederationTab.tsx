@@ -56,6 +56,8 @@ export default function FederationTab() {
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
   const [newPeer, setNewPeer] = useState({ display_name: '', peer_public_id: '', remote_url: '', shared_secret: '' })
+  const [editingPeerId, setEditingPeerId] = useState<number | null>(null)
+  const [editPeerForm, setEditPeerForm] = useState({ display_name: '', remote_url: '', shared_secret: '' })
   const [editInstance, setEditInstance] = useState(false)
   const [instanceForm, setInstanceForm] = useState({ display_name: '', public_url: '', public_id: '' })
 
@@ -108,6 +110,26 @@ export default function FederationTab() {
 
   const handleDisconnect = async (id: number) => {
     await api.post(`/admin/federation/peers/${id}/disconnect`)
+    await loadData()
+  }
+
+  const handleEditPeer = (peer: Peer) => {
+    setEditingPeerId(peer.id)
+    setEditPeerForm({ display_name: peer.display_name, remote_url: peer.remote_url, shared_secret: '' })
+  }
+
+  const handleSavePeer = async () => {
+    if (!editingPeerId) return
+    const payload: any = {
+      display_name: editPeerForm.display_name,
+      remote_url: editPeerForm.remote_url,
+    }
+    // 只有填了密钥才发送（留空 = 不修改）
+    if (editPeerForm.shared_secret.trim()) {
+      payload.shared_secret = editPeerForm.shared_secret.trim()
+    }
+    await api.put(`/admin/federation/peers/${editingPeerId}`, payload)
+    setEditingPeerId(null)
     await loadData()
   }
 
@@ -752,13 +774,22 @@ export default function FederationTab() {
                       <Power size={14} />
                     </button>
                   ) : (
-                    <button
-                      onClick={() => handleConnect(peer.id)}
-                      className="p-1.5 text-primary-400 hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition-colors"
-                      title="连接"
-                    >
-                      <RefreshCw size={14} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleConnect(peer.id)}
+                        className="p-1.5 text-primary-400 hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition-colors"
+                        title="连接"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleEditPeer(peer)}
+                        className="p-1.5 text-textMuted hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                        title="编辑"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => handleDeletePeer(peer.id)}
@@ -769,6 +800,53 @@ export default function FederationTab() {
                   </button>
                 </div>
               </div>
+              {/* 编辑对等端表单 */}
+              {editingPeerId === peer.id && (
+                <div className="p-3 bg-canvas rounded-lg border border-amber-500/20 space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-textMuted">显示名称</label>
+                      <input
+                        value={editPeerForm.display_name}
+                        onChange={e => setEditPeerForm({ ...editPeerForm, display_name: e.target.value })}
+                        className="w-full mt-0.5 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-textMuted">公网 URL</label>
+                      <input
+                        value={editPeerForm.remote_url}
+                        onChange={e => setEditPeerForm({ ...editPeerForm, remote_url: e.target.value })}
+                        className="w-full mt-0.5 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary font-mono"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] text-textMuted">共享密钥（留空则不修改）</label>
+                      <input
+                        type="password"
+                        value={editPeerForm.shared_secret}
+                        onChange={e => setEditPeerForm({ ...editPeerForm, shared_secret: e.target.value })}
+                        className="w-full mt-0.5 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary"
+                        placeholder="输入新密钥替换旧密钥"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSavePeer}
+                      className="px-3 py-1 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded transition-colors"
+                    >
+                      保存
+                    </button>
+                    <button
+                      onClick={() => setEditingPeerId(null)}
+                      className="px-3 py-1 text-xs bg-canvas border border-border text-textSecondary rounded hover:bg-border/20 transition-colors"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
             ))}
           </div>
         )}

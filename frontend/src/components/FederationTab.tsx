@@ -812,11 +812,35 @@ export default function FederationTab() {
                     </div>
                     <div>
                       <label className="text-[10px] text-textMuted">公网 URL</label>
-                      <input
-                        value={editPeerForm.remote_url}
-                        onChange={e => setEditPeerForm({ ...editPeerForm, remote_url: e.target.value })}
-                        className="w-full mt-0.5 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary font-mono"
-                      />
+                      <div className="flex items-stretch mt-0.5">
+                        <select
+                          value={(editPeerForm.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
+                          onChange={e => {
+                            const host = editPeerForm.remote_url.replace(/^wss?:\/\//, '').replace(/\/federation\/ws$/, '')
+                            setEditPeerForm({ ...editPeerForm, remote_url: `${e.target.value}://${host}/federation/ws` })
+                          }}
+                          className="w-16 px-1.5 text-xs bg-surface border border-border rounded-l text-textPrimary shrink-0"
+                        >
+                          <option value="wss">wss://</option>
+                          <option value="ws">ws://</option>
+                        </select>
+                        <input
+                          value={(() => {
+                            const m = editPeerForm.remote_url.match(/^(wss?):\/\/(.+?)\/federation\/ws$/)
+                            return m ? m[2] : editPeerForm.remote_url.replace(/^wss?:\/\//, '')
+                          })()}
+                          onChange={e => {
+                            const proto = (editPeerForm.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'
+                            const host = e.target.value.replace(/\/$/, '')
+                            setEditPeerForm({ ...editPeerForm, remote_url: `${proto}://${host}/federation/ws` })
+                          }}
+                          className="flex-1 px-2 py-1 text-xs bg-surface border border-border border-x-0 text-textPrimary font-mono"
+                          placeholder="aischat.datongai.top:5228"
+                        />
+                        <span className="inline-flex items-center px-1.5 text-[10px] text-textMuted bg-surface border border-border rounded-r shrink-0 font-mono">
+                          /federation/ws
+                        </span>
+                      </div>
                     </div>
                     <div className="md:col-span-2">
                       <label className="text-[10px] text-textMuted">共享密钥（留空则不修改）</label>

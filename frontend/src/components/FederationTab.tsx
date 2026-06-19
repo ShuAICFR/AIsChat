@@ -49,7 +49,7 @@ export default function FederationTab() {
   const [githubToken, setGithubToken] = useState('')
   const [tokenSaving, setTokenSaving] = useState(false)
   const [dialogToken, setDialogToken] = useState('')  // 弹窗内的临时 Token 输入
-  const [quickToken, setQuickToken] = useState('')    // TOKEN_MISSING 时行内快速输入
+  const [quickToken, setQuickToken] = useState('')    // TOKEN_MISSING / TOKEN_INVALID 时行内快速替换
 
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
@@ -119,8 +119,8 @@ export default function FederationTab() {
     // 再次点击（已确认风险）→ 执行注册
     setRegisterState('loading')
 
-    // 如果弹窗中填了 Token 且尚未配置，先保存
-    const needSaveToken = dialogToken.trim() && !instance?.github_token_configured
+    // 如果弹窗中填了 Token（无论是首次配置还是更换），先保存
+    const needSaveToken = !!dialogToken.trim()
     if (needSaveToken) {
       setRegisterResult('🔑 正在保存 Token...')
       try {
@@ -167,7 +167,7 @@ export default function FederationTab() {
   }
 
   const handleQuickSaveToken = async () => {
-    // 快速保存 Token 并重试注册（TOKEN_MISSING 错误恢复）
+    // 快速保存 Token 并重试注册（TOKEN_MISSING / TOKEN_INVALID 错误恢复）
     if (!quickToken.trim()) return
     setRegisterState('loading')
     setRegisterResult('🔑 正在保存 Token...')
@@ -267,27 +267,47 @@ export default function FederationTab() {
               </ul>
               <p className="text-xs text-textMuted mt-2">注册前系统会验证你的公网 URL 确实指向运行中的 AIsChat 实例。</p>
             </div>
-            {/* 若未配置 Token，直接在弹窗中输入 */}
-            {!instance?.github_token_configured && (
-              <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                <label className="text-xs text-textMuted">
-                  GitHub Token{' '}
-                  <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
-                    获取 →
-                  </a>
-                </label>
-                <p className="text-[10px] text-textMuted mb-1.5">
-                  需要 Token 才能写入注册表。点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong>
-                </p>
-                <input
-                  type="password"
-                  value={dialogToken}
-                  onChange={e => setDialogToken(e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                  placeholder="ghp_xxxxxxxxxxxxxxxx"
-                />
-              </div>
-            )}
+            {/* Token 输入区：未配置时突出显示，已配置时可折叠更换 */}
+            <div className={`mb-4 p-3 rounded-lg ${!instance?.github_token_configured ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-canvas border border-border'}`}>
+              {instance?.github_token_configured ? (
+                <details className="text-xs">
+                  <summary className="text-textMuted cursor-pointer hover:text-textPrimary transition-colors">
+                    🔑 已配置 Token（点击更换）
+                  </summary>
+                  <div className="mt-2">
+                    <input
+                      type="password"
+                      value={dialogToken}
+                      onChange={e => setDialogToken(e.target.value)}
+                      className="w-full px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                      placeholder="粘贴新 Token 替换旧 Token"
+                    />
+                    <p className="text-[10px] text-textMuted mt-1">
+                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">github.com/settings/tokens →</a>
+                    </p>
+                  </div>
+                </details>
+              ) : (
+                <>
+                  <label className="text-xs text-textMuted">
+                    GitHub Token{' '}
+                    <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                      获取 →
+                    </a>
+                  </label>
+                  <p className="text-[10px] text-textMuted mb-1.5">
+                    需要 Token 才能写入注册表。点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong>
+                  </p>
+                  <input
+                    type="password"
+                    value={dialogToken}
+                    onChange={e => setDialogToken(e.target.value)}
+                    className="w-full px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                    placeholder="ghp_xxxxxxxxxxxxxxxx"
+                  />
+                </>
+              )}
+            </div>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => { setRegisterState('idle'); setDialogToken('') }}
@@ -456,7 +476,7 @@ export default function FederationTab() {
               </p>
             )}
             {/* TOKEN_MISSING 时行内快速输入，无需跳转到编辑模式 */}
-            {registerErrorCode === 'TOKEN_MISSING' && (
+            {(registerErrorCode === 'TOKEN_MISSING' || registerErrorCode === 'TOKEN_INVALID') && (
               <div className="flex gap-2 mt-2">
                 <input
                   type="password"
@@ -531,7 +551,7 @@ export default function FederationTab() {
                   </span>
                 )}
                 {/* TOKEN_MISSING 时行内快速输入 */}
-                {registerErrorCode === 'TOKEN_MISSING' && (
+                {(registerErrorCode === 'TOKEN_MISSING' || registerErrorCode === 'TOKEN_INVALID') && (
                   <div className="flex gap-2 mt-2 w-full">
                     <input
                       type="password"

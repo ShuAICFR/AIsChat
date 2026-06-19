@@ -44,6 +44,32 @@ from sqlalchemy import select
 router = APIRouter(prefix="/agents", tags=["AI 管理"])
 
 
+@router.get("/models")
+async def get_available_models(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """返回可用模型选项列表（供前端下拉框），附带当前 API 提供商的能力"""
+    from app.config import settings
+
+    # 获取当前用户的 API base URL，判断提供商能力
+    api_base = await _get_user_api_base(db, current_user["user_id"])
+    thinking_supported = settings.is_thinking_supported_for(api_base)
+    is_deepseek = "deepseek.com" in api_base
+
+    return {
+        "models": settings.get_model_options(),
+        "defaults": {
+            "chat_model": settings.default_chat_model,
+            "work_model": settings.default_work_model,
+        },
+        "provider": {
+            "thinking_supported": thinking_supported,
+            "is_deepseek": is_deepseek,
+        },
+    }
+
+
 async def _require_agent_owner(
     agent_id: int,
     current_user: dict = Depends(get_current_user),
@@ -157,7 +183,7 @@ async def update_config(
 ):
     """更新 AI 配置（AI 自修改或用户手动修改）"""
     try:
-        updates = req.model_dump(exclude_none=True)
+        updates = req.model_dump(exclude_unset=True)
         agent = await update_agent_config(
             db,
             agent_id=agent_id,

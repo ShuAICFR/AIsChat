@@ -207,9 +207,9 @@ async def chat_completion(
         payload["tool_choice"] = "auto"
     if response_format:
         payload["response_format"] = response_format
-    if thinking_enabled:
+    if thinking_enabled and settings.is_deepseek_api:
         payload["thinking"] = {"type": "enabled"}
-    if user_id:
+    if user_id and settings.is_deepseek_api:
         payload["user_id"] = user_id
 
     async with httpx.AsyncClient(timeout=120.0) as client:

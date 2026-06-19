@@ -39,6 +39,8 @@ class AgentUpdateConfigRequest(BaseModel):
     top_p: float | None = Field(default=None, ge=0, le=1.0)
     presence_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
     frequency_penalty: float | None = Field(default=None, ge=-2.0, le=2.0)
+    chat_model: str | None = None
+    work_model: str | None = None
     thinking_enabled: bool | None = None
 
 

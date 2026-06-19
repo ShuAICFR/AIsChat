@@ -158,6 +158,11 @@ async def update_agent_config(
     if "thinking_enabled" in updates and updates["thinking_enabled"] is not None:
         agent.thinking_enabled = updates["thinking_enabled"]
 
+    # chat_model / work_model 允许设为 None（重置为全局默认）
+    for field in ("chat_model", "work_model"):
+        if field in updates:
+            setattr(agent, field, updates[field])  # None = 继承全局
+
     await db.flush()
     await db.refresh(agent)
 

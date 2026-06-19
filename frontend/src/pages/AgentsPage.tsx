@@ -3,6 +3,12 @@ import { api, ApiError } from '../api/client'
 import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
+interface ModelOption {
+  value: string
+  label: string
+  provider: string
+}
+
 interface Agent {
   id: number
   name: string
@@ -20,6 +26,8 @@ interface Agent {
   current_top_p: number
   current_presence_penalty: number
   current_frequency_penalty: number
+  chat_model: string | null
+  work_model: string | null
   thinking_enabled: boolean
   created_at: string
 }
@@ -165,7 +173,10 @@ export default function AgentsPage() {
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 text-xs text-textMuted mb-1">
+                  <div className="flex items-center gap-2 text-xs text-textMuted mb-1 flex-wrap">
+                    <span className="text-textSecondary font-medium">
+                      {agent.chat_model || '默认'}
+                    </span>
                     <span>
                       Temp: {agent.current_temperature}
                       {hasModified && agent.original_temperature !== agent.current_temperature && (
@@ -291,13 +302,31 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [topP, setTopP] = useState(agent.current_top_p)
   const [presencePenalty, setPresencePenalty] = useState(agent.current_presence_penalty)
   const [frequencyPenalty, setFrequencyPenalty] = useState(agent.current_frequency_penalty)
+  const [chatModel, setChatModel] = useState(agent.chat_model || '')
+  const [workModel, setWorkModel] = useState(agent.work_model || '')
   const [thinkingEnabled, setThinkingEnabled] = useState(agent.thinking_enabled)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [defaults, setDefaults] = useState<{ chat_model: string; work_model: string }>({ chat_model: '', work_model: '' })
+  const [thinkingSupported, setThinkingSupported] = useState(false)
+
+  useEffect(() => {
+    api.get<{ models: ModelOption[]; defaults: { chat_model: string; work_model: string }; provider: { thinking_supported: boolean } }>('/agents/models')
+      .then(data => {
+        setModelOptions(data.models)
+        setDefaults(data.defaults)
+        setThinkingSupported(data.provider?.thinking_supported ?? false)
+      })
+      .catch(console.error)
+  }, [])
 
   const hasModified =
     agent.current_system_prompt !== agent.original_system_prompt ||
     agent.current_temperature !== agent.original_temperature
+
+  const effectiveChatModel = chatModel || defaults.chat_model
+  const effectiveWorkModel = workModel || defaults.work_model
 
   const handleSave = async () => {
     setLoading(true)
@@ -309,6 +338,8 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         top_p: topP,
         presence_penalty: presencePenalty,
         frequency_penalty: frequencyPenalty,
+        chat_model: chatModel || null,
+        work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
       })
       onUpdated()
@@ -321,7 +352,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-textPrimary">编辑 {agent.name}</h2>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
@@ -343,6 +374,10 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs">
+                <span className="text-textMuted">聊天模型:</span>
+                <span className="text-textSecondary">{agent.chat_model || `默认 (${defaults.chat_model})`}</span>
+                <span className="text-textMuted">工作模型:</span>
+                <span className="text-textSecondary">{agent.work_model || `默认 (${defaults.work_model})`}</span>
                 <span className="text-textMuted">Temperature:</span>
                 <span className="text-textSecondary">{agent.original_temperature}</span>
                 <span className="text-textMuted">Top P:</span>
@@ -366,9 +401,41 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                 <textarea
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  rows={4}
+                  rows={3}
                   className="w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none mt-0.5"
                 />
+              </div>
+              {/* 模型选择 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-textMuted">聊天模型</label>
+                  <select
+                    value={chatModel}
+                    onChange={(e) => setChatModel(e.target.value)}
+                    className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  >
+                    <option value="">默认 ({defaults.chat_model})</option>
+                    {modelOptions.map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-textMuted">工作模型</label>
+                  <select
+                    value={workModel}
+                    onChange={(e) => setWorkModel(e.target.value)}
+                    className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  >
+                    <option value="">默认 ({defaults.work_model})</option>
+                    {modelOptions.map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="text-[10px] text-textMuted">
+                生效：聊天 {effectiveChatModel} · 工作 {effectiveWorkModel}
               </div>
               <div className="space-y-1.5 text-xs">
                 {[
@@ -391,22 +458,24 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   </div>
                 ))}
               </div>
-              {/* 深度推理模式 */}
-              <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
-                <div>
-                  <span className="text-xs text-textSecondary">🧠 深度推理模式</span>
-                  <p className="text-[10px] text-textMuted mt-0.5">开启后回复更慢但思考更深入</p>
+              {/* 深度推理模式（仅 DeepSeek API 显示） */}
+              {thinkingSupported && (
+                <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                  <div>
+                    <span className="text-xs text-textSecondary">🧠 深度推理模式</span>
+                    <p className="text-[10px] text-textMuted mt-0.5">开启后回复更慢但思考更深入</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={thinkingEnabled}
+                      onChange={(e) => setThinkingEnabled(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                  </label>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={thinkingEnabled}
-                    onChange={(e) => setThinkingEnabled(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-                </label>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -747,9 +816,24 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [name, setName] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
   const [temperature, setTemperature] = useState(0.8)
+  const [chatModel, setChatModel] = useState('')
+  const [workModel, setWorkModel] = useState('')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
+  const [defaults, setDefaults] = useState<{ chat_model: string; work_model: string }>({ chat_model: '', work_model: '' })
+  const [thinkingSupported, setThinkingSupported] = useState(false)
+
+  useEffect(() => {
+    api.get<{ models: ModelOption[]; defaults: { chat_model: string; work_model: string }; provider: { thinking_supported: boolean } }>('/agents/models')
+      .then(data => {
+        setModelOptions(data.models)
+        setDefaults(data.defaults)
+        setThinkingSupported(data.provider?.thinking_supported ?? false)
+      })
+      .catch(console.error)
+  }, [])
 
   const handleCreate = async () => {
     if (!name.trim()) return
@@ -760,6 +844,8 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
         name: name.trim(),
         system_prompt: systemPrompt || null,
         temperature,
+        chat_model: chatModel || null,
+        work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
       })
       onCreated()
@@ -772,7 +858,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
-      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-semibold mb-4 text-textPrimary">创建新 AI</h2>
 
         <div className="space-y-3">
@@ -796,6 +882,39 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               placeholder="描述 AI 的性格和行为..."
             />
           </div>
+          {/* 模型选择 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">
+                聊天模型 <span className="text-textMuted">（默认 {defaults.chat_model}）</span>
+              </label>
+              <select
+                value={chatModel}
+                onChange={(e) => setChatModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="">全局默认</option>
+                {modelOptions.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">
+                工作模型 <span className="text-textMuted">（默认 {defaults.work_model}）</span>
+              </label>
+              <select
+                value={workModel}
+                onChange={(e) => setWorkModel(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="">全局默认</option>
+                {modelOptions.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
           <div>
             <label className="block text-xs font-medium mb-1.5 text-textSecondary">
               Temperature: {temperature}
@@ -810,18 +929,22 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               className="w-full accent-primary-500"
             />
           </div>
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={thinkingEnabled}
-                onChange={(e) => setThinkingEnabled(e.target.checked)}
-                className="rounded accent-primary-500"
-              />
-              <span className="text-xs text-textSecondary">🧠 启用深度推理模式</span>
-            </label>
-            <p className="text-[10px] text-textMuted mt-0.5 ml-6">开启后回复更慢但思考更深入，适合执行复杂任务的 AI</p>
-          </div>
+          {thinkingSupported && (
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={thinkingEnabled}
+                  onChange={(e) => setThinkingEnabled(e.target.checked)}
+                  className="rounded accent-primary-500"
+                />
+                <span className="text-xs text-textSecondary">🧠 启用深度推理模式</span>
+              </label>
+              <p className="text-[10px] text-textMuted mt-0.5 ml-6">
+                开启后回复更慢但思考更深入，适合执行复杂任务的 AI
+              </p>
+            </div>
+          )}
         </div>
 
         {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}

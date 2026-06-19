@@ -3,6 +3,7 @@
 从环境变量读取配置，提供全局设置
 """
 import os
+import json
 from pydantic_settings import BaseSettings
 
 
@@ -24,13 +25,47 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_days: int = 7
 
-    # DeepSeek API 默认配置
+    # API 默认配置
     deepseek_base_url: str = os.getenv(
         "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
     )
     default_chat_model: str = "deepseek-v4-flash"
     default_work_model: str = "deepseek-v4-pro"
     default_embedding_model: str = "deepseek-embed"
+
+    @property
+    def is_deepseek_api(self) -> bool:
+        """自动检测当前 API 提供商是否为 DeepSeek"""
+        return "deepseek.com" in self.deepseek_base_url
+
+    def get_model_options(self) -> list[dict]:
+        """
+        返回可用模型选项列表。
+        优先读环境变量 MODEL_OPTIONS（JSON），否则按 API 提供商给默认值。
+        """
+        raw = os.getenv("MODEL_OPTIONS", "")
+        if raw:
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                pass
+        # 默认模型列表
+        if self.is_deepseek_api:
+            return [
+                {"value": "deepseek-v4-flash", "label": "DeepSeek V4 Flash（快速）", "provider": "deepseek"},
+                {"value": "deepseek-v4-pro", "label": "DeepSeek V4 Pro（高质量）", "provider": "deepseek"},
+            ]
+        else:
+            # 通用 OpenAI 兼容 API：默认给两个常见档位
+            return [
+                {"value": self.default_chat_model, "label": f"{self.default_chat_model}（默认）", "provider": "generic"},
+                {"value": self.default_work_model, "label": f"{self.default_work_model}（工作）", "provider": "generic"},
+            ]
+
+    @staticmethod
+    def is_thinking_supported_for(base_url: str) -> bool:
+        """检查某个 API base URL 是否支持 thinking/reasoning 参数"""
+        return "deepseek.com" in base_url
 
     # 文件存储
     data_dir: str = os.getenv("DATA_DIR", "/app/data")

@@ -26,15 +26,15 @@ async def run_migrations():
     async with async_session() as db:
         try:
             await _migrate_users_type(db)
+            await _migrate_conversation_logs(db)   # 必须在查询 Agent 之前添加列
+            await _migrate_federation_tables(db)   # 必须在查询 Agent 之前添加列
             await _migrate_agents_user_id(db)
-            await _migrate_create_dm_tables(db)
             await _migrate_agent_users(db)
+            await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
-            await _migrate_federation_tables(db)
-            await _migrate_conversation_logs(db)
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -542,9 +542,6 @@ async def _migrate_conversation_logs(db):
         logger.info("  ✅ 对话日志系统迁移完成")
     else:
         logger.info("  ⏭ 对话日志系统均已存在，跳过")
-    logger.info("  ✅ 联邦通信表/列创建完成")
-    else:
-        logger.info("  ⏭ 联邦通信表/列均已存在，跳过")
 
 
 async def _fix_column_types(db):

@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI群聊社交网络",
     description="让 AI 拥有完整社交行为的群聊平台",
-    version="1.1.2",
+    version="1.2.1",
     lifespan=lifespan,
 )
 

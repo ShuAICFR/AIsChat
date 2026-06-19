@@ -224,6 +224,7 @@ async def _maybe_trigger_ai_reply(
 
     # 2. @提及检测（需要在离线/DND 判断前执行，因为 @提及可以唤醒离线 AI）
     is_mentioned = _check_mention(content, agent.name)
+    logger.info(f"🔍 AI {agent.name}({agent_id}): is_mentioned={is_mentioned}, content_preview='{content[:80]}'")
 
     # 3. 离线 + 未被 @ → 跳过；离线 + 被 @ → 唤醒为 active
     if agent.state == "offline":
@@ -251,12 +252,13 @@ async def _maybe_trigger_ai_reply(
     threshold = agent.auto_dnd_threshold or settings.default_auto_dnd_threshold
     logger.info(f"🔍 AI {agent.name}({agent_id}): willingness={willingness}, threshold={threshold}")
 
-    if willingness < threshold:
+    # @提及强制回复，跳过意愿检查
+    if not is_mentioned and willingness < threshold:
         logger.info(
             f"AI {agent.name}({agent_id}) 意愿分 {willingness} < {threshold}，跳过"
         )
-        # 自动 DND（如果意愿过低且非 @ 提及）
-        if willingness < threshold // 2 and not is_mentioned:
+        # 自动 DND（意愿过低）
+        if willingness < threshold // 2:
             from app.services.group_service import set_group_dnd
             try:
                 await set_group_dnd(
@@ -309,10 +311,16 @@ async def _maybe_trigger_ai_reply(
             "type": "ai_typing",
             "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
         })
-    # 延迟回复
+    # 延迟回复（若已有积压消息则跳过，避免级联延迟）
     if skill_result.delay_seconds > 0:
-        logger.info(f"🧠 AI {agent.name} 技能延迟 {skill_result.delay_seconds}s")
-        await asyncio.sleep(skill_result.delay_seconds)
+        from app.services.group_service import get_pending_messages
+        pending = await get_pending_messages(db, agent_id, group_id)
+        pending_count = len(pending) if pending else 0
+        if pending_count > 0:
+            logger.info(f"🧠 AI {agent.name} 有 {pending_count} 条积压消息，跳过延迟回复")
+        else:
+            logger.info(f"🧠 AI {agent.name} 技能延迟 {skill_result.delay_seconds}s")
+            await asyncio.sleep(skill_result.delay_seconds)
 
     # 6. 构建消息
     from app.services.llm_service import build_messages, resolve_model
@@ -562,8 +570,8 @@ async def _tool_call_loop(
                 ),
             })
 
-        # 如果 finish_reason 是 "tool_calls"，继续循环让 LLM 处理工具结果
-        if finish_reason != "tool_calls" and loop_idx >= max_loops - 1:
+        # LLM 未请求 tool_calls → 已完成，保存并退出
+        if finish_reason != "tool_calls":
             if last_task:
                 try:
                     from app.services.workspace_service import save_current_task
@@ -580,6 +588,20 @@ async def _tool_call_loop(
 
         # 短暂延迟，避免过于频繁的 API 调用
         await asyncio.sleep(0.5)
+
+    # 循环耗尽（LLM 持续请求 tool_calls 达到 max_loops），仍需保存
+    if last_task:
+        try:
+            from app.services.workspace_service import save_current_task
+            await save_current_task(db, agent.id, last_task)
+        except Exception:
+            pass
+    await _save_conversation_log_safe(
+        db, agent, messages, conversation_type,
+        group_id, session_id,
+        has_output=True, model=model,
+        token_usage=None,
+    )
 
 
 from app.utils.text import extract_mentions as _extract_mentions, check_mention as _check_mention

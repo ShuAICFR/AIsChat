@@ -50,6 +50,8 @@ export default function FederationTab() {
   const [tokenSaving, setTokenSaving] = useState(false)
   const [dialogToken, setDialogToken] = useState('')  // 弹窗内的临时 Token 输入
   const [quickToken, setQuickToken] = useState('')    // TOKEN_MISSING / TOKEN_INVALID 时行内快速替换
+  const [showTokenInput, setShowTokenInput] = useState(false)  // 非编辑视图中的 Token 更换
+  const [manageToken, setManageToken] = useState('')
 
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
@@ -198,6 +200,22 @@ export default function FederationTab() {
       } else {
         setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '保存/注册失败'))
       }
+    }
+  }
+
+  const handleManageToken = async () => {
+    if (!manageToken.trim()) return
+    setTokenSaving(true)
+    try {
+      await api.put('/admin/federation/instance/github-token', { token: manageToken.trim() })
+      setManageToken('')
+      setShowTokenInput(false)
+      setRegisterResult('✅ GitHub Token 已更新')
+      await loadData()
+    } catch (e: any) {
+      setRegisterResult(e?.response?.data?.detail || '保存失败')
+    } finally {
+      setTokenSaving(false)
     }
   }
 
@@ -518,13 +536,39 @@ export default function FederationTab() {
               </div>
               <div>
                 <span className="text-textMuted text-xs">GitHub Token</span>
-                <p className="text-xs mt-0.5">
-                  {instance?.github_token_configured ? (
-                    <span className="text-emerald-400">🔑 已配置（加密存储）</span>
-                  ) : (
-                    <span className="text-textMuted italic">未配置</span>
-                  )}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs">
+                    {instance?.github_token_configured ? (
+                      <span className="text-emerald-400">🔑 已配置（加密存储）</span>
+                    ) : (
+                      <span className="text-textMuted italic">未配置</span>
+                    )}
+                  </p>
+                  <button
+                    onClick={() => setShowTokenInput(!showTokenInput)}
+                    className="text-[10px] text-textMuted hover:text-textPrimary border border-border rounded px-1.5 py-0.5 transition-colors"
+                  >
+                    {showTokenInput ? '取消' : instance?.github_token_configured ? '更换' : '配置'}
+                  </button>
+                </div>
+                {showTokenInput && (
+                  <div className="flex gap-2 mt-1.5">
+                    <input
+                      type="password"
+                      value={manageToken}
+                      onChange={e => setManageToken(e.target.value)}
+                      className="flex-1 px-2 py-1 text-xs bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                      placeholder={instance?.github_token_configured ? '粘贴新 Token 替换旧 Token' : 'ghp_xxxxxxxxxxxxxxxx'}
+                    />
+                    <button
+                      onClick={handleManageToken}
+                      disabled={tokenSaving || !manageToken.trim()}
+                      className="shrink-0 px-2 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded transition-colors disabled:opacity-50"
+                    >
+                      {tokenSaving ? '保存中...' : '保存'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             {instance?.public_id && (

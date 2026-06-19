@@ -33,3 +33,7 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# 垃圾文件（Windows 编码残留）
+I:*
+R:*

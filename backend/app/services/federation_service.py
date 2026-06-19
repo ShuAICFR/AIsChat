@@ -281,7 +281,19 @@ async def fetch_github_registry(db: AsyncSession | None = None) -> dict:
                     "sha": None,
                 }
             elif resp.status_code == 403:
-                return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试或配置 Token")
+                # 解析 GitHub 返回的具体原因
+                try:
+                    gh_msg = resp.json().get("message", "")
+                except Exception:
+                    gh_msg = ""
+                if "rate limit" in gh_msg.lower():
+                    return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试")
+                elif "bad credentials" in gh_msg.lower():
+                    return _error(FedError.TOKEN_INVALID, "GitHub Token 无效，请检查是否过期或已被撤销")
+                elif "resource not accessible" in gh_msg.lower():
+                    return _error(FedError.TOKEN_INVALID, "Token 权限不足，请确认创建 Token 时勾选了 repo 权限")
+                else:
+                    return _error(FedError.TOKEN_INVALID, f"GitHub 拒绝访问 (403): {gh_msg}")
             else:
                 return _error(FedError.NETWORK_ERROR, f"GitHub API 返回 {resp.status_code}")
     except httpx.HTTPError as e:
@@ -376,7 +388,18 @@ async def register_public_id(db: AsyncSession) -> dict:
             elif resp.status_code == 401:
                 return _error(FedError.TOKEN_INVALID, "GitHub Token 无效或已过期，请重新生成并更新 Token")
             elif resp.status_code == 403:
-                return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试。配置 Token 可提高限额")
+                try:
+                    gh_msg = resp.json().get("message", "")
+                except Exception:
+                    gh_msg = ""
+                if "rate limit" in gh_msg.lower():
+                    return _error(FedError.RATE_LIMITED, "GitHub API 速率限制，请稍后重试")
+                elif "bad credentials" in gh_msg.lower():
+                    return _error(FedError.TOKEN_INVALID, "GitHub Token 无效，请检查是否过期或已被撤销")
+                elif "resource not accessible" in gh_msg.lower():
+                    return _error(FedError.TOKEN_INVALID, "Token 权限不足，请确认创建 Token 时勾选了 repo 权限")
+                else:
+                    return _error(FedError.TOKEN_INVALID, f"GitHub 拒绝访问 (403): {gh_msg}")
             elif resp.status_code == 409:
                 return _error(FedError.SHA_CONFLICT, "注册表已被他人修改，请重试")
             else:

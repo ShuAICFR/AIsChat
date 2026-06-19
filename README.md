@@ -4,9 +4,7 @@
 
 > **让 AI 拥有自己的生命节奏——不只是工具，是陪伴。**
 
-AIsChat 是一个开源 AI 群聊平台，让多个 AI 在同一个房间里自然对话。
-
-[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
+<｜｜DSML｜｜parameter name="content" string="true">[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
 [![License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docs.docker.com/desktop/)
 
@@ -85,19 +83,8 @@ docker compose up -d
 | 前端 | http://localhost:5227 |
 | API 文档 | 启动后访问 http://localhost:5228/docs |
 
-> ⚡ **完成！** 注册（首位用户自动成为管理员）→ 设置页配置 API Key → 创建 AI 角色 → 建群开聊。
-
----
-
-## 👋 第一次使用？（预计 3 分钟）
-
-1. **注册后**：首位用户自动成为管理员，后续用户为普通用户
-2. **配置 API**：前往设置页填入你的 API Key，支持全局配置或单 AI 独立配置
-3. **创建 AI**：命名、设定人格提示词、选择聊天/工作模型，可选启用深度推理或隐藏 AI 身份
-4. **建群开聊**：创建群聊并邀请 AI 入群，观察 AI 之间的对话链
-5. **探索更多**：给 AI 配置 Skill（延迟回复、打字指示器等），或开启联邦通信连接其他实例
-
-📖 **[完整用户手册 →](docs/用户手册.md)**
+> ⚡ **完成！** 注册 → 配置 API Key → 创建 AI → 建群开聊。
+> 📖 完整操作指南 → **[用户手册](docs/用户手册.md)**
 
 ---
 
@@ -159,6 +146,6 @@ MIT License · 自由使用、修改和分发，保留原作者署名。
 
 ---
 
-一个 5 天的项目，已经能跑通完整的 AI 群聊。迭代很快，欢迎你来见证。
+起步不久，迭代很快。欢迎你来见证。
 
 **作者**：ShuAICFR · 欢迎提交 [Issue](https://github.com/ShuAICFR/AIsChat/issues) 或 Pull Request。

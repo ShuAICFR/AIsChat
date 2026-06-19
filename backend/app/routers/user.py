@@ -1,6 +1,7 @@
 """
 用户设置路由
 """
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
@@ -102,3 +103,54 @@ async def redeem_code(
         "current_quota": user.ai_quota,
         "current_api_credit": user.api_credit,
     }
+
+
+class TestApiBody(BaseModel):
+    api_base_url: str | None = None
+    api_key: str | None = None
+
+
+@router.post("/test-api-connection")
+async def test_api_connection(
+    req: TestApiBody,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """测试 API 连接（服务端代理，避免浏览器 CORS 限制）"""
+    import logging
+    logger = logging.getLogger(__name__)
+
+    base_url = req.api_base_url or "https://api.deepseek.com"
+    key = req.api_key
+
+    # 如果没传 key，尝试从数据库读取
+    if not key:
+        from sqlalchemy import select
+        from app.models.user import User
+        result = await db.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if user and user.api_key_encrypted:
+            from app.utils.crypto import decrypt_api_key
+            key = decrypt_api_key(user.api_key_encrypted)
+
+    if not key:
+        raise HTTPException(status_code=400, detail="请先配置 API Key")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                f"{base_url.rstrip('/')}/models",
+                headers={"Authorization": f"Bearer {key}"},
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                model_count = len(data.get("data", []))
+                return {"ok": True, "message": f"连接成功，{model_count} 个模型可用"}
+            else:
+                return {"ok": False, "message": f"API 返回 {resp.status_code}: {resp.text[:200]}"}
+    except httpx.ConnectError:
+        return {"ok": False, "message": "无法连接到 API 服务器，请检查 Base URL"}
+    except httpx.TimeoutException:
+        return {"ok": False, "message": "连接超时，请检查网络或 API 地址"}
+    except Exception as e:
+        return {"ok": False, "message": f"连接失败: {str(e)}"}

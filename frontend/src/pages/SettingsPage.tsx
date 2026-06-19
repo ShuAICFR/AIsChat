@@ -81,20 +81,12 @@ export default function SettingsPage() {
     setTesting(true)
     setTestResult(null)
     try {
-      const baseUrl = apiBaseUrl || 'https://api.deepseek.com'
-      const key = apiKey || null
-      // 发一个简单的 models list 请求验证
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (key) headers['Authorization'] = `Bearer ${key}`
-      const res = await fetch(`${baseUrl}/v1/models`, { headers })
-      if (res.ok) {
-        setTestResult('success')
-      } else {
-        const body = await res.text()
-        setTestResult('fail')
-        console.warn('API test failed:', res.status, body)
-      }
-    } catch {
+      const data = await api.post<{ ok: boolean; message: string }>('/user/test-api-connection', {
+        api_base_url: apiBaseUrl || null,
+        api_key: apiKey || null,
+      })
+      setTestResult(data.ok ? 'success' : 'fail')
+    } catch (err: any) {
       setTestResult('fail')
     } finally {
       setTesting(false)

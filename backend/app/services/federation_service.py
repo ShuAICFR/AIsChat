@@ -685,6 +685,70 @@ def generate_challenge() -> str:
     return secrets.token_hex(32)
 
 
+def url_rotate_hmac(secret: str, rotation_id: str, *fields: str) -> str:
+    """URL 轮换消息 HMAC-SHA256: HMAC(rotation_id | field1 | field2 | ..., secret)"""
+    message = rotation_id + "|" + "|".join(fields)
+    return hmac.new(
+        secret.encode("utf-8"),
+        message.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def validate_rotation_url(url: str, current_url: str) -> str | None:
+    """
+    验证轮换 URL 合法性。合法返回 None，非法返回错误消息字符串。
+    - 必须 ws:// 或 wss://
+    - 必须以 /federation/ws 结尾
+    - 必须与当前 URL 不同
+    """
+    if not url:
+        return "URL 不能为空"
+    if not (url.startswith("ws://") or url.startswith("wss://")):
+        return "URL 必须以 ws:// 或 wss:// 开头"
+    if not url.endswith("/federation/ws"):
+        return "URL 必须以 /federation/ws 结尾"
+    if url == current_url:
+        return "新 URL 不能与当前 URL 相同"
+    if len(url) > 500:
+        return "URL 长度不能超过 500 字符"
+    return None
+
+
+async def update_peer_url(db: AsyncSession, peer_id: int, new_url: str) -> bool:
+    """提交 URL 轮换：更新 remote_url，备份旧值到 remote_url_backup"""
+    from app.models.federation import FederationPeer
+    result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
+    peer = result.scalar_one_or_none()
+    if peer is None:
+        return False
+
+    peer.remote_url_backup = peer.remote_url
+    peer.remote_url = new_url
+    peer.url_rotated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    peer.url_rotation_count = (peer.url_rotation_count or 0) + 1
+    peer.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    logger.info(f"🌐 URL 轮换成功 #{peer_id}: {peer.remote_url_backup} → {new_url}")
+    return True
+
+
+async def rollback_peer_url(db: AsyncSession, peer_id: int) -> bool:
+    """回退 URL 轮换：从 remote_url_backup 恢复"""
+    from app.models.federation import FederationPeer
+    result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
+    peer = result.scalar_one_or_none()
+    if peer is None or not peer.remote_url_backup:
+        return False
+
+    peer.remote_url = peer.remote_url_backup
+    peer.remote_url_backup = None
+    peer.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    await db.commit()
+    logger.info(f"🌐 URL 回退 #{peer_id}: 恢复为 {peer.remote_url}")
+    return True
+
+
 # ── dict 转换 ──
 
 def _instance_config_to_dict(config) -> dict:
@@ -708,6 +772,9 @@ def _peer_to_dict(peer) -> dict:
         "is_enabled": peer.is_enabled,
         "connection_state": peer.connection_state,
         "last_connected_at": str(peer.last_connected_at) if peer.last_connected_at else None,
+        "url_rotated_at": str(peer.url_rotated_at) if peer.url_rotated_at else None,
+        "url_rotation_count": peer.url_rotation_count or 0,
+        "remote_url_backup": peer.remote_url_backup or None,
         "created_at": str(peer.created_at) if peer.created_at else None,
         "updated_at": str(peer.updated_at) if peer.updated_at else None,
     }

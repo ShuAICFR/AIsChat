@@ -53,6 +53,11 @@ class PeerConnection:
     last_heartbeat: "datetime | None" = None
     pending_outbox: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=OUTBOX_MAX_SIZE))
     handshake_complete: bool = False
+    # URL 动态轮换
+    rotation_state: str | None = None       # None|proposing|received_proposal|trying_new|connected_new|reverted_old
+    rotation_id: str | None = None          # 当前轮换的 ULID
+    new_url: str | None = None              # 提议的新 URL
+    last_rotation_at: "datetime | None" = None  # 上次轮换时间（用于频率限制）
 
 
 class FederationManager:
@@ -66,6 +71,9 @@ class FederationManager:
     def __init__(self):
         self.peers: dict[str, PeerConnection] = {}       # peer_public_id → PeerConnection
         self.group_routes: dict[int, set[str]] = defaultdict(set)  # local_group_id → {peer_public_id}
+        self._connecting: set[str] = set()               # 防重入：正在连接中的 public_id
+        self._recent_rotation_ids: dict[str, set[str]] = defaultdict(set)  # 防重放：peer → {rotation_id}
+        self._connecting_new_url: set[str] = set()       # 防重入：正在测试新 URL 的 public_id
         self._heartbeat_task: asyncio.Task | None = None
         self._reconnect_task: asyncio.Task | None = None
         self._running = False
@@ -81,6 +89,12 @@ class FederationManager:
         public_id = peer_record.peer_public_id
         url = peer_record.remote_url
 
+        # 防重入：同一 peer 正在连接中则跳过
+        if public_id in self._connecting:
+            logger.info(f"🌐 {public_id} 正在连接中，跳过重复请求")
+            return False
+        self._connecting.add(public_id)
+
         # 如果已有连接，先断开
         if public_id in self.peers:
             await self._close_peer_connection(public_id)
@@ -89,6 +103,7 @@ class FederationManager:
             secret = await get_decrypted_secret(peer_record)
         except Exception as e:
             logger.error(f"🌐 解密对等端 {public_id} 共享密钥失败: {e}")
+            self._connecting.discard(public_id)
             return False
 
         conn = PeerConnection(
@@ -197,6 +212,8 @@ class FederationManager:
             except Exception:
                 pass
             return False
+        finally:
+            self._connecting.discard(public_id)
 
     async def disconnect_peer(self, public_id: str) -> None:
         """断开与指定对等端的连接"""
@@ -380,6 +397,12 @@ class FederationManager:
                     await self._handle_remote_forward(public_id, data)
                 elif msg_type == "error":
                     logger.warning(f"🌐 {public_id} 报错: {data.get('code')} — {data.get('message')}")
+                elif msg_type == "url_rotate_propose":
+                    await self._handle_url_rotate_propose(public_id, data)
+                elif msg_type == "url_rotate_ack":
+                    await self._handle_url_rotate_ack(public_id, data)
+                elif msg_type == "url_rotate_commit":
+                    await self._handle_url_rotate_commit(public_id, data)
                 else:
                     logger.debug(f"🌐 未知消息类型: {msg_type} from {public_id}")
         except Exception as e:
@@ -435,11 +458,347 @@ class FederationManager:
         except Exception as e:
             logger.error(f"🌐 处理远程消息失败: {e}", exc_info=True)
 
+    # ── URL 动态轮换 ──
+
+    async def initiate_url_rotation(self, public_id: str, new_url: str) -> str | None:
+        """
+        发起 URL 轮换。返回 None 表示成功发起，返回字符串表示错误消息。
+        仅已连接且未在轮换中的 peer 可发起。
+        """
+        conn = self.peers.get(public_id)
+        if not conn or not conn.handshake_complete:
+            return "对等端未连接，无法发起轮换"
+        if conn.rotation_state is not None:
+            return f"对等端正在轮换中（{conn.rotation_state}），请稍后再试"
+
+        from datetime import timedelta
+
+        # 频率限制：最少间隔 300 秒
+        MIN_INTERVAL = timedelta(seconds=300)
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if conn.last_rotation_at and (now - conn.last_rotation_at) < MIN_INTERVAL:
+            remaining = int(MIN_INTERVAL.total_seconds() - (now - conn.last_rotation_at).total_seconds())
+            return f"距上次轮换不足 {remaining} 秒，请等待"
+
+        # 验证 URL
+        from app.services.federation_service import validate_rotation_url
+        err = validate_rotation_url(new_url, conn.remote_url)
+        if err:
+            return err
+
+        # 生成 rotation_id
+        import uuid
+        rotation_id = uuid.uuid4().hex[:16]  # 32 字符 hex
+        expires_at = (now + timedelta(seconds=60)).isoformat()
+
+        # 获取共享密钥
+        async with async_session() as db:
+            peer = await get_peer_by_public_id(db, public_id)
+            if not peer:
+                return "对等端不存在"
+            secret = await get_decrypted_secret(peer)
+
+        # 计算 HMAC
+        from app.services.federation_service import url_rotate_hmac
+        hmac_val = url_rotate_hmac(secret, rotation_id, new_url, expires_at, "propose")
+
+        # 更新连接状态
+        conn.rotation_state = "proposing"
+        conn.rotation_id = rotation_id
+        conn.new_url = new_url
+        conn.last_rotation_at = now
+
+        # 发送提议
+        try:
+            await conn.websocket.send(json.dumps({
+                "type": "url_rotate_propose",
+                "rotation_id": rotation_id,
+                "new_url": new_url,
+                "expires_at": expires_at,
+                "hmac": hmac_val,
+            }))
+        except Exception:
+            conn.rotation_state = None
+            conn.rotation_id = None
+            conn.new_url = None
+            return "发送轮换提议失败"
+
+        logger.info(f"🌐 发起 URL 轮换: {public_id} → {new_url}")
+        return None
+
+    async def _handle_url_rotate_propose(self, public_id: str, data: dict) -> None:
+        """处理对方发来的 URL 轮换提议"""
+        conn = self.peers.get(public_id)
+        if not conn or not conn.handshake_complete:
+            return
+
+        rotation_id = data.get("rotation_id", "")
+        new_url = data.get("new_url", "")
+        expires_at_str = data.get("expires_at", "")
+        hmac_val = data.get("hmac", "")
+
+        # 防重放
+        if rotation_id in self._recent_rotation_ids.get(public_id, set()):
+            logger.warning(f"🌐 重复的 rotation_id: {rotation_id} from {public_id}")
+            return
+        self._recent_rotation_ids[public_id].add(rotation_id)
+        # 限制集合大小
+        if len(self._recent_rotation_ids[public_id]) > 100:
+            self._recent_rotation_ids[public_id] = set(list(self._recent_rotation_ids[public_id])[-50:])
+
+        # 检查过期
+        from datetime import timedelta
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        try:
+            expires_at = datetime.fromisoformat(expires_at_str)
+            if now > expires_at:
+                logger.info(f"🌐 URL 轮换提议已过期: {rotation_id} from {public_id}")
+                await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+                return
+        except (ValueError, TypeError):
+            await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+            return
+
+        # 频率限制检查
+        MIN_INTERVAL = timedelta(seconds=300)
+        if conn.last_rotation_at and (now - conn.last_rotation_at) < MIN_INTERVAL:
+            logger.info(f"🌐 轮换过于频繁 from {public_id}")
+            await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+            return
+
+        # 检查是否已在轮换中
+        if conn.rotation_state is not None:
+            await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+            return
+
+        # 先查 DB（需要 peer 的 remote_url 和 secret）
+        async with async_session() as db:
+            peer = await get_peer_by_public_id(db, public_id)
+            if not peer:
+                return
+            secret = await get_decrypted_secret(peer)
+            current_url = peer.remote_url
+
+        # 验证 URL（用 DB 中的 remote_url 而非 conn）
+        from app.services.federation_service import validate_rotation_url
+        err = validate_rotation_url(new_url, current_url)
+        if err:
+            logger.info(f"🌐 轮换 URL 不合法 from {public_id}: {err}")
+            await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+            return
+
+        from app.services.federation_service import url_rotate_hmac
+        expected_hmac = url_rotate_hmac(secret, rotation_id, new_url, expires_at_str, "propose")
+        if hmac_val != expected_hmac:
+            logger.warning(f"🌐 轮换提议 HMAC 不匹配 from {public_id}")
+            await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, False)
+            return
+
+        # 接受提议
+        conn.rotation_state = "received_proposal"
+        conn.rotation_id = rotation_id
+        conn.new_url = new_url
+        conn.last_rotation_at = now
+
+        # 发送 ack
+        await self._send_rotation_msg(public_id, "url_rotate_ack", rotation_id, True)
+
+        # 异步测试新 URL
+        asyncio.create_task(self._test_new_url_connection(public_id, new_url, rotation_id))
+
+    async def _handle_url_rotate_ack(self, public_id: str, data: dict) -> None:
+        """处理对方对轮换提议的确认"""
+        conn = self.peers.get(public_id)
+        if not conn:
+            return
+
+        rotation_id = data.get("rotation_id", "")
+        accepted = data.get("accepted", False)
+
+        if conn.rotation_state != "proposing" or conn.rotation_id != rotation_id:
+            return  # 不是我们发出的提议
+
+        if not accepted:
+            logger.info(f"🌐 {public_id} 拒绝了 URL 轮换提议")
+            conn.rotation_state = None
+            conn.rotation_id = None
+            conn.new_url = None
+            return
+
+        logger.info(f"🌐 {public_id} 接受了 URL 轮换，开始测试新 URL")
+        conn.rotation_state = "trying_new"
+        asyncio.create_task(self._test_new_url_connection(public_id, conn.new_url, rotation_id))
+
+    async def _handle_url_rotate_commit(self, public_id: str, data: dict) -> None:
+        """处理轮换提交/回退"""
+        conn = self.peers.get(public_id)
+        if not conn:
+            return
+
+        rotation_id = data.get("rotation_id", "")
+        result = data.get("result", "rollback")
+
+        # 只处理与当前轮换匹配的 commit
+        if conn.rotation_id != rotation_id:
+            return
+
+        await self._commit_rotation(public_id, rotation_id, result == "success")
+
+    async def _test_new_url_connection(self, public_id: str, url: str, rotation_id: str) -> None:
+        """测试新 URL 的 WebSocket 握手（非阻塞）"""
+        conn = self.peers.get(public_id)
+        if not conn:
+            return
+
+        # 防重入
+        test_key = f"{public_id}:{rotation_id}"
+        if test_key in self._connecting_new_url:
+            return
+        self._connecting_new_url.add(test_key)
+
+        success = False
+        try:
+            logger.info(f"🌐 测试新 URL 连接: {public_id} → {url}")
+            test_ws = await asyncio.wait_for(
+                websockets.connect(url, ping_interval=None, ping_timeout=None, close_timeout=10, max_size=2**20),
+                timeout=15,
+            )
+
+            try:
+                # 简单握手验证
+                challenge = generate_challenge()
+                my_pub_id = await self._get_my_public_id()
+                await test_ws.send(json.dumps({
+                    "type": "handshake",
+                    "public_id": my_pub_id,
+                    "challenge": challenge,
+                }))
+
+                raw = await asyncio.wait_for(test_ws.recv(), timeout=10)
+                ack = json.loads(raw)
+                if ack.get("type") == "handshake_ack":
+                    success = True
+                    logger.info(f"🌐 新 URL 测试握手成功: {public_id}")
+            finally:
+                try:
+                    await test_ws.close()
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.warning(f"🌐 新 URL 测试失败: {public_id} — {e}")
+
+        finally:
+            self._connecting_new_url.discard(test_key)
+
+        # 更新状态并发送 commit
+        if conn.rotation_id != rotation_id:
+            return  # 轮换已被取消
+
+        if success:
+            conn.rotation_state = "connected_new"
+            await self._send_rotation_msg(public_id, "url_rotate_commit", rotation_id, True, "success")
+        else:
+            conn.rotation_state = "reverted_old"
+            await self._send_rotation_msg(public_id, "url_rotate_commit", rotation_id, True, "rollback")
+
+    async def _commit_rotation(self, public_id: str, rotation_id: str, success: bool) -> None:
+        """提交或回退 URL 轮换"""
+        conn = self.peers.get(public_id)
+        if not conn:
+            return
+
+        if success and conn.new_url:
+            # 更新数据库
+            async with async_session() as db:
+                peer = await get_peer_by_public_id(db, public_id)
+                if peer:
+                    from app.services.federation_service import update_peer_url
+                    await update_peer_url(db, peer.id, conn.new_url)
+            # 更新内存中的 URL
+            conn.remote_url = conn.new_url
+            logger.info(f"🌐 ✅ URL 轮换成功: {public_id} → {conn.new_url}")
+        else:
+            logger.info(f"🌐 ↩️ URL 轮换回退: {public_id} 保持 {conn.remote_url}")
+
+        # 清理状态
+        conn.rotation_state = None
+        conn.rotation_id = None
+        conn.new_url = None
+
+    async def _abort_rotation(self, public_id: str) -> None:
+        """异常情况下中止轮换（不修改 DB）"""
+        conn = self.peers.get(public_id)
+        if conn and conn.rotation_state is not None:
+            logger.warning(f"🌐 中止轮换: {public_id} (状态={conn.rotation_state})")
+            conn.rotation_state = None
+            conn.rotation_id = None
+            conn.new_url = None
+
+    async def _send_rotation_msg(
+        self, public_id: str, msg_type: str, rotation_id: str,
+        accepted: bool = False, result: str = "",
+    ) -> None:
+        """发送 URL 轮换相关消息"""
+        conn = self.peers.get(public_id)
+        if not conn or not conn.websocket or not conn.handshake_complete:
+            return
+
+        payload = {"type": msg_type, "rotation_id": rotation_id}
+
+        if msg_type == "url_rotate_ack":
+            payload["accepted"] = accepted
+        elif msg_type == "url_rotate_commit":
+            payload["result"] = result
+
+        # 添加 HMAC
+        async with async_session() as db:
+            peer = await get_peer_by_public_id(db, public_id)
+            if peer:
+                secret = await get_decrypted_secret(peer)
+                from app.services.federation_service import url_rotate_hmac
+                fields = [str(accepted).lower(), result, msg_type.split("_")[-1]]
+                payload["hmac"] = url_rotate_hmac(secret, rotation_id, *fields)
+
+        try:
+            await conn.websocket.send(json.dumps(payload))
+        except Exception:
+            pass
+
+    async def handle_inbound_rotation_message(
+        self, public_id: str, data: dict, inbound_ws=None
+    ) -> None:
+        """federation_ws.py 调用：处理入站连接上的轮换消息"""
+        msg_type = data.get("type", "")
+
+        # 如果是入站连接（无出站 PeerConnection），创建临时条目以便发送消息
+        is_inbound = public_id not in self.peers or not self.peers[public_id].handshake_complete
+        if is_inbound and inbound_ws:
+            # 创建/更新一个临时 PeerConnection 仅用于轮换消息发送
+            if public_id not in self.peers:
+                self.peers[public_id] = PeerConnection(
+                    public_id=public_id,
+                    websocket=inbound_ws,
+                    handshake_complete=True,
+                    remote_url="",  # 入站连接不追踪 URL
+                )
+
+        if msg_type == "url_rotate_propose":
+            await self._handle_url_rotate_propose(public_id, data)
+        elif msg_type == "url_rotate_ack":
+            await self._handle_url_rotate_ack(public_id, data)
+        elif msg_type == "url_rotate_commit":
+            await self._handle_url_rotate_commit(public_id, data)
+
     async def _close_peer_connection(self, public_id: str) -> None:
         """关闭与指定对等端的连接（不清除缓冲）"""
         conn = self.peers.get(public_id)
         if conn is None:
             return
+
+        # 如果正在轮换中，中止（重连会恢复旧 URL）
+        if conn.rotation_state is not None:
+            await self._abort_rotation(public_id)
 
         conn.handshake_complete = False
         if conn.websocket:

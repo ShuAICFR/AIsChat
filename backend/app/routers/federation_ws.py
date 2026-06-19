@@ -157,6 +157,12 @@ async def federation_websocket(ws: WebSocket):
             elif msg_type == "subscribe":
                 # 远端告知它共享了哪些群，暂时仅记录日志
                 logger.info(f"🌐 {peer_public_id} 订阅群: {data.get('group_id')}")
+            elif msg_type in ("url_rotate_propose", "url_rotate_ack", "url_rotate_commit"):
+                # URL 轮换协议 — 委托给 FederationManager
+                from app.services.federation_manager import federation_manager
+                await federation_manager.handle_inbound_rotation_message(
+                    peer_public_id, data, ws
+                )
             else:
                 logger.debug(f"🌐 忽略消息类型: {msg_type} from {peer_public_id}")
 

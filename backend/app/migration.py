@@ -431,6 +431,34 @@ async def _migrate_federation_tables(db):
     else:
         logger.info("  ⏭ instance_config.github_token_encrypted 已存在，跳过")
 
+    # 7. federation_peers.url_rotation 动态 URL 轮换（v1.2.1）
+    if not await _column_exists(db, "federation_peers", "remote_url_backup"):
+        logger.info("  🌐 添加 federation_peers.remote_url_backup 列")
+        await db.execute(text(
+            "ALTER TABLE federation_peers ADD COLUMN remote_url_backup VARCHAR(500)"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_peers.remote_url_backup 已存在，跳过")
+
+    if not await _column_exists(db, "federation_peers", "url_rotated_at"):
+        logger.info("  🌐 添加 federation_peers.url_rotated_at 列")
+        await db.execute(text(
+            "ALTER TABLE federation_peers ADD COLUMN url_rotated_at TIMESTAMP"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_peers.url_rotated_at 已存在，跳过")
+
+    if not await _column_exists(db, "federation_peers", "url_rotation_count"):
+        logger.info("  🌐 添加 federation_peers.url_rotation_count 列")
+        await db.execute(text(
+            "ALTER TABLE federation_peers ADD COLUMN url_rotation_count INTEGER NOT NULL DEFAULT 0"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_peers.url_rotation_count 已存在，跳过")
+
     if created_any:
         await db.commit()
         logger.info("  ✅ 联邦通信表/列创建完成")

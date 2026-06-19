@@ -923,6 +923,34 @@ async def disconnect_federation_peer(
     return {"message": f"已断开 {peer.peer_public_id}"}
 
 
+class URLRotateRequest(BaseModel):
+    new_url: str = Field(..., min_length=1, max_length=500)
+
+
+@router.post("/federation/peers/{peer_id}/rotate-url")
+async def rotate_federation_peer_url(
+    peer_id: int,
+    body: URLRotateRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """手动触发对等端 URL 轮换"""
+    from app.models.federation import FederationPeer
+    result = await db.execute(select(FederationPeer).where(FederationPeer.id == peer_id))
+    peer = result.scalar_one_or_none()
+    if peer is None:
+        raise HTTPException(status_code=404, detail="对等端不存在")
+
+    if not peer.is_enabled:
+        raise HTTPException(status_code=400, detail="对等端已禁用")
+
+    from app.services.federation_manager import federation_manager
+    err = await federation_manager.initiate_url_rotation(peer.peer_public_id, body.new_url)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return {"message": f"已发起 URL 轮换: {peer.peer_public_id} → {body.new_url}"}
+
+
 # ── 群聊共享 ──
 
 @router.get("/federation/groups/{group_id}/shares")

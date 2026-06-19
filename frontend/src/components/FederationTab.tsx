@@ -20,6 +20,9 @@ interface Peer {
   is_enabled: boolean
   connection_state: string
   last_connected_at: string | null
+  url_rotated_at: string | null
+  url_rotation_count: number
+  remote_url_backup: string | null
   created_at: string | null
   updated_at: string | null
 }
@@ -60,6 +63,12 @@ export default function FederationTab() {
   const [editPeerForm, setEditPeerForm] = useState({ display_name: '', remote_url: '', shared_secret: '' })
   const [editInstance, setEditInstance] = useState(false)
   const [instanceForm, setInstanceForm] = useState({ display_name: '', public_url: '', public_id: '' })
+
+  // URL 轮换
+  const [rotatingPeerId, setRotatingPeerId] = useState<number | null>(null)
+  const [rotateUrl, setRotateUrl] = useState('')
+  const [rotateError, setRotateError] = useState('')
+  const [rotateLoading, setRotateLoading] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -131,6 +140,37 @@ export default function FederationTab() {
     await api.put(`/admin/federation/peers/${editingPeerId}`, payload)
     setEditingPeerId(null)
     await loadData()
+  }
+
+  const handleRotateUrl = async (peerId: number) => {
+    const peer = peers.find(p => p.id === peerId)
+    if (!peer) return
+
+    // 打开轮换表单
+    if (rotatingPeerId !== peerId) {
+      setRotatingPeerId(peerId)
+      setRotateUrl(peer.remote_url.replace(/\/federation\/ws$/, '') + '/federation/ws')
+      setRotateError('')
+      return
+    }
+
+    // 执行轮换
+    if (!rotateUrl.trim()) {
+      setRotateError('URL 不能为空')
+      return
+    }
+
+    setRotateLoading(true)
+    setRotateError('')
+    try {
+      await api.post(`/admin/federation/peers/${peerId}/rotate-url`, { new_url: rotateUrl.trim() })
+      setRotatingPeerId(null)
+      await loadData()
+    } catch (e: any) {
+      setRotateError(e?.message || '轮换失败')
+    } finally {
+      setRotateLoading(false)
+    }
   }
 
   const handleRegister = async () => {
@@ -279,6 +319,7 @@ export default function FederationTab() {
       connecting: { bg: 'bg-amber-500/10', text: 'text-amber-400', label: '连接中' },
       disconnected: { bg: 'bg-slate-500/10', text: 'text-slate-400', label: '未连接' },
       failed: { bg: 'bg-rose-500/10', text: 'text-rose-400', label: '失败' },
+      rotating: { bg: 'bg-purple-500/10', text: 'text-purple-400', label: '轮换中' },
     }
     const s = map[state] || map.disconnected
     return <span className={`text-xs px-2 py-0.5 rounded-full ${s.bg} ${s.text}`}>{s.label}</span>
@@ -762,15 +803,24 @@ export default function FederationTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {stateBadge(peer.connection_state)}
+                  {stateBadge(rotatingPeerId === peer.id ? 'rotating' : peer.connection_state)}
                   {peer.connection_state === 'connected' ? (
-                    <button
-                      onClick={() => handleDisconnect(peer.id)}
-                      className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
-                      title="断开"
-                    >
-                      <Power size={14} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => handleRotateUrl(peer.id)}
+                        className="p-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-lg transition-colors"
+                        title="轮换 URL"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDisconnect(peer.id)}
+                        className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        title="断开"
+                      >
+                        <Power size={14} />
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -868,6 +918,59 @@ export default function FederationTab() {
                     </button>
                   </div>
                 </div>
+              )}
+              {/* 轮换 URL 表单 */}
+              {rotatingPeerId === peer.id && (
+                <div className="p-3 bg-canvas rounded-lg border border-purple-500/20 space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-purple-400">
+                    <RefreshCw size={12} className="animate-spin" />
+                    <span>URL 轮换 — 新 URL 测试成功后旧 URL 才会失效</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <select
+                      value={rotateUrl.startsWith('wss://') ? 'wss://' : 'ws://'}
+                      onChange={e => setRotateUrl(e.target.value + rotateUrl.replace(/^(wss?):\/\//, ''))}
+                      className="px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary shrink-0"
+                    >
+                      <option value="wss://">wss://</option>
+                      <option value="ws://">ws://</option>
+                    </select>
+                    <input
+                      value={rotateUrl.replace(/^(wss?):\/\//, '').replace(/\/federation\/ws$/, '')}
+                      onChange={e => setRotateUrl((rotateUrl.startsWith('wss://') ? 'wss://' : 'ws://') + e.target.value + '/federation/ws')}
+                      className="flex-1 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary font-mono"
+                      placeholder="host:port"
+                    />
+                    <span className="flex items-center text-xs text-textMuted shrink-0">/federation/ws</span>
+                  </div>
+                  {rotateError && (
+                    <p className="text-xs text-rose-400">{rotateError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleRotateUrl(peer.id)}
+                      disabled={rotateLoading}
+                      className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded transition-colors"
+                    >
+                      {rotateLoading ? '轮换中...' : '发起轮换'}
+                    </button>
+                    <button
+                      onClick={() => { setRotatingPeerId(null); setRotateError('') }}
+                      className="px-3 py-1 text-xs bg-canvas border border-border text-textSecondary rounded hover:bg-border/20 transition-colors"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* 轮换次数 */}
+              {peer.url_rotation_count > 0 && (
+                <p className="text-[10px] text-textMuted ml-11">
+                  URL 已轮换 <span className="text-purple-400">{peer.url_rotation_count}</span> 次
+                  {peer.url_rotated_at && (
+                    <span> · 最近: {new Date(peer.url_rotated_at).toLocaleString()}</span>
+                  )}
+                </p>
               )}
               </Fragment>
             ))}

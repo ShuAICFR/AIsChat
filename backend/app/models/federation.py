@@ -30,10 +30,13 @@ class FederationPeer(Base):
     peer_public_id = Column(String(50), nullable=False)  # 对方公网 ID
     display_name = Column(String(100), default="")
     remote_url = Column(String(500), nullable=False)      # ws://host:port/federation/ws
+    remote_url_backup = Column(String(500), nullable=True)  # 轮换回退：保留旧 URL 直到新 URL 验证成功
     shared_secret_encrypted = Column(String, nullable=False)  # Fernet 加密的共享密钥
     is_enabled = Column(Boolean, default=True)
     connection_state = Column(String(20), default="disconnected")  # connecting|connected|disconnected|failed
     last_connected_at = Column(DateTime, nullable=True)
+    url_rotated_at = Column(DateTime, nullable=True)       # 上次成功轮换时间
+    url_rotation_count = Column(Integer, default=0)        # 成功轮换次数
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 

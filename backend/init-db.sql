@@ -421,11 +421,14 @@ CREATE TABLE IF NOT EXISTS federation_peers (
     peer_public_id VARCHAR(50) NOT NULL,
     display_name VARCHAR(100) DEFAULT '',
     remote_url VARCHAR(500) NOT NULL,
+    remote_url_backup VARCHAR(500),
     shared_secret_encrypted TEXT NOT NULL,
     is_enabled BOOLEAN DEFAULT TRUE,
     connection_state VARCHAR(20) DEFAULT 'disconnected'
         CHECK (connection_state IN ('connecting', 'connected', 'disconnected', 'failed')),
     last_connected_at TIMESTAMP,
+    url_rotated_at TIMESTAMP,
+    url_rotation_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

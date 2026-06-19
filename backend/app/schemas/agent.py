@@ -17,6 +17,7 @@ class AgentCreateRequest(BaseModel):
     thinking_enabled: bool = Field(default=False)
     hide_ai_identity: bool = Field(default=False)
     config_profile: str | None = Field(default=None, description="预设档位: chat|immersive|digital_life，不填=custom")
+    delay_reply_enabled: bool | None = Field(default=None, description="延迟回复开关，NULL=继承全局默认")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
 
@@ -47,6 +48,7 @@ class AgentUpdateConfigRequest(BaseModel):
     thinking_enabled: bool | None = None
     hide_ai_identity: bool | None = None
     config_profile: str | None = None
+    delay_reply_enabled: bool | None = None
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None
@@ -81,6 +83,7 @@ class AgentResponse(BaseModel):
     is_ai_editable: bool
     thinking_enabled: bool
     config_profile: str | None = None
+    delay_reply_enabled: bool | None = None
     created_at: str | None
 
 

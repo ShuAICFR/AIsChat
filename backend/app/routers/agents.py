@@ -143,6 +143,8 @@ async def create_new_agent(
             is_admin=current_user["role"] == "admin",
             api_credit_cost=req.api_credit_cost,
             hide_ai_identity=req.hide_ai_identity,
+            delay_reply_enabled=req.delay_reply_enabled,
+            config_profile=req.config_profile,
         )
         return agent_to_dict(agent)
     except ValueError as e:

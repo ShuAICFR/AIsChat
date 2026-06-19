@@ -75,6 +75,24 @@ def _match_trigger(skill, context: dict | None) -> bool:
     return True
 
 
+async def _is_delay_reply_allowed(db: AsyncSession, agent) -> bool:
+    """
+    检查 agent 级别是否允许延迟回复。
+    agent.delay_reply_enabled: True=允许, False=禁止, NULL=继承全局默认。
+    """
+    if agent.delay_reply_enabled is not None:
+        return agent.delay_reply_enabled
+
+    # NULL → 查全局默认
+    try:
+        from app.models.conversation_log import ConversationLogConfig
+        result = await db.execute(select(ConversationLogConfig).limit(1))
+        cfg = result.scalar_one_or_none()
+        return cfg.default_delay_reply_enabled if cfg else False
+    except Exception:
+        return False
+
+
 async def evaluate_action_skills(
     db: AsyncSession,
     agent,
@@ -97,6 +115,9 @@ async def evaluate_action_skills(
         logger.warning(f"加载技能失败: {e}")
         return result
 
+    # 检查 agent 级别的延迟回复开关
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
+
     for skill in skills:
         if not _match_trigger(skill, context):
             continue
@@ -104,6 +125,9 @@ async def evaluate_action_skills(
         config = skill.config or {}
 
         if skill.skill_type == "delay_reply" and skill.is_enabled:
+            if not delay_allowed:
+                logger.info(f"⏱️ AI agent_id={agent.id} 延迟回复已关闭，跳过 skill #{skill.id}")
+                continue
             delay = config.get("delay_seconds", 0)
             max_delay = config.get("max_delay_seconds", 30)
             if delay > 0:

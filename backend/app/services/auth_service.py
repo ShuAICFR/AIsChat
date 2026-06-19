@@ -103,7 +103,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "auto_approve_vector_default": user.auto_approve_vector_default,
         "timezone": user.timezone or "Asia/Shanghai",
         "language": user.language or "zh",
-        "ui_prefs": user.ui_prefs or "{}",
+        "ui_prefs": user.ui_prefs or {},
         "created_at": str(user.created_at) if user.created_at else None,
     }
 
@@ -117,7 +117,7 @@ async def update_user_settings(
     auto_approve_vector_default: bool | None = None,
     timezone: str | None = None,
     language: str | None = None,
-    ui_prefs: str | None = None,
+    ui_prefs: dict | None = None,
 ) -> dict:
     """更新用户设置"""
     result = await db.execute(select(User).where(User.id == user_id))

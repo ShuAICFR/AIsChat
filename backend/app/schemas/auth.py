@@ -39,5 +39,5 @@ class UserInfoResponse(BaseModel):
     auto_approve_vector_default: bool
     timezone: str = "Asia/Shanghai"
     language: str = "zh"
-    ui_prefs: str = "{}"
+    ui_prefs: dict = {}
     created_at: str | None = None

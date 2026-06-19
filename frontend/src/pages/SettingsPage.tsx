@@ -70,11 +70,8 @@ export default function SettingsPage() {
         setAutoDefault(data.auto_approve_vector_default)
         if (data.timezone) setTimezone(data.timezone)
         if (data.language) setLanguage(data.language)
-        if (data.ui_prefs) {
-          try {
-            const prefs = JSON.parse(data.ui_prefs)
-            if (prefs.chat_style) setChatStyle(prefs.chat_style)
-          } catch { /* ignore */ }
+        if (data.ui_prefs?.chat_style) {
+          setChatStyle(data.ui_prefs.chat_style)
         }
       }).catch(console.error)
     }
@@ -109,7 +106,6 @@ export default function SettingsPage() {
     setSaving(true)
     setMessage('')
     try {
-      const uiPrefs = JSON.stringify({ chat_style: chatStyle })
       await api.put('/user/settings', {
         api_base_url: apiBaseUrl || null,
         api_key: apiKey || null,
@@ -117,7 +113,7 @@ export default function SettingsPage() {
         auto_approve_vector_default: autoDefault,
         timezone,
         language,
-        ui_prefs: uiPrefs,
+        ui_prefs: { chat_style: chatStyle },
       })
       setApiKey('')
       setMessage('设置已保存')

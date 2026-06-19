@@ -2,6 +2,7 @@
 用户模型
 """
 from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, func
+from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 
 
@@ -39,6 +40,6 @@ class User(Base):
     language = Column(String(10), default="zh")
 
     # 界面偏好（JSONB：chat_style, mobile_layout 等）
-    ui_prefs = Column(String(500), default="{}")
+    ui_prefs = Column(JSONB, default=dict)
 
     created_at = Column(DateTime, server_default=func.now())

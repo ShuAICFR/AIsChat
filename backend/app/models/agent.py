@@ -68,6 +68,9 @@ class Agent(Base):
     api_base_url = Column(Text)
     api_key_encrypted = Column(Text)
 
+    # 延迟回复功能开关（NULL=继承全局默认，False=关闭，True=开启）
+    delay_reply_enabled = Column(Boolean, nullable=True, comment="延迟回复功能开关，NULL=继承全局默认")
+
     # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
     hide_ai_identity = Column(Boolean, default=False)
 

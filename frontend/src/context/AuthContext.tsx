@@ -11,7 +11,7 @@ interface User {
   has_api_key: boolean
   timezone: string
   language: string
-  ui_prefs: string
+  ui_prefs: Record<string, any>
 }
 
 interface AuthContextType {
@@ -63,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       has_api_key: false,
       timezone: 'Asia/Shanghai',
       language: 'zh',
-      ui_prefs: '{}',
+      ui_prefs: {} as Record<string, any>,
     })
   }
 
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       has_api_key: false,
       timezone: 'Asia/Shanghai',
       language: 'zh',
-      ui_prefs: '{}',
+      ui_prefs: {} as Record<string, any>,
     })
   }
 

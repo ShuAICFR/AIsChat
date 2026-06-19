@@ -30,6 +30,7 @@ async def run_migrations():
             await _migrate_federation_tables(db)   # 必须在查询 Agent 之前添加列
             await _migrate_api_credit(db)          # 新增列必须在查询 Agent 之前
             await _migrate_config_profile(db)      # v1.3.1 三档配置，也要在查询 Agent 之前
+            await _migrate_delay_reply_enabled(db) # v1.3.2 延迟回复开关，也要在查询 Agent 之前
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)
             await _migrate_create_dm_tables(db)
@@ -661,6 +662,31 @@ async def _migrate_config_profile(db):
     ))
     await db.commit()
     logger.info("  ✅ config_profile 迁移完成")
+
+
+async def _migrate_delay_reply_enabled(db):
+    """v1.3.2 延迟回复开关（幂等）"""
+    # 1. agents.delay_reply_enabled
+    if not await _column_exists(db, "agents", "delay_reply_enabled"):
+        logger.info("  ⏱️ 添加 agents.delay_reply_enabled 列")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN delay_reply_enabled BOOLEAN DEFAULT NULL"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.delay_reply_enabled 迁移完成")
+    else:
+        logger.info("  ⏭ agents.delay_reply_enabled 已存在，跳过")
+
+    # 2. conversation_log_config.default_delay_reply_enabled
+    if not await _column_exists(db, "conversation_log_config", "default_delay_reply_enabled"):
+        logger.info("  ⏱️ 添加 conversation_log_config.default_delay_reply_enabled 列")
+        await db.execute(text(
+            "ALTER TABLE conversation_log_config ADD COLUMN default_delay_reply_enabled BOOLEAN NOT NULL DEFAULT false"
+        ))
+        await db.commit()
+        logger.info("  ✅ default_delay_reply_enabled 迁移完成")
+    else:
+        logger.info("  ⏭ conversation_log_config.default_delay_reply_enabled 已存在，跳过")
 
 
 async def _fix_column_types(db):

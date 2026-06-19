@@ -20,7 +20,7 @@ class UpdateSettingsRequest(BaseModel):
     auto_approve_vector_default: bool | None = None
     timezone: str | None = None
     language: str | None = None
-    ui_prefs: str | None = None
+    ui_prefs: dict | None = None
 
 
 class RedeemRequest(BaseModel):

@@ -6,6 +6,7 @@ interface GlobalConfig {
   max_conversation_logs: number
   default_user_conversation_logs: number
   default_user_log_access: boolean
+  default_delay_reply_enabled: boolean
 }
 
 interface AgentSettings {
@@ -94,6 +95,7 @@ export default function ConversationLogTab() {
         max_conversation_logs: config.max_conversation_logs,
         default_user_conversation_logs: config.default_user_conversation_logs,
         default_user_log_access: config.default_user_log_access,
+        default_delay_reply_enabled: config.default_delay_reply_enabled,
       })
       setConfig(updated)
     } catch (err: any) { alert(err.message) }
@@ -202,6 +204,22 @@ export default function ConversationLogTab() {
                 >
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
                     config.default_user_log_access ? 'translate-x-5' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs font-medium text-textSecondary">新 AI 默认开启延迟回复</label>
+                  <p className="text-[10px] text-textMuted mt-0.5">关闭时新创建的 AI 需手动开启延迟回复 Skill</p>
+                </div>
+                <button
+                  onClick={() => setConfig({ ...config, default_delay_reply_enabled: !config.default_delay_reply_enabled })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    config.default_delay_reply_enabled ? 'bg-mint-400' : 'bg-[#3a3a4a]'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    config.default_delay_reply_enabled ? 'translate-x-5' : 'translate-x-0.5'
                   }`} />
                 </button>
               </div>

@@ -30,6 +30,7 @@ interface Agent {
   thinking_enabled: boolean
   hide_ai_identity: boolean
   config_profile: string
+  delay_reply_enabled: boolean | null
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -314,6 +315,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [workModel, setWorkModel] = useState(agent.work_model || '')
   const [thinkingEnabled, setThinkingEnabled] = useState(agent.thinking_enabled)
   const [hideAiIdentity, setHideAiIdentity] = useState(agent.hide_ai_identity || false)
+  const [delayReplyEnabled, setDelayReplyEnabled] = useState<boolean | null>(agent.delay_reply_enabled ?? null)
   const [configProfile, setConfigProfile] = useState(agent.config_profile || 'custom')
   const [agentApiBaseUrl, setAgentApiBaseUrl] = useState(agent.api_base_url || '')
   const [agentApiKey, setAgentApiKey] = useState('')
@@ -359,6 +361,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideIdentity,
+        delay_reply_enabled: delayReplyEnabled,
         api_base_url: apiBaseUrl,
         api_key: apiKey,
       })
@@ -563,6 +566,25 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   />
                   <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                 </label>
+              </div>
+              {/* 延迟回复 */}
+              <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                <div>
+                  <span className="text-xs text-textSecondary">⏱️ 延迟回复</span>
+                  <p className="text-[10px] text-textMuted mt-0.5">控制 AI 是否可以使用延迟回复 Skill（清空=继承全局）</p>
+                </div>
+                <select
+                  value={delayReplyEnabled === null ? 'inherit' : delayReplyEnabled ? 'on' : 'off'}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setDelayReplyEnabled(v === 'inherit' ? null : v === 'on')
+                  }}
+                  className="text-xs px-2 py-1 rounded-lg border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                >
+                  <option value="inherit">继承全局</option>
+                  <option value="on">开启</option>
+                  <option value="off">关闭</option>
+                </select>
               </div>
             </div>
           </div>
@@ -936,6 +958,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [workModel, setWorkModel] = useState('')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [hideAiIdentity, setHideAiIdentity] = useState(false)
+  const [delayReplyEnabled, setDelayReplyEnabled] = useState<boolean | null>(null)
   const [configProfile, setConfigProfile] = useState('custom')
   const [apiCreditCost, setApiCreditCost] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -967,6 +990,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
         work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideAiIdentity,
+        delay_reply_enabled: delayReplyEnabled,
         config_profile: configProfile === 'custom' ? null : configProfile,
         api_credit_cost: apiCreditCost,
       })
@@ -1092,6 +1116,26 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </label>
             <p className="text-[10px] text-textMuted mt-0.5 ml-6">
               开启后系统提示词中将不包含"你是AI"相关表述，AI 会把自己视为角色本身
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">
+              ⏱️ 延迟回复
+            </label>
+            <select
+              value={delayReplyEnabled === null ? 'inherit' : delayReplyEnabled ? 'on' : 'off'}
+              onChange={(e) => {
+                const v = e.target.value
+                setDelayReplyEnabled(v === 'inherit' ? null : v === 'on')
+              }}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            >
+              <option value="inherit">继承全局默认</option>
+              <option value="on">开启</option>
+              <option value="off">关闭</option>
+            </select>
+            <p className="text-xs text-textMuted mt-1">
+              控制 AI 是否可以使用延迟回复 Skill，留空则继承全局默认设置
             </p>
           </div>
           <div>

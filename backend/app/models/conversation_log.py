@@ -20,6 +20,8 @@ class ConversationLogConfig(Base):
     default_user_conversation_logs = Column(Integer, default=20)
     # 全局默认：用户是否可以查看 AI 对话日志
     default_user_log_access = Column(Boolean, default=False)
+    # 全局默认：新创建的 AI 是否默认开启延迟回复功能
+    default_delay_reply_enabled = Column(Boolean, default=False)
 
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

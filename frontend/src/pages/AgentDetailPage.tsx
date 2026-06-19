@@ -27,6 +27,7 @@ interface Agent {
   thinking_enabled: boolean
   hide_ai_identity: boolean
   config_profile: string
+  delay_reply_enabled: boolean | null
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -180,6 +181,16 @@ export default function AgentDetailPage() {
       alert(err.message || '保存失败')
     } finally {
       setSavingPrompt(false)
+    }
+  }
+
+  // delay_reply_enabled toggle (auto-save)
+  const handleToggleDelayReply = async (value: boolean | null) => {
+    try {
+      const data = await api.put(`/agents/${agentId}/config`, { delay_reply_enabled: value })
+      setAgent(data)
+    } catch (err: any) {
+      alert(err.message || '更新失败')
     }
   }
 
@@ -430,6 +441,21 @@ export default function AgentDetailPage() {
                      agent.config_profile === 'immersive' ? '深度沉浸档' :
                      agent.config_profile === 'digital_life' ? '数字生命档' : '自定义'}
                   </span>
+                </div>
+                <div>
+                  <span className="text-textMuted">延迟回复：</span>
+                  <select
+                    value={agent.delay_reply_enabled === null ? 'inherit' : agent.delay_reply_enabled ? 'on' : 'off'}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      handleToggleDelayReply(v === 'inherit' ? null : v === 'on')
+                    }}
+                    className="text-xs px-2 py-0.5 rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                  >
+                    <option value="inherit">继承全局</option>
+                    <option value="on">开启</option>
+                    <option value="off">关闭</option>
+                  </select>
                 </div>
               </div>
             </div>

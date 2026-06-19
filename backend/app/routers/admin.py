@@ -1031,6 +1031,7 @@ class ConvLogConfigBody(PydanticBaseModel):
     max_conversation_logs: int | None = Field(None, ge=1, le=500)
     default_user_conversation_logs: int | None = Field(None, ge=1, le=500)
     default_user_log_access: bool | None = None
+    default_delay_reply_enabled: bool | None = None
 
 
 class ConvLogAgentSettingsBody(PydanticBaseModel):
@@ -1063,6 +1064,7 @@ async def update_conv_log_config(
             max_conversation_logs=req.max_conversation_logs,
             default_user_conversation_logs=req.default_user_conversation_logs,
             default_user_log_access=req.default_user_log_access,
+            default_delay_reply_enabled=req.default_delay_reply_enabled,
         )
         await _log_admin_action(
             db, admin["user_id"], "update_conv_log_config", "system", 1,

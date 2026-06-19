@@ -110,6 +110,7 @@ async def get_config_dict(db: AsyncSession) -> dict:
         "max_conversation_logs": config.max_conversation_logs,
         "default_user_conversation_logs": config.default_user_conversation_logs,
         "default_user_log_access": config.default_user_log_access,
+        "default_delay_reply_enabled": config.default_delay_reply_enabled,
     }
 
 
@@ -119,6 +120,7 @@ async def update_config(
     max_conversation_logs: int | None = None,
     default_user_conversation_logs: int | None = None,
     default_user_log_access: bool | None = None,
+    default_delay_reply_enabled: bool | None = None,
 ) -> dict:
     """更新全局配置"""
     config = await _get_config(db)
@@ -135,6 +137,8 @@ async def update_config(
         config.default_user_conversation_logs = default_user_conversation_logs
     if default_user_log_access is not None:
         config.default_user_log_access = default_user_log_access
+    if default_delay_reply_enabled is not None:
+        config.default_delay_reply_enabled = default_delay_reply_enabled
 
     config.updated_by = updated_by
     config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

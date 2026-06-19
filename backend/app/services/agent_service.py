@@ -92,6 +92,8 @@ async def create_agent(
     is_admin: bool = False,
     api_credit_cost: int = 0,
     hide_ai_identity: bool = False,
+    delay_reply_enabled: bool | None = None,
+    config_profile: str | None = None,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -119,6 +121,13 @@ async def create_agent(
     db.add(ai_user)
     await db.flush()
 
+    # 解析 delay_reply_enabled：None = 继承全局默认
+    if delay_reply_enabled is None:
+        from app.models.conversation_log import ConversationLogConfig
+        cfg_result = await db.execute(select(ConversationLogConfig).limit(1))
+        cfg = cfg_result.scalar_one_or_none()
+        delay_reply_enabled = cfg.default_delay_reply_enabled if cfg else False
+
     # 创建 Agent
     agent = Agent(
         owner_id=owner_id,
@@ -137,9 +146,11 @@ async def create_agent(
         chat_model=chat_model,
         work_model=work_model,
         thinking_enabled=thinking_enabled,
+        config_profile=config_profile,
         state="active",
         api_credit_cost=api_credit_cost,
         hide_ai_identity=hide_ai_identity,
+        delay_reply_enabled=delay_reply_enabled,
     )
     db.add(agent)
     await db.flush()
@@ -296,6 +307,10 @@ async def update_agent_config(
     for field in ("chat_model", "work_model"):
         if field in updates:
             setattr(agent, field, updates[field])  # None = 继承全局
+
+    # delay_reply_enabled 延迟回复开关
+    if "delay_reply_enabled" in updates:
+        agent.delay_reply_enabled = updates["delay_reply_enabled"]
 
     # config_profile（手动编辑参数时自动回退到 custom）
     if "config_profile" in updates and updates["config_profile"] is not None:
@@ -776,6 +791,7 @@ def agent_to_dict(agent: Agent) -> dict:
         "is_ai_editable": agent.is_ai_editable,
         "thinking_enabled": agent.thinking_enabled,
         "config_profile": agent.config_profile or "custom",
+        "delay_reply_enabled": agent.delay_reply_enabled,
         "hide_ai_identity": agent.hide_ai_identity,
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,

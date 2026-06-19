@@ -168,6 +168,8 @@ stateDiagram-v2
 
 **结论**：未在 GitHub 上找到任何实现 `propose → ack → 双向测试 → commit/rollback` 完整流程的 WebSocket 对等端地址轮换协议。
 
+> ⚠️ **搜索范围说明 / Search Scope Disclaimer**：以上搜索仅覆盖 **GitHub 公开代码仓库**，未覆盖学术论文（arXiv、IEEE、ACM DL）或专利数据库。所证明的是"工程实现层面的组合新颖性"，而非"学术意义上的首次提出"。三阶段提交、HMAC 认证、连接迁移等底层概念当然广泛存在——本协议的原创性在于将它们以特定方式组合应用于 WebSocket P2P 对等端地址轮换。
+
 ### 3.3 各相近方案详细分析 / Detailed Analysis of Similar Projects
 
 #### Trystero (`@trystero-p2p/*`)

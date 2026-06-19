@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
+import ConversationLogTab from '../components/ConversationLogTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: '概览', icon: Activity },
@@ -13,8 +14,9 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'groups', label: '群聊审查', icon: MessageCircle },
   { key: 'codes', label: '兑换码', icon: Ticket },
   { key: 'opencli', label: 'OpenCLI', icon: Terminal },
+  { key: 'convlog', label: '对话日志', icon: ScrollText },
   { key: 'backup', label: '备份', icon: Database },
-  { key: 'logs', label: '日志', icon: FileText },
+  { key: 'logs', label: '审计', icon: FileText },
   { key: 'federation', label: '联邦', icon: Globe },
 ]
 
@@ -68,6 +70,7 @@ export default function AdminPage() {
         {activeTab === 'backup' && <BackupTab />}
         {activeTab === 'logs' && <LogsTab />}
         {activeTab === 'federation' && <FederationTab />}
+        {activeTab === 'convlog' && <ConversationLogTab />}
       </div>
     </div>
   )

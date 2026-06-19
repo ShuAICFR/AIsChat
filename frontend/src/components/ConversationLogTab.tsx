@@ -1,0 +1,404 @@
+import { useState, useEffect } from 'react'
+import { api } from '../api/client'
+import { FileText, Settings, Bot, Eye, ChevronDown, ChevronUp, Loader2, Save, Sliders } from 'lucide-react'
+
+interface GlobalConfig {
+  max_conversation_logs: number
+  default_user_conversation_logs: number
+  default_user_log_access: boolean
+}
+
+interface AgentSettings {
+  agent_id: number
+  conversation_logs_limit: number | null
+  user_can_view_logs: boolean | null
+  effective_limit: number
+  effective_user_access: boolean
+  system_max: number
+  system_default_access: boolean
+}
+
+interface LogSummary {
+  id: number
+  agent_id: number
+  conversation_type: string
+  message_count: number
+  token_usage: any
+  has_output: boolean
+  model: string | null
+  thinking_enabled: boolean
+  preview: any[]
+  created_at: string | null
+}
+
+interface AgentOption {
+  id: number
+  name: string
+}
+
+export default function ConversationLogTab() {
+  const [section, setSection] = useState<'config' | 'agents' | 'viewer'>('config')
+  const [config, setConfig] = useState<GlobalConfig | null>(null)
+  const [configLoading, setConfigLoading] = useState(true)
+  const [configSaving, setConfigSaving] = useState(false)
+
+  // Per-agent
+  const [agents, setAgents] = useState<AgentOption[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
+  const [agentSettings, setAgentSettings] = useState<AgentSettings | null>(null)
+  const [agentLimit, setAgentLimit] = useState('')
+  const [agentAccess, setAgentAccess] = useState<boolean | null>(null)
+  const [agentSaving, setAgentSaving] = useState(false)
+
+  // Log viewer
+  const [viewAgentId, setViewAgentId] = useState<number | null>(null)
+  const [logs, setLogs] = useState<LogSummary[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<any>(null)
+  const [logDetail, setLogDetail] = useState<any>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  // ── Load global config ──
+  useEffect(() => {
+    api.get<GlobalConfig>('/admin/conversation-log/config')
+      .then(setConfig)
+      .catch(console.error)
+      .finally(() => setConfigLoading(false))
+  }, [])
+
+  // ── Load agent list ──
+  useEffect(() => {
+    api.get<any[]>('/admin/agents').then(list => {
+      setAgents(list.map((a: any) => ({ id: a.id, name: a.name })))
+    }).catch(console.error)
+  }, [])
+
+  // ── Load per-agent settings ──
+  useEffect(() => {
+    if (!selectedAgentId) return
+    api.get<AgentSettings>(`/admin/conversation-log/agents/${selectedAgentId}/settings`)
+      .then(s => {
+        setAgentSettings(s)
+        setAgentLimit(s.conversation_logs_limit?.toString() || '')
+        setAgentAccess(s.user_can_view_logs)
+      })
+      .catch(console.error)
+  }, [selectedAgentId])
+
+  // ── Save global config ──
+  const saveConfig = async () => {
+    if (!config) return
+    setConfigSaving(true)
+    try {
+      const updated = await api.put<GlobalConfig>('/admin/conversation-log/config', {
+        max_conversation_logs: config.max_conversation_logs,
+        default_user_conversation_logs: config.default_user_conversation_logs,
+        default_user_log_access: config.default_user_log_access,
+      })
+      setConfig(updated)
+    } catch (err: any) { alert(err.message) }
+    finally { setConfigSaving(false) }
+  }
+
+  // ── Save per-agent settings ──
+  const saveAgentSettings = async () => {
+    if (!selectedAgentId) return
+    setAgentSaving(true)
+    try {
+      const body: any = {}
+      const limit = parseInt(agentLimit)
+      if (!isNaN(limit) && limit > 0) body.conversation_logs_limit = limit
+      else if (agentLimit === '') body.conversation_logs_limit = null  // reset to default
+      if (agentAccess !== null) body.user_can_view_logs = agentAccess
+      const updated = await api.put<AgentSettings>(`/admin/conversation-log/agents/${selectedAgentId}/settings`, body)
+      setAgentSettings(updated)
+    } catch (err: any) { alert(err.message) }
+    finally { setAgentSaving(false) }
+  }
+
+  // ── Load logs ──
+  const loadLogs = async () => {
+    if (!viewAgentId) return
+    setLogsLoading(true)
+    try {
+      const data = await api.get<LogSummary[]>(`/admin/conversation-log/agents/${viewAgentId}/logs?limit=30`)
+      setLogs(data)
+    } catch (err: any) { alert(err.message) }
+    finally { setLogsLoading(false) }
+  }
+
+  // ── View log detail ──
+  const viewDetail = async (logId: number) => {
+    setDetailLoading(true)
+    setSelectedLog(logId)
+    try {
+      const data = await api.get(`/admin/conversation-log/agents/${viewAgentId}/logs/${logId}`)
+      setLogDetail(data)
+    } catch (err: any) { alert(err.message) }
+    finally { setDetailLoading(false) }
+  }
+
+  const formatTime = (t: string | null) => {
+    if (!t) return '-'
+    return new Date(t).toLocaleString('zh-CN')
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Section tabs */}
+      <div className="flex gap-2 bg-elevated rounded-xl p-1 w-fit">
+        {[
+          { k: 'config', label: '全局设置', icon: Settings },
+          { k: 'agents', label: '按 AI 设置', icon: Sliders },
+          { k: 'viewer', label: '查看日志', icon: Eye },
+        ].map(s => (
+          <button
+            key={s.k}
+            onClick={() => setSection(s.k as any)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              section === s.k ? 'bg-canvas text-textPrimary shadow-sm' : 'text-textMuted hover:text-textSecondary'
+            }`}
+          >
+            <s.icon size={14} /> {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Global Config ── */}
+      {section === 'config' && (
+        <div className="bg-elevated border border-border rounded-xl p-5 max-w-xl">
+          <h3 className="text-sm font-semibold text-textPrimary mb-4 flex items-center gap-2">
+            <Settings size={16} className="text-primary-400" /> 全局对话日志配置
+          </h3>
+          {configLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={20} /></div>
+          ) : config ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-textSecondary mb-1">系统硬上限（所有 AI 最多保留条数）</label>
+                <input
+                  type="number" min={1} max={500}
+                  value={config.max_conversation_logs}
+                  onChange={e => setConfig({ ...config, max_conversation_logs: parseInt(e.target.value) || 30 })}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-textSecondary mb-1">新用户默认保留数（≤ 系统上限）</label>
+                <input
+                  type="number" min={1} max={config.max_conversation_logs}
+                  value={config.default_user_conversation_logs}
+                  onChange={e => setConfig({ ...config, default_user_conversation_logs: parseInt(e.target.value) || 20 })}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-textSecondary">默认允许用户查看 AI 对话日志</label>
+                <button
+                  onClick={() => setConfig({ ...config, default_user_log_access: !config.default_user_log_access })}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    config.default_user_log_access ? 'bg-mint-400' : 'bg-[#3a3a4a]'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                    config.default_user_log_access ? 'translate-x-5' : 'translate-x-0.5'
+                  }`} />
+                </button>
+              </div>
+              <button
+                onClick={saveConfig}
+                disabled={configSaving}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
+              >
+                <Save size={14} /> {configSaving ? '保存中...' : '保存配置'}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* ── Per-Agent Settings ── */}
+      {section === 'agents' && (
+        <div className="bg-elevated border border-border rounded-xl p-5 max-w-xl">
+          <h3 className="text-sm font-semibold text-textPrimary mb-4 flex items-center gap-2">
+            <Bot size={16} className="text-primary-400" /> 按 AI 单独设置
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-textSecondary mb-1">选择 AI</label>
+              <select
+                value={selectedAgentId || ''}
+                onChange={e => setSelectedAgentId(e.target.value ? parseInt(e.target.value) : null)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="">-- 选择 AI --</option>
+                {agents.map(a => (
+                  <option key={a.id} value={a.id}>{a.name} (ID: {a.id})</option>
+                ))}
+              </select>
+            </div>
+
+            {agentSettings && (
+              <>
+                <div className="p-3 rounded-lg bg-canvas text-xs text-textSecondary">
+                  当前生效：保留 <b className="text-textPrimary">{agentSettings.effective_limit}</b> 条 ·
+                  用户访问 <b className={agentSettings.effective_user_access ? 'text-mint-400' : 'text-rose-400'}>
+                    {agentSettings.effective_user_access ? '已开启' : '已关闭'}
+                  </b>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-textSecondary mb-1">
+                    保留上限（留空=系统上限 {agentSettings.system_max}）
+                  </label>
+                  <input
+                    type="number" min={1} max={agentSettings.system_max}
+                    value={agentLimit}
+                    onChange={e => setAgentLimit(e.target.value)}
+                    placeholder={`系统上限 ${agentSettings.system_max}`}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-textSecondary">
+                    允许用户查看日志
+                    <span className="text-textMuted ml-1">（{agentSettings.system_default_access ? '全局默认开' : '全局默认关'}）</span>
+                  </label>
+                  <button
+                    onClick={() => setAgentAccess(agentAccess === null ? null : !agentAccess)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      agentAccess === true ? 'bg-mint-400' :
+                      agentAccess === false ? 'bg-rose-400' :
+                      'bg-[#3a3a4a]'
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      agentAccess === true ? 'translate-x-5' :
+                      agentAccess === false ? 'translate-x-0.5' :
+                      'translate-x-2.5 opacity-50'
+                    }`} />
+                  </button>
+                </div>
+                <button
+                  onClick={saveAgentSettings}
+                  disabled={agentSaving}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
+                >
+                  <Save size={14} /> {agentSaving ? '保存中...' : '保存设置'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Log Viewer ── */}
+      {section === 'viewer' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <select
+              value={viewAgentId || ''}
+              onChange={e => {
+                setViewAgentId(e.target.value ? parseInt(e.target.value) : null)
+                setLogs([])
+                setSelectedLog(null)
+              }}
+              className="px-3 py-2 rounded-lg border border-border bg-elevated text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            >
+              <option value="">-- 选择 AI --</option>
+              {agents.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={loadLogs}
+              disabled={!viewAgentId || logsLoading}
+              className="px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
+            >
+              {logsLoading ? <Loader2 className="animate-spin" size={14} /> : '加载'}
+            </button>
+          </div>
+
+          {/* Log list */}
+          {logs.length > 0 && (
+            <div className="bg-elevated border border-border rounded-xl overflow-hidden">
+              <div className="divide-y divide-border">
+                {logs.map(log => (
+                  <div
+                    key={log.id}
+                    className="px-4 py-3 hover:bg-canvas cursor-pointer transition-colors"
+                    onClick={() => viewDetail(log.id)}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-textMuted">#{log.id}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          log.conversation_type === 'group' ? 'bg-blue-400/10 text-blue-400' : 'bg-purple-400/10 text-purple-400'
+                        }`}>
+                          {log.conversation_type === 'group' ? '群聊' : log.conversation_type === 'dm' ? '私信' : log.conversation_type}
+                        </span>
+                        {log.has_output && <span className="text-xs text-mint-400">有产出</span>}
+                        {log.thinking_enabled && <span className="text-xs text-accent-400">深度推理</span>}
+                      </div>
+                      <span className="text-xs text-textMuted">{formatTime(log.created_at)}</span>
+                    </div>
+                    <div className="text-xs text-textSecondary">
+                      <span>{log.message_count} 条消息</span>
+                      {log.token_usage && (
+                        <span className="ml-3">
+                          tokens: {log.token_usage.total_tokens}
+                        </span>
+                      )}
+                      {log.model && <span className="ml-3 text-textMuted">{log.model}</span>}
+                    </div>
+                    {log.preview && log.preview.length > 0 && (
+                      <div className="mt-1.5 text-xs text-textMuted space-y-0.5">
+                        {log.preview.slice(0, 2).map((p: any, i: number) => (
+                          <div key={i} className="truncate">
+                            <span className="font-medium">{p.role}:</span>{' '}
+                            {p.content || (p.tool_calls ? `🔧 ${p.tool_calls.join(', ')}` : '...')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Log detail modal */}
+          {selectedLog && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 pt-10 overflow-y-auto" onClick={() => { setSelectedLog(null); setLogDetail(null) }}>
+              <div
+                className="bg-elevated border border-border rounded-2xl p-5 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 max-h-[80vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-textPrimary">对话日志 #{selectedLog}</h3>
+                  <button onClick={() => { setSelectedLog(null); setLogDetail(null) }} className="text-textMuted hover:text-textSecondary">✕</button>
+                </div>
+                {detailLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={24} /></div>
+                ) : logDetail ? (
+                  <div className="space-y-3">
+                    <div className="flex gap-4 text-xs text-textSecondary">
+                      <span>类型: {logDetail.conversation_type}</span>
+                      <span>消息数: {logDetail.message_count}</span>
+                      <span>模型: {logDetail.model || '-'}</span>
+                      <span>{formatTime(logDetail.created_at)}</span>
+                    </div>
+                    <div className="bg-canvas rounded-xl p-3 max-h-[50vh] overflow-y-auto">
+                      <pre className="text-xs text-textSecondary whitespace-pre-wrap font-mono leading-relaxed">
+                        {JSON.stringify(logDetail.messages, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}

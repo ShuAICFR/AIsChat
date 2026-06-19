@@ -199,12 +199,16 @@ async def _process_group_event(db, event: dict):
         await _maybe_trigger_ai_reply(
             db, ai_id, group_id, group, content, message_id,
             chain_depth=next_depth,
+            sender_type=sender_type,
+            sender_id=sender_id,
         )
 
 
 async def _maybe_trigger_ai_reply(
     db, agent_id: int, group_id: int, group, content: str, trigger_message_id: int,
     chain_depth: int = 0,
+    sender_type: str = "human",
+    sender_id: int | None = None,
 ):
     """检查单个 AI 是否应该回复，如果是则调用 LLM 生成回复"""
     from app.services.agent_service import get_agent, calculate_willingness

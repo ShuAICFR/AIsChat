@@ -61,6 +61,19 @@ const stateLabels: Record<string, string> = {
   blocked: '封禁',
 }
 
+const PRESET_LABELS: Record<string, string> = {
+  chat: '聊天档', immersive: '深度沉浸档', digital_life: '数字生命档',
+}
+
+const PARAM_LABELS: Record<string, string> = {
+  temperature: 'Temperature', top_p: 'Top P',
+  presence_penalty: 'Presence', frequency_penalty: 'Frequency',
+  thinking_enabled: '深度推理', max_tool_rounds: '回复轮次上限',
+  alarm_max_tool_rounds: '闹钟轮次上限', force_alarm_on_end: '强制设闹钟',
+  max_alarms: '最大闹钟数', is_ai_editable: '自修改人格',
+  hide_ai_identity: '隐藏AI身份', delay_reply_enabled: '延迟回复',
+}
+
 const stateColors: Record<string, string> = {
   active: 'bg-mint-400/15 text-mint-400 border-mint-400/30',
   dnd: 'bg-rose-400/15 text-rose-400 border-rose-400/30',
@@ -322,9 +335,15 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [hideAiIdentity, setHideAiIdentity] = useState(agent.hide_ai_identity || false)
   const [delayReplyEnabled, setDelayReplyEnabled] = useState<boolean | null>(agent.delay_reply_enabled ?? null)
   const [configProfile, setConfigProfile] = useState(agent.config_profile || 'custom')
+  const [maxToolRounds, setMaxToolRounds] = useState(agent.max_tool_rounds ?? 3)
+  const [alarmMaxToolRounds, setAlarmMaxToolRounds] = useState(agent.alarm_max_tool_rounds ?? 10)
+  const [forceAlarmOnEnd, setForceAlarmOnEnd] = useState(agent.force_alarm_on_end ?? false)
+  const [maxAlarms, setMaxAlarms] = useState(agent.max_alarms ?? 10)
+  const [isAiEditable, setIsAiEditable] = useState(agent.is_ai_editable ?? true)
   const [agentApiBaseUrl, setAgentApiBaseUrl] = useState(agent.api_base_url || '')
   const [agentApiKey, setAgentApiKey] = useState('')
   const [applyingPreset, setApplyingPreset] = useState(false)
+  const [presetPreview, setPresetPreview] = useState<any>(null) // 预设预览数据
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
@@ -367,6 +386,11 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideIdentity,
         delay_reply_enabled: delayReplyEnabled,
+        max_tool_rounds: maxToolRounds,
+        alarm_max_tool_rounds: alarmMaxToolRounds,
+        force_alarm_on_end: forceAlarmOnEnd,
+        max_alarms: maxAlarms,
+        is_ai_editable: isAiEditable,
         api_base_url: apiBaseUrl,
         api_key: apiKey,
       })
@@ -379,17 +403,37 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   }
 
   const handleApplyPreset = async (profile: string) => {
+    // 先预览
+    setApplyingPreset(true)
+    setError('')
+    try {
+      const preview = await api.get<any>(`/agents/${agent.id}/preset-preview?profile=${profile}`)
+      setPresetPreview({ profile, ...preview })
+    } catch (err: any) {
+      setError(err.message || '预览失败')
+      setApplyingPreset(false)
+    }
+  }
+
+  const confirmApplyPreset = async () => {
+    if (!presetPreview) return
+    const profile = presetPreview.profile
     setApplyingPreset(true)
     setError('')
     try {
       const updated = await api.post<Agent>(`/agents/${agent.id}/apply-preset`, { profile })
-      // 同步本地 state
       setTemperature(updated.current_temperature)
       setTopP(updated.current_top_p)
       setPresencePenalty(updated.current_presence_penalty)
       setFrequencyPenalty(updated.current_frequency_penalty)
       setThinkingEnabled(updated.thinking_enabled)
+      setMaxToolRounds(updated.max_tool_rounds)
+      setAlarmMaxToolRounds(updated.alarm_max_tool_rounds)
+      setForceAlarmOnEnd(updated.force_alarm_on_end)
+      setMaxAlarms(updated.max_alarms)
+      setIsAiEditable(updated.is_ai_editable)
       setConfigProfile(profile)
+      setPresetPreview(null)
       onUpdated()
     } catch (err: any) {
       setError(err.message || '应用预设失败')
@@ -399,9 +443,9 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   }
 
   const presets = [
-    { key: 'chat', label: '聊天', desc: '轻量对话' },
-    { key: 'immersive', label: '沉浸', desc: '深度推理' },
-    { key: 'digital_life', label: '生命', desc: '最大自主' },
+    { key: 'chat', label: '聊天档', desc: '被动响应·低成本' },
+    { key: 'immersive', label: '深度沉浸档', desc: '半自主·按需参与' },
+    { key: 'digital_life', label: '数字生命档', desc: '持续在线·主动行为' },
   ]
 
   return (
@@ -624,6 +668,50 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         </div>
 
         {error && <div className="text-sm text-rose-400 mb-3">{error}</div>}
+
+        {/* ── 预设切换预览确认 ── */}
+        {presetPreview && (
+          <div className="mb-4 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-textPrimary mb-2">🔄 切换预设确认</h4>
+            <p className="text-xs text-textSecondary mb-3">
+              从 <b>{presetPreview.old_profile === 'custom' ? '自定义' : presetPreview.old_profile}</b> 切换至{' '}
+              <b>{presetPreview.new_profile}</b>
+              （{presetPreview.direction === 'upgrade' ? '⬆️ 升级' : '⬇️ 降级'}），
+              以下 {Object.keys(presetPreview.changed_fields || {}).length} 项将变更：
+            </p>
+            {Object.keys(presetPreview.changed_fields || {}).length > 0 ? (
+              <div className="space-y-1.5 mb-3 text-xs">
+                {Object.entries(presetPreview.changed_fields as Record<string, {old: any; new: any}>).map(([key, v]: [string, any]) => (
+                  <div key={key} className="flex items-center justify-between bg-canvas rounded-lg px-3 py-1.5">
+                    <span className="text-textSecondary">{key}</span>
+                    <span className="text-textMuted font-mono">
+                      <span>{String(v.old)}</span>
+                      <span className="mx-1.5">→</span>
+                      <span className="text-mint-400 font-medium">{String(v.new)}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-textMuted mb-3">无需变更，当前值已满足新预设要求。</p>
+            )}
+            {presetPreview.independent_untouched?.length > 0 && (
+              <p className="text-[10px] text-textMuted mb-3">
+                🔒 以下参数不受预设影响保持不变：{presetPreview.independent_untouched.join('、')}
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => { setPresetPreview(null); setApplyingPreset(false) }}
+                className="flex-1 py-1.5 text-xs border border-border rounded-lg hover:bg-elevated text-textSecondary transition-colors">
+                取消
+              </button>
+              <button onClick={confirmApplyPreset} disabled={applyingPreset}
+                className="flex-1 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-400 disabled:opacity-30 transition-all">
+                {applyingPreset ? '应用中...' : '确认切换'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium">

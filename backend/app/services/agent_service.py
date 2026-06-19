@@ -70,13 +70,109 @@ CONFIG_PROFILES = {
 }
 
 
+# 预设档位顺序（用于判断升降级方向）
+_PRESET_ORDER = {"custom": 0, "chat": 1, "immersive": 2, "digital_life": 3}
+
+# 强相关参数：切换预设时按升降级规则合并
+_STRONG_NUMERIC_PARAMS = [
+    "temperature", "top_p", "presence_penalty", "frequency_penalty",
+    "max_tool_rounds", "alarm_max_tool_rounds", "max_alarms",
+]
+_STRONG_BOOL_PARAMS = [
+    "thinking_enabled", "force_alarm_on_end", "is_ai_editable",
+]
+# 无关参数：切换预设时永远不改
+_INDEPENDENT_PARAMS = [
+    "hide_ai_identity", "delay_reply_enabled",
+    # 以下在 preset dict 中不存在但列出来明确语义
+    # "system_prompt", "chat_model", "work_model", "api_base_url",
+    # "api_key_encrypted", "api_credit_cost", "avatar_url", "name",
+]
+
+
+def _merge_preset_values(
+    old_profile: str,
+    new_profile: str,
+    current_values: dict,
+    preset_values: dict,
+) -> tuple[dict, list[str]]:
+    """
+    按升降级规则合并预设值，返回 (合并后的值, 变更字段列表)。
+
+    升级（chat→immersive→digital_life）：
+      - 数值：max(当前, 预设) — 用户拉高的保留
+      - 布尔：当前 OR 预设 — 任一开即开
+
+    降级（逆向）：
+      - 数值：min(当前, 预设) — 用户拉低的保留
+      - 布尔：当前 AND 预设 — 都开才开
+
+    custom→任意预设视为升级；任意预设→custom 不做任何变更。
+    """
+    old_order = _PRESET_ORDER.get(old_profile, 0)
+    new_order = _PRESET_ORDER.get(new_profile, 0)
+
+    # custom → custom 或 预设 → custom：不改任何值
+    if new_profile == "custom":
+        return {}, []
+
+    is_upgrade = new_order > old_order  # custom→预设 也是升级
+
+    merged = {}
+    changed: list[str] = []
+
+    for key in _STRONG_NUMERIC_PARAMS:
+        if key not in preset_values:
+            continue
+        cur = current_values.get(key)
+        pre = preset_values[key]
+        if cur is None:
+            merged[key] = pre
+            changed.append(key)
+        elif is_upgrade:
+            merged[key] = max(cur, pre)
+            if merged[key] != cur:
+                changed.append(key)
+        else:
+            merged[key] = min(cur, pre)
+            if merged[key] != cur:
+                changed.append(key)
+
+    for key in _STRONG_BOOL_PARAMS:
+        if key not in preset_values:
+            continue
+        cur = current_values.get(key)
+        pre = preset_values[key]
+        if cur is None:
+            merged[key] = pre
+            changed.append(key)
+        elif is_upgrade:
+            merged[key] = cur or pre
+            if merged[key] != cur:
+                changed.append(key)
+        else:
+            merged[key] = cur and pre
+            if merged[key] != cur:
+                changed.append(key)
+
+    return merged, changed
+
+
 async def apply_config_profile(
     db: AsyncSession,
     agent_id: int,
     profile: str,
     operator_id: int | None = None,
-) -> Agent:
-    """应用预设配置档。先保存历史快照，再写入 current_* 字段。"""
+    dry_run: bool = False,
+) -> Agent | dict:
+    """
+    应用（或预览）预设配置档。
+
+    - 首次应用（config_profile='custom'）：直接写入全部强相关值
+    - 切换预设：按升降级规则智能合并，保护用户手动调整
+
+    设置 dry_run=True 返回预览 dict 而非实际写入。
+    """
     if profile not in CONFIG_PROFILES:
         raise ValueError(f"无效的配置档: {profile}，可选: {list(CONFIG_PROFILES.keys())}")
 
@@ -85,7 +181,43 @@ async def apply_config_profile(
         raise ValueError("AI 代理不存在")
 
     preset = CONFIG_PROFILES[profile]
+    old_profile = agent.config_profile or "custom"
 
+    # 收集当前强相关值
+    current_values = {
+        "temperature": agent.current_temperature,
+        "top_p": agent.current_top_p,
+        "presence_penalty": agent.current_presence_penalty,
+        "frequency_penalty": agent.current_frequency_penalty,
+        "thinking_enabled": agent.thinking_enabled,
+        "max_tool_rounds": agent.max_tool_rounds,
+        "alarm_max_tool_rounds": agent.alarm_max_tool_rounds,
+        "force_alarm_on_end": agent.force_alarm_on_end,
+        "max_alarms": agent.max_alarms,
+        "is_ai_editable": agent.is_ai_editable,
+    }
+
+    # 合并
+    merged, changed = _merge_preset_values(old_profile, profile, current_values, preset)
+
+    # 预览模式
+    if dry_run:
+        changes_detail = {}
+        for key in changed:
+            changes_detail[key] = {
+                "old": current_values.get(key),
+                "new": merged[key],
+            }
+        return {
+            "direction": "upgrade" if _PRESET_ORDER.get(profile, 0) > _PRESET_ORDER.get(old_profile, 0) else "downgrade",
+            "old_profile": old_profile,
+            "new_profile": profile,
+            "changed_fields": changes_detail,
+            "unchanged_strong": [k for k in _STRONG_NUMERIC_PARAMS + _STRONG_BOOL_PARAMS if k in preset and k not in changed],
+            "independent_untouched": [k for k in _INDEPENDENT_PARAMS if hasattr(agent, k)],
+        }
+
+    # 实际写入
     # 保存历史快照
     history = AgentConfigHistory(
         agent_id=agent.id,
@@ -97,28 +229,22 @@ async def apply_config_profile(
     )
     db.add(history)
 
-    # 应用预设值 — 模型参数
-    agent.current_temperature = preset["temperature"]
-    agent.current_top_p = preset["top_p"]
-    agent.current_presence_penalty = preset["presence_penalty"]
-    agent.current_frequency_penalty = preset["frequency_penalty"]
-    agent.thinking_enabled = preset["thinking_enabled"]
-    # 工具调用
-    agent.max_tool_rounds = preset.get("max_tool_rounds", 3)
-    agent.alarm_max_tool_rounds = preset.get("alarm_max_tool_rounds", 10)
-    # 闹钟 / 心跳
-    agent.force_alarm_on_end = preset.get("force_alarm_on_end", False)
-    agent.max_alarms = preset.get("max_alarms", 10)
-    # 行为开关
-    if "delay_reply_enabled" in preset:
-        agent.delay_reply_enabled = preset["delay_reply_enabled"]
-    agent.is_ai_editable = preset.get("is_ai_editable", True)
-    agent.hide_ai_identity = preset.get("hide_ai_identity", False)
+    # 写入合并后的强相关值
+    for key, value in merged.items():
+        if key in ("temperature", "top_p", "presence_penalty", "frequency_penalty"):
+            setattr(agent, f"current_{key}", value)
+        elif hasattr(agent, key):
+            setattr(agent, key, value)
+
     # 档位标记
     agent.config_profile = profile
 
     await db.flush()
-    logger.info(f"🎚️ AI({agent_id}) 应用配置档: {profile} → T={preset['temperature']}, thinking={preset['thinking_enabled']}, rounds={agent.max_tool_rounds}")
+    logger.info(
+        f"🎚️ AI({agent_id}) 切换预设: {old_profile} → {profile}"
+        f"（{'升级' if _PRESET_ORDER.get(profile,0) > _PRESET_ORDER.get(old_profile,0) else '降级'}），"
+        f"变更 {len(changed)} 项: {changed}"
+    )
     return agent
 
 

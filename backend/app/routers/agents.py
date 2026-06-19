@@ -661,6 +661,26 @@ async def list_config_presets():
     }
 
 
+@router.get("/{agent_id}/preset-preview")
+async def preview_preset_change(
+    agent_id: int,
+    profile: str,
+    agent: any = Depends(_require_agent_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """预览切换预设后的变更（不实际应用）"""
+    if profile not in CONFIG_PROFILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的配置档: {profile}，可选: {list(CONFIG_PROFILES.keys())}",
+        )
+    try:
+        preview = await apply_config_profile(db, agent_id, profile, dry_run=True)
+        return preview
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.post("/{agent_id}/apply-preset")
 async def apply_preset(
     agent_id: int,
@@ -669,7 +689,7 @@ async def apply_preset(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """应用配置档位到 AI（保存历史快照后覆盖所有参数）"""
+    """应用配置档位到 AI（按升降级规则智能合并，保护用户手动调整）"""
     if req.profile not in CONFIG_PROFILES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

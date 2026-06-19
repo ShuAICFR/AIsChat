@@ -409,6 +409,16 @@ export default function CreateAgentModal({
           })}
         </div>
 
+        {/* ── 跳过预设 ── */}
+        {!selectedPreset && (
+          <button
+            onClick={() => setShowDetailSettings(true)}
+            className="w-full text-center text-xs text-textMuted hover:text-textSecondary transition-colors mb-3 py-1"
+          >
+            或者，跳过预设，手动配置 →
+          </button>
+        )}
+
         {/* ── 操作按钮区 ── */}
         <div className="flex gap-3">
           <button

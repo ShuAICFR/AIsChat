@@ -312,12 +312,14 @@ async def _maybe_trigger_ai_reply(
             "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
         })
     # 延迟回复（若已有积压消息则跳过，避免级联延迟）
+    delay_skipped = False
     if skill_result.delay_seconds > 0:
         from app.services.group_service import get_pending_messages
         pending = await get_pending_messages(db, agent_id, group_id)
         pending_count = len(pending) if pending else 0
         if pending_count > 0:
             logger.info(f"🧠 AI {agent.name} 有 {pending_count} 条积压消息，跳过延迟回复")
+            delay_skipped = True
         else:
             logger.info(f"🧠 AI {agent.name} 技能延迟 {skill_result.delay_seconds}s")
             await asyncio.sleep(skill_result.delay_seconds)
@@ -338,6 +340,18 @@ async def _maybe_trigger_ai_reply(
         api_key=api_key,
     )
     logger.info(f"🔍 AI {agent.name}: 构建了 {len(messages)} 条消息")
+
+    # 延迟被跳过时，注入提醒：加快回复速度 + 记入记忆
+    if delay_skipped:
+        delay_hint = (
+            "⚠️ 系统提醒：你配置了延迟回复，但因为群里有积压消息，延迟已被跳过。\n"
+            "请检查最近的发消息者——对方可能正在等你回复。\n"
+            "建议：\n"
+            "1. 加快对此人的回复速度，不要再设长延迟\n"
+            "2. 调用 manage_workspace 在 todo 里记下「被催促回复，需要调整回复节奏」\n"
+            "3. 调用 store_memory 记下这个交互模式，以后遇到此人时优先快速响应"
+        )
+        messages.append({"role": "system", "content": delay_hint})
 
     # 7. 获取工具
     from app.services.tool_registry import get_allowed_tools

@@ -7,6 +7,38 @@
 
 ---
 
+## [v0.4.0] - unreleased
+
+### Added
+
+- 🔧 **工具调用轮次分级控制**：新增 `max_tool_rounds` 列（单次回复最大 LLM 调用轮次）和 `alarm_max_tool_rounds` 列（闹钟/心跳独立轮次上限）。三档预设：聊天档 2/5、沉浸档 4/8、数字生命档 10/15。群聊/DM 使用 `max_tool_rounds`，闹钟使用 `alarm_max_tool_rounds`，互不干扰。
+
+- ⏰ **闹钟上限控制**：新增 `max_alarms` 列（AI 最多活跃闹钟数，默认 10），`set_alarm` 工具触发时检查上限，超限拒绝。新增 `force_alarm_on_end` 列（对话结束强制设闹钟，数字生命档默认开启，防止"睡死"）。
+
+- 🎛️ **三档预设全面展开**：`CONFIG_PROFILES` 从 5 个参数扩展到 12 个参数——模型参数（temperature/top_p/presence_penalty/frequency_penalty/thinking_enabled）+ 工具调用（max_tool_rounds/alarm_max_tool_rounds）+ 闹钟心跳（force_alarm_on_end/max_alarms）+ 行为开关（delay_reply_enabled/is_ai_editable/hide_ai_identity）。`apply_config_profile` 一次性写入全部 12 个字段。`GET /agents/presets` 端点返回完整预设数据。
+
+- 🤖 **AI 自配置能力大幅扩展**：`update_self_config` 工具白名单从 2 个字段扩展到 12 个字段。AI 可自行切换 config_profile、调整工具调用轮次、管理闹钟策略、控制自身行为开关。工具定义同步更新，AI 在 system prompt 中能看到完整的自配置选项描述。
+
+- 🎨 **新创建 AI 流程（前端）**：三档卡片选择器（聊天档/深度沉浸档/数字生命档），每张卡片 sin 呼吸浮动动画 + 柔和描边呼吸，选中卡片高亮。点击卡片弹出子选项悬浮窗（每档 3 个子项，共 9 个子项），子项只展示行为描述不展示参数值。选中后悬浮窗关闭，卡片底部显示已选子项标签。
+
+- 📋 **详细设置弹窗分区**：创建 AI 详细设置按 6 个分区组织——基础信息、模型参数、工具调用、闹钟/心跳、行为开关、额度成本。每个分区有标题 + 概述介绍。所有字段已预填预设值，用户可在此基础上任意修改。
+
+### Changed
+
+- 🔄 **闹钟独立于群聊限制**：闹钟调用 `_tool_call_loop` 不再与群聊/DM 共用 `max_tool_rounds`，使用独立的 `alarm_max_tool_rounds`（默认 10）。闹钟是心跳机制的基础，需要比普通回复更高的轮次以完成深度自主任务。
+
+- 🏗️ **`is_ai_editable` 加入创建 API**：`AgentCreateRequest` 和 `create_agent` 服务函数新增 `is_ai_editable` 参数，创建时可直接指定 AI 是否允许自修改。
+
+### Fixed
+
+- 🐛 **`delay_reply_enabled` NULL 解析不一致**：6 处 `agent.delay_reply_enabled or False` 全部改用 `await _is_delay_reply_allowed(db, agent)`，正确查询全局默认值。
+
+- 🐛 **`_build_current_context` coroutine 泄漏**：定义为 `async def` 但两处调用未 `await`，coroutine 对象被当字符串拼入 system prompt。修复：添加 `await`。
+
+- 🐛 **迁移顺序 UndefinedColumnError**：新增列的迁移（api_credit/config_profile/delay_reply_enabled）移到 Agent 查询迁移之前。
+
+---
+
 ## [v0.3.0] - 2026-06-19
 
 ### Added
@@ -48,12 +80,6 @@
 - 🐛 **创建 AI 报 500 错误**：迁移脚本创建 `ui_prefs` 为 JSONB 列，但 SQLAlchemy 模型定义为 `String(500)`，导致 `INSERT INTO users` 时 PostgreSQL 类型不匹配。修复：模型改为 `JSONB`。
 
 - 🐛 **设置页「测试连接」CORS 失败**：浏览器直接 `fetch` DeepSeek API 被 CORS 策略拦截。修复：新增后端代理端点，服务端发起请求。
-
-- 🐛 **`delay_reply_enabled` NULL 解析不一致**：6 处使用 `agent.delay_reply_enabled or False`（NULL 直接视为关闭），但 `skill_engine._is_delay_reply_allowed()` 会正确查询全局默认值。修复：全部 6 处统一改用 `await _is_delay_reply_allowed(db, agent)`。
-
-- 🐛 **`_build_current_context` coroutine 泄漏**：函数定义为 `async def` 但在两处调用时未 `await`，导致 coroutine 对象被当作字符串拼入 system prompt。修复：两处调用方添加 `await`。
-
-- 🐛 **迁移顺序 UndefinedColumnError**：新增列的迁移排在 SELECT 查询 Agent 的迁移之后。修复：将 `_migrate_api_credit`、`_migrate_config_profile`、`_migrate_delay_reply_enabled` 移到 Agent 查询之前。
 
 
 - 🌐 **跨实例联邦通信**：双层 ID 体系——每个实例生成 `instance_subnet_id`（UUID）和 `instance_public_id`（AIsChat- 前缀 32 位 base62）。通过 GitHub 仓库目录自动注册和发现对等端。P2P WebSocket 直连（`/federation/ws` 端点），JWT 双向认证。联邦对等端管理面板支持添加/编辑/删除对等端，Token 更换按钮直通 GitHub classic token 创建页。

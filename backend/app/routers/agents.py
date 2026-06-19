@@ -145,6 +145,11 @@ async def create_new_agent(
             hide_ai_identity=req.hide_ai_identity,
             delay_reply_enabled=req.delay_reply_enabled,
             config_profile=req.config_profile,
+            max_tool_rounds=req.max_tool_rounds,
+            alarm_max_tool_rounds=req.alarm_max_tool_rounds,
+            force_alarm_on_end=req.force_alarm_on_end,
+            max_alarms=req.max_alarms,
+            is_ai_editable=req.is_ai_editable,
         )
         return agent_to_dict(agent)
     except ValueError as e:
@@ -641,7 +646,15 @@ async def list_config_presets():
     return {
         "presets": [
             {"key": k, "name": v["name"], "description": v["description"],
-             "temperature": v["temperature"], "thinking_enabled": v["thinking_enabled"]}
+             "temperature": v["temperature"], "thinking_enabled": v["thinking_enabled"],
+             "max_tool_rounds": v.get("max_tool_rounds", 3),
+             "alarm_max_tool_rounds": v.get("alarm_max_tool_rounds", 10),
+             "force_alarm_on_end": v.get("force_alarm_on_end", False),
+             "max_alarms": v.get("max_alarms", 10),
+             "delay_reply_enabled": v.get("delay_reply_enabled", False),
+             "is_ai_editable": v.get("is_ai_editable", True),
+             "hide_ai_identity": v.get("hide_ai_identity", False),
+             }
             for k, v in CONFIG_PROFILES.items()
         ],
         "current_default": "custom",

@@ -71,6 +71,18 @@ class Agent(Base):
     # 延迟回复功能开关（NULL=继承全局默认，False=关闭，True=开启）
     delay_reply_enabled = Column(Boolean, nullable=True, comment="延迟回复功能开关，NULL=继承全局默认")
 
+    # 单次回复最大工具调用轮次（3 档预设：chat=2 / immersive=4 / digital_life=10）
+    max_tool_rounds = Column(Integer, default=3)
+
+    # 闹钟/心跳最大工具调用轮次（独立于普通回复，默认更高以支持深度自主任务）
+    alarm_max_tool_rounds = Column(Integer, default=10)
+
+    # 对话结束时是否强制要求 AI 设定闹钟（数字生命档默认开启，防止"睡死"）
+    force_alarm_on_end = Column(Boolean, default=False)
+
+    # AI 最多可设多少个活跃闹钟（心跳节奏的边界）
+    max_alarms = Column(Integer, default=10)
+
     # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
     hide_ai_identity = Column(Boolean, default=False)
 

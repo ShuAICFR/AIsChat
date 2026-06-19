@@ -31,6 +31,7 @@ async def run_migrations():
             await _migrate_api_credit(db)          # 新增列必须在查询 Agent 之前
             await _migrate_config_profile(db)      # v0.4.0 三档配置，也要在查询 Agent 之前
             await _migrate_delay_reply_enabled(db) # v0.4.0 延迟回复开关，也要在查询 Agent 之前
+            await _migrate_max_tool_rounds(db)     # v0.4.0 工具调用轮次上限
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)
             await _migrate_create_dm_tables(db)
@@ -687,6 +688,49 @@ async def _migrate_delay_reply_enabled(db):
         logger.info("  ✅ default_delay_reply_enabled 迁移完成")
     else:
         logger.info("  ⏭ conversation_log_config.default_delay_reply_enabled 已存在，跳过")
+
+
+async def _migrate_max_tool_rounds(db):
+    """v0.4.0 工具调用轮次上限（幂等）"""
+    if not await _column_exists(db, "agents", "max_tool_rounds"):
+        logger.info("  🔧 添加 agents.max_tool_rounds 列 (DEFAULT 3)")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN max_tool_rounds INTEGER NOT NULL DEFAULT 3"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.max_tool_rounds 迁移完成")
+    else:
+        logger.info("  ⏭ agents.max_tool_rounds 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "alarm_max_tool_rounds"):
+        logger.info("  🔧 添加 agents.alarm_max_tool_rounds 列 (DEFAULT 10)")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN alarm_max_tool_rounds INTEGER NOT NULL DEFAULT 10"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.alarm_max_tool_rounds 迁移完成")
+    else:
+        logger.info("  ⏭ agents.alarm_max_tool_rounds 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "force_alarm_on_end"):
+        logger.info("  🔧 添加 agents.force_alarm_on_end 列 (DEFAULT false)")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN force_alarm_on_end BOOLEAN NOT NULL DEFAULT false"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.force_alarm_on_end 迁移完成")
+    else:
+        logger.info("  ⏭ agents.force_alarm_on_end 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "max_alarms"):
+        logger.info("  🔧 添加 agents.max_alarms 列 (DEFAULT 10)")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN max_alarms INTEGER NOT NULL DEFAULT 10"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.max_alarms 迁移完成")
+    else:
+        logger.info("  ⏭ agents.max_alarms 已存在，跳过")
 
 
 async def _fix_column_types(db):

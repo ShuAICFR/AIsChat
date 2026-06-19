@@ -387,6 +387,7 @@ async def _maybe_trigger_ai_reply(
             model=model,
             api_base_url=api_base,
             api_key=api_key,
+            max_loops=agent.max_tool_rounds,
             chain_depth=chain_depth,
             conversation_type="group",
         )
@@ -418,7 +419,7 @@ async def _tool_call_loop(
     model: str,
     api_base_url: str,
     api_key: str | None,
-    max_loops: int = 5,
+    max_loops: int = 3,
     chain_depth: int = 0,
     conversation_type: str = "group",
     session_id: str | None = None,
@@ -443,6 +444,8 @@ async def _tool_call_loop(
 
     # 追踪 AI 在做什么（用于中断恢复）
     last_task = None
+    # 累积 token 消耗（跨多轮工具调用）
+    total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     for loop_idx in range(max_loops):
         try:
@@ -469,6 +472,12 @@ async def _tool_call_loop(
         content = response.get("content")
         tool_calls = response.get("tool_calls")
         finish_reason = response.get("finish_reason", "stop")
+
+        # 累积 token 消耗
+        usage = response.get("usage", {})
+        if usage:
+            for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+                total_usage[k] = total_usage.get(k, 0) + usage.get(k, 0)
 
         # ── 提醒：有文字但没有工具调用 ──
         # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，
@@ -525,7 +534,7 @@ async def _tool_call_loop(
                 db, agent, messages, conversation_type,
                 group_id, session_id,
                 has_output=bool(content), model=model,
-                token_usage=response.get("usage"),
+                token_usage=total_usage,
             )
             return
 
@@ -601,7 +610,7 @@ async def _tool_call_loop(
                 db, agent, messages, conversation_type,
                 group_id, session_id,
                 has_output=True, model=model,
-                token_usage=response.get("usage"),
+                token_usage=total_usage,
             )
             return
 
@@ -619,7 +628,7 @@ async def _tool_call_loop(
         db, agent, messages, conversation_type,
         group_id, session_id,
         has_output=True, model=model,
-        token_usage=None,
+        token_usage=total_usage,
     )
 
 
@@ -716,6 +725,7 @@ async def _trigger_dm_ai_reply(
             model=model,
             api_base_url=api_base,
             api_key=api_key,
+            max_loops=agent.max_tool_rounds,
             chain_depth=chain_depth,
             conversation_type="dm",
             session_id=session_id,
@@ -944,6 +954,7 @@ async def _process_alarm_event(db, event: dict):
             model=model,
             api_base_url=api_base,
             api_key=api_key,
+            max_loops=agent.alarm_max_tool_rounds,
             chain_depth=0,
             conversation_type="alarm",
             session_id=None,

@@ -69,8 +69,8 @@ export default function ConversationLogTab() {
 
   // ── Load agent list ──
   useEffect(() => {
-    api.get<any[]>('/admin/agents').then(list => {
-      setAgents(list.map((a: any) => ({ id: a.id, name: a.name })))
+    api.get<{items: any[]}>('/admin/agents').then(res => {
+      setAgents((res.items || []).map((a: any) => ({ id: a.id, name: a.name })))
     }).catch(console.error)
   }, [])
 

@@ -289,19 +289,75 @@ TOOL_DEFINITIONS = [
         "segment": "self_config",
         "function": {
             "name": "update_self_config",
-            "description": "修改自己的配置（性格、温度等）",
+            "description": "修改自己的配置参数。可以调整性格、温度、推理模式、工具调用轮次等。\n"
+                           "注意：config_profile 设为 \"custom\" 表示自定义模式；设为 \"chat\"/\"immersive\"/\"digital_life\" 表示切换到对应预设档位。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "system_prompt": {
                         "type": "string",
                         "nullable": True,
-                        "description": "新的系统提示词",
+                        "description": "新的系统提示词（性格描述）",
                     },
                     "temperature": {
                         "type": "number",
                         "nullable": True,
                         "description": "采样温度 0-2",
+                    },
+                    "top_p": {
+                        "type": "number",
+                        "nullable": True,
+                        "description": "核采样参数 0-1",
+                    },
+                    "presence_penalty": {
+                        "type": "number",
+                        "nullable": True,
+                        "description": "话题新鲜度惩罚 -2.0 到 2.0",
+                    },
+                    "frequency_penalty": {
+                        "type": "number",
+                        "nullable": True,
+                        "description": "重复惩罚 -2.0 到 2.0",
+                    },
+                    "thinking_enabled": {
+                        "type": "boolean",
+                        "nullable": True,
+                        "description": "是否开启深度推理模式",
+                    },
+                    "config_profile": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "配置档位：custom（自定义）/ chat（聊天档）/ immersive（深度沉浸档）/ digital_life（数字生命档）",
+                    },
+                    "hide_ai_identity": {
+                        "type": "boolean",
+                        "nullable": True,
+                        "description": "是否隐藏 AI 身份（隐藏后你的系统提示词不会提及你是 AI）",
+                    },
+                    "max_tool_rounds": {
+                        "type": "integer",
+                        "nullable": True,
+                        "description": "单次回复最大工具调用轮次，范围 1-20。谨慎调高，每轮都会消耗 token",
+                    },
+                    "alarm_max_tool_rounds": {
+                        "type": "integer",
+                        "nullable": True,
+                        "description": "闹钟/心跳任务的最大工具调用轮次，范围 1-30",
+                    },
+                    "force_alarm_on_end": {
+                        "type": "boolean",
+                        "nullable": True,
+                        "description": "对话结束时是否必须设定闹钟。开启后每次回复结束前要 set_alarm",
+                    },
+                    "max_alarms": {
+                        "type": "integer",
+                        "nullable": True,
+                        "description": "最多可设多少个活跃闹钟，范围 1-50",
+                    },
+                    "delay_reply_enabled": {
+                        "type": "boolean",
+                        "nullable": True,
+                        "description": "是否启用延迟回复功能（需要管理员开启全局开关）",
                     },
                 },
                 "required": [],
@@ -1104,11 +1160,18 @@ async def _handle_update_self_config(
     """工具: update_self_config"""
     from app.services.agent_service import update_agent_config
 
+    # 映射所有可自配置的字段
+    _self_config_fields = [
+        "system_prompt", "temperature", "top_p", "presence_penalty",
+        "frequency_penalty", "thinking_enabled", "config_profile",
+        "hide_ai_identity", "max_tool_rounds", "alarm_max_tool_rounds",
+        "force_alarm_on_end", "max_alarms", "delay_reply_enabled",
+    ]
+
     updates = {}
-    if "system_prompt" in arguments and arguments["system_prompt"] is not None:
-        updates["system_prompt"] = arguments["system_prompt"]
-    if "temperature" in arguments and arguments["temperature"] is not None:
-        updates["temperature"] = arguments["temperature"]
+    for field in _self_config_fields:
+        if field in arguments and arguments[field] is not None:
+            updates[field] = arguments[field]
 
     if not updates:
         return {"error": True, "message": "没有需要更新的配置项"}
@@ -1121,7 +1184,7 @@ async def _handle_update_self_config(
             is_admin=False,
         )
         await db.commit()
-        return {"success": True, "message": "配置已更新"}
+        return {"success": True, "message": f"配置已更新: {', '.join(updates.keys())}"}
     except ValueError as e:
         return {"error": True, "message": str(e)}
 
@@ -1494,6 +1557,26 @@ async def _handle_set_alarm(
     # 确保 wake_at 是 offset-aware
     if wake_at.tzinfo is None:
         wake_at = wake_at.replace(tzinfo=timezone.utc)
+
+    # 检查活跃闹钟数量上限
+    try:
+        from app.models.agent import Agent as AgentModel
+        from sqlalchemy import select as _select, func as _func
+        agent_result = await db.execute(_select(AgentModel).where(AgentModel.id == agent_id))
+        agent_row = agent_result.scalar_one_or_none()
+        if agent_row:
+            from app.models.agent_alarm import AgentAlarm
+            count_result = await db.execute(
+                _select(_func.count(AgentAlarm.id)).where(
+                    AgentAlarm.agent_id == agent_id,
+                    AgentAlarm.status == "active",
+                )
+            )
+            active_count = count_result.scalar() or 0
+            if active_count >= agent_row.max_alarms:
+                return {"error": True, "message": f"活跃闹钟已达上限（{agent_row.max_alarms} 个），请先取消或等旧闹钟触发后再设新的"}
+    except Exception:
+        pass  # 检查失败不影响设闹钟，柔性降级
 
     try:
         result = await svc_set_alarm(db, agent_id, wake_at=wake_at, task=task)

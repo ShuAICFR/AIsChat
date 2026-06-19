@@ -18,6 +18,11 @@ class AgentCreateRequest(BaseModel):
     hide_ai_identity: bool = Field(default=False)
     config_profile: str | None = Field(default=None, description="预设档位: chat|immersive|digital_life，不填=custom")
     delay_reply_enabled: bool | None = Field(default=None, description="延迟回复开关，NULL=继承全局默认")
+    max_tool_rounds: int = Field(default=3, ge=1, le=20, description="单次回复最大工具调用轮次")
+    alarm_max_tool_rounds: int = Field(default=10, ge=1, le=30, description="闹钟/心跳最大工具调用轮次")
+    force_alarm_on_end: bool = Field(default=False, description="对话结束时强制要求 AI 设定闹钟")
+    max_alarms: int = Field(default=10, ge=1, le=50, description="AI 最多可设活跃闹钟数")
+    is_ai_editable: bool = Field(default=True, description="是否允许 AI 自修改配置")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
 
@@ -49,6 +54,10 @@ class AgentUpdateConfigRequest(BaseModel):
     hide_ai_identity: bool | None = None
     config_profile: str | None = None
     delay_reply_enabled: bool | None = None
+    max_tool_rounds: int | None = Field(default=None, ge=1, le=20, description="工具调用轮次上限")
+    alarm_max_tool_rounds: int | None = Field(default=None, ge=1, le=30, description="闹钟/心跳轮次上限")
+    force_alarm_on_end: bool | None = None
+    max_alarms: int | None = Field(default=None, ge=1, le=50, description="最大闹钟数")
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None
@@ -84,6 +93,10 @@ class AgentResponse(BaseModel):
     thinking_enabled: bool
     config_profile: str | None = None
     delay_reply_enabled: bool | None = None
+    max_tool_rounds: int = 3
+    alarm_max_tool_rounds: int = 10
+    force_alarm_on_end: bool = False
+    max_alarms: int = 10
     created_at: str | None
 
 

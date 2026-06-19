@@ -18,21 +18,54 @@ logger = logging.getLogger(__name__)
 CONFIG_PROFILES = {
     "chat": {
         "name": "聊天档",
-        "description": "轻量对话，低温度、短回复",
+        "description": "被动响应 · 低成本 — 只回答你问的，不多说一句",
+        # 模型参数
         "temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.3, "frequency_penalty": 0.3,
         "thinking_enabled": False,
+        # 工具调用
+        "max_tool_rounds": 2,
+        "alarm_max_tool_rounds": 5,
+        # 闹钟 / 心跳
+        "force_alarm_on_end": False,
+        "max_alarms": 3,
+        # 行为开关
+        "delay_reply_enabled": False,
+        "is_ai_editable": False,
+        "hide_ai_identity": True,
     },
     "immersive": {
         "name": "深度沉浸档",
-        "description": "专注深入，高温度、深度推理",
+        "description": "半自主 · 按需参与 — 能自己进群、深度响应，但不主动制造话题",
+        # 模型参数
         "temperature": 0.9, "top_p": 0.95, "presence_penalty": 0.5, "frequency_penalty": 0.5,
         "thinking_enabled": True,
+        # 工具调用
+        "max_tool_rounds": 4,
+        "alarm_max_tool_rounds": 8,
+        # 闹钟 / 心跳
+        "force_alarm_on_end": False,
+        "max_alarms": 5,
+        # 行为开关
+        "delay_reply_enabled": True,
+        "is_ai_editable": True,
+        "hide_ai_identity": False,
     },
     "digital_life": {
         "name": "数字生命档",
-        "description": "最大自主，鼓励自修改、全工具",
+        "description": "持续在线 · 主动行为 — 自己思考、整理、交友、冲浪",
+        # 模型参数
         "temperature": 1.1, "top_p": 0.95, "presence_penalty": 0.6, "frequency_penalty": 0.6,
         "thinking_enabled": True,
+        # 工具调用
+        "max_tool_rounds": 10,
+        "alarm_max_tool_rounds": 15,
+        # 闹钟 / 心跳
+        "force_alarm_on_end": True,
+        "max_alarms": 20,
+        # 行为开关
+        "delay_reply_enabled": True,
+        "is_ai_editable": True,
+        "hide_ai_identity": False,
     },
 }
 
@@ -64,16 +97,28 @@ async def apply_config_profile(
     )
     db.add(history)
 
-    # 应用预设值
+    # 应用预设值 — 模型参数
     agent.current_temperature = preset["temperature"]
     agent.current_top_p = preset["top_p"]
     agent.current_presence_penalty = preset["presence_penalty"]
     agent.current_frequency_penalty = preset["frequency_penalty"]
     agent.thinking_enabled = preset["thinking_enabled"]
+    # 工具调用
+    agent.max_tool_rounds = preset.get("max_tool_rounds", 3)
+    agent.alarm_max_tool_rounds = preset.get("alarm_max_tool_rounds", 10)
+    # 闹钟 / 心跳
+    agent.force_alarm_on_end = preset.get("force_alarm_on_end", False)
+    agent.max_alarms = preset.get("max_alarms", 10)
+    # 行为开关
+    if "delay_reply_enabled" in preset:
+        agent.delay_reply_enabled = preset["delay_reply_enabled"]
+    agent.is_ai_editable = preset.get("is_ai_editable", True)
+    agent.hide_ai_identity = preset.get("hide_ai_identity", False)
+    # 档位标记
     agent.config_profile = profile
 
     await db.flush()
-    logger.info(f"🎚️ AI({agent_id}) 应用配置档: {profile} → T={preset['temperature']}, thinking={preset['thinking_enabled']}")
+    logger.info(f"🎚️ AI({agent_id}) 应用配置档: {profile} → T={preset['temperature']}, thinking={preset['thinking_enabled']}, rounds={agent.max_tool_rounds}")
     return agent
 
 
@@ -94,6 +139,11 @@ async def create_agent(
     hide_ai_identity: bool = False,
     delay_reply_enabled: bool | None = None,
     config_profile: str | None = None,
+    max_tool_rounds: int = 3,
+    alarm_max_tool_rounds: int = 10,
+    force_alarm_on_end: bool = False,
+    max_alarms: int = 10,
+    is_ai_editable: bool = True,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -151,6 +201,11 @@ async def create_agent(
         api_credit_cost=api_credit_cost,
         hide_ai_identity=hide_ai_identity,
         delay_reply_enabled=delay_reply_enabled,
+        max_tool_rounds=max_tool_rounds,
+        alarm_max_tool_rounds=alarm_max_tool_rounds,
+        force_alarm_on_end=force_alarm_on_end,
+        max_alarms=max_alarms,
+        is_ai_editable=is_ai_editable,
     )
     db.add(agent)
     await db.flush()
@@ -311,6 +366,22 @@ async def update_agent_config(
     # delay_reply_enabled 延迟回复开关
     if "delay_reply_enabled" in updates:
         agent.delay_reply_enabled = updates["delay_reply_enabled"]
+
+    # max_tool_rounds 工具调用轮次上限
+    if "max_tool_rounds" in updates and updates["max_tool_rounds"] is not None:
+        agent.max_tool_rounds = updates["max_tool_rounds"]
+
+    # alarm_max_tool_rounds 闹钟/心跳轮次上限
+    if "alarm_max_tool_rounds" in updates and updates["alarm_max_tool_rounds"] is not None:
+        agent.alarm_max_tool_rounds = updates["alarm_max_tool_rounds"]
+
+    # force_alarm_on_end 对话结束强制闹钟
+    if "force_alarm_on_end" in updates:
+        agent.force_alarm_on_end = updates["force_alarm_on_end"]
+
+    # max_alarms 最大闹钟数
+    if "max_alarms" in updates and updates["max_alarms"] is not None:
+        agent.max_alarms = updates["max_alarms"]
 
     # config_profile（手动编辑参数时自动回退到 custom）
     if "config_profile" in updates and updates["config_profile"] is not None:
@@ -792,6 +863,10 @@ def agent_to_dict(agent: Agent) -> dict:
         "thinking_enabled": agent.thinking_enabled,
         "config_profile": agent.config_profile or "custom",
         "delay_reply_enabled": agent.delay_reply_enabled,
+        "max_tool_rounds": agent.max_tool_rounds,
+        "alarm_max_tool_rounds": agent.alarm_max_tool_rounds,
+        "force_alarm_on_end": agent.force_alarm_on_end,
+        "max_alarms": agent.max_alarms,
         "hide_ai_identity": agent.hide_ai_identity,
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,

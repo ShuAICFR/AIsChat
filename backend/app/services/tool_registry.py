@@ -1166,7 +1166,8 @@ async def _handle_manage_skills(
     # 检查延迟回复开关：关闭时拒绝 delay_reply / typing_indicator 操作
     agent_result = await db.execute(_select(AgentModel).where(AgentModel.id == agent_id))
     agent = agent_result.scalar_one_or_none()
-    delay_allowed = agent.delay_reply_enabled or False if agent else True
+    from app.services.skill_engine import _is_delay_reply_allowed
+    delay_allowed = await _is_delay_reply_allowed(db, agent) if agent else True
     bundled_skills = ("delay_reply", "typing_indicator")
 
     action = arguments["action"]
@@ -1422,7 +1423,8 @@ async def _handle_list_available_skills(
     thinking_enabled = agent.thinking_enabled
 
     # 复用 get_allowed_tools 的过滤逻辑（单一过滤规则来源）
-    delay_allowed = agent.delay_reply_enabled or False
+    from app.services.skill_engine import _is_delay_reply_allowed
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
     current_tools = get_allowed_tools(current_state, thinking_enabled=thinking_enabled, delay_reply_allowed=delay_allowed)
     current_tool_names = {t["function"]["name"] for t in current_tools}
 

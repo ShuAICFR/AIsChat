@@ -303,7 +303,7 @@ async def _maybe_trigger_ai_reply(
         pass  # 非致命
 
     # 5.6. Skill 引擎评估（延迟回复、打字指示器）
-    from app.services.skill_engine import evaluate_action_skills
+    from app.services.skill_engine import evaluate_action_skills, _is_delay_reply_allowed
     skill_result = await evaluate_action_skills(db, agent, group_id, context={
         "content": content,
         "sender_type": sender_type,
@@ -359,7 +359,7 @@ async def _maybe_trigger_ai_reply(
 
     # 7. 获取工具
     from app.services.tool_registry import get_allowed_tools
-    delay_allowed = agent.delay_reply_enabled or False
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
     tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
     model = resolve_model(agent)
     logger.info(f"🔍 AI {agent.name}: model={model}, tools={len(tools)}")
@@ -669,7 +669,7 @@ async def _trigger_dm_ai_reply(
         pass  # 非致命
 
     # Skill 引擎评估（延迟回复、打字指示器）
-    from app.services.skill_engine import evaluate_action_skills
+    from app.services.skill_engine import evaluate_action_skills, _is_delay_reply_allowed
     skill_result = await evaluate_action_skills(db, agent, 0, context={
         "content": content,
         "sender_type": "human",  # DM 中对方是人类
@@ -688,7 +688,7 @@ async def _trigger_dm_ai_reply(
 
     # 获取工具
     from app.services.tool_registry import get_allowed_tools
-    delay_allowed = agent.delay_reply_enabled or False
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
     tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
     model = resolve_model(agent)
 
@@ -895,7 +895,8 @@ async def _process_alarm_event(db, event: dict):
     )
 
     # 可用工具
-    delay_allowed = agent.delay_reply_enabled or False
+    from app.services.skill_engine import _is_delay_reply_allowed
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
     tools = get_allowed_tools("active", thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
     tool_names = [t["function"]["name"] for t in tools]
     tool_list = "、".join(tool_names)

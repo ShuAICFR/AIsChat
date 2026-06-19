@@ -282,10 +282,11 @@ def _build_personality(agent, language: str = "zh") -> str:
     )
 
 
-def _build_tools_segment(agent, is_dm: bool = False) -> str:
+async def _build_tools_segment(db, agent, is_dm: bool = False) -> str:
     """tools 段：当前可用工具清单（非空，状态切换时变）"""
     from app.services.tool_registry import get_allowed_tools
-    delay_allowed = agent.delay_reply_enabled or False
+    from app.services.skill_engine import _is_delay_reply_allowed
+    delay_allowed = await _is_delay_reply_allowed(db, agent)
     current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
     tool_names = [t["function"]["name"] for t in current_tools]
     tool_list = "、".join(tool_names)
@@ -454,8 +455,8 @@ async def build_messages(
         "core_identity": CORE_IDENTITY,
         "personality": _build_personality(agent, language),
         "rules": RULES,
-        "tools": _build_tools_segment(agent, is_dm),
-        "current_context": _build_current_context(db, agent, group_id, group_name, is_dm),
+        "tools": await _build_tools_segment(db, agent, is_dm),
+        "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
         "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key),
     }
 
@@ -585,7 +586,7 @@ async def build_dm_messages(
         "core_identity": CORE_IDENTITY,
         "personality": _build_personality(agent, language),
         "rules": RULES,
-        "tools": _build_tools_segment(agent, is_dm=True),
+        "tools": await _build_tools_segment(db, agent, is_dm=True),
         "current_context": dm_context,
         "injected_skills": await _build_injected_skills(
             db, agent, group_id=0,  # group_id=0 表示非群聊上下文

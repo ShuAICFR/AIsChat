@@ -60,35 +60,27 @@ wss://aischat.datongai.top/federation/ws
 ### 2.1 总览 / Overview
 
 ```
-发起方 (Initiator)                           响应方 (Responder)
-   |                                              |
-   |── url_rotate_propose ──────────────────────>|
-   |   {rotation_id, new_url, expires_at, hmac} |
-   |                                              |
-   |                       Responder 验证:        |
-   |                       • HMAC 签名            |
-   |                       • rotation_id 未重复   |
-   |                       • 未过期               |
-   |                       • 频率合规             |
-   |                       • 新 URL 格式合法      |
-   |                       • 测试新 URL 握手 ✅    |
-   |                                              |
-   |<── url_rotate_ack ──────────────────────────|
-   |   {rotation_id, accepted: true, hmac}       |
-   |                                              |
-   | Initiator 收到 ack:                          |
-   | • 测试新 URL 握手 ✅                          |
-   |                                              |
-   |        双方各自保持新旧 URL 共存              |
-   |        （旧连接不中断）                       |
-   |                                              |
-   |── url_rotate_commit ───────────────────────>|
-   |   {rotation_id, result: "success", hmac}    |
-   |                                              |
-   |<── 双方更新 DB:                              |
-   |    remote_url = new_url                      |
-   |    remote_url_backup = old_url               |
-   |    url_rotation_count += 1                   |
+```mermaid
+sequenceDiagram
+    participant I as Initiator
+    participant R as Responder
+
+    Note over I,R: Old WS connection stays active
+
+    I->>R: url_rotate_propose<br/>{rotation_id, new_url, expires_at, hmac}
+
+    Note over R: Validate: HMAC, replay, expiry,<br/>frequency, URL format, test new URL
+
+    R-->>I: url_rotate_ack<br/>{rotation_id, accepted: true, hmac}
+
+    Note over I: Test new URL handshake
+
+    Note over I,R: Both keep old + new URL alive<br/>Old connection NOT interrupted
+
+    I->>R: url_rotate_commit<br/>{rotation_id, result: success, hmac}
+
+    Note over I,R: Both update DB:<br/>remote_url = new_url<br/>remote_url_backup = old_url<br/>url_rotation_count += 1
+```
 ```
 
 **如果新 URL 测试失败**：commit 消息携带 `result: "rollback"` → 双方保持旧 URL → 状态机回到 IDLE。
@@ -106,31 +98,27 @@ HMAC 公式：`HMAC-SHA256(rotation_id | field1 | field2 | suffix, shared_secret
 ### 2.3 状态机 / State Machine
 
 ```
-                    IDLE (rotation_state = None)
-                     │
-          ┌──────────┴──────────┐
-          │ 手动触发              │ 收到 propose
-          ▼                      ▼
-      PROPOSING              RECEIVED_PROPOSAL
-          │                      │
-          │ 收到 ack(accepted)    │ 发送 ack(accepted)
-          ▼                      ▼
-      TRYING_NEW_URL          TRYING_NEW_URL
-          │                      │
-    ┌─────┴─────┐          ┌─────┴─────┐
-    │ 新URL通    │ 不通      │ 新URL通    │ 不通
-    ▼            ▼          ▼            ▼
-CONNECTED_NEW  REVERTED   CONNECTED_NEW  REVERTED
-    │            │          │            │
-    │ commit     │ commit   │ 等待commit │ 等待commit
-    │ (success)  │ (rollback)│           │
-    ▼            ▼          ▼            ▼
-  更新DB远程URL  保持旧URL  更新DB远程URL  保持旧URL
-    │            │          │            │
-    └────────────┴──────────┴────────────┘
-                     │
-                     ▼
-                   IDLE
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE: rotation_state = None
+
+    IDLE --> PROPOSING: admin trigger
+    IDLE --> RECEIVED_PROPOSAL: receive propose
+
+    PROPOSING --> TRYING_NEW_URL: receive ack(accepted)
+    RECEIVED_PROPOSAL --> TRYING_NEW_URL: send ack(accepted)
+
+    state TRYING_NEW_URL {
+        Test new URL handshake
+        Old connection stays alive
+    }
+
+    TRYING_NEW_URL --> CONNECTED_NEW: new URL OK
+    TRYING_NEW_URL --> REVERTED_OLD: new URL fails
+
+    CONNECTED_NEW --> IDLE: commit(success)
+    REVERTED_OLD --> IDLE: commit(rollback)
+```
 ```
 
 **关键属性**：

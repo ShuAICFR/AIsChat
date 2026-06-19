@@ -138,6 +138,9 @@ async def evaluate_action_skills(
                 })
 
         elif skill.skill_type == "typing_indicator" and skill.is_enabled:
+            if not delay_allowed:
+                logger.info(f"⏱️ AI agent_id={agent.id} 延迟回复已关闭，跳过 typing_indicator skill #{skill.id}")
+                continue
             result.show_typing = True
             result.typing_config = config
             result.matched_skills.append({

@@ -285,7 +285,8 @@ def _build_personality(agent, language: str = "zh") -> str:
 def _build_tools_segment(agent, is_dm: bool = False) -> str:
     """tools 段：当前可用工具清单（非空，状态切换时变）"""
     from app.services.tool_registry import get_allowed_tools
-    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled)
+    delay_allowed = agent.delay_reply_enabled or False
+    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
     tool_names = [t["function"]["name"] for t in current_tools]
     tool_list = "、".join(tool_names)
     segment_name = "DM 私信" if is_dm else "群聊社交"

@@ -683,11 +683,14 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
 }
 
 
-def get_allowed_tools(state: str, thinking_enabled: bool | None = None) -> list[dict]:
+def get_allowed_tools(state: str, thinking_enabled: bool | None = None, delay_reply_allowed: bool = True) -> list[dict]:
     """根据 AI 状态返回允许使用的工具定义列表。
 
     thinking_enabled 为 False 时，过滤掉 toggle_thinking 工具（省 token，防止 AI 擅自开启）。
     为 None 时不额外过滤（保持向后兼容）。
+
+    delay_reply_allowed 为 False 时，从 manage_skills 工具的 skill_type 枚举中移除 delay_reply，
+    避免 AI 在延迟回复功能关闭时仍能看到或操作此技能类型（省 token + 信息精简）。
     """
     allowed_names = STATE_TOOL_WHITELIST.get(state, [])
     tools = [
@@ -696,7 +699,56 @@ def get_allowed_tools(state: str, thinking_enabled: bool | None = None) -> list[
     ]
     if thinking_enabled is False:
         tools = [t for t in tools if t["function"]["name"] != "toggle_thinking"]
+
+    if not delay_reply_allowed:
+        tools = _strip_delay_reply_from_manage_skills(tools)
     return tools
+
+
+def _strip_delay_reply_from_manage_skills(tools: list[dict]) -> list[dict]:
+    """从 manage_skills 工具定义中移除 delay_reply 和 typing_indicator（省 token）
+
+    延迟回复开关关闭时，同时隐藏 delay_reply 和 typing_indicator，
+    二者捆绑为「回复行为」技能包。
+    """
+    import copy
+    result = []
+    for t in tools:
+        if t["function"]["name"] != "manage_skills":
+            result.append(t)
+            continue
+        t2 = copy.deepcopy(t)
+        fn = t2["function"]
+        # 从 skill_type 枚举中移除 delay_reply 和 typing_indicator
+        old_enum: list = fn["parameters"]["properties"]["skill_type"]["enum"]
+        fn["parameters"]["properties"]["skill_type"]["enum"] = [
+            v for v in old_enum if v not in ("delay_reply", "typing_indicator")
+        ]
+        # 精简 description：移除 delay_reply 和 typing_indicator 行
+        lines = fn["description"].split("\n")
+        filtered_lines = [
+            l for l in lines
+            if not any(l.strip().startswith(f"{n}. {t}") for n, t in [
+                ("1", "delay_reply"), ("2", "typing_indicator"),
+            ]) and "delay_reply + typing_indicator" not in l
+        ]
+        # 重新编号
+        new_lines = []
+        idx = 0
+        for l in filtered_lines:
+            if l.strip() and l.strip()[0].isdigit() and ". " in l[:4]:
+                idx += 1
+                new_lines.append(l.replace(l.split(".")[0], str(idx), 1))
+            else:
+                new_lines.append(l)
+        fn["description"] = "\n".join(new_lines)
+        # 清理残留的捆绑引用
+        fn["description"] = fn["description"].replace(
+            "添加  + typing_indicator",
+            "添加 typing_indicator"
+        ).replace(" + typing_indicator。", "。").replace(" + typing_indicator", "")
+        result.append(t2)
+    return result
 
 
 # ============================================================
@@ -1108,8 +1160,37 @@ async def _handle_manage_skills(
     from app.services.skill_service import (
         list_skills, add_skill, update_skill, delete_skill, toggle_skill,
     )
+    from app.models.agent import Agent as AgentModel
+    from sqlalchemy import select as _select
+
+    # 检查延迟回复开关：关闭时拒绝 delay_reply / typing_indicator 操作
+    agent_result = await db.execute(_select(AgentModel).where(AgentModel.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    delay_allowed = agent.delay_reply_enabled or False if agent else True
+    bundled_skills = ("delay_reply", "typing_indicator")
 
     action = arguments["action"]
+    skill_type = arguments.get("skill_type")
+
+    # 对涉及回复行为技能包的操作做准入检查
+    if not delay_allowed:
+        if action == "add" and skill_type in bundled_skills:
+            return {"error": True, "message": f"「{skill_type}」已被管理员关闭，无法添加。请先开启延迟回复功能"}
+        if action in ("update", "toggle", "delete"):
+            # 需要查出 skill 的类型
+            if action in ("update", "toggle", "delete"):
+                skill_id = arguments.get("skill_id")
+                if skill_id:
+                    from app.models.agent_skill import AgentSkill
+                    sk_result = await db.execute(
+                        _select(AgentSkill).where(
+                            AgentSkill.id == skill_id,
+                            AgentSkill.agent_id == agent_id,
+                        )
+                    )
+                    skill = sk_result.scalar_one_or_none()
+                    if skill and skill.skill_type in bundled_skills:
+                        return {"error": True, "message": f"「{skill.skill_type}」已被管理员关闭，无法修改。请先开启延迟回复功能"}
 
     if action == "list":
         skills = await list_skills(db, agent_id)
@@ -1119,6 +1200,9 @@ async def _handle_manage_skills(
             "scene_trigger": "场景匹配 — 检测关键词/正则时触发行为",
             "inject_prompt": "注入提示词 — 临时追加指导到思维中",
         }
+        # 延迟回复关闭时过滤掉相关技能，对 AI 透明
+        if not delay_allowed:
+            skills = [s for s in skills if s.get("skill_type") not in bundled_skills]
         for s in skills:
             s["type_hint"] = type_hints.get(s.get("skill_type", ""), "")
         return {"success": True, "skills": skills, "count": len(skills)}
@@ -1338,7 +1422,8 @@ async def _handle_list_available_skills(
     thinking_enabled = agent.thinking_enabled
 
     # 复用 get_allowed_tools 的过滤逻辑（单一过滤规则来源）
-    current_tools = get_allowed_tools(current_state, thinking_enabled=thinking_enabled)
+    delay_allowed = agent.delay_reply_enabled or False
+    current_tools = get_allowed_tools(current_state, thinking_enabled=thinking_enabled, delay_reply_allowed=delay_allowed)
     current_tool_names = {t["function"]["name"] for t in current_tools}
 
     # 构建技能段信息

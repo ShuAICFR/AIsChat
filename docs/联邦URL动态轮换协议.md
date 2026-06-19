@@ -3,6 +3,8 @@
 > **一个原创的协商式 WebSocket 对等端地址轮换协议——结合 propose→ack→commit 三阶段协商、双向测试、自动回滚，实现 P2P 联邦通信的运行时地址迁移。**
 >
 > **An original negotiated WebSocket peer address rotation protocol — combining propose→ack→commit three-phase negotiation, bilateral testing, and automatic rollback for runtime address migration in P2P federated communication.**
+>
+> 📦 **独立项目 / Standalone Project**: [github.com/ShuAICFR/ws-peer-url-rotation](https://github.com/ShuAICFR/ws-peer-url-rotation) — 可供搜索发现 / searchable & discoverable
 
 ---
 
@@ -59,7 +61,6 @@ wss://aischat.datongai.top/federation/ws
 
 ### 2.1 总览 / Overview
 
-```
 ```mermaid
 sequenceDiagram
     participant I as Initiator
@@ -81,7 +82,6 @@ sequenceDiagram
 
     Note over I,R: Both update DB:<br/>remote_url = new_url<br/>remote_url_backup = old_url<br/>url_rotation_count += 1
 ```
-```
 
 **如果新 URL 测试失败**：commit 消息携带 `result: "rollback"` → 双方保持旧 URL → 状态机回到 IDLE。
 
@@ -97,7 +97,6 @@ HMAC 公式：`HMAC-SHA256(rotation_id | field1 | field2 | suffix, shared_secret
 
 ### 2.3 状态机 / State Machine
 
-```
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE: rotation_state = None
@@ -118,7 +117,6 @@ stateDiagram-v2
 
     CONNECTED_NEW --> IDLE: commit(success)
     REVERTED_OLD --> IDLE: commit(rollback)
-```
 ```
 
 **关键属性**：

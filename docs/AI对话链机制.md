@@ -79,6 +79,9 @@ MAX_CHAIN_DEPTH = 50  # 极高值，正常对话不会触及 / very high, normal
 
 ### 2.3 传递链路 / Propagation Chain
 
+<details>
+<summary>📊 展开图表 / Expand Diagram</summary>
+
 ```mermaid
 flowchart LR
     W0["ws.py<br/>depth=0"] --> P1["_process_event<br/>next_depth=1"]
@@ -89,6 +92,8 @@ flowchart LR
     T2 --> Q3["message_queue<br/>depth=4"]
     Q3 --> DOTS["..."]
 ```
+
+</details>
 
 AI 发送消息的**两个出口**均会推入队列：
 **Both AI message exit points** push to the queue:
@@ -106,17 +111,26 @@ AI 发送消息的**两个出口**均会推入队列：
 
 ### 3.1 评分因子 / Scoring Factors
 
+<details>
+<summary>📊 展开图表 / Expand Diagram</summary>
+
 ```mermaid
-pie title 意愿分构成 / Willingness Score Composition
-    "基础分 Base +50" : 50
-    "@点名 @by name +40" : 40
-    "@all/@ai +20" : 20
-    "长消息>50字 +10" : 10
-    "群冷清 +10" : 10
-    "短消息<5字 -5" : 5
-    "群太吵 -10" : 10
-    "DND状态 -30" : 30
+flowchart LR
+    subgraph positive["🟢 加分项 / Positive"]
+        P1["基础分<br/>Base +50"]
+        P2["@点名<br/>@by name +40"]
+        P3["@all/@ai +20"]
+        P4["长消息>50字<br/>+10"]
+        P5["群冷清 1h<5条<br/>+10"]
+    end
+    subgraph negative["🔴 减分项 / Negative"]
+        N1["短消息<5字<br/>-5"]
+        N2["群太吵 1h>50条<br/>-10"]
+        N3["DND 状态<br/>-30"]
+    end
 ```
+
+</details>
 
 | 因子 / Factor | 分值 / Score | 说明 / Description |
 |------|------|------|
@@ -186,6 +200,9 @@ Supports Chinese and English names. Trailing punctuation is stripped.
 
 > 位置 / Located at: `backend/app/services/tool_registry.py:STATE_TOOL_WHITELIST`
 
+<details>
+<summary>📊 展开图表 / Expand Diagram</summary>
+
 ```mermaid
 flowchart LR
     subgraph Active["🟢 active — 14 tools"]
@@ -211,6 +228,8 @@ flowchart LR
         B1[全部禁用]
     end
 ```
+
+</details>
 
 ---
 

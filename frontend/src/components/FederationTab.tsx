@@ -48,6 +48,8 @@ export default function FederationTab() {
   const [registerErrorCode, setRegisterErrorCode] = useState('')
   const [githubToken, setGithubToken] = useState('')
   const [tokenSaving, setTokenSaving] = useState(false)
+  const [dialogToken, setDialogToken] = useState('')  // 弹窗内的临时 Token 输入
+  const [quickToken, setQuickToken] = useState('')    // TOKEN_MISSING 时行内快速输入
 
   // 表单状态
   const [showAddPeer, setShowAddPeer] = useState(false)
@@ -116,6 +118,22 @@ export default function FederationTab() {
 
     // 再次点击（已确认风险）→ 执行注册
     setRegisterState('loading')
+
+    // 如果弹窗中填了 Token 且尚未配置，先保存
+    const needSaveToken = dialogToken.trim() && !instance?.github_token_configured
+    if (needSaveToken) {
+      setRegisterResult('🔑 正在保存 Token...')
+      try {
+        await api.put('/admin/federation/instance/github-token', { token: dialogToken.trim() })
+        setDialogToken('')
+        await loadData() // 刷新 github_token_configured
+      } catch (e: any) {
+        setRegisterState('error')
+        setRegisterResult(e?.response?.data?.detail || 'Token 保存失败')
+        return
+      }
+    }
+
     setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
     setRegisterErrorCode('')
 
@@ -144,6 +162,41 @@ export default function FederationTab() {
         setRegisterResult(detail.message || JSON.stringify(detail))
       } else {
         setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '注册失败'))
+      }
+    }
+  }
+
+  const handleQuickSaveToken = async () => {
+    // 快速保存 Token 并重试注册（TOKEN_MISSING 错误恢复）
+    if (!quickToken.trim()) return
+    setRegisterState('loading')
+    setRegisterResult('🔑 正在保存 Token...')
+    try {
+      await api.put('/admin/federation/instance/github-token', { token: quickToken.trim() })
+      setQuickToken('')
+      await loadData()
+      // 保存成功后自动重试注册
+      setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
+      const result = await api.post<{
+        success: boolean; message: string; error_code?: string
+      }>('/admin/federation/instance/register')
+      if (result.success) {
+        setRegisterState('success')
+        setRegisterResult(result.message)
+        await loadData()
+      } else {
+        setRegisterState('error')
+        setRegisterErrorCode(result.error_code || '')
+        setRegisterResult(result.message || '注册失败')
+      }
+    } catch (e: any) {
+      setRegisterState('error')
+      const detail = e?.response?.data?.detail
+      if (typeof detail === 'object') {
+        setRegisterErrorCode(detail.error_code || '')
+        setRegisterResult(detail.message || JSON.stringify(detail))
+      } else {
+        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '保存/注册失败'))
       }
     }
   }
@@ -200,7 +253,7 @@ export default function FederationTab() {
     <div className="space-y-6">
       {/* 风险告知弹窗 */}
       {registerState === 'confirm' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setRegisterState('idle')}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setRegisterState('idle'); setDialogToken('') }}>
           <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-textPrimary mb-3">⚠️ 注册公网 ID 须知</h3>
             <div className="text-sm text-textSecondary space-y-2 mb-5">
@@ -214,18 +267,44 @@ export default function FederationTab() {
               </ul>
               <p className="text-xs text-textMuted mt-2">注册前系统会验证你的公网 URL 确实指向运行中的 AIsChat 实例。</p>
             </div>
+            {/* 若未配置 Token，直接在弹窗中输入 */}
+            {!instance?.github_token_configured && (
+              <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
+                <label className="text-xs text-textMuted">
+                  GitHub Token{' '}
+                  <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                    获取 →
+                  </a>
+                </label>
+                <p className="text-[10px] text-textMuted mb-1.5">
+                  需要 Token 才能写入注册表。点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong>
+                </p>
+                <input
+                  type="password"
+                  value={dialogToken}
+                  onChange={e => setDialogToken(e.target.value)}
+                  className="w-full px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                  placeholder="ghp_xxxxxxxxxxxxxxxx"
+                />
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => setRegisterState('idle')}
+                onClick={() => { setRegisterState('idle'); setDialogToken('') }}
                 className="px-4 py-1.5 text-xs bg-canvas border border-border text-textSecondary rounded-lg hover:bg-border/20 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleRegister}
-                className="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                disabled={!instance?.github_token_configured && !dialogToken.trim()}
+                className={`px-4 py-1.5 text-xs rounded-lg transition-colors ${
+                  !instance?.github_token_configured && !dialogToken.trim()
+                    ? 'bg-canvas text-textMuted cursor-not-allowed'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                }`}
               >
-                我已知晓，继续注册
+                {!instance?.github_token_configured ? '保存 Token 并注册' : '我已知晓，继续注册'}
               </button>
             </div>
           </div>
@@ -376,6 +455,25 @@ export default function FederationTab() {
                 {registerResult}
               </p>
             )}
+            {/* TOKEN_MISSING 时行内快速输入，无需跳转到编辑模式 */}
+            {registerErrorCode === 'TOKEN_MISSING' && (
+              <div className="flex gap-2 mt-2">
+                <input
+                  type="password"
+                  value={quickToken}
+                  onChange={e => setQuickToken(e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                  placeholder="ghp_xxxxxxxxxxxxxxxx"
+                />
+                <button
+                  onClick={handleQuickSaveToken}
+                  disabled={registerState === 'loading' || !quickToken.trim()}
+                  className="shrink-0 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {registerState === 'loading' ? '保存中...' : '保存并重试'}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -431,6 +529,25 @@ export default function FederationTab() {
                     {registerErrorCode && <span className="font-mono mr-1">[{registerErrorCode}]</span>}
                     {registerResult}
                   </span>
+                )}
+                {/* TOKEN_MISSING 时行内快速输入 */}
+                {registerErrorCode === 'TOKEN_MISSING' && (
+                  <div className="flex gap-2 mt-2 w-full">
+                    <input
+                      type="password"
+                      value={quickToken}
+                      onChange={e => setQuickToken(e.target.value)}
+                      className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
+                      placeholder="ghp_xxxxxxxxxxxxxxxx"
+                    />
+                    <button
+                      onClick={handleQuickSaveToken}
+                      disabled={registerState === 'loading' || !quickToken.trim()}
+                      className="shrink-0 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {registerState === 'loading' ? '保存中...' : '保存并重试'}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

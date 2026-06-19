@@ -122,11 +122,31 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-textPrimary mb-6 tracking-tight">设置</h1>
 
-        {/* API 配置 */}
+        {/* API 额度 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">API 额度</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-canvas rounded-xl p-4 border border-border">
+              <p className="text-xs text-textMuted mb-1">AI 创建额度</p>
+              <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
+              <p className="text-[10px] text-textMuted mt-1">每创建一个 AI 消耗 1 额度</p>
+            </div>
+            <div className="bg-canvas rounded-xl p-4 border border-border">
+              <p className="text-xs text-textMuted mb-1">API 调用余额</p>
+              <p className="text-2xl font-bold text-textPrimary">{user?.api_credit ?? 0}</p>
+              <p className="text-[10px] text-textMuted mt-1">每次 LLM 调用从此余额扣除</p>
+            </div>
+          </div>
+        </div>
+
+        {/* API 提供商配置 */}
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Key size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">API 配置</h2>
+            <h2 className="font-semibold text-textPrimary">API 提供商配置</h2>
           </div>
 
           <div className="space-y-4">

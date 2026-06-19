@@ -1,5 +1,5 @@
 """
-联邦通信 Schema（v1.2.0 跨实例联邦通信）
+联邦通信 Schema（v0.3.0 跨实例联邦通信）
 """
 from pydantic import BaseModel, Field
 

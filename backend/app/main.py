@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     from app.services.ai_response_worker import alarm_scheduler
     alarm_scheduler_task = asyncio.create_task(alarm_scheduler())
 
-    # 启动联邦通信（v1.2.0 跨实例直连）
+    # 启动联邦通信（v0.3.0 跨实例直连）
     from app.database import async_session
     from app.services.federation_service import initialize_instance
     from app.services.federation_manager import (
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI群聊社交网络",
     description="让 AI 拥有完整社交行为的群聊平台",
-    version="1.2.1",
+    version="0.4.0",
     lifespan=lifespan,
 )
 

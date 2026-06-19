@@ -1,14 +1,14 @@
 """
 数据库迁移脚本（幂等：每次启动自动执行，已迁移则跳过）
 
-v1.1.2 迁移内容：
+v0.2.0 迁移内容（统一用户ID + DM表）：
   1. users 表加 type 列（human/ai）
   2. agents 表加 user_id 列
   3. 为已有 agent 创建 users 条目（username = agent.name + "_agent"）
   4. 新建 dm_sessions / dm_messages 表
   5. 将历史 DM 群聊消息导入 dm_messages
 
-v1.1.3 迁移内容：
+v0.2.0 迁移内容（续 — 闹钟 + 工作区）：
   6. 新建 agent_alarms 表（AI 自主闹钟）
   7. 新建 agent_workspace 表（AI 当前任务追踪 / 中断恢复）
 """
@@ -29,8 +29,8 @@ async def run_migrations():
             await _migrate_conversation_logs(db)   # 必须在查询 Agent 之前添加列
             await _migrate_federation_tables(db)   # 必须在查询 Agent 之前添加列
             await _migrate_api_credit(db)          # 新增列必须在查询 Agent 之前
-            await _migrate_config_profile(db)      # v1.3.1 三档配置，也要在查询 Agent 之前
-            await _migrate_delay_reply_enabled(db) # v1.3.2 延迟回复开关，也要在查询 Agent 之前
+            await _migrate_config_profile(db)      # v0.4.0 三档配置，也要在查询 Agent 之前
+            await _migrate_delay_reply_enabled(db) # v0.4.0 延迟回复开关，也要在查询 Agent 之前
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)
             await _migrate_create_dm_tables(db)
@@ -272,7 +272,7 @@ async def _migrate_dm_messages(db):
 
 
 async def _migrate_agent_alarms(db):
-    """创建 agent_alarms 表（v1.1.3）"""
+    """创建 agent_alarms 表（v0.2.0）"""
     if await _table_exists(db, "agent_alarms"):
         logger.info("  ⏭ agent_alarms 表已存在，跳过")
         return
@@ -293,7 +293,7 @@ async def _migrate_agent_alarms(db):
 
 
 async def _migrate_workspace(db):
-    """创建/扩展 agent_workspace 表（v1.1.3 创建，v1.3.1 扩展 TODO/PLAN/JOURNAL）"""
+    """创建/扩展 agent_workspace 表（v0.2.0 创建，v0.4.0 扩展 TODO/PLAN/JOURNAL）"""
     if not await _table_exists(db, "agent_workspace"):
         logger.info("  📋 创建 agent_workspace 表")
         await db.execute(text("""
@@ -334,7 +334,7 @@ async def _migrate_workspace(db):
 
 
 async def _migrate_agent_skills(db):
-    """创建 agent_skills 表（v1.1.5 Skill 系统）"""
+    """创建 agent_skills 表（v0.2.0 Skill 系统）"""
     if await _table_exists(db, "agent_skills"):
         logger.info("  ⏭ agent_skills 表已存在，跳过")
         return
@@ -363,7 +363,7 @@ async def _migrate_agent_skills(db):
 
 
 async def _migrate_federation_tables(db):
-    """创建联邦通信相关表（v1.2.0 跨实例联邦通信）"""
+    """创建联邦通信相关表（v0.3.0 跨实例联邦通信）"""
     created_any = False
 
     # 1. instance_config 表（单例，存本实例身份）
@@ -456,7 +456,7 @@ async def _migrate_federation_tables(db):
     else:
         logger.info("  ⏭ instance_config.github_token_encrypted 已存在，跳过")
 
-    # 7. federation_peers.url_rotation 动态 URL 轮换（v1.2.1）
+    # 7. federation_peers.url_rotation 动态 URL 轮换（v0.3.0）
     if not await _column_exists(db, "federation_peers", "remote_url_backup"):
         logger.info("  🌐 添加 federation_peers.remote_url_backup 列")
         await db.execute(text(
@@ -569,7 +569,7 @@ async def _migrate_conversation_logs(db):
 
 
 async def _migrate_api_credit(db):
-    """v1.3.0 API 额度系统 + 单 AI API 覆盖 + AI 不自知 + 语言/界面设置（幂等）"""
+    """v0.4.0 API 额度系统 + 单 AI API 覆盖 + AI 不自知 + 语言/界面设置（幂等）"""
     created_any = False
 
     if not await _column_exists(db, "users", "api_credit"):
@@ -652,7 +652,7 @@ async def _migrate_api_credit(db):
 
 
 async def _migrate_config_profile(db):
-    """v1.3.1 三档 AI 配置（幂等）"""
+    """v0.4.0 三档 AI 配置（幂等）"""
     if await _column_exists(db, "agents", "config_profile"):
         logger.info("  ⏭ agents.config_profile 已存在，跳过")
         return
@@ -665,7 +665,7 @@ async def _migrate_config_profile(db):
 
 
 async def _migrate_delay_reply_enabled(db):
-    """v1.3.2 延迟回复开关（幂等）"""
+    """v0.4.0 延迟回复开关（幂等）"""
     # 1. agents.delay_reply_enabled
     if not await _column_exists(db, "agents", "delay_reply_enabled"):
         logger.info("  ⏱️ 添加 agents.delay_reply_enabled 列")

@@ -1,5 +1,5 @@
 """
-联邦通信 ORM 模型（v1.2.0 跨实例联邦通信）
+联邦通信 ORM 模型（v0.3.0 跨实例联邦通信）
 """
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, ForeignKey, func,

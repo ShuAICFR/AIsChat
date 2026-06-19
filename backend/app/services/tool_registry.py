@@ -1256,7 +1256,7 @@ async def _handle_send_dm(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
 ) -> dict:
-    """工具: send_dm — AI 向好友发送私信（v1.1.2: 使用统一 ID）"""
+    """工具: send_dm — AI 向好友发送私信（v0.2.0: 使用统一 ID）"""
     from sqlalchemy import select
     from app.services.dm_service import (
         get_or_create_dm_session, send_dm_message, generate_dm_session_id,

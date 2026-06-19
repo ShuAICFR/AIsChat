@@ -1,5 +1,5 @@
 """
-联邦端点（v1.2.0 跨实例联邦通信）
+联邦端点（v0.3.0 跨实例联邦通信）
 
 - GET /federation/identity — 公开端点，注册表验证实例真实性
 - WS /federation/ws   — 实例间 WebSocket 连接

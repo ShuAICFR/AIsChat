@@ -26,6 +26,7 @@ interface Agent {
   work_model: string | null
   thinking_enabled: boolean
   hide_ai_identity: boolean
+  config_profile: string
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -49,6 +50,12 @@ interface MemoryItem {
   created_at: string | null
 }
 
+interface WorkspaceFiles {
+  todo: string
+  plan: string
+  journal: string
+}
+
 export default function AgentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -57,7 +64,7 @@ export default function AgentDetailPage() {
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace'>('info')
 
   // Delete
   const [showDelete, setShowDelete] = useState(false)
@@ -89,6 +96,17 @@ export default function AgentDetailPage() {
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [memPage, setMemPage] = useState(1)
   const [memTotal, setMemTotal] = useState(0)
+
+  // Workspace
+  const [workspace, setWorkspace] = useState<WorkspaceFiles>({ todo: '', plan: '', journal: '' })
+  const [wsActive, setWsActive] = useState<'todo' | 'plan' | 'journal'>('todo')
+
+  const loadWorkspace = useCallback(async () => {
+    try {
+      const data = await api.get<WorkspaceFiles>(`/agents/${agentId}/workspace`)
+      setWorkspace(data)
+    } catch { /* ignore */ }
+  }, [agentId])
 
   const loadAgent = useCallback(async () => {
     try {
@@ -133,7 +151,8 @@ export default function AgentDetailPage() {
   useEffect(() => {
     if (activeTab === 'storage') loadStorage()
     if (activeTab === 'memories') loadMemories(1)
-  }, [activeTab, loadStorage, loadMemories])
+    if (activeTab === 'workspace') loadWorkspace()
+  }, [activeTab, loadStorage, loadMemories, loadWorkspace])
 
   // Delete handler
   const handleDelete = async () => {
@@ -319,7 +338,7 @@ export default function AgentDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-border">
-          {(['info', 'memories', 'storage'] as const).map((t) => (
+          {(['info', 'memories', 'storage', 'workspace'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -329,7 +348,7 @@ export default function AgentDetailPage() {
                   : 'border-transparent text-textMuted hover:text-textSecondary'
               }`}
             >
-              {t === 'info' ? '基本信息' : t === 'memories' ? '记忆' : '存储'}
+              {t === 'info' ? '基本信息' : t === 'memories' ? '记忆' : t === 'storage' ? '存储' : '工作区'}
             </button>
           ))}
         </div>
@@ -402,7 +421,15 @@ export default function AgentDetailPage() {
                 </div>
                 <div>
                   <span className="text-textMuted">AI 身份：</span>
-                  <span className="text-textPrimary">{agent.hide_ai_identity ? '🎭 隐藏' : '正常'}</span>
+                  <span className="text-textPrimary">{agent.hide_ai_identity ? '隐藏' : '正常'}</span>
+                </div>
+                <div>
+                  <span className="text-textMuted">配置档位：</span>
+                  <span className="text-textPrimary">
+                    {agent.config_profile === 'chat' ? '聊天档' :
+                     agent.config_profile === 'immersive' ? '深度沉浸档' :
+                     agent.config_profile === 'digital_life' ? '数字生命档' : '自定义'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -564,6 +591,36 @@ export default function AgentDetailPage() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'workspace' && (
+          <div className="bg-surface rounded-xl border border-border p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Edit3 size={16} className="text-primary-400" />
+              <h3 className="font-medium text-textPrimary text-sm">个人工作区</h3>
+              <span className="text-xs text-textMuted ml-auto">AI 自主维护，用户只读</span>
+            </div>
+            {/* Sub-tabs */}
+            <div className="flex gap-1 mb-3 border-b border-border">
+              {(['todo', 'plan', 'journal'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setWsActive(f)}
+                  className={`px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                    wsActive === f
+                      ? 'border-primary-500 text-primary-400'
+                      : 'border-transparent text-textMuted hover:text-textSecondary'
+                  }`}
+                >
+                  {f === 'todo' ? 'TODO' : f === 'plan' ? 'PLAN' : 'JOURNAL'}
+                </button>
+              ))}
+            </div>
+            {/* Content */}
+            <pre className="text-xs text-textSecondary whitespace-pre-wrap max-h-80 overflow-y-auto p-3 rounded-lg bg-canvas border border-border leading-relaxed font-mono min-h-[120px]">
+              {workspace[wsActive] || `（${wsActive === 'todo' ? 'TODO 列表' : wsActive === 'plan' ? 'PLAN 规划' : 'JOURNAL 日志'} 为空）`}
+            </pre>
           </div>
         )}
       </div>

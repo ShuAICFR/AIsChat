@@ -29,6 +29,7 @@ async def run_migrations():
             await _migrate_conversation_logs(db)   # 必须在查询 Agent 之前添加列
             await _migrate_federation_tables(db)   # 必须在查询 Agent 之前添加列
             await _migrate_api_credit(db)          # 新增列必须在查询 Agent 之前
+            await _migrate_config_profile(db)      # v1.3.1 三档配置，也要在查询 Agent 之前
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)
             await _migrate_create_dm_tables(db)
@@ -291,23 +292,44 @@ async def _migrate_agent_alarms(db):
 
 
 async def _migrate_workspace(db):
-    """创建 agent_workspace 表（v1.1.3）"""
-    if await _table_exists(db, "agent_workspace"):
-        logger.info("  ⏭ agent_workspace 表已存在，跳过")
-        return
-    logger.info("  📋 创建 agent_workspace 表")
-    await db.execute(text("""
-        CREATE TABLE agent_workspace (
-            agent_id INT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
-            current_task TEXT,
-            current_task_at TIMESTAMP,
-            interrupted_at TIMESTAMP,
-            interruption_reason TEXT,
-            updated_at TIMESTAMP DEFAULT NOW()
-        )
-    """))
-    await db.commit()
-    logger.info("  ✅ agent_workspace 表创建完成")
+    """创建/扩展 agent_workspace 表（v1.1.3 创建，v1.3.1 扩展 TODO/PLAN/JOURNAL）"""
+    if not await _table_exists(db, "agent_workspace"):
+        logger.info("  📋 创建 agent_workspace 表")
+        await db.execute(text("""
+            CREATE TABLE agent_workspace (
+                agent_id INT PRIMARY KEY REFERENCES agents(id) ON DELETE CASCADE,
+                current_task TEXT,
+                current_task_at TIMESTAMP,
+                interrupted_at TIMESTAMP,
+                interruption_reason TEXT,
+                todo TEXT DEFAULT '',
+                plan TEXT DEFAULT '',
+                journal TEXT DEFAULT '',
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.commit()
+        logger.info("  ✅ agent_workspace 表创建完成")
+    else:
+        logger.info("  ⏭ agent_workspace 表已存在，检查新列...")
+        cols_added = False
+        if not await _column_exists(db, "agent_workspace", "todo"):
+            await db.execute(text("ALTER TABLE agent_workspace ADD COLUMN todo TEXT DEFAULT ''"))
+            cols_added = True
+            logger.info("  📝 添加 agent_workspace.todo 列")
+        if not await _column_exists(db, "agent_workspace", "plan"):
+            await db.execute(text("ALTER TABLE agent_workspace ADD COLUMN plan TEXT DEFAULT ''"))
+            cols_added = True
+            logger.info("  📝 添加 agent_workspace.plan 列")
+        if not await _column_exists(db, "agent_workspace", "journal"):
+            await db.execute(text("ALTER TABLE agent_workspace ADD COLUMN journal TEXT DEFAULT ''"))
+            cols_added = True
+            logger.info("  📝 添加 agent_workspace.journal 列")
+        if cols_added:
+            await db.commit()
+            logger.info("  ✅ agent_workspace 扩展完成")
+        else:
+            logger.info("  ⏭ agent_workspace 新列均已存在，跳过")
 
 
 async def _migrate_agent_skills(db):
@@ -626,6 +648,19 @@ async def _migrate_api_credit(db):
         logger.info("  ✅ API 额度/配置系统迁移完成")
     else:
         logger.info("  ⏭ API 额度/配置系统均已存在，跳过")
+
+
+async def _migrate_config_profile(db):
+    """v1.3.1 三档 AI 配置（幂等）"""
+    if await _column_exists(db, "agents", "config_profile"):
+        logger.info("  ⏭ agents.config_profile 已存在，跳过")
+        return
+    logger.info("  🎚️ 添加 agents.config_profile 列")
+    await db.execute(text(
+        "ALTER TABLE agents ADD COLUMN config_profile VARCHAR(20) NOT NULL DEFAULT 'custom'"
+    ))
+    await db.commit()
+    logger.info("  ✅ config_profile 迁移完成")
 
 
 async def _fix_column_types(db):

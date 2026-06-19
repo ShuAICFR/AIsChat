@@ -16,6 +16,7 @@ class AgentCreateRequest(BaseModel):
     work_model: str | None = None
     thinking_enabled: bool = Field(default=False)
     hide_ai_identity: bool = Field(default=False)
+    config_profile: str | None = Field(default=None, description="预设档位: chat|immersive|digital_life，不填=custom")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
 
@@ -45,6 +46,7 @@ class AgentUpdateConfigRequest(BaseModel):
     work_model: str | None = None
     thinking_enabled: bool | None = None
     hide_ai_identity: bool | None = None
+    config_profile: str | None = None
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None
@@ -78,6 +80,7 @@ class AgentResponse(BaseModel):
     offline_until: str | None
     is_ai_editable: bool
     thinking_enabled: bool
+    config_profile: str | None = None
     created_at: str | None
 
 
@@ -91,3 +94,21 @@ class AgentConfigHistoryResponse(BaseModel):
     presence_penalty: float | None
     frequency_penalty: float | None
     created_at: str | None
+
+
+class ApplyPresetRequest(BaseModel):
+    """应用配置档请求"""
+    profile: str = Field(..., description="chat|immersive|digital_life")
+
+
+class WorkspaceFileUpdate(BaseModel):
+    """更新工作区文件"""
+    file: str = Field(..., description="todo|plan|journal")
+    content: str = Field(..., description="新内容")
+
+
+class WorkspaceResponse(BaseModel):
+    """工作区响应"""
+    todo: str = ""
+    plan: str = ""
+    journal: str = ""

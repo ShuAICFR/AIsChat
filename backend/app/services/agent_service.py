@@ -14,6 +14,68 @@ from app.utils.text import extract_mentions
 
 logger = logging.getLogger(__name__)
 
+# 三档 AI 配置预设值
+CONFIG_PROFILES = {
+    "chat": {
+        "name": "聊天档",
+        "description": "轻量对话，低温度、短回复",
+        "temperature": 0.7, "top_p": 0.9, "presence_penalty": 0.3, "frequency_penalty": 0.3,
+        "thinking_enabled": False,
+    },
+    "immersive": {
+        "name": "深度沉浸档",
+        "description": "专注深入，高温度、深度推理",
+        "temperature": 0.9, "top_p": 0.95, "presence_penalty": 0.5, "frequency_penalty": 0.5,
+        "thinking_enabled": True,
+    },
+    "digital_life": {
+        "name": "数字生命档",
+        "description": "最大自主，鼓励自修改、全工具",
+        "temperature": 1.1, "top_p": 0.95, "presence_penalty": 0.6, "frequency_penalty": 0.6,
+        "thinking_enabled": True,
+    },
+}
+
+
+async def apply_config_profile(
+    db: AsyncSession,
+    agent_id: int,
+    profile: str,
+    operator_id: int | None = None,
+) -> Agent:
+    """应用预设配置档。先保存历史快照，再写入 current_* 字段。"""
+    if profile not in CONFIG_PROFILES:
+        raise ValueError(f"无效的配置档: {profile}，可选: {list(CONFIG_PROFILES.keys())}")
+
+    agent = await get_agent(db, agent_id)
+    if agent is None:
+        raise ValueError("AI 代理不存在")
+
+    preset = CONFIG_PROFILES[profile]
+
+    # 保存历史快照
+    history = AgentConfigHistory(
+        agent_id=agent.id,
+        system_prompt=agent.current_system_prompt,
+        temperature=agent.current_temperature,
+        top_p=agent.current_top_p,
+        presence_penalty=agent.current_presence_penalty,
+        frequency_penalty=agent.current_frequency_penalty,
+    )
+    db.add(history)
+
+    # 应用预设值
+    agent.current_temperature = preset["temperature"]
+    agent.current_top_p = preset["top_p"]
+    agent.current_presence_penalty = preset["presence_penalty"]
+    agent.current_frequency_penalty = preset["frequency_penalty"]
+    agent.thinking_enabled = preset["thinking_enabled"]
+    agent.config_profile = profile
+
+    await db.flush()
+    logger.info(f"🎚️ AI({agent_id}) 应用配置档: {profile} → T={preset['temperature']}, thinking={preset['thinking_enabled']}")
+    return agent
+
 
 async def create_agent(
     db: AsyncSession,
@@ -234,6 +296,14 @@ async def update_agent_config(
     for field in ("chat_model", "work_model"):
         if field in updates:
             setattr(agent, field, updates[field])  # None = 继承全局
+
+    # config_profile（手动编辑参数时自动回退到 custom）
+    if "config_profile" in updates and updates["config_profile"] is not None:
+        agent.config_profile = updates["config_profile"]
+    elif any(f in updates and updates[f] is not None for f in allowed_fields):
+        # 用户手动调了参数 → 不再是预设档
+        if agent.config_profile and agent.config_profile != "custom":
+            agent.config_profile = "custom"
 
     await db.flush()
     await db.refresh(agent)
@@ -705,6 +775,7 @@ def agent_to_dict(agent: Agent) -> dict:
         "auto_dnd_duration": agent.auto_dnd_duration,
         "is_ai_editable": agent.is_ai_editable,
         "thinking_enabled": agent.thinking_enabled,
+        "config_profile": agent.config_profile or "custom",
         "hide_ai_identity": agent.hide_ai_identity,
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,

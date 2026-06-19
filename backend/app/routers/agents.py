@@ -15,6 +15,9 @@ from app.schemas.agent import (
     AgentStateRequest,
     AgentResponse,
     AgentConfigHistoryResponse,
+    ApplyPresetRequest,
+    WorkspaceFileUpdate,
+    WorkspaceResponse,
 )
 from app.schemas.opencli import OpenCLIExecuteRequest, OpenCLIExecuteResponse
 from app.services.opencli_service import execute_opencli
@@ -36,7 +39,10 @@ from app.services.agent_service import (
     export_agent_soul,
     import_agent_soul,
     agent_to_dict,
+    CONFIG_PROFILES,
+    apply_config_profile,
 )
+from app.services import workspace_service
 from app.utils.auth import get_current_user
 from app.utils.crypto import decrypt_api_key
 from app.models.user import User
@@ -623,3 +629,71 @@ async def execute_opencli_tool(
             level="ERROR",
         )
         return build_tool_error("OPENCLI_EXEC_FAILED", f"命令执行失败: {str(e)}")
+
+
+# ──────────────────────────── 三档 AI 配置 ────────────────────────────
+
+@router.get("/presets")
+async def list_config_presets():
+    """返回所有可用的配置档位预设"""
+    return {
+        "presets": [
+            {"key": k, "name": v["name"], "description": v["description"],
+             "temperature": v["temperature"], "thinking_enabled": v["thinking_enabled"]}
+            for k, v in CONFIG_PROFILES.items()
+        ],
+        "current_default": "custom",
+    }
+
+
+@router.post("/{agent_id}/apply-preset")
+async def apply_preset(
+    agent_id: int,
+    req: ApplyPresetRequest,
+    agent: any = Depends(_require_agent_owner),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """应用配置档位到 AI（保存历史快照后覆盖所有参数）"""
+    if req.profile not in CONFIG_PROFILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的配置档: {req.profile}，可选: {list(CONFIG_PROFILES.keys())}",
+        )
+    try:
+        updated = await apply_config_profile(db, agent_id, req.profile)
+        return agent_to_dict(updated)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ──────────────────────────── AI 个人工作区 ────────────────────────────
+
+@router.get("/{agent_id}/workspace", response_model=WorkspaceResponse)
+async def get_workspace(
+    agent_id: int,
+    agent: any = Depends(_require_agent_owner),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取 AI 的工作区文件（TODO / PLAN / JOURNAL）"""
+    files = await workspace_service.get_all_workspace_files(db, agent_id)
+    return WorkspaceResponse(**files)
+
+
+@router.put("/{agent_id}/workspace", response_model=WorkspaceResponse)
+async def update_workspace(
+    agent_id: int,
+    req: WorkspaceFileUpdate,
+    agent: any = Depends(_require_agent_owner),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新 AI 的工作区文件（也可由 AI 工具调用触发）"""
+    if req.file not in ("todo", "plan", "journal"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的文件类型: {req.file}，可选: todo|plan|journal",
+        )
+    await workspace_service.set_workspace_file(db, agent_id, req.file, req.content)
+    files = await workspace_service.get_all_workspace_files(db, agent_id)
+    return WorkspaceResponse(**files)

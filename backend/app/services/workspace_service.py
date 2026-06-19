@@ -176,3 +176,44 @@ async def clear_task(db: AsyncSession, agent_id: int) -> None:
         ws.interruption_reason = None
         ws.updated_at = datetime.utcnow()
         await db.flush()
+
+
+async def _get_or_create_ws(db: AsyncSession, agent_id: int) -> AgentWorkspace:
+    """获取或创建工作区记录"""
+    result = await db.execute(
+        select(AgentWorkspace).where(AgentWorkspace.agent_id == agent_id)
+    )
+    ws = result.scalar_one_or_none()
+    if ws is None:
+        ws = AgentWorkspace(agent_id=agent_id, updated_at=datetime.utcnow())
+        db.add(ws)
+        await db.flush()
+    return ws
+
+
+async def get_workspace_file(db: AsyncSession, agent_id: int, file_type: str) -> str:
+    """读取单个工作区文件"""
+    ws = await _get_or_create_ws(db, agent_id)
+    content = getattr(ws, file_type, None)
+    return content or ""
+
+
+async def set_workspace_file(db: AsyncSession, agent_id: int, file_type: str, content: str) -> None:
+    """写入单个工作区文件"""
+    if file_type not in ("todo", "plan", "journal"):
+        raise ValueError(f"无效的文件类型: {file_type}")
+    ws = await _get_or_create_ws(db, agent_id)
+    setattr(ws, file_type, content)
+    ws.updated_at = datetime.utcnow()
+    await db.flush()
+    logger.info(f"📝 AI({agent_id}) 更新工作区 {file_type}: {len(content)} 字符")
+
+
+async def get_all_workspace_files(db: AsyncSession, agent_id: int) -> dict:
+    """获取所有工作区文件"""
+    ws = await _get_or_create_ws(db, agent_id)
+    return {
+        "todo": ws.todo or "",
+        "plan": ws.plan or "",
+        "journal": ws.journal or "",
+    }

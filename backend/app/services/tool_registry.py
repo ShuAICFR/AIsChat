@@ -603,6 +603,41 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "manage_workspace",
+            "description": (
+                "管理你的个人工作区文件。你可以读取或写入三个文件：\n"
+                "- todo: 你的待办事项列表（markdown 格式）\n"
+                "- plan: 你的中长期规划文档\n"
+                "- journal: 你的操作日志/日记，写入时会自动追加时间戳\n"
+                "用法示例：读 TODO → action='read' file='todo'；写 PLAN → action='write' file='plan' content='...'"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["read", "write"],
+                        "description": "read=读取文件内容, write=写入/覆盖文件内容",
+                    },
+                    "file": {
+                        "type": "string",
+                        "enum": ["todo", "plan", "journal"],
+                        "description": "要操作的文件：todo=待办列表, plan=规划文档, journal=日记",
+                    },
+                    "content": {
+                        "type": "string",
+                        "nullable": True,
+                        "description": "要写入的内容（action=write 时必填，markdown 格式）。journal 写入时自动在前面加日期标题。",
+                    },
+                },
+                "required": ["action", "file"],
+            },
+        },
+    },
 ]
 
 # 从 TOOL_DEFINITIONS 自动推导 SKILL_SEGMENTS（单一数据源，避免三方维护）
@@ -631,18 +666,18 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "view_unread", "update_self_config", "toggle_thinking",
         "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
-        "cross_post", "check_workspace", "clear_current_task",
+        "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
     ],
     "dnd": [
         "switch_state", "recall_memory", "view_unread", "toggle_thinking",
         "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
-        "cross_post", "check_workspace", "clear_current_task",
+        "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
     ],
     "offline": [
         "switch_state", "list_available_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
-        "check_workspace", "clear_current_task",
+        "check_workspace", "clear_current_task", "manage_workspace",
     ],
     "blocked": [],
 }
@@ -1484,6 +1519,48 @@ async def _handle_clear_current_task(
         return {"error": True, "message": f"清除任务失败: {e}"}
 
 
+async def _handle_manage_workspace(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """工具: manage_workspace — 读写个人工作区文件（TODO/PLAN/JOURNAL）"""
+    from app.services.workspace_service import get_workspace_file, set_workspace_file
+    from datetime import datetime
+
+    action = arguments["action"]
+    file_type = arguments["file"]
+
+    try:
+        if action == "read":
+            content = await get_workspace_file(db, agent_id, file_type)
+            if not content:
+                return {"success": True, "action": "read", "file": file_type,
+                        "content": f"（{file_type} 文件目前为空，你可以开始写第一条）"}
+            return {"success": True, "action": "read", "file": file_type, "content": content}
+
+        elif action == "write":
+            content = arguments.get("content", "")
+            if not content:
+                return {"error": True, "message": "写入内容不能为空"}
+            # journal 写入时自动追加日期标题
+            if file_type == "journal":
+                now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                # 读取已有内容，在前面追加新的日记条目
+                existing = await get_workspace_file(db, agent_id, "journal")
+                if existing:
+                    content = f"## {now}\n\n{content}\n\n---\n\n{existing}"
+                else:
+                    content = f"## {now}\n\n{content}\n"
+            await set_workspace_file(db, agent_id, file_type, content)
+            await db.commit()
+            return {"success": True, "action": "write", "file": file_type,
+                    "message": f"已更新 {file_type}", "length": len(content)}
+
+    except Exception as e:
+        logger.error(f"manage_workspace 失败 (agent={agent_id}): {e}", exc_info=True)
+        return {"error": True, "message": f"工作区操作失败: {e}"}
+
+
 async def _handle_cross_post(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
@@ -1608,6 +1685,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "cross_post": _handle_cross_post,
     "check_workspace": _handle_check_workspace,
     "clear_current_task": _handle_clear_current_task,
+    "manage_workspace": _handle_manage_workspace,
 }
 
 

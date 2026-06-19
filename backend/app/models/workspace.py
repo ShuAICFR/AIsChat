@@ -16,3 +16,8 @@ class AgentWorkspace(Base):
     interrupted_at = Column(DateTime, nullable=True, comment="被中断的时间")
     interruption_reason = Column(Text, nullable=True, comment="中断原因（谁发消息打断了）")
     updated_at = Column(DateTime, nullable=True, comment="最后更新时间")
+
+    # 个人工作区文件（路线图：个人工作区）
+    todo = Column(Text, nullable=True, default="", comment="AI 的 TODO 列表（markdown）")
+    plan = Column(Text, nullable=True, default="", comment="AI 的 PLAN 规划（markdown）")
+    journal = Column(Text, nullable=True, default="", comment="AI 的 JOURNAL 日志（markdown，按日期追加）")

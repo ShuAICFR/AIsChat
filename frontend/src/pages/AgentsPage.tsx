@@ -29,6 +29,7 @@ interface Agent {
   work_model: string | null
   thinking_enabled: boolean
   hide_ai_identity: boolean
+  config_profile: string
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -313,8 +314,10 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [workModel, setWorkModel] = useState(agent.work_model || '')
   const [thinkingEnabled, setThinkingEnabled] = useState(agent.thinking_enabled)
   const [hideAiIdentity, setHideAiIdentity] = useState(agent.hide_ai_identity || false)
+  const [configProfile, setConfigProfile] = useState(agent.config_profile || 'custom')
   const [agentApiBaseUrl, setAgentApiBaseUrl] = useState(agent.api_base_url || '')
   const [agentApiKey, setAgentApiKey] = useState('')
+  const [applyingPreset, setApplyingPreset] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
@@ -367,6 +370,32 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
     }
   }
 
+  const handleApplyPreset = async (profile: string) => {
+    setApplyingPreset(true)
+    setError('')
+    try {
+      const updated = await api.post<Agent>(`/agents/${agent.id}/apply-preset`, { profile })
+      // 同步本地 state
+      setTemperature(updated.current_temperature)
+      setTopP(updated.current_top_p)
+      setPresencePenalty(updated.current_presence_penalty)
+      setFrequencyPenalty(updated.current_frequency_penalty)
+      setThinkingEnabled(updated.thinking_enabled)
+      setConfigProfile(profile)
+      onUpdated()
+    } catch (err: any) {
+      setError(err.message || '应用预设失败')
+    } finally {
+      setApplyingPreset(false)
+    }
+  }
+
+  const presets = [
+    { key: 'chat', label: '聊天', desc: '轻量对话' },
+    { key: 'immersive', label: '沉浸', desc: '深度推理' },
+    { key: 'digital_life', label: '生命', desc: '最大自主' },
+  ]
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl shadow-black/30" onClick={(e) => e.stopPropagation()}>
@@ -409,9 +438,35 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 
           {/* 当前设定（可编辑） */}
           <div className="bg-primary-500/5 rounded-xl p-4 border border-primary-500/20">
-            <h3 className="text-sm font-semibold text-primary-400 mb-3 flex items-center gap-1">
-              ✏️ 当前设定{hasModified ? '（AI 已修改）' : ''}
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-primary-400 flex items-center gap-1">
+                当前设定{hasModified ? '（AI 已修改）' : ''}
+              </h3>
+              {/* 档位标签 */}
+              {configProfile !== 'custom' && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 font-medium">
+                  {configProfile === 'chat' ? '聊天档' : configProfile === 'immersive' ? '沉浸档' : '生命档'}
+                </span>
+              )}
+            </div>
+            {/* 三档快捷切换 */}
+            <div className="flex gap-1.5 mb-3">
+              {presets.map(p => (
+                <button
+                  key={p.key}
+                  onClick={() => handleApplyPreset(p.key)}
+                  disabled={applyingPreset || configProfile === p.key}
+                  className={`flex-1 py-1.5 text-xs rounded-lg font-medium transition-all ${
+                    configProfile === p.key
+                      ? 'bg-primary-500 text-white shadow-sm'
+                      : 'bg-canvas border border-border text-textSecondary hover:border-primary-500/40 hover:text-primary-400'
+                  } disabled:opacity-50`}
+                  title={p.desc}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <div className="space-y-2">
               <div>
                 <label className="text-xs text-textMuted">System Prompt</label>
@@ -881,6 +936,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [workModel, setWorkModel] = useState('')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [hideAiIdentity, setHideAiIdentity] = useState(false)
+  const [configProfile, setConfigProfile] = useState('custom')
   const [apiCreditCost, setApiCreditCost] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -911,6 +967,7 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
         work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideAiIdentity,
+        config_profile: configProfile === 'custom' ? null : configProfile,
         api_credit_cost: apiCreditCost,
       })
       onCreated()
@@ -993,6 +1050,19 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               onChange={(e) => setTemperature(parseFloat(e.target.value))}
               className="w-full accent-primary-500"
             />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">配置档位</label>
+            <select
+              value={configProfile}
+              onChange={(e) => setConfigProfile(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            >
+              <option value="custom">自定义</option>
+              <option value="chat">聊天档 — 轻量对话，低温度</option>
+              <option value="immersive">深度沉浸档 — 专注深入，深度推理</option>
+              <option value="digital_life">数字生命档 — 最大自主，全工具</option>
+            </select>
           </div>
           {thinkingSupported && (
             <div>

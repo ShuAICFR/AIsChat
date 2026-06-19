@@ -23,6 +23,11 @@ export default defineConfig({
         target: 'ws://backend:8000',
         ws: true,
       },
+      '/federation': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

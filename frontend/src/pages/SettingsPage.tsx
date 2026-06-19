@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -55,6 +55,11 @@ export default function SettingsPage() {
   })
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [agents, setAgents] = useState<any[]>([])
+  const [editingAgentId, setEditingAgentId] = useState<number | null>(null)
+  const [agentApiBaseUrl, setAgentApiBaseUrl] = useState('')
+  const [agentApiKey, setAgentApiKey] = useState('')
+  const [agentApiSaving, setAgentApiSaving] = useState(false)
 
   // 通知开关立即生效，不需点保存
   const handleNotificationToggle = (enabled: boolean) => {
@@ -74,6 +79,10 @@ export default function SettingsPage() {
           setChatStyle(data.ui_prefs.chat_style)
         }
       }).catch(console.error)
+      // 加载我的 AI 列表（用于单 AI API 配置）
+      api.get<any[]>('/agents').then(list => {
+        setAgents(list || [])
+      }).catch(() => {})
     }
   }, [user])
 
@@ -110,11 +119,37 @@ export default function SettingsPage() {
       setApiKey('')
       setMessage('设置已保存')
       refreshUser()
+      // 刷新 AI 列表以更新独立 API 状态
+      api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
     } catch (err: any) {
       setMessage(err.message || '保存失败')
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSaveAgentApi = async (agentId: number) => {
+    setAgentApiSaving(true)
+    try {
+      await api.put(`/agents/${agentId}/config`, {
+        api_base_url: agentApiBaseUrl || null,
+        api_key: agentApiKey || null,
+      })
+      setEditingAgentId(null)
+      setAgentApiKey('')
+      // 刷新列表
+      api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
+    } catch (err: any) {
+      alert(err.message || '保存失败')
+    } finally {
+      setAgentApiSaving(false)
+    }
+  }
+
+  const startEditAgentApi = (agent: any) => {
+    setEditingAgentId(agent.id)
+    setAgentApiBaseUrl(agent.api_base_url || '')
+    setAgentApiKey('')
   }
 
   return (
@@ -201,6 +236,78 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 单 AI API 配置 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Bot size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">单 AI API 配置</h2>
+            <span className="text-[10px] text-textMuted ml-auto">独立 API 会覆盖全局设置</span>
+          </div>
+
+          {agents.length === 0 ? (
+            <p className="text-xs text-textMuted py-4 text-center">暂无 AI，创建 AI 后可为每个 AI 配置独立 API</p>
+          ) : (
+            <div className="space-y-2">
+              {agents.map((agent: any) => (
+                <div key={agent.id} className="bg-canvas rounded-xl border border-border p-3">
+                  {editingAgentId === agent.id ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-textPrimary">{agent.name}</span>
+                        <button onClick={() => setEditingAgentId(null)} className="text-textMuted hover:text-textSecondary">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={agentApiBaseUrl}
+                        onChange={(e) => setAgentApiBaseUrl(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                        placeholder="Base URL（留空继承全局）"
+                      />
+                      <input
+                        type="password"
+                        value={agentApiKey}
+                        onChange={(e) => setAgentApiKey(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                        placeholder="API Key（留空继承全局）"
+                      />
+                      <button
+                        onClick={() => handleSaveAgentApi(agent.id)}
+                        disabled={agentApiSaving}
+                        className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
+                      >
+                        {agentApiSaving ? '保存中...' : '保存'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-textPrimary">{agent.name}</span>
+                        {agent.api_base_url ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
+                            独立 API
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
+                            继承全局
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => startEditAgentApi(agent)}
+                        className="text-textMuted hover:text-textSecondary transition-colors"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* 时区设置 */}

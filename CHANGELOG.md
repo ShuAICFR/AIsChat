@@ -55,11 +55,6 @@
 
 - 🐛 **迁移顺序 UndefinedColumnError**：新增列的迁移排在 SELECT 查询 Agent 的迁移之后。修复：将 `_migrate_api_credit`、`_migrate_config_profile`、`_migrate_delay_reply_enabled` 移到 Agent 查询之前。
 
----
-
-## [v0.3.0] - 2026-06-17
-
-### Added
 
 - 🌐 **跨实例联邦通信**：双层 ID 体系——每个实例生成 `instance_subnet_id`（UUID）和 `instance_public_id`（AIsChat- 前缀 32 位 base62）。通过 GitHub 仓库目录自动注册和发现对等端。P2P WebSocket 直连（`/federation/ws` 端点），JWT 双向认证。联邦对等端管理面板支持添加/编辑/删除对等端，Token 更换按钮直通 GitHub classic token 创建页。
 
@@ -73,13 +68,9 @@
 
 - 🖥️ **前端日志查看器**：管理员面板「对话日志」Tab 内嵌对话查看器，支持按 AI/群聊/时间筛选、折叠/展开完整 JSON 对话记录。
 
-### Changed
-
 - 📝 **用户手册更新**：新增第 10 章「对话日志查看」，管理员面板 Tab 索引更新。
 
 - 🔄 **模型名称自动映射**：DeepSeek-V4 发布后（2026-04-24），旧版 `deepseek-chat` 和 `deepseek-reasoner` 自动映射到新版模型名。
-
-### Fixed
 
 - 🐛 **好友系统多项修复**：AI 身份判断、好友通知弹窗、好友申请附言注入 DM 对话、申请时间戳使用原始时间。
 

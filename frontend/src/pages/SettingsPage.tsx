@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -26,14 +26,29 @@ const TIMEZONES = [
   'UTC',
 ]
 
+const LANGUAGES = [
+  { code: 'zh', name: '中文（简体）' },
+  { code: 'en', name: 'English' },
+]
+
+const CHAT_STYLES = [
+  { value: 'cozy', label: '舒适模式', enLabel: 'Cozy' },
+  { value: 'compact', label: '紧凑模式', enLabel: 'Compact' },
+]
+
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com')
   const [apiKey, setApiKey] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<'success' | 'fail' | null>(null)
   const [autoTimeout, setAutoTimeout] = useState(60)
   const [autoDefault, setAutoDefault] = useState(false)
   const [timezone, setTimezone] = useState('Asia/Shanghai')
+  const [language, setLanguage] = useState('zh')
+  const [chatStyle, setChatStyle] = useState('cozy')
   const [notifications, setNotifications] = useState<boolean>(() => {
     const stored = localStorage.getItem('notifications_enabled')
     return stored === null ? true : stored === 'true'
@@ -49,26 +64,60 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      // 从 /auth/me 加载当前设置
       api.get('/auth/me').then((data) => {
         if (data.api_base_url) setApiBaseUrl(data.api_base_url)
         setAutoTimeout(data.auto_approve_vector_timeout)
         setAutoDefault(data.auto_approve_vector_default)
         if (data.timezone) setTimezone(data.timezone)
+        if (data.language) setLanguage(data.language)
+        if (data.ui_prefs) {
+          try {
+            const prefs = JSON.parse(data.ui_prefs)
+            if (prefs.chat_style) setChatStyle(prefs.chat_style)
+          } catch { /* ignore */ }
+        }
       }).catch(console.error)
     }
   }, [user])
+
+  const handleTestConnection = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const baseUrl = apiBaseUrl || 'https://api.deepseek.com'
+      const key = apiKey || null
+      // 发一个简单的 models list 请求验证
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (key) headers['Authorization'] = `Bearer ${key}`
+      const res = await fetch(`${baseUrl}/v1/models`, { headers })
+      if (res.ok) {
+        setTestResult('success')
+      } else {
+        const body = await res.text()
+        setTestResult('fail')
+        console.warn('API test failed:', res.status, body)
+      }
+    } catch {
+      setTestResult('fail')
+    } finally {
+      setTesting(false)
+      setTimeout(() => setTestResult(null), 5000)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
     setMessage('')
     try {
+      const uiPrefs = JSON.stringify({ chat_style: chatStyle })
       await api.put('/user/settings', {
         api_base_url: apiBaseUrl || null,
         api_key: apiKey || null,
         auto_approve_vector_timeout: autoTimeout,
         auto_approve_vector_default: autoDefault,
         timezone,
+        language,
+        ui_prefs: uiPrefs,
       })
       setApiKey('')
       setMessage('设置已保存')
@@ -105,16 +154,43 @@ export default function SettingsPage() {
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5 text-textSecondary">API Key</label>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="留空表示不修改"
-              />
-              <p className="text-xs text-textMuted mt-1.5">
-                {user?.has_api_key ? '已设置 API Key（重新输入将覆盖）' : '尚未设置 API Key'}
-              </p>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  placeholder={user?.has_api_key ? '留空表示不修改（已设置）' : '输入你的 API Key'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-textSecondary"
+                >
+                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-xs text-textMuted">
+                  {user?.has_api_key
+                    ? '✅ 已设置 API Key'
+                    : '⚠️ 尚未设置 API Key'}
+                </p>
+                <button
+                  onClick={handleTestConnection}
+                  disabled={testing}
+                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 disabled:opacity-50 transition-colors"
+                >
+                  {testing ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : testResult === 'success' ? (
+                    <CheckCircle size={12} className="text-mint-400" />
+                  ) : testResult === 'fail' ? (
+                    <XCircle size={12} className="text-rose-400" />
+                  ) : null}
+                  {testing ? '测试中...' : testResult === 'success' ? '连接成功' : testResult === 'fail' ? '连接失败' : '测试连接'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -138,6 +214,47 @@ export default function SettingsPage() {
           <p className="text-xs text-textMuted mt-2">
             当前: {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
           </p>
+        </div>
+
+        {/* 语言设置 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Globe size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">语言</h2>
+          </div>
+          <p className="text-xs text-textMuted mb-3">界面和 AI 系统提示词将使用所选语言</p>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 聊天样式 */}
+        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Layout size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">聊天样式</h2>
+          </div>
+          <div className="flex gap-3">
+            {CHAT_STYLES.map((s) => (
+              <button
+                key={s.value}
+                onClick={() => setChatStyle(s.value)}
+                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+                  chatStyle === s.value
+                    ? 'border-primary-500 bg-primary-500/10 text-primary-400'
+                    : 'border-border bg-canvas text-textSecondary hover:border-primary-500/30'
+                }`}
+              >
+                {language === 'en' ? s.enLabel : s.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 策略模式 */}

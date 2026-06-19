@@ -58,6 +58,22 @@ class Agent(Base):
     # 对话日志：用户是否可查看此 AI 的日志（NULL=使用全局 default_user_log_access）
     user_can_view_logs = Column(Boolean, nullable=True)
 
+    # API 调用额度成本（创建时从用户 api_credit 扣除，删除时返还）
+    api_credit_cost = Column(Integer, default=0)
+
+    # 单 AI 级 API 配置覆盖（NULL = 继承用户全局设置）
+    api_base_url = Column(Text)
+    api_key_encrypted = Column(Text)
+
+    # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
+    hide_ai_identity = Column(Boolean, default=False)
+
+    # 头像 URL
+    avatar_url = Column(Text)
+
+    # API Token（供外部调用该 AI）
+    api_token = Column(String(64))
+
     created_at = Column(DateTime, server_default=func.now())
 
 

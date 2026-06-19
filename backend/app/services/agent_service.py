@@ -28,10 +28,13 @@ async def create_agent(
     work_model: str | None = None,
     thinking_enabled: bool = False,
     is_admin: bool = False,
+    api_credit_cost: int = 0,
+    hide_ai_identity: bool = False,
 ) -> Agent:
     """
-    创建 AI 代理，消耗用户的创建额度。
-    管理员创建不消耗额度。
+    创建 AI 代理。
+    管理员创建不限额度；普通用户需有剩余 ai_quota（仅作上限检查，不扣除）。
+    实际 API 调用消耗 api_credit。
     """
     # 查询用户（额度检查和日志都需要）
     result = await db.execute(select(User).where(User.id == owner_id))
@@ -42,8 +45,6 @@ async def create_agent(
     if not is_admin:
         if user.ai_quota <= 0:
             raise ValueError("AI 创建额度不足，请联系管理员获取兑换码")
-        # 扣减额度
-        user.ai_quota -= 1
 
     # 创建 Agent 对应的 users 条目（统一 ID 空间，用于私信等场景）
     ai_user = User(
@@ -75,6 +76,8 @@ async def create_agent(
         work_model=work_model,
         thinking_enabled=thinking_enabled,
         state="active",
+        api_credit_cost=api_credit_cost,
+        hide_ai_identity=hide_ai_identity,
     )
     db.add(agent)
     await db.flush()
@@ -89,8 +92,7 @@ async def create_agent(
     )
     db.add(friendship)
 
-    quota_info = f"剩余额度: {user.ai_quota}" if not is_admin else "管理员创建，不消耗额度"
-    logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，{quota_info}")
+    logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，api_credit_cost={api_credit_cost}")
     return agent
 
 
@@ -109,6 +111,57 @@ async def list_agents(db: AsyncSession, owner_id: int) -> list[Agent]:
         select(Agent).where(Agent.owner_id == owner_id).order_by(Agent.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def delete_agent(
+    db: AsyncSession,
+    agent_id: int,
+    operator_id: int,
+    is_admin: bool = False,
+) -> dict:
+    """
+    删除 AI 代理，返还 api_credit_cost 给创建者。
+    同时删除关联的 users 条目（type='ai'）。
+    """
+    agent = await get_agent(db, agent_id)
+    if agent is None:
+        raise ValueError("AI 代理不存在")
+
+    # 权限检查
+    if not is_admin and agent.owner_id != operator_id:
+        raise ValueError("无权删除此 AI")
+
+    returned_credit = agent.api_credit_cost
+    owner_id = agent.owner_id
+
+    # 返还 API 额度
+    if returned_credit > 0:
+        result = await db.execute(select(User).where(User.id == owner_id))
+        owner = result.scalar_one_or_none()
+        if owner:
+            owner.api_credit += returned_credit
+
+    # 删除关联的 User（type='ai'）
+    if agent.user_id:
+        await db.execute(select(User).where(User.id == agent.user_id))
+        ai_user_result = await db.execute(select(User).where(User.id == agent.user_id))
+        ai_user = ai_user_result.scalar_one_or_none()
+        if ai_user:
+            await db.delete(ai_user)
+
+    agent_name = agent.name
+    await db.delete(agent)
+    await db.flush()
+
+    logger.info(
+        f"AI '{agent_name}' (id={agent_id}) 已删除，"
+        f"返还 {returned_credit} API 额度给用户 id={owner_id}"
+    )
+    return {
+        "message": f"AI '{agent_name}' 已删除",
+        "agent_id": agent_id,
+        "returned_credit": returned_credit,
+    }
 
 
 async def update_agent_config(
@@ -157,6 +210,25 @@ async def update_agent_config(
     # thinking_enabled 是简单布尔，不遵循 current_* 模式
     if "thinking_enabled" in updates and updates["thinking_enabled"] is not None:
         agent.thinking_enabled = updates["thinking_enabled"]
+
+    # hide_ai_identity 开关
+    if "hide_ai_identity" in updates:
+        agent.hide_ai_identity = updates["hide_ai_identity"]
+
+    # 头像 URL
+    if "avatar_url" in updates:
+        agent.avatar_url = updates.get("avatar_url")
+
+    # 单 AI 级 API 配置
+    if "api_base_url" in updates:
+        agent.api_base_url = updates.get("api_base_url")
+    if "api_key" in updates:
+        from app.utils.crypto import encrypt_api_key
+        api_key_val = updates["api_key"]
+        if api_key_val:
+            agent.api_key_encrypted = encrypt_api_key(api_key_val)
+        elif api_key_val == "":  # 空字符串表示清除
+            agent.api_key_encrypted = None
 
     # chat_model / work_model 允许设为 None（重置为全局默认）
     for field in ("chat_model", "work_model"):
@@ -633,6 +705,12 @@ def agent_to_dict(agent: Agent) -> dict:
         "auto_dnd_duration": agent.auto_dnd_duration,
         "is_ai_editable": agent.is_ai_editable,
         "thinking_enabled": agent.thinking_enabled,
+        "hide_ai_identity": agent.hide_ai_identity,
         "user_id": agent.user_id,
+        "api_credit_cost": agent.api_credit_cost,
+        "api_base_url": agent.api_base_url,
+        "has_api_key": agent.api_key_encrypted is not None,
+        "avatar_url": agent.avatar_url,
+        "api_token": agent.api_token,
         "created_at": str(agent.created_at) if agent.created_at else None,
     }

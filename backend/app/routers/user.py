@@ -19,6 +19,8 @@ class UpdateSettingsRequest(BaseModel):
     auto_approve_vector_timeout: int | None = None
     auto_approve_vector_default: bool | None = None
     timezone: str | None = None
+    language: str | None = None
+    ui_prefs: str | None = None
 
 
 class RedeemRequest(BaseModel):
@@ -42,6 +44,8 @@ async def update_settings(
             auto_approve_vector_timeout=req.auto_approve_vector_timeout,
             auto_approve_vector_default=req.auto_approve_vector_default,
             timezone=req.timezone,
+            language=req.language,
+            ui_prefs=req.ui_prefs,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -74,10 +78,18 @@ async def redeem_code(
     if code_obj.expires_at and code_obj.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="兑换码已过期")
 
-    # 增加额度
+    # 增加额度（按类型加到不同字段）
     user_result = await db.execute(select(User).where(User.id == current_user["user_id"]))
     user = user_result.scalar_one()
-    user.ai_quota += code_obj.quota_amount
+    code_type = code_obj.code_type or "ai_quota"
+    if code_type == "api_credit":
+        user.api_credit += code_obj.quota_amount
+        msg = f"兑换成功，获得 {code_obj.quota_amount} API 调用额度"
+        current_amount = user.api_credit
+    else:
+        user.ai_quota += code_obj.quota_amount
+        msg = f"兑换成功，获得 {code_obj.quota_amount} AI 创建额度"
+        current_amount = user.ai_quota
 
     # 标记兑换码已使用
     code_obj.used_by = current_user["user_id"]
@@ -86,6 +98,7 @@ async def redeem_code(
     await db.flush()
 
     return {
-        "message": f"兑换成功，获得 {code_obj.quota_amount} 个 AI 创建额度",
+        "message": msg,
         "current_quota": user.ai_quota,
+        "current_api_credit": user.api_credit,
     }

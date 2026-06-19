@@ -15,6 +15,8 @@ class AgentCreateRequest(BaseModel):
     chat_model: str | None = None  # NULL = 继承全局
     work_model: str | None = None
     thinking_enabled: bool = Field(default=False)
+    hide_ai_identity: bool = Field(default=False)
+    api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
 
 class AgentGenerateRequest(BaseModel):
@@ -42,6 +44,10 @@ class AgentUpdateConfigRequest(BaseModel):
     chat_model: str | None = None
     work_model: str | None = None
     thinking_enabled: bool | None = None
+    hide_ai_identity: bool | None = None
+    avatar_url: str | None = None
+    api_base_url: str | None = None
+    api_key: str | None = None
 
 
 class AgentStateRequest(BaseModel):

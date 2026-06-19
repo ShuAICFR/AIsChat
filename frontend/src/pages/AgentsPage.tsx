@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
-import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw } from 'lucide-react'
+import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface ModelOption {
@@ -14,13 +15,11 @@ interface Agent {
   name: string
   state: string
   is_ai_editable: boolean
-  // 原始设定
   original_system_prompt: string | null
   original_temperature: number
   original_top_p: number
   original_presence_penalty: number
   original_frequency_penalty: number
-  // 当前设定（AI 可能已修改）
   current_system_prompt: string | null
   current_temperature: number
   current_top_p: number
@@ -29,6 +28,11 @@ interface Agent {
   chat_model: string | null
   work_model: string | null
   thinking_enabled: boolean
+  hide_ai_identity: boolean
+  api_credit_cost: number
+  api_base_url: string | null
+  has_api_key: boolean
+  avatar_url: string | null
   created_at: string
 }
 
@@ -102,6 +106,8 @@ export default function AgentsPage() {
     }
   }
 
+  const navigate = useNavigate()
+
   return (
     <div className="h-full overflow-y-auto p-6 bg-canvas">
       <div className="max-w-4xl mx-auto">
@@ -148,7 +154,8 @@ export default function AgentsPage() {
               return (
                 <div
                   key={agent.id}
-                  className="bg-surface border border-border rounded-xl p-5 hover:border-primary-500/30 transition-all duration-200"
+                  onClick={() => navigate(`/agents/${agent.id}`)}
+                  className="bg-surface border border-border rounded-xl p-5 hover:border-primary-500/30 transition-all duration-200 cursor-pointer"
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -305,6 +312,9 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
   const [chatModel, setChatModel] = useState(agent.chat_model || '')
   const [workModel, setWorkModel] = useState(agent.work_model || '')
   const [thinkingEnabled, setThinkingEnabled] = useState(agent.thinking_enabled)
+  const [hideAiIdentity, setHideAiIdentity] = useState(agent.hide_ai_identity || false)
+  const [agentApiBaseUrl, setAgentApiBaseUrl] = useState(agent.api_base_url || '')
+  const [agentApiKey, setAgentApiKey] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
@@ -332,6 +342,10 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
     setLoading(true)
     setError('')
     try {
+      const hideIdentity = hideAiIdentity
+      const apiBaseUrl = agentApiBaseUrl || null
+      const apiKey = agentApiKey || null
+
       await api.put(`/agents/${agent.id}/config`, {
         system_prompt: systemPrompt || null,
         temperature,
@@ -341,6 +355,9 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         chat_model: chatModel || null,
         work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
+        hide_ai_identity: hideIdentity,
+        api_base_url: apiBaseUrl,
+        api_key: apiKey,
       })
       onUpdated()
     } catch (err: any) {
@@ -476,6 +493,50 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   </label>
                 </div>
               )}
+              {/* AI 身份隐藏 */}
+              <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                <div>
+                  <span className="text-xs text-textSecondary">🎭 隐藏 AI 身份</span>
+                  <p className="text-[10px] text-textMuted mt-0.5">开启后系统提示词不出现"你是AI"</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideAiIdentity}
+                    onChange={(e) => setHideAiIdentity(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 独立 API 配置 */}
+        <div className="bg-canvas rounded-xl p-4 border border-border mb-4">
+          <h3 className="text-sm font-semibold text-textSecondary mb-3">🔗 独立 API 配置（留空继承全局）</h3>
+          <div className="space-y-2">
+            <div>
+              <label className="text-xs text-textMuted">API Base URL</label>
+              <input
+                type="text"
+                value={agentApiBaseUrl}
+                onChange={(e) => setAgentApiBaseUrl(e.target.value)}
+                className="w-full mt-0.5 px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                placeholder="https://api.deepseek.com"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-textMuted">API Key</label>
+              <input
+                type="password"
+                value={agentApiKey}
+                onChange={(e) => setAgentApiKey(e.target.value)}
+                placeholder={agent.has_api_key ? '留空不修改（已设置）' : '留空不修改'}
+                className="w-full mt-0.5 px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              />
+              {agent.has_api_key && <p className="text-[10px] text-mint-400 mt-0.5">已设置独立 Key</p>}
             </div>
           </div>
         </div>
@@ -819,6 +880,8 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [chatModel, setChatModel] = useState('')
   const [workModel, setWorkModel] = useState('')
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
+  const [hideAiIdentity, setHideAiIdentity] = useState(false)
+  const [apiCreditCost, setApiCreditCost] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
@@ -847,6 +910,8 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
         chat_model: chatModel || null,
         work_model: workModel || null,
         thinking_enabled: thinkingEnabled,
+        hide_ai_identity: hideAiIdentity,
+        api_credit_cost: apiCreditCost,
       })
       onCreated()
     } catch (err: any) {
@@ -945,6 +1010,37 @@ function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; onCreat
               </p>
             </div>
           )}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideAiIdentity}
+                onChange={(e) => setHideAiIdentity(e.target.checked)}
+                className="rounded accent-primary-500"
+              />
+              <span className="text-xs text-textSecondary">🎭 隐藏 AI 身份</span>
+            </label>
+            <p className="text-[10px] text-textMuted mt-0.5 ml-6">
+              开启后系统提示词中将不包含"你是AI"相关表述，AI 会把自己视为角色本身
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">
+              API 额度成本
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100000}
+              value={apiCreditCost}
+              onChange={(e) => setApiCreditCost(parseInt(e.target.value) || 0)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              placeholder="0"
+            />
+            <p className="text-xs text-textMuted mt-1">
+              删除此 AI 时返还的 API 额度（0 表示不返还）
+            </p>
+          </div>
         </div>
 
         {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}

@@ -32,4 +32,13 @@ class User(Base):
     # 对话日志：用户自己保留的对话日志数（NULL=使用系统默认值，≤ 管理员上限）
     conversation_logs_limit = Column(Integer, nullable=True)
 
+    # API 调用额度（用于 LLM API 调用计费）
+    api_credit = Column(Integer, default=0)
+
+    # 语言偏好（zh / en）
+    language = Column(String(10), default="zh")
+
+    # 界面偏好（JSONB：chat_style, mobile_layout 等）
+    ui_prefs = Column(String(500), default="{}")
+
     created_at = Column(DateTime, server_default=func.now())

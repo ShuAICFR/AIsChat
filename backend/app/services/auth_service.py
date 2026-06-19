@@ -96,11 +96,14 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "role": user.role,
         "is_active": user.is_active,
         "ai_quota": user.ai_quota,
+        "api_credit": user.api_credit,
         "api_base_url": user.api_base_url,
         "has_api_key": user.api_key_encrypted is not None,
         "auto_approve_vector_timeout": user.auto_approve_vector_timeout,
         "auto_approve_vector_default": user.auto_approve_vector_default,
         "timezone": user.timezone or "Asia/Shanghai",
+        "language": user.language or "zh",
+        "ui_prefs": user.ui_prefs or "{}",
         "created_at": str(user.created_at) if user.created_at else None,
     }
 
@@ -113,6 +116,8 @@ async def update_user_settings(
     auto_approve_vector_timeout: int | None = None,
     auto_approve_vector_default: bool | None = None,
     timezone: str | None = None,
+    language: str | None = None,
+    ui_prefs: str | None = None,
 ) -> dict:
     """更新用户设置"""
     result = await db.execute(select(User).where(User.id == user_id))
@@ -130,6 +135,10 @@ async def update_user_settings(
         user.auto_approve_vector_default = auto_approve_vector_default
     if timezone is not None:
         user.timezone = timezone
+    if language is not None:
+        user.language = language
+    if ui_prefs is not None:
+        user.ui_prefs = ui_prefs
 
     await db.flush()
     await db.refresh(user)

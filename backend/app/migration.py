@@ -28,6 +28,7 @@ async def run_migrations():
             await _migrate_users_type(db)
             await _migrate_conversation_logs(db)   # 必须在查询 Agent 之前添加列
             await _migrate_federation_tables(db)   # 必须在查询 Agent 之前添加列
+            await _migrate_api_credit(db)          # 新增列必须在查询 Agent 之前
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)
             await _migrate_create_dm_tables(db)
@@ -542,6 +543,89 @@ async def _migrate_conversation_logs(db):
         logger.info("  ✅ 对话日志系统迁移完成")
     else:
         logger.info("  ⏭ 对话日志系统均已存在，跳过")
+
+
+async def _migrate_api_credit(db):
+    """v1.3.0 API 额度系统 + 单 AI API 覆盖 + AI 不自知 + 语言/界面设置（幂等）"""
+    created_any = False
+
+    if not await _column_exists(db, "users", "api_credit"):
+        logger.info("  💰 添加 users.api_credit 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN api_credit INTEGER NOT NULL DEFAULT 0"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.api_credit 已存在，跳过")
+
+    if not await _column_exists(db, "users", "language"):
+        logger.info("  🌐 添加 users.language 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN language VARCHAR(10) DEFAULT 'zh'"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.language 已存在，跳过")
+
+    if not await _column_exists(db, "users", "ui_prefs"):
+        logger.info("  🎨 添加 users.ui_prefs 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN ui_prefs JSONB DEFAULT '{}'"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.ui_prefs 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "api_credit_cost"):
+        logger.info("  💰 添加 agents.api_credit_cost 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN api_credit_cost INTEGER NOT NULL DEFAULT 0"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.api_credit_cost 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "api_base_url"):
+        logger.info("  🔗 添加 agents.api_base_url 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN api_base_url TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.api_base_url 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "api_key_encrypted"):
+        logger.info("  🔑 添加 agents.api_key_encrypted 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN api_key_encrypted TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.api_key_encrypted 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "hide_ai_identity"):
+        logger.info("  🎭 添加 agents.hide_ai_identity 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN hide_ai_identity BOOLEAN NOT NULL DEFAULT FALSE"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.hide_ai_identity 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "avatar_url"):
+        logger.info("  🖼️ 添加 agents.avatar_url 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN avatar_url TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.avatar_url 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "api_token"):
+        logger.info("  🪙 添加 agents.api_token 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN api_token VARCHAR(64)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.api_token 已存在，跳过")
+
+    if not await _column_exists(db, "redemption_codes", "code_type"):
+        logger.info("  🏷️ 添加 redemption_codes.code_type 列")
+        await db.execute(text(
+            "ALTER TABLE redemption_codes ADD COLUMN code_type VARCHAR(10) NOT NULL DEFAULT 'ai_quota'"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ redemption_codes.code_type 已存在，跳过")
+
+    if created_any:
+        await db.commit()
+        logger.info("  ✅ API 额度/配置系统迁移完成")
+    else:
+        logger.info("  ⏭ API 额度/配置系统均已存在，跳过")
 
 
 async def _fix_column_types(db):

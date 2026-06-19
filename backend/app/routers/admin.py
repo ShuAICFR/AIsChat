@@ -44,6 +44,7 @@ class BanUserRequest(BaseModel):
 
 class GenerateCodeRequest(BaseModel):
     quota_amount: int = Field(..., ge=1, le=100)
+    code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit)$")
     expires_in_days: int = Field(..., ge=1, le=365)
 
 
@@ -185,6 +186,31 @@ async def update_user_quota(
     await db.flush()
 
     return {"message": "额度已更新", "user_id": user_id, "ai_quota": quota}
+
+
+@router.put("/users/{user_id}/api-credit")
+async def update_user_api_credit(
+    user_id: int,
+    credit: int = Query(..., ge=0, le=100000),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """调整用户 API 调用额度"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    old_credit = user.api_credit
+    user.api_credit = credit
+
+    await _log_admin_action(
+        db, admin["user_id"], "update_api_credit", "user", user_id,
+        {"old_credit": old_credit, "new_credit": credit},
+    )
+    await db.flush()
+
+    return {"message": "API 额度已更新", "user_id": user_id, "api_credit": credit}
 
 
 @router.put("/users/{user_id}/role")
@@ -345,6 +371,7 @@ async def generate_code(
     code = RedemptionCode(
         code=code_str,
         quota_amount=req.quota_amount,
+        code_type=req.code_type,
         expires_at=datetime.now(timezone.utc) + timedelta(days=req.expires_in_days),
         created_by=admin["user_id"],
     )
@@ -352,13 +379,14 @@ async def generate_code(
 
     await _log_admin_action(
         db, admin["user_id"], "generate_code", "redemption_code", 0,
-        {"code": code_str, "quota_amount": req.quota_amount},
+        {"code": code_str, "quota_amount": req.quota_amount, "code_type": req.code_type},
     )
     await db.flush()
 
     return {
         "code": code_str,
         "quota_amount": req.quota_amount,
+        "code_type": req.code_type,
         "expires_in_days": req.expires_in_days,
     }
 
@@ -378,6 +406,7 @@ async def list_codes(
         {
             "code": c.code,
             "quota_amount": c.quota_amount,
+            "code_type": c.code_type or "ai_quota",
             "expires_at": str(c.expires_at) if c.expires_at else None,
             "used_by": c.used_by,
             "used_at": str(c.used_at) if c.used_at else None,

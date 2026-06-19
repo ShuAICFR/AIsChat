@@ -277,8 +277,15 @@ async def _maybe_trigger_ai_reply(
     user_result = await db.execute(select(User).where(User.id == agent.owner_id))
     user = user_result.scalar_one_or_none()
     from app.utils.crypto import decrypt_api_key
-    api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
-    api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+    # 优先级：Agent 级配置 > User 全局配置
+    api_key = None
+    api_base = settings.deepseek_base_url
+    if agent.api_key_encrypted:
+        api_key = decrypt_api_key(agent.api_key_encrypted)
+        api_base = agent.api_base_url or settings.deepseek_base_url
+    elif user and user.api_key_encrypted:
+        api_key = decrypt_api_key(user.api_key_encrypted)
+        api_base = user.api_base_url or settings.deepseek_base_url
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}")
 
     # 5.5. 中断标记：如果 AI 之前在忙，记录中断
@@ -600,12 +607,18 @@ async def _trigger_dm_ai_reply(
         logger.info(f"AI {agent.name}({agent.id}) 速率限制，跳过 DM 回复")
         return
 
-    # 获取 API 配置
+    # 获取 API 配置（Agent 级优先）
     user_result = await db.execute(select(User).where(User.id == agent.owner_id))
     user = user_result.scalar_one_or_none()
     from app.utils.crypto import decrypt_api_key
-    api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
-    api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+    api_key = None
+    api_base = settings.deepseek_base_url
+    if agent.api_key_encrypted:
+        api_key = decrypt_api_key(agent.api_key_encrypted)
+        api_base = agent.api_base_url or settings.deepseek_base_url
+    elif user and user.api_key_encrypted:
+        api_key = decrypt_api_key(user.api_key_encrypted)
+        api_base = user.api_base_url or settings.deepseek_base_url
 
     # 中断标记：如果 AI 之前在忙，记录中断
     try:
@@ -794,11 +807,17 @@ async def _process_alarm_event(db, event: dict):
         )
         await db.flush()
 
-    # 获取 API 配置
+    # 获取 API 配置（Agent 级优先）
     user_result = await db.execute(select(User).where(User.id == agent.owner_id))
     user = user_result.scalar_one_or_none()
-    api_key = decrypt_api_key(user.api_key_encrypted) if user and user.api_key_encrypted else None
-    api_base = user.api_base_url if user and user.api_base_url else settings.deepseek_base_url
+    api_key = None
+    api_base = settings.deepseek_base_url
+    if agent.api_key_encrypted:
+        api_key = decrypt_api_key(agent.api_key_encrypted)
+        api_base = agent.api_base_url or settings.deepseek_base_url
+    elif user and user.api_key_encrypted:
+        api_key = decrypt_api_key(user.api_key_encrypted)
+        api_base = user.api_base_url or settings.deepseek_base_url
 
     # 构建系统提示词
     custom_prompt = agent.current_system_prompt or (

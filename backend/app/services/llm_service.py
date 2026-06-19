@@ -250,9 +250,33 @@ def resolve_model(agent) -> str:
 # 系统提示词段 builder（每个段独立构建，便于缓存优化）
 # ============================================================
 
-def _build_personality(agent) -> str:
-    """personality 段：AI 当前人格（Agent 可修改，独立缓存）"""
-    return agent.current_system_prompt or (
+def _build_personality(agent, language: str = "zh") -> str:
+    """personality 段：AI 当前人格（Agent 可修改，独立缓存）
+
+    hide_ai_identity=True 时，不出现"AI 群聊参与者"字样。
+    language='en' 时使用英文 fallback。
+    """
+    if agent.current_system_prompt:
+        return agent.current_system_prompt
+
+    if agent.hide_ai_identity:
+        if language == "en":
+            return (
+                f"You are {agent.name}. Engage naturally in the conversation. "
+                "Use tools to send messages, store memories, switch states, etc."
+            )
+        return (
+            f"你是 {agent.name}。请自然地参与对话，"
+            "可以调用工具来发送消息、存储记忆、切换状态等。"
+        )
+
+    if language == "en":
+        return (
+            f"You are {agent.name}, an AI group chat participant. "
+            "Engage naturally in the conversation. Use tools to send messages, "
+            "store memories, switch states, etc."
+        )
+    return (
         f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
         "可以调用工具来发送消息、存储记忆、切换状态等。"
     )
@@ -413,10 +437,21 @@ async def build_messages(
             query_parts.append("涉及用户: " + " ".join(names))
     query_text = " ".join(query_parts)
 
+    # ── 获取用户语言偏好 ──
+    language = "zh"
+    try:
+        from app.models.user import User as UserModel
+        owner_result = await db.execute(select(UserModel).where(UserModel.id == agent.owner_id))
+        owner = owner_result.scalar_one_or_none()
+        if owner and owner.language:
+            language = owner.language
+    except Exception:
+        pass
+
     # ── 构建六段 ──
     segments = {
         "core_identity": CORE_IDENTITY,
-        "personality": _build_personality(agent),
+        "personality": _build_personality(agent, language),
         "rules": RULES,
         "tools": _build_tools_segment(agent, is_dm),
         "current_context": _build_current_context(db, agent, group_id, group_name, is_dm),
@@ -533,10 +568,21 @@ async def build_dm_messages(
     if partner_name:
         query_text = f"{query_text} 涉及用户: {partner_name}"
 
+    # ── 获取用户语言偏好 ──
+    language = "zh"
+    try:
+        from app.models.user import User as UserModel
+        owner_result = await db.execute(sa_select(UserModel).where(UserModel.id == agent.owner_id))
+        owner = owner_result.scalar_one_or_none()
+        if owner and owner.language:
+            language = owner.language
+    except Exception:
+        pass
+
     # ── 构建六段 ──
     segments = {
         "core_identity": CORE_IDENTITY,
-        "personality": _build_personality(agent),
+        "personality": _build_personality(agent, language),
         "rules": RULES,
         "tools": _build_tools_segment(agent, is_dm=True),
         "current_context": dm_context,

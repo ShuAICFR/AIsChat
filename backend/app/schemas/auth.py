@@ -32,9 +32,12 @@ class UserInfoResponse(BaseModel):
     role: str
     is_active: bool
     ai_quota: int
+    api_credit: int = 0
     api_base_url: str | None = None
     has_api_key: bool = False  # 不返回明文 key，只返回是否已设置
     auto_approve_vector_timeout: int
     auto_approve_vector_default: bool
     timezone: str = "Asia/Shanghai"
+    language: str = "zh"
+    ui_prefs: str = "{}"
     created_at: str | None = None

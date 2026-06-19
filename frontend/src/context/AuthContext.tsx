@@ -7,8 +7,11 @@ interface User {
   role: string
   is_active: boolean
   ai_quota: number
+  api_credit: number
   has_api_key: boolean
   timezone: string
+  language: string
+  ui_prefs: string
 }
 
 interface AuthContextType {
@@ -56,8 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: data.role,
       is_active: true,
       ai_quota: 0,
+      api_credit: 0,
       has_api_key: false,
       timezone: 'Asia/Shanghai',
+      language: 'zh',
+      ui_prefs: '{}',
     })
   }
 
@@ -70,8 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role: data.role,
       is_active: true,
       ai_quota: 3,
+      api_credit: 0,
       has_api_key: false,
       timezone: 'Asia/Shanghai',
+      language: 'zh',
+      ui_prefs: '{}',
     })
   }
 

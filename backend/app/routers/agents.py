@@ -4,6 +4,7 @@ AI 代理管理路由
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import Response
 import json
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.agent import (
@@ -134,6 +135,8 @@ async def create_new_agent(
             work_model=req.work_model,
             thinking_enabled=req.thinking_enabled,
             is_admin=current_user["role"] == "admin",
+            api_credit_cost=req.api_credit_cost,
+            hide_ai_identity=req.hide_ai_identity,
         )
         return agent_to_dict(agent)
     except ValueError as e:
@@ -380,6 +383,196 @@ async def import_soul(
         return agent_to_dict(agent)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ---------- 删除 AI ----------
+
+@router.delete("/{agent_id}")
+async def delete_agent(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除 AI（返还 api_credit_cost 额度）"""
+    from app.services.agent_service import delete_agent as delete_agent_svc
+    try:
+        result = await delete_agent_svc(
+            db,
+            agent_id=agent_id,
+            operator_id=current_user["user_id"],
+            is_admin=current_user["role"] == "admin",
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ---------- API Token ----------
+
+@router.post("/{agent_id}/token")
+async def generate_agent_token(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """为 AI 生成/刷新外部 API Token"""
+    import secrets
+    agent = await _require_agent_owner(agent_id, current_user, db)
+    token = "at-" + secrets.token_hex(24)
+    agent.api_token = token
+    await db.flush()
+    return {"agent_id": agent_id, "api_token": token}
+
+
+@router.get("/{agent_id}/token")
+async def get_agent_token(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取 AI 当前的 API Token（脱敏）"""
+    agent = await _require_agent_owner(agent_id, current_user, db)
+    token = agent.api_token
+    if token:
+        masked = token[:8] + "..." + token[-4:] if len(token) > 12 else token[:4] + "***"
+    else:
+        masked = None
+    return {"agent_id": agent_id, "api_token": masked, "has_token": token is not None}
+
+
+# ---------- 头像 ----------
+
+@router.post("/{agent_id}/avatar")
+async def upload_agent_avatar(
+    agent_id: int,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传 AI 头像"""
+    import os
+    import uuid
+
+    agent = await _require_agent_owner(agent_id, current_user, db)
+
+    # 验证文件类型
+    allowed_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅支持 JPEG/PNG/GIF/WebP")
+
+    # 生成唯一文件名
+    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "png"
+    filename = f"avatar_{agent_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    upload_dir = "uploads/avatars"
+    os.makedirs(upload_dir, exist_ok=True)
+    filepath = os.path.join(upload_dir, filename)
+
+    content = await file.read()
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    avatar_url = f"/{upload_dir}/{filename}"
+    agent.avatar_url = avatar_url
+    await db.flush()
+
+    return {"agent_id": agent_id, "avatar_url": avatar_url}
+
+
+# ---------- 存储管理 ----------
+
+@router.get("/{agent_id}/storage")
+async def get_agent_storage(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """查看 AI 的文件空间占用"""
+    import os
+    agent = await _require_agent_owner(agent_id, current_user, db)
+
+    workspace_dir = f"uploads/workspace/{agent_id}"
+    total_size = 0
+    file_count = 0
+    files = []
+    if os.path.exists(workspace_dir):
+        for dirpath, dirnames, filenames in os.walk(workspace_dir):
+            for fn in filenames:
+                fp = os.path.join(dirpath, fn)
+                size = os.path.getsize(fp)
+                total_size += size
+                file_count += 1
+                files.append({
+                    "path": fp.replace("\\", "/"),
+                    "size": size,
+                    "name": fn,
+                })
+
+    return {
+        "agent_id": agent_id,
+        "workspace_dir": workspace_dir,
+        "total_size": total_size,
+        "file_count": file_count,
+        "files": sorted(files, key=lambda f: f["size"], reverse=True)[:50],
+    }
+
+
+# ---------- 记忆查看 ----------
+
+@router.get("/{agent_id}/memories")
+async def get_agent_memories(
+    agent_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """查看 AI 的所有记忆条目"""
+    from app.models.memory import RoughMemory, DetailMemory
+
+    agent = await _require_agent_owner(agent_id, current_user, db)
+
+    # 总数
+    total_result = await db.execute(
+        select(func.count(RoughMemory.id)).where(
+            RoughMemory.owner_type == "ai",
+            RoughMemory.owner_id == agent_id,
+        )
+    )
+    total = total_result.scalar() or 0
+
+    # 分页查询
+    offset = (page - 1) * page_size
+    result = await db.execute(
+        select(RoughMemory)
+        .where(RoughMemory.owner_type == "ai", RoughMemory.owner_id == agent_id)
+        .order_by(RoughMemory.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+    )
+    memories = result.scalars().all()
+
+    items = []
+    for rm in memories:
+        detail_result = await db.execute(
+            select(DetailMemory).where(DetailMemory.rough_id == rm.id).limit(1)
+        )
+        detail = detail_result.scalar_one_or_none()
+        items.append({
+            "id": rm.id,
+            "title": rm.title,
+            "content": detail.content if detail else None,
+            "scope": rm.scope,
+            "group_id": rm.group_id,
+            "created_at": str(rm.created_at) if rm.created_at else None,
+        })
+
+    return {
+        "agent_id": agent_id,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 # ---------- OpenCLI 工具调用 ----------

@@ -6,6 +6,7 @@ import ChatPage from './pages/ChatPage'
 import DMPage from './pages/DMPage'
 import FriendsPage from './pages/FriendsPage'
 import AgentsPage from './pages/AgentsPage'
+import AgentDetailPage from './pages/AgentDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
 
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="dm/:sessionId" element={<DMPage />} />
         <Route path="friends" element={<FriendsPage />} />
         <Route path="agents" element={<AgentsPage />} />
+        <Route path="agents/:id" element={<AgentDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route
           path="admin"

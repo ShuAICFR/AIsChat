@@ -34,6 +34,7 @@ async def run_migrations():
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
             await _migrate_federation_tables(db)
+            await _migrate_conversation_logs(db)
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -461,7 +462,87 @@ async def _migrate_federation_tables(db):
 
     if created_any:
         await db.commit()
-        logger.info("  ✅ 联邦通信表/列创建完成")
+
+
+async def _migrate_conversation_logs(db):
+    """对话日志系统表/列（幂等）"""
+    created_any = False
+
+    # 1. 配置表
+    if not await _table_exists(db, "conversation_log_config"):
+        logger.info("  ➕ 创建 conversation_log_config 表")
+        await db.execute(text("""
+            CREATE TABLE conversation_log_config (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                max_conversation_logs INTEGER DEFAULT 30,
+                default_user_conversation_logs INTEGER DEFAULT 20,
+                default_user_log_access BOOLEAN DEFAULT FALSE,
+                updated_by INTEGER REFERENCES users(id),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.execute(text("""
+            INSERT INTO conversation_log_config (id) VALUES (1)
+            ON CONFLICT (id) DO NOTHING
+        """))
+        created_any = True
+    else:
+        logger.info("  ⏭ conversation_log_config 表已存在，跳过")
+
+    # 2. 日志表
+    if not await _table_exists(db, "ai_conversation_logs"):
+        logger.info("  ➕ 创建 ai_conversation_logs 表")
+        await db.execute(text("""
+            CREATE TABLE ai_conversation_logs (
+                id SERIAL PRIMARY KEY,
+                agent_id INTEGER NOT NULL REFERENCES agents(id),
+                group_id INTEGER REFERENCES groups(id),
+                session_id VARCHAR(50),
+                conversation_type VARCHAR(10) NOT NULL DEFAULT 'group',
+                messages JSONB NOT NULL,
+                message_count INTEGER DEFAULT 0,
+                token_usage JSONB,
+                has_output BOOLEAN DEFAULT FALSE,
+                model VARCHAR(50),
+                thinking_enabled BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_logs_agent ON ai_conversation_logs(agent_id)"))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_conv_logs_time ON ai_conversation_logs(created_at)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ ai_conversation_logs 表已存在，跳过")
+
+    # 3. agents 表新列
+    if not await _column_exists(db, "agents", "conversation_logs_limit"):
+        logger.info("  ➕ 添加 agents.conversation_logs_limit 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN conversation_logs_limit INTEGER"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.conversation_logs_limit 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "user_can_view_logs"):
+        logger.info("  ➕ 添加 agents.user_can_view_logs 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN user_can_view_logs BOOLEAN"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.user_can_view_logs 已存在，跳过")
+
+    # 4. users 表新列
+    if not await _column_exists(db, "users", "conversation_logs_limit"):
+        logger.info("  ➕ 添加 users.conversation_logs_limit 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN conversation_logs_limit INTEGER"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.conversation_logs_limit 已存在，跳过")
+
+    if created_any:
+        await db.commit()
+        logger.info("  ✅ 对话日志系统迁移完成")
+    else:
+        logger.info("  ⏭ 对话日志系统均已存在，跳过")
+    logger.info("  ✅ 联邦通信表/列创建完成")
     else:
         logger.info("  ⏭ 联邦通信表/列均已存在，跳过")
 

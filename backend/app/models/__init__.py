@@ -22,6 +22,7 @@ from app.models.opencli import (
     OpenCLIUsageLog,
     OpenCLIDeniedCommand,
 )
+from app.models.conversation_log import ConversationLogConfig, ConversationLog
 
 __all__ = [
     "User",
@@ -52,4 +53,6 @@ __all__ = [
     "InstanceConfig",
     "FederationPeer",
     "FederationGroupShare",
+    "ConversationLogConfig",
+    "ConversationLog",
 ]

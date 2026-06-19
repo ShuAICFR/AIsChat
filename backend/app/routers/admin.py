@@ -991,3 +991,126 @@ async def delete_group_federation_share(
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["message"])
     return result
+
+
+# ── 对话日志管理 ──
+
+from pydantic import BaseModel as PydanticBaseModel, Field
+
+
+class ConvLogConfigBody(PydanticBaseModel):
+    max_conversation_logs: int | None = Field(None, ge=1, le=500)
+    default_user_conversation_logs: int | None = Field(None, ge=1, le=500)
+    default_user_log_access: bool | None = None
+
+
+class ConvLogAgentSettingsBody(PydanticBaseModel):
+    conversation_logs_limit: int | None = Field(None, ge=1, le=500)
+    user_can_view_logs: bool | None = None
+
+
+@router.get("/conversation-log/config")
+async def get_conv_log_config(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取对话日志全局配置"""
+    from app.services.conversation_log_service import get_config_dict
+    return await get_config_dict(db)
+
+
+@router.put("/conversation-log/config")
+async def update_conv_log_config(
+    req: ConvLogConfigBody,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新对话日志全局配置"""
+    from app.services.conversation_log_service import update_config
+    try:
+        result = await update_config(
+            db,
+            updated_by=admin["user_id"],
+            max_conversation_logs=req.max_conversation_logs,
+            default_user_conversation_logs=req.default_user_conversation_logs,
+            default_user_log_access=req.default_user_log_access,
+        )
+        await _log_admin_action(
+            db, admin["user_id"], "update_conv_log_config", "system", 1,
+            req.model_dump(exclude_none=True),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/conversation-log/agents/{agent_id}/settings")
+async def get_agent_conv_log_settings(
+    agent_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取某 AI 的对话日志设置"""
+    from app.services.conversation_log_service import get_agent_log_settings
+    try:
+        return await get_agent_log_settings(db, agent_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.put("/conversation-log/agents/{agent_id}/settings")
+async def update_agent_conv_log_settings(
+    agent_id: int,
+    req: ConvLogAgentSettingsBody,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新某 AI 的对话日志设置"""
+    from app.services.conversation_log_service import update_agent_log_settings
+    try:
+        result = await update_agent_log_settings(
+            db, agent_id,
+            conversation_logs_limit=req.conversation_logs_limit,
+            user_can_view_logs=req.user_can_view_logs,
+        )
+        await _log_admin_action(
+            db, admin["user_id"], "update_agent_conv_log", "agent", agent_id,
+            req.model_dump(exclude_none=True),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/conversation-log/agents/{agent_id}/logs")
+async def get_agent_conv_logs(
+    agent_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取某 AI 的对话日志列表（管理员）"""
+    from app.services.conversation_log_service import get_agent_logs
+    try:
+        return await get_agent_logs(db, agent_id, is_admin=True, limit=limit, offset=offset)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/conversation-log/agents/{agent_id}/logs/{log_id}")
+async def get_agent_conv_log_detail(
+    agent_id: int,
+    log_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单条对话日志详情（含完整 messages）"""
+    from app.services.conversation_log_service import get_log_detail
+    try:
+        detail = await get_log_detail(db, log_id, is_admin=True)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="日志不存在")
+        return detail
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))

@@ -53,6 +53,11 @@ class Agent(Base):
     # AI 在 users 表中的身份（统一 ID 空间，用于私信等场景）
     user_id = Column(Integer, ForeignKey("users.id"))
 
+    # 对话日志：此 AI 的保留上限（NULL=使用全局 max_conversation_logs）
+    conversation_logs_limit = Column(Integer, nullable=True)
+    # 对话日志：用户是否可查看此 AI 的日志（NULL=使用全局 default_user_log_access）
+    user_can_view_logs = Column(Boolean, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())
 
 

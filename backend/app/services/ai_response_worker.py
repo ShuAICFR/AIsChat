@@ -426,6 +426,10 @@ async def _tool_call_loop(
             )
         except Exception as e:
             logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
+            await _save_conversation_log_safe(
+                db, agent, messages, conversation_type,
+                group_id, session_id, has_output=False, model=model,
+            )
             return
 
         content = response.get("content")
@@ -483,6 +487,12 @@ async def _tool_call_loop(
                     await save_current_task(db, agent.id, last_task)
                 except Exception:
                     pass
+            await _save_conversation_log_safe(
+                db, agent, messages, conversation_type,
+                group_id, session_id,
+                has_output=bool(content), model=model,
+                token_usage=response.get("usage"),
+            )
             return
 
         # ── 有工具调用 → 执行（文字只作为附加上下文，不自动发送） ──
@@ -553,6 +563,12 @@ async def _tool_call_loop(
                     await save_current_task(db, agent.id, last_task)
                 except Exception:
                     pass
+            await _save_conversation_log_safe(
+                db, agent, messages, conversation_type,
+                group_id, session_id,
+                has_output=True, model=model,
+                token_usage=response.get("usage"),
+            )
             return
 
         # 短暂延迟，避免过于频繁的 API 调用
@@ -874,3 +890,33 @@ async def _process_alarm_event(db, event: dict):
 
     await db.commit()
     logger.info(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行完成")
+
+
+# ── 对话日志保存 ──
+
+async def _save_conversation_log_safe(
+    db, agent, messages: list[dict],
+    conversation_type: str = "group",
+    group_id: int | None = None,
+    session_id: str | None = None,
+    has_output: bool = False,
+    model: str | None = None,
+    token_usage: dict | None = None,
+):
+    """安全保存对话日志（失败不影响主流程）"""
+    try:
+        from app.services.conversation_log_service import save_conversation_log
+        await save_conversation_log(
+            db,
+            agent_id=agent.id,
+            messages=messages,
+            conversation_type=conversation_type,
+            group_id=group_id,
+            session_id=session_id,
+            token_usage=token_usage,
+            has_output=has_output,
+            model=model,
+            thinking_enabled=bool(agent.thinking_enabled),
+        )
+    except Exception as e:
+        logger.warning(f"保存对话日志失败 (agent={agent.id}): {e}")

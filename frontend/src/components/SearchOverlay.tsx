@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, UserPlus, UserCheck, Clock, X } from 'lucide-react'
+import { Search, UserPlus, UserCheck, Clock, X, Send } from 'lucide-react'
 import { api } from '../api/client'
 
 interface SearchResult {
@@ -17,6 +17,9 @@ export default function SearchOverlay() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set())
+  // 加好友附言弹窗
+  const [addFriendTarget, setAddFriendTarget] = useState<SearchResult | null>(null)
+  const [addFriendMessage, setAddFriendMessage] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -55,20 +58,28 @@ export default function SearchOverlay() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const handleAddFriend = async (targetType: string, targetId: number, name: string) => {
+  const handleOpenAddFriend = (item: SearchResult) => {
+    setAddFriendTarget(item)
+    setAddFriendMessage('')
+  }
+
+  const handleSendFriendRequest = async () => {
+    if (!addFriendTarget) return
+    const { type, id } = addFriendTarget
     try {
       const result = await api.post<{ status: string }>('/friends/requests', {
-        target_type: targetType,
-        target_id: targetId,
+        target_type: type,
+        target_id: id,
+        message: addFriendMessage.trim() || undefined,
       })
       if (result.status === 'accepted') {
-        // 更新搜索结果中的好友状态
         setResults(prev => prev.map(r =>
-          r.type === targetType && r.id === targetId ? { ...r, is_friend: true } : r
+          r.type === type && r.id === id ? { ...r, is_friend: true } : r
         ))
       } else {
-        setPendingRequests(prev => new Set(prev).add(`${targetType}:${targetId}`))
+        setPendingRequests(prev => new Set(prev).add(`${type}:${id}`))
       }
+      setAddFriendTarget(null)
     } catch (err: any) {
       alert(err.message || '发送失败')
     }
@@ -149,7 +160,7 @@ export default function SearchOverlay() {
                   </span>
                 ) : (
                   <button
-                    onClick={() => handleAddFriend(item.type, item.id, item.name)}
+                    onClick={() => handleOpenAddFriend(item)}
                     className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 shrink-0 transition-colors"
                   >
                     <UserPlus size={12} /> 加好友
@@ -158,6 +169,61 @@ export default function SearchOverlay() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* 加好友附言弹窗 */}
+      {addFriendTarget && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={() => setAddFriendTarget(null)}>
+          <div
+            className="bg-elevated border border-border rounded-2xl p-5 w-full max-w-sm mx-4 shadow-2xl shadow-black/30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
+                addFriendTarget.type === 'human'
+                  ? 'bg-gradient-to-br from-primary-500 to-primary-700 text-white'
+                  : 'bg-gradient-to-br from-mint-400 to-emerald-600 text-white'
+              }`}>
+                {addFriendTarget.name.charAt(0)}
+              </div>
+              <div>
+                <h3 className="font-semibold text-textPrimary text-sm">{addFriendTarget.name}</h3>
+                <p className="text-xs text-textMuted">
+                  {addFriendTarget.type === 'ai' ? 'AI 角色' : '人类用户'}
+                </p>
+              </div>
+              <button onClick={() => setAddFriendTarget(null)} className="ml-auto text-textMuted hover:text-textSecondary">
+                <X size={18} />
+              </button>
+            </div>
+
+            <textarea
+              value={addFriendMessage}
+              onChange={(e) => setAddFriendMessage(e.target.value)}
+              placeholder="附言（可选）—— 对方接受后会显示在对话开头"
+              rows={3}
+              maxLength={200}
+              className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none mb-3"
+              autoFocus
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setAddFriendTarget(null)}
+                className="flex-1 py-2 rounded-xl border border-border text-textSecondary hover:text-textPrimary text-sm font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSendFriendRequest}
+                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-primary-500 text-white hover:bg-primary-400 transition-colors text-sm font-medium"
+              >
+                <Send size={14} />
+                发送申请
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

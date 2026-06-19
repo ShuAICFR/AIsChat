@@ -1208,18 +1208,29 @@ async def _handle_send_friend_request(
     if friend_type == "ai" and friend_id == agent_id:
         return {"error": True, "message": "不能加自己为好友"}
 
-    # 获取 AI 的 owner（以 owner 身份发送好友申请）
+    # 获取 AI 信息（以 AI 自己的 user_id 身份发送好友申请）
     agent_result = await db.execute(
         sa_select(AgentModel).where(AgentModel.id == agent_id)
     )
     agent = agent_result.scalar_one_or_none()
     if agent is None:
         return {"error": True, "message": "AI 代理不存在"}
+    if agent.user_id is None:
+        return {"error": True, "message": "AI 尚未初始化统一 ID，请稍后再试"}
+
+    # 若目标是另一个 AI，防止通过自己的 user_id 向自己发好友申请
+    if friend_type == "ai":
+        target_agent_result = await db.execute(
+            sa_select(AgentModel).where(AgentModel.id == friend_id)
+        )
+        target_agent = target_agent_result.scalar_one_or_none()
+        if target_agent and target_agent.user_id == agent.user_id:
+            return {"error": True, "message": "不能加自己为好友"}
 
     try:
         result = await send_friend_request(
             db,
-            requester_id=agent.owner_id,
+            requester_id=agent.user_id,
             target_type=friend_type,
             target_id=friend_id,
             message=message,

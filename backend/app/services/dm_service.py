@@ -204,8 +204,9 @@ async def send_dm_message(
     sender_id: int,
     content: str,
     reply_to: int | None = None,
+    created_at: datetime | None = None,
 ) -> dict:
-    """发送私信消息"""
+    """发送私信消息（可指定 created_at 用于注入历史消息）"""
     if not content.strip():
         raise ValueError("消息内容不能为空")
 
@@ -225,6 +226,7 @@ async def send_dm_message(
         sender_id=sender_id,
         content=content.strip(),
         reply_to=reply_to,
+        created_at=created_at or now,
     )
     db.add(msg)
     await db.flush()

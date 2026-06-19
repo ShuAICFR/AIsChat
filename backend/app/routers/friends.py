@@ -2,8 +2,10 @@
 好友系统路由
 搜索、好友申请、好友列表管理
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app.database import get_db
 from app.schemas.friendship import (
     FriendRequestCreate, FriendRequestResponse,
@@ -14,8 +16,36 @@ from app.services.friend_service import (
     remove_friend, list_friends, list_friend_requests, search_entities,
 )
 from app.utils.auth import get_current_user
+from app.routers.ws import manager
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["好友"])
+
+
+async def _notify_friend_request(db: AsyncSession, event_type: str, data: dict, target_user_id: int):
+    """通过 WebSocket 向目标用户推送好友相关通知"""
+    try:
+        await manager.send_to_user(target_user_id, {
+            "type": "friend_notification",
+            "data": {
+                "event": event_type,
+                **data,
+            },
+        })
+    except Exception as e:
+        logger.warning(f"推送好友通知给用户 {target_user_id} 失败: {e}")
+
+
+async def _resolve_target_user_id(db: AsyncSession, target_type: str, target_id: int) -> int | None:
+    """将 target_type:target_id 解析为 users.id（用于 WebSocket 推送）"""
+    if target_type == "human":
+        return target_id
+    else:
+        from app.models.agent import Agent
+        result = await db.execute(
+            select(Agent.user_id).where(Agent.id == target_id)
+        )
+        return result.scalar_one_or_none()
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -55,6 +85,32 @@ async def create_friend_request(
             target_id=req.target_id,
             message=req.message,
         )
+        # WebSocket 通知目标用户
+        target_uid = await _resolve_target_user_id(db, req.target_type, req.target_id)
+        if target_uid:
+            await _notify_friend_request(db, "request_received", {
+                "request_id": result.get("request_id"),
+                "requester_id": current_user["user_id"],
+                "requester_name": current_user.get("username", ""),
+                "target_type": req.target_type,
+                "target_id": req.target_id,
+                "message": req.message,
+                "status": result.get("status", "pending"),
+            }, target_uid)
+
+        # 双向自动接受：注入双方附言到 DM
+        if result.get("auto") and target_uid:
+            greeting = "你们互相发送了好友申请，已自动成为好友"
+            if req.message:
+                greeting += f"\n{current_user.get('username', '对方')}：{req.message}"
+            # 获取对方的附言（从反向申请中）
+            if result.get("reverse_message"):
+                greeting += f"\n{result.get('reverse_target_name', '对方')}：{result['reverse_message']}"
+            await _inject_friend_greeting(
+                db, current_user["user_id"], target_uid,
+                greeting,
+            )
+
         return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -78,7 +134,37 @@ async def accept_request(
 ):
     """接受好友申请"""
     try:
-        return await accept_friend_request(db, request_id, current_user["user_id"])
+        # 先获取请求详情（用于后续 DM 附言注入）
+        f_req = await _get_friend_request(db, request_id)
+        req_message = f_req.message if f_req else None
+        req_created_at = f_req.created_at if f_req else None
+        req_requester_id = f_req.requester_id if f_req else None
+        req_target_type = f_req.target_type if f_req else None
+        req_target_id = f_req.target_id if f_req else None
+
+        result = await accept_friend_request(db, request_id, current_user["user_id"])
+
+        # 通知发起者：申请已被接受
+        if req_requester_id:
+            await _notify_friend_request(db, "request_accepted", {
+                "request_id": request_id,
+                "accepter_name": current_user.get("username", ""),
+            }, req_requester_id)
+
+        # 将附言注入 DM 对话（使用申请发起时间戳）
+        if req_requester_id and req_target_type:
+            accepter_uid = current_user["user_id"]
+            requester_uid = req_requester_id if req_target_type == "human" else req_requester_id
+            # requester_uid 始终是 users.id
+            greeting = "好友申请已通过"
+            if req_message:
+                greeting += f"\n附言：{req_message}"
+            await _inject_friend_greeting(
+                db, accepter_uid, requester_uid,
+                greeting, created_at=req_created_at,
+            )
+
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -91,7 +177,15 @@ async def reject_request(
 ):
     """拒绝好友申请"""
     try:
-        return await reject_friend_request(db, request_id, current_user["user_id"])
+        result = await reject_friend_request(db, request_id, current_user["user_id"])
+        # 通知发起者：申请已被拒绝
+        req = await _get_friend_request(db, request_id)
+        if req:
+            await _notify_friend_request(db, "request_rejected", {
+                "request_id": request_id,
+                "rejecter_name": current_user.get("username", ""),
+            }, req.requester_id)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -110,6 +204,38 @@ async def delete_friend(
         return await remove_friend(db, current_user["user_id"], friend_type, friend_id)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+async def _get_friend_request(db: AsyncSession, request_id: int):
+    """获取好友申请（用于获取 requester_id 发送通知）"""
+    from app.models.friendship import FriendshipRequest
+    result = await db.execute(
+        select(FriendshipRequest).where(FriendshipRequest.id == request_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _inject_friend_greeting(
+    db: AsyncSession,
+    from_user_id: int,
+    to_user_id: int,
+    greeting: str,
+    created_at=None,
+):
+    """好友通过后，将附言注入 DM 对话开头（使用申请时间戳）"""
+    from app.services.dm_service import (
+        get_or_create_dm_session, send_dm_message,
+    )
+    try:
+        dm = await get_or_create_dm_session(db, from_user_id, to_user_id)
+        await send_dm_message(
+            db, dm["session_id"],
+            sender_id=from_user_id,
+            content=f"🤝 {greeting}",
+            created_at=created_at,
+        )
+    except Exception as e:
+        logger.warning(f"注入好友附言到 DM 失败: {e}")
 
 
 # ⚠️ 旧版 POST /dm/{friend_type}/{friend_id} 已移除（v1.1.2 统一 ID 后不再使用）。

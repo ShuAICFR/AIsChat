@@ -44,25 +44,34 @@ async def send_friend_request(
         raise ValueError("已发送过好友申请，请等待对方处理")
 
     # 检查对方是否已向自己发送申请（双向申请自动接受）
-    if target_type == "human":
-        reverse_req = await db.execute(
-            select(FriendshipRequest).where(
-                FriendshipRequest.requester_id == target_id,
-                FriendshipRequest.target_type == "human",
-                FriendshipRequest.target_id == requester_id,
-                FriendshipRequest.status == "pending",
-            )
-        )
-        reverse = reverse_req.scalar_one_or_none()
-        if reverse:
-            # 自动接受对方的申请
-            reverse.status = "accepted"
-            reverse.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
-            # 双向添加好友
-            db.add(Friendship(user_id=requester_id, friend_type="human", friend_id=target_id))
-            db.add(Friendship(user_id=target_id, friend_type="human", friend_id=requester_id))
-            await db.flush()
-            return {"status": "accepted", "auto": True, "message": "对方已向你发送申请，已自动成为好友"}
+    # 支持 human↔human、AI(user_id)↔human、跨类型双向自动接受
+    from app.models.agent import Agent as AgentModel
+    reverse = await _find_reverse_request(db, requester_id, target_type, target_id)
+    if reverse:
+        reverse.status = "accepted"
+        reverse.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        # 解析 reverse 中的双方身份
+        r_user_id = reverse.requester_id
+        r_type = reverse.target_type
+        r_target = reverse.target_id
+        # 双向添加好友
+        db.add(Friendship(user_id=requester_id, friend_type=target_type, friend_id=target_id))
+        db.add(Friendship(user_id=r_user_id, friend_type=r_type, friend_id=r_target))
+        await db.flush()
+        # 获取反向申请发起者的名称
+        reverse_name = None
+        try:
+            from app.models.user import User
+            name_result = await db.execute(select(User.username).where(User.id == r_user_id))
+            reverse_name = name_result.scalar_one_or_none()
+        except Exception:
+            pass
+        return {
+            "status": "accepted", "auto": True,
+            "message": "对方已向你发送申请，已自动成为好友",
+            "reverse_message": reverse.message,
+            "reverse_target_name": reverse_name or f"用户{r_user_id}",
+        }
 
     # 创建申请
     req = FriendshipRequest(
@@ -357,6 +366,58 @@ async def _get_request(db: AsyncSession, request_id: int):
         select(FriendshipRequest).where(FriendshipRequest.id == request_id)
     )
     return result.scalar_one_or_none()
+
+
+async def _find_reverse_request(
+    db: AsyncSession,
+    requester_id: int,
+    target_type: str,
+    target_id: int,
+):
+    """查找对方是否已向当前发起者发送过待处理的好友申请
+
+    requester_id: 当前发起者的 users.id
+    target_type/target_id: 当前发起的目标（human=users.id, ai=agents.id）
+
+    返回: 匹配的 reverse FriendshipRequest 或 None
+    """
+    from app.models.friendship import FriendshipRequest
+    from app.models.agent import Agent as AgentModel
+
+    # 解析目标实体的 user_id（用于查找对方发出的申请）
+    if target_type == "human":
+        target_user_id = target_id
+    else:
+        # AI: 查 agents 表获取 user_id
+        agent_result = await db.execute(
+            select(AgentModel.user_id).where(AgentModel.id == target_id)
+        )
+        target_user_id = agent_result.scalar_one_or_none()
+
+    if target_user_id is None:
+        return None
+
+    # 获取对方发出的所有 pending 申请
+    sent_result = await db.execute(
+        select(FriendshipRequest).where(
+            FriendshipRequest.requester_id == target_user_id,
+            FriendshipRequest.status == "pending",
+        )
+    )
+    for req in sent_result.scalars().all():
+        # 检查对方的申请目标是否匹配当前发起者
+        if req.target_type == "human" and req.target_id == requester_id:
+            return req
+        if req.target_type == "ai":
+            # 对方申请目标是个 AI，查其 user_id 是否匹配 requester_id
+            ai_result = await db.execute(
+                select(AgentModel.user_id).where(AgentModel.id == req.target_id)
+            )
+            ai_user_id = ai_result.scalar_one_or_none()
+            if ai_user_id == requester_id:
+                return req
+
+    return None
 
 
 async def _is_friend(db: AsyncSession, user_id: int, friend_type: str, friend_id: int) -> bool:

@@ -6,9 +6,9 @@
 
 AIsChat 是一个开源 AI 群聊平台，让多个 AI 在同一个房间里自然对话。
 
+[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
 [![License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docs.docker.com/desktop/)
-[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
 
 <img src="docs/images/demo.gif" alt="AIsChat Demo" width="85%" />
 
@@ -83,13 +83,13 @@ docker compose up -d
 | 服务 | 地址 |
 |------|------|
 | 前端 | http://localhost:5227 |
-| API 文档 | http://localhost:5228/docs |
+| API 文档 | 启动后访问 http://localhost:5228/docs |
 
 > ⚡ **完成！** 注册（首位用户自动成为管理员）→ 设置页配置 API Key → 创建 AI 角色 → 建群开聊。
 
 ---
 
-## 👋 第一次使用？
+## 👋 第一次使用？（预计 3 分钟）
 
 1. **注册后**：首位用户自动成为管理员，后续用户为普通用户
 2. **配置 API**：前往设置页填入你的 API Key，支持全局配置或单 AI 独立配置

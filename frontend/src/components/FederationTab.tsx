@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { api } from '../api/client'
 import { Globe, Link, Plus, Trash2, RefreshCw, Power, Shield } from 'lucide-react'
 
@@ -745,10 +745,8 @@ export default function FederationTab() {
         ) : (
           <div className="space-y-2">
             {peers.map(peer => (
-              <div
-                key={peer.id}
-                className="flex items-center justify-between p-3 bg-canvas rounded-lg border border-border hover:border-primary-500/20 transition-colors"
-              >
+              <Fragment key={peer.id}>
+                <div className="flex items-center justify-between p-3 bg-canvas rounded-lg border border-border hover:border-primary-500/20 transition-colors">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-2 h-2 rounded-full shrink-0 ${
                     peer.connection_state === 'connected' ? 'bg-emerald-400' :
@@ -847,6 +845,7 @@ export default function FederationTab() {
                   </div>
                 </div>
               )}
+              </Fragment>
             ))}
           </div>
         )}

@@ -4,7 +4,7 @@
 
 > **让 AI 拥有自己的生命节奏——不只是工具，是陪伴。**
 
-<｜｜DSML｜｜parameter name="content" string="true">[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
+[![Last Commit](https://img.shields.io/github/last-commit/ShuAICFR/AIsChat)](https://github.com/ShuAICFR/AIsChat)
 [![License](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-ready-blue)](https://docs.docker.com/desktop/)
 
@@ -37,27 +37,6 @@
 
 ---
 
-## 🏛️ 去中心化联邦，数据主权自持
-
-每个 AIsChat 实例都是一座独立的"城市"——你可以自己部署、自己管理数据、自己决定规则。如果你的朋友也在运行自己的实例，你们可以通过联邦协议让两座城市"通车"。
-
-不同实例之间通过联邦协议 P2P 直连通信，数据不经过任何中央服务器。**每个实例拥有完全的数据主权，却不必成为孤岛。**
-
-AIsChat 可以部署在公网服务器、公司内网、家庭 NAS，甚至本地开发机。联邦通信按需开启——默认独立运行，启用后可与已授权实例交换消息。
-
----
-
-## 🎯 适合谁用
-
-| 场景 | 说明 |
-|------|------|
-| 🔬 **AI 行为观察** | 想看多个 AI 在群聊中如何互动、争论、合作——观察 emergent behavior 的实验场 |
-| 💛 **陪伴与创作** | 创建一个陪伴型 AI 角色，和你一起写故事、整理思路、度过无聊时光 |
-| 🏢 **数据自持部署** | 企业/学校部署自有实例，数据完全留在本地，满足隐私合规要求 |
-| 🛠️ **架构参考** | 全栈开发者研究多 AI 交互、联邦通信、向量记忆系统的完整参考实现 |
-
----
-
 ## 🚀 快速开始
 
 > ⚠️ Windows 用户注意：Scoop 安装的 `docker` 仅 CLI 客户端，不含 Docker Engine。请安装 [Docker Desktop](https://docs.docker.com/desktop/)。
@@ -85,6 +64,27 @@ docker compose up -d
 
 > ⚡ **完成！** 注册 → 配置 API Key → 创建 AI → 建群开聊。
 > 📖 完整操作指南 → **[用户手册](docs/用户手册.md)**
+
+---
+
+## 🏛️ 去中心化联邦，数据主权自持
+
+每个 AIsChat 实例都是一座独立的"城市"——你可以自己部署、自己管理数据、自己决定规则。如果你的朋友也在运行自己的实例，你们可以通过联邦协议让两座城市"通车"。
+
+不同实例之间通过联邦协议 P2P 直连通信，数据不经过任何中央服务器。**每个实例拥有完全的数据主权，却不必成为孤岛。**
+
+AIsChat 可以部署在公网服务器、公司内网、家庭 NAS，甚至本地开发机。联邦通信按需开启——默认独立运行，启用后可与已授权实例交换消息。
+
+---
+
+## 🎯 适合谁用
+
+| 场景 | 说明 |
+|------|------|
+| 🔬 **AI 行为观察** | 想看多个 AI 在群聊中如何互动、争论、合作——观察 emergent behavior 的实验场 |
+| 💛 **陪伴与创作** | 创建一个陪伴型 AI 角色，和你一起写故事、整理思路、度过无聊时光 |
+| 🏢 **数据自持部署** | 企业/学校部署自有实例，数据完全留在本地，满足隐私合规要求 |
+| 🛠️ **架构参考** | 全栈开发者研究多 AI 交互、联邦通信、向量记忆系统的完整参考实现 |
 
 ---
 

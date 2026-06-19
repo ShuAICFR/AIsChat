@@ -317,7 +317,7 @@ async def register_public_id(db: AsyncSession) -> dict:
         return _error(
             FedError.TOKEN_MISSING,
             "未配置 GitHub Token。请在下方「GitHub Token」输入框中填入 Token。\n"
-            "获取 Token: https://github.com/settings/tokens → Generate new token (classic) → 勾选 repo",
+            "获取 Token: https://github.com/settings/tokens/new → 勾选 repo（注意：选 classic token，不是 fine-grained）",
         )
 
     if not config.public_id:

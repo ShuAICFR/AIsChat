@@ -301,7 +301,7 @@ export default function FederationTab() {
                       placeholder="粘贴新 Token 替换旧 Token"
                     />
                     <p className="text-[10px] text-textMuted mt-1">
-                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">github.com/settings/tokens →</a>
+                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">github.com/settings/tokens →</a>
                     </p>
                   </div>
                 </details>
@@ -309,7 +309,7 @@ export default function FederationTab() {
                 <>
                   <label className="text-xs text-textMuted">
                     GitHub Token{' '}
-                    <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
                       获取 →
                     </a>
                   </label>
@@ -427,7 +427,7 @@ export default function FederationTab() {
             <div>
               <label className="text-xs text-textMuted">
                 GitHub Token{' '}
-                <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
                   获取 →
                 </a>
               </label>

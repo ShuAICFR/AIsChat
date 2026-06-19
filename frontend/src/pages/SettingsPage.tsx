@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -32,8 +32,8 @@ const LANGUAGES = [
 ]
 
 const CHAT_STYLES = [
-  { value: 'cozy', label: '舒适模式', enLabel: 'Cozy' },
-  { value: 'compact', label: '紧凑模式', enLabel: 'Compact' },
+  { value: 'cozy', label: '舒适模式', enLabel: 'Cozy', desc: '气泡间距宽松，头像较大，适合长时间阅读', enDesc: 'Relaxed bubble spacing, larger avatars' },
+  { value: 'compact', label: '紧凑模式', enLabel: 'Compact', desc: '气泡排列紧密，信息密度高，适合快速浏览', enDesc: 'Dense message layout, high information density' },
 ]
 
 export default function SettingsPage() {
@@ -63,6 +63,7 @@ export default function SettingsPage() {
   const [redeemCode, setRedeemCode] = useState('')
   const [redeeming, setRedeeming] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState('')
+  const [showAgentApi, setShowAgentApi] = useState(false)
 
   // 通知开关立即生效，不需点保存
   const handleNotificationToggle = (enabled: boolean) => {
@@ -228,6 +229,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2 mb-4">
             <Key size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">API 提供商配置</h2>
+            <span className="text-[10px] text-textMuted ml-auto">以下为全局默认，所有 AI 共用</span>
           </div>
 
           <div className="space-y-4">
@@ -238,8 +240,9 @@ export default function SettingsPage() {
                 value={apiBaseUrl}
                 onChange={(e) => setApiBaseUrl(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="https://api.deepseek.com"
+                placeholder="例: https://api.deepseek.com"
               />
+              <p className="text-[10px] text-textMuted mt-1">API 服务地址，需兼容 OpenAI 接口格式。也可填第三方代理地址</p>
             </div>
             <div>
               <label className="block text-xs font-medium mb-1.5 text-textSecondary">API Key</label>
@@ -249,7 +252,7 @@ export default function SettingsPage() {
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                  placeholder={user?.has_api_key ? '留空表示不修改（已设置）' : '输入你的 API Key'}
+                  placeholder={user?.has_api_key ? '留空表示不修改（已设置）' : '输入 API Key，如 sk-xxxxxxxx'}
                 />
                 <button
                   type="button"
@@ -282,78 +285,86 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 单 AI API 配置 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Bot size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">单 AI API 配置</h2>
-            <span className="text-[10px] text-textMuted ml-auto">独立 API 会覆盖全局设置</span>
-          </div>
+          {/* 单 AI API 配置（可折叠） */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <button
+              onClick={() => setShowAgentApi(!showAgentApi)}
+              className="flex items-center gap-2 w-full text-left hover:bg-canvas/50 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+            >
+              {showAgentApi ? <ChevronDown size={16} className="text-textMuted" /> : <ChevronRight size={16} className="text-textMuted" />}
+              <Bot size={16} className="text-primary-400" />
+              <span className="text-sm font-medium text-textPrimary">单 AI API 配置</span>
+              <span className="text-[10px] text-textMuted">（为特定 AI 设置独立 API，覆盖全局）</span>
+            </button>
 
-          {agents.length === 0 ? (
-            <p className="text-xs text-textMuted py-4 text-center">暂无 AI，创建 AI 后可为每个 AI 配置独立 API</p>
-          ) : (
-            <div className="space-y-2">
-              {agents.map((agent: any) => (
-                <div key={agent.id} className="bg-canvas rounded-xl border border-border p-3">
-                  {editingAgentId === agent.id ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-textPrimary">{agent.name}</span>
-                        <button onClick={() => setEditingAgentId(null)} className="text-textMuted hover:text-textSecondary">
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <input
-                        type="text"
-                        value={agentApiBaseUrl}
-                        onChange={(e) => setAgentApiBaseUrl(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                        placeholder="Base URL（留空继承全局）"
-                      />
-                      <input
-                        type="password"
-                        value={agentApiKey}
-                        onChange={(e) => setAgentApiKey(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                        placeholder="API Key（留空继承全局）"
-                      />
-                      <button
-                        onClick={() => handleSaveAgentApi(agent.id)}
-                        disabled={agentApiSaving}
-                        className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
-                      >
-                        {agentApiSaving ? '保存中...' : '保存'}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-textPrimary">{agent.name}</span>
-                        {agent.api_base_url ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
-                            独立 API
-                          </span>
+            {showAgentApi && (
+              <div className="mt-3">
+                {agents.length === 0 ? (
+                  <p className="text-xs text-textMuted py-4 text-center">暂无 AI，创建 AI 后可为每个 AI 配置独立 API</p>
+                ) : (
+                  <div className="space-y-2">
+                    {agents.map((agent: any) => (
+                      <div key={agent.id} className="bg-canvas rounded-xl border border-border p-3">
+                        {editingAgentId === agent.id ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-textPrimary">{agent.name}</span>
+                              <button onClick={() => setEditingAgentId(null)} className="text-textMuted hover:text-textSecondary">
+                                <X size={14} />
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              value={agentApiBaseUrl}
+                              onChange={(e) => setAgentApiBaseUrl(e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                              placeholder="例: https://api.deepseek.com（留空则继承全局）"
+                            />
+                            <input
+                              type="password"
+                              value={agentApiKey}
+                              onChange={(e) => setAgentApiKey(e.target.value)}
+                              className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                              placeholder="例: sk-xxxxxxxx（留空则继承全局）"
+                            />
+                            <button
+                              onClick={() => handleSaveAgentApi(agent.id)}
+                              disabled={agentApiSaving}
+                              className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
+                            >
+                              {agentApiSaving ? '保存中...' : '保存'}
+                            </button>
+                          </div>
                         ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
-                            继承全局
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm text-textPrimary">{agent.name}</span>
+                              {agent.api_base_url ? (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
+                                  独立 API
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
+                                  继承全局
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => startEditAgentApi(agent)}
+                              className="text-textMuted hover:text-textSecondary transition-colors"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          </div>
                         )}
                       </div>
-                      <button
-                        onClick={() => startEditAgentApi(agent)}
-                        className="text-textMuted hover:text-textSecondary transition-colors"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 时区设置 */}
@@ -401,18 +412,20 @@ export default function SettingsPage() {
             <Layout size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">聊天样式</h2>
           </div>
+          <p className="text-xs text-textMuted mb-3">控制群聊和私信界面中消息气泡的间距与布局风格</p>
           <div className="flex gap-3">
             {CHAT_STYLES.map((s) => (
               <button
                 key={s.value}
                 onClick={() => setChatStyle(s.value)}
-                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all ${
+                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left ${
                   chatStyle === s.value
                     ? 'border-primary-500 bg-primary-500/10 text-primary-400'
                     : 'border-border bg-canvas text-textSecondary hover:border-primary-500/30'
                 }`}
               >
-                {language === 'en' ? s.enLabel : s.label}
+                <div className="font-medium">{language === 'en' ? s.enLabel : s.label}</div>
+                <div className="text-[10px] mt-0.5 opacity-70">{language === 'en' ? s.enDesc : s.desc}</div>
               </button>
             ))}
           </div>

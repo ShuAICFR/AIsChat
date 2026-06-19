@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus } from 'lucide-react'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -60,6 +60,9 @@ export default function SettingsPage() {
   const [agentApiBaseUrl, setAgentApiBaseUrl] = useState('')
   const [agentApiKey, setAgentApiKey] = useState('')
   const [agentApiSaving, setAgentApiSaving] = useState(false)
+  const [redeemCode, setRedeemCode] = useState('')
+  const [redeeming, setRedeeming] = useState(false)
+  const [redeemMsg, setRedeemMsg] = useState('')
 
   // 通知开关立即生效，不需点保存
   const handleNotificationToggle = (enabled: boolean) => {
@@ -152,18 +155,35 @@ export default function SettingsPage() {
     setAgentApiKey('')
   }
 
+  const handleRedeem = async () => {
+    if (!redeemCode.trim()) return
+    setRedeeming(true)
+    setRedeemMsg('')
+    try {
+      const data = await api.post<{ message: string }>('/user/redeem', { code: redeemCode.trim() })
+      setRedeemMsg(data.message || '兑换成功')
+      setRedeemCode('')
+      refreshUser()
+    } catch (err: any) {
+      setRedeemMsg(err.message || '兑换失败')
+    } finally {
+      setRedeeming(false)
+      setTimeout(() => setRedeemMsg(''), 4000)
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 bg-canvas">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-textPrimary mb-6 tracking-tight">设置</h1>
 
-        {/* API 额度 */}
+        {/* 额度 */}
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">API 额度</h2>
+            <h2 className="font-semibold text-textPrimary">额度</h2>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="bg-canvas rounded-xl p-4 border border-border">
               <p className="text-xs text-textMuted mb-1">AI 创建额度</p>
               <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
@@ -175,6 +195,32 @@ export default function SettingsPage() {
               <p className="text-[10px] text-textMuted mt-1">每次 LLM 调用从此余额扣除</p>
             </div>
           </div>
+          {/* 兑换码 */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 relative">
+              <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+              <input
+                type="text"
+                value={redeemCode}
+                onChange={(e) => setRedeemCode(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                placeholder="输入兑换码（如 RC-xxxxxxxxxxxxxxxx）"
+              />
+            </div>
+            <button
+              onClick={handleRedeem}
+              disabled={redeeming || !redeemCode.trim()}
+              className="flex items-center gap-1 px-4 py-2 rounded-xl bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
+            >
+              {redeeming ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              兑换
+            </button>
+          </div>
+          {redeemMsg && (
+            <p className={`text-xs mt-2 ${redeemMsg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>
+              {redeemMsg}
+            </p>
+          )}
         </div>
 
         {/* API 提供商配置 */}

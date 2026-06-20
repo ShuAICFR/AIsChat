@@ -4,12 +4,21 @@ POST /auth/register, POST /auth/login, GET /auth/me
 """
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 from app.database import get_db
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserInfoResponse
 from app.services.auth_service import register_user, login_user, get_user_info, update_user_settings
 from app.utils.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["认证"])
+
+
+@router.get("/has-users")
+async def has_users(db: AsyncSession = Depends(get_db)):
+    """检查是否已有注册用户（公开接口，注册页用）"""
+    count = (await db.execute(select(func.count(User.id)))).scalar()
+    return {"has_users": count > 0}
 
 
 @router.post("/register", response_model=TokenResponse)

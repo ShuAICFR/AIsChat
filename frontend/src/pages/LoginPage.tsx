@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../api/client'
 import { MessageCircle } from 'lucide-react'
 
 export default function LoginPage() {
@@ -9,8 +10,16 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [hasExistingUsers, setHasExistingUsers] = useState<boolean | null>(null)
   const { login, register } = useAuth()
   const navigate = useNavigate()
+
+  // 检查是否已有用户（决定是否显示"首位管理员"提示）
+  useEffect(() => {
+    api.get<{ has_users: boolean }>('/auth/has-users')
+      .then(r => setHasExistingUsers(r.has_users))
+      .catch(() => setHasExistingUsers(true)) // 失败时保守处理，不显示提示
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,7 +155,7 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {mode === 'register' && (
+            {mode === 'register' && hasExistingUsers === false && (
               <p className="text-xs text-textMuted mt-4 text-center leading-relaxed">
                 首位注册用户自动成为<span className="text-accent-400 font-medium">管理员</span>
               </p>

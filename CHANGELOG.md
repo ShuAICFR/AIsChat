@@ -31,6 +31,15 @@
 
 - 🏗️ **`is_ai_editable` 加入创建 API**：`AgentCreateRequest` 和 `create_agent` 服务函数新增 `is_ai_editable` 参数，创建时可直接指定 AI 是否允许自修改。
 
+- 📱 **移动端 UX 全面优化**：
+  - 底部栏「群聊」→「聊天」，点击自动全屏展开聊天列表（不再显示空白占位）
+  - 移动端侧边栏隐藏好友入口 + 好友申请徽章，统一通过底部栏 `/friends` 访问，消除两套好友列表不一致
+  - AgentsPage / AdminPage 头部新增 ☰ 菜单按钮（打开抽屉导航），解决移动端部分页面无法返回的问题
+  - 设置页外观/桌面通知增加 🟢「即时生效」标签 + 保存按钮下说明文字，消除即时生效 vs 需保存的困惑
+  - 设置页管理员用户手机端新增「管理面板」快捷入口
+  - 手册链接增加 `ExternalLink` 图标，标注为外部链接
+  - 全部页面统一 `p-4 md:p-6` 响应式内边距，按钮/Tab 移动端紧凑化
+
 ### Fixed
 
 - 🐛 **`delay_reply_enabled` NULL 解析不一致**：6 处 `agent.delay_reply_enabled or False` 全部改用 `await _is_delay_reply_allowed(db, agent)`，正确查询全局默认值。

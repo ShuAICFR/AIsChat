@@ -328,7 +328,7 @@ export default function CreateAgentModal({
     : ''
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto" onClick={onClose}>
       <div
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-8"
         onClick={(e) => e.stopPropagation()}
@@ -480,7 +480,7 @@ function SubOptionModal({
   const icon = CARD_ICONS[preset.key]
   const subOptions = SUB_OPTIONS[preset.key] || []
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70]" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" onClick={onClose}>
       <div
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 animate-pop-in"
         onClick={(e) => e.stopPropagation()}
@@ -572,7 +572,7 @@ function DetailSettingsModal({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[60] pt-8 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-[60] pt-8 overflow-y-auto" onClick={onClose}>
       <div
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-4"
         onClick={(e) => e.stopPropagation()}

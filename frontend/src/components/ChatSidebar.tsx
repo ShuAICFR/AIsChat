@@ -30,6 +30,8 @@ interface ChatSidebarProps {
   hideOnMobile: boolean
   /** 移动端返回当前对话（侧边栏作为 overlay 时） */
   onMobileBack?: () => void
+  /** 移动端全屏覆盖模式 */
+  mobileFullscreen?: boolean
 }
 
 export default function ChatSidebar({
@@ -39,6 +41,7 @@ export default function ChatSidebar({
   openDrawer,
   hideOnMobile,
   onMobileBack,
+  mobileFullscreen,
 }: ChatSidebarProps) {
   const [groups, setGroups] = useState<Group[]>([])
   const [dmSessions, setDmSessions] = useState<DMSession[]>([])
@@ -105,7 +108,9 @@ export default function ChatSidebar({
   const nothingSelected = !activeGroupId && !activeSessionId
 
   return (
-    <div className={`w-56 bg-surface border-r border-border shrink-0 flex-col flex ${
+    <div className={`${
+      mobileFullscreen ? 'w-full md:w-56' : 'w-56'
+    } bg-surface border-r border-border shrink-0 flex-col flex h-full ${
       hideOnMobile && !nothingSelected ? 'hidden' : 'flex'
     } md:flex`}>
       {/* 标题 */}

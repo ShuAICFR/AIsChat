@@ -5,7 +5,7 @@ import ChatView from './ChatView'
 import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, UserPlus, Settings, Menu, ArrowLeft } from 'lucide-react'
+import { Bell, BellOff, UserPlus, Settings, ArrowLeft } from 'lucide-react'
 
 interface Group {
   id: number
@@ -64,18 +64,24 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   return (
     <div className="flex h-full relative">
       {/* 统一侧边栏：群聊 + 私信列表 */}
-      <ChatSidebar
-        activeGroupId={groupId}
-        activeSessionId={dmSessionId}
-        onCreateGroup={() => setShowCreateGroup(true)}
-        openDrawer={openDrawer}
-        hideOnMobile={hasActiveConversation && !mobileSidebarOpen}
-        onMobileBack={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
-      />
+      <div className={`${mobileSidebarOpen ? 'absolute inset-y-0 left-0 z-30' : ''} md:relative md:z-auto`}>
+        <ChatSidebar
+          activeGroupId={groupId}
+          activeSessionId={dmSessionId}
+          onCreateGroup={() => setShowCreateGroup(true)}
+          openDrawer={openDrawer}
+          hideOnMobile={hasActiveConversation && !mobileSidebarOpen}
+          onMobileBack={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
+          mobileFullscreen={mobileSidebarOpen}
+        />
+      </div>
 
       {/* ── 右侧主区域 ── */}
       {!hasActiveConversation ? (
-        <div className="hidden md:flex flex-1 items-center justify-center bg-canvas">
+        <div
+          className="hidden md:flex flex-1 items-center justify-center bg-canvas"
+          onClick={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
+        >
           <div className="text-center">
             <MessageBubblePlaceholder />
             <p className="mt-4 text-lg text-textSecondary font-medium">选择一个对话开始</p>
@@ -96,15 +102,9 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
             <button
               onClick={() => setMobileSidebarOpen(true)}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="返回聊天列表"
             >
               <ArrowLeft size={20} />
-            </button>
-            <button
-              onClick={openDrawer}
-              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="菜单"
-            >
-              <Menu size={18} />
             </button>
             <h2 className="font-semibold text-textPrimary text-sm truncate">
               # {currentGroup?.name || '加载中...'}

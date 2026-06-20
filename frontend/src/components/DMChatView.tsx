@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
-import { ArrowLeft, Bell, BellOff, Settings, Menu } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings } from 'lucide-react'
 
 interface DMChatViewProps {
   sessionId: string
@@ -44,19 +44,13 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* 私信头部 — 与群聊头部布局对齐 */}
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
-        {/* 移动端：返回 + 抽屉菜单 */}
+        {/* 移动端：返回聊天列表 */}
         <button
           onClick={() => onMobileBack ? onMobileBack() : navigate('/chat')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          title="返回聊天列表"
         >
           <ArrowLeft size={20} />
-        </button>
-        <button
-          onClick={openDrawer}
-          className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title="菜单"
-        >
-          <Menu size={18} />
         </button>
 
         {/* 对方头像 */}

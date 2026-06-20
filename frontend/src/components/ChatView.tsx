@@ -667,6 +667,12 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               setTimeout(() => detectMention(ta.value, ta.selectionStart), 0)
             }}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              // 手机端键盘弹出时重新计算可视区域，防止布局错乱
+              setTimeout(() => {
+                textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }, 350)
+            }}
             placeholder={conversationType === 'dm' ? '输入私信... Enter 发送' : '输入消息... @AI名称 提及, Enter 发送'}
             rows={1}
             className="flex-1 min-w-0 resize-none rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"

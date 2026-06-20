@@ -483,7 +483,7 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={toggleTheme}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
                 theme === 'dark'
                   ? 'bg-primary-600'
                   : 'bg-[#CBD5E1]'
@@ -519,7 +519,7 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={() => handleNotificationToggle(!notifications)}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
                 notifications
                   ? 'bg-primary-600'
                   : 'bg-[#CBD5E1]'

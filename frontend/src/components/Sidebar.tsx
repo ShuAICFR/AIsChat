@@ -94,7 +94,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       {/* 主导航 */}
       {!collapsed && !showFriendList && (
         <nav className="flex-1 py-3 space-y-0.5">
-          <NavLink to="/chat" onClick={() => setShowFriendList(false)} className={navLinkClass}>
+          <NavLink to="/chat" onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }} className={navLinkClass}>
             <MessageCircle size={18} />
             <span>聊天</span>
           </NavLink>
@@ -111,7 +111,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={() => setShowFriendList(false)}
+              onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }}
               className={navLinkClass}
               title={collapsed ? item.label : undefined}
             >
@@ -146,7 +146,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           <div className="px-3 py-2 border-b border-border flex items-center justify-between">
             <span className="text-sm font-medium text-textPrimary">好友列表</span>
             <button
-              onClick={() => setShowFriendList(false)}
+              onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }}
               className="p-1 rounded hover:bg-elevated text-textMuted hover:text-textSecondary"
               title="返回导航"
             >
@@ -160,7 +160,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
                 const targetUserId = (friend as any).friend_user_id || friend.friend_id
                 try {
                   const dm = await api.post(`/dm/${targetUserId}`)
-                  if (dm.session_id) navigate(`/chat/dm/${dm.session_id}`)
+                  if (dm.session_id) { navigate(`/chat/dm/${dm.session_id}`); if (mobile) onClose?.() }
                 } catch { /* ignore */ }
               }}
             />
@@ -179,6 +179,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             <NavLink
               key={item.to}
               to={item.to}
+              onClick={() => { if (mobile) onClose?.() }}
               className={({ isActive }) =>
                 `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive
@@ -201,6 +202,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           {user?.role === 'admin' && (
             <NavLink
               to="/admin"
+              onClick={() => { if (mobile) onClose?.() }}
               className={({ isActive }) =>
                 `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive

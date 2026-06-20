@@ -198,7 +198,7 @@ export default function ConversationLogTab() {
                 <label className="text-xs font-medium text-textSecondary">默认允许用户查看 AI 对话日志</label>
                 <button
                   onClick={() => setConfig({ ...config, default_user_log_access: !config.default_user_log_access })}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
                     config.default_user_log_access ? 'bg-mint-400' : 'bg-[#3a3a4a]'
                   }`}
                 >
@@ -214,7 +214,7 @@ export default function ConversationLogTab() {
                 </div>
                 <button
                   onClick={() => setConfig({ ...config, default_delay_reply_enabled: !config.default_delay_reply_enabled })}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
                     config.default_delay_reply_enabled ? 'bg-mint-400' : 'bg-[#3a3a4a]'
                   }`}
                 >

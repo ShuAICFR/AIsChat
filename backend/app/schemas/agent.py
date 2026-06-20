@@ -23,6 +23,7 @@ class AgentCreateRequest(BaseModel):
     force_alarm_on_end: bool = Field(default=False, description="对话结束时强制要求 AI 设定闹钟")
     max_alarms: int = Field(default=10, ge=1, le=50, description="AI 最多可设活跃闹钟数")
     is_ai_editable: bool = Field(default=True, description="是否允许 AI 自修改配置")
+    ai_type: str = Field(default="resonance", description="AI 类型: general|semi_general|resonance")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
 
@@ -97,6 +98,7 @@ class AgentResponse(BaseModel):
     alarm_max_tool_rounds: int = 10
     force_alarm_on_end: bool = False
     max_alarms: int = 10
+    ai_type: str = "resonance"
     created_at: str | None
 
 

@@ -2,7 +2,7 @@
 SQLAlchemy ORM 模型
 """
 from app.models.user import User
-from app.models.agent import Agent, AgentConfigHistory
+from app.models.agent import Agent, AgentConfigHistory, AgentUserConfig
 from app.models.group import Group, GroupMember
 from app.models.message import Message, GroupMessageEmbedding, PendingMessage
 from app.models.memory import RoughMemory, DetailMemory
@@ -28,6 +28,7 @@ __all__ = [
     "User",
     "Agent",
     "AgentConfigHistory",
+    "AgentUserConfig",
     "Group",
     "GroupMember",
     "Message",

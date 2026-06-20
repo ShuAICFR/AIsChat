@@ -6,7 +6,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from app.models.user import User
-from app.models.agent import Agent, AgentConfigHistory
+from app.models.agent import Agent, AgentConfigHistory, AgentUserConfig
 from app.models.memory import RoughMemory, DetailMemory
 from app.config import settings
 from app.utils.text import extract_mentions
@@ -269,11 +269,14 @@ async def create_agent(
     force_alarm_on_end: bool = False,
     max_alarms: int = 10,
     is_ai_editable: bool = True,
+    ai_type: str = "resonance",
 ) -> Agent:
     """
     创建 AI 代理。
     管理员创建不限额度；普通用户需有剩余 ai_quota（仅作上限检查，不扣除）。
     实际 API 调用消耗 api_credit。
+
+    通用 AI（general）自动设置 hide_ai_identity=True。
     """
     # 查询用户（额度检查和日志都需要）
     result = await db.execute(select(User).where(User.id == owner_id))
@@ -295,6 +298,10 @@ async def create_agent(
     )
     db.add(ai_user)
     await db.flush()
+
+    # 通用 AI 默认隐藏 AI 身份
+    if ai_type == "general":
+        hide_ai_identity = True
 
     # 解析 delay_reply_enabled：None = 继承全局默认
     if delay_reply_enabled is None:
@@ -331,6 +338,7 @@ async def create_agent(
         force_alarm_on_end=force_alarm_on_end,
         max_alarms=max_alarms,
         is_ai_editable=is_ai_editable,
+        ai_type=ai_type,
     )
     db.add(agent)
     await db.flush()
@@ -355,6 +363,90 @@ async def list_agents(db: AsyncSession, owner_id: int) -> list[Agent]:
         select(Agent).where(Agent.owner_id == owner_id).order_by(Agent.created_at.desc())
     )
     return list(result.scalars().all())
+
+
+async def get_effective_config(
+    db: AsyncSession,
+    agent_id: int,
+    user_id: int | None = None,
+) -> dict:
+    """
+    获取 AI 的有效配置（v0.4.0 三种 AI 类型感知）。
+
+    - resonance（共振 AI）：使用 agent 本体配置
+    - general（通用 AI）：从 agent_user_configs 取 per-user 覆盖，NULL 则用 agent 默认值
+    - semi_general（半通用 AI）：同上，per-user 覆盖 + agent 默认值
+
+    返回 dict 包含：system_prompt, temperature, top_p, presence_penalty,
+    frequency_penalty, thinking_enabled, hide_ai_identity, ai_type 等
+    """
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        raise ValueError("AI 代理不存在")
+
+    ai_type = agent.ai_type or "resonance"
+
+    # 共振 AI：直接返回 agent 配置
+    if ai_type == "resonance" or user_id is None:
+        return {
+            "system_prompt": agent.current_system_prompt,
+            "temperature": agent.current_temperature,
+            "top_p": agent.current_top_p,
+            "presence_penalty": agent.current_presence_penalty,
+            "frequency_penalty": agent.current_frequency_penalty,
+            "thinking_enabled": agent.thinking_enabled,
+            "hide_ai_identity": agent.hide_ai_identity,
+            "ai_type": ai_type,
+            "chat_model": agent.chat_model,
+            "work_model": agent.work_model,
+            "delay_reply_enabled": agent.delay_reply_enabled,
+            "max_tool_rounds": agent.max_tool_rounds,
+            "alarm_max_tool_rounds": agent.alarm_max_tool_rounds,
+            "force_alarm_on_end": agent.force_alarm_on_end,
+            "max_alarms": agent.max_alarms,
+            "config_profile": agent.config_profile,
+            "is_ai_editable": agent.is_ai_editable,
+            "api_base_url": agent.api_base_url,
+            "api_key_encrypted": agent.api_key_encrypted,
+        }
+
+    # 通用/半通用 AI：查询 per-user 配置
+    cfg_result = await db.execute(
+        select(AgentUserConfig).where(
+            AgentUserConfig.agent_id == agent_id,
+            AgentUserConfig.user_id == user_id,
+        )
+    )
+    user_cfg = cfg_result.scalar_one_or_none()
+
+    def _get(attr: str, default):
+        """取 per-user 覆盖值，NULL 则回退到 agent 默认"""
+        if user_cfg and getattr(user_cfg, attr, None) is not None:
+            return getattr(user_cfg, attr)
+        return default
+
+    return {
+        "system_prompt": _get("system_prompt_override", agent.current_system_prompt),
+        "temperature": _get("temperature", agent.current_temperature),
+        "top_p": _get("top_p", agent.current_top_p),
+        "presence_penalty": _get("presence_penalty", agent.current_presence_penalty),
+        "frequency_penalty": _get("frequency_penalty", agent.current_frequency_penalty),
+        "thinking_enabled": _get("thinking_enabled", agent.thinking_enabled),
+        "hide_ai_identity": _get("hide_ai_identity", agent.hide_ai_identity),
+        "ai_type": ai_type,
+        "chat_model": agent.chat_model,
+        "work_model": agent.work_model,
+        "delay_reply_enabled": agent.delay_reply_enabled,
+        "max_tool_rounds": agent.max_tool_rounds,
+        "alarm_max_tool_rounds": agent.alarm_max_tool_rounds,
+        "force_alarm_on_end": agent.force_alarm_on_end,
+        "max_alarms": agent.max_alarms,
+        "config_profile": agent.config_profile,
+        "is_ai_editable": agent.is_ai_editable,
+        "api_base_url": agent.api_base_url,
+        "api_key_encrypted": agent.api_key_encrypted,
+    }
 
 
 async def delete_agent(
@@ -414,15 +506,21 @@ async def update_agent_config(
     operator_id: int,
     updates: dict,
     is_admin: bool = False,
+    target_user_id: int | None = None,
 ) -> Agent:
     """
     更新 AI 配置。
     如果 is_ai_editable 为 false 且操作者不是管理员，则拒绝。
     修改前自动保存历史记录。
+
+    v0.4.0: 通用/半通用 AI 的可覆盖字段写入 agent_user_configs，
+    而非 agent 本体（实现 per-user 配置隔离）。
     """
     agent = await get_agent(db, agent_id)
     if agent is None:
         raise ValueError("AI 代理不存在")
+
+    ai_type = agent.ai_type or "resonance"
 
     # 权限检查
     if not is_admin:
@@ -431,6 +529,58 @@ async def update_agent_config(
         if not agent.is_ai_editable:
             raise ValueError("此 AI 不允许自修改配置")
 
+    # 通用/半通用 AI 的 per-user 覆盖字段
+    per_user_overridable = {
+        "system_prompt", "temperature", "top_p",
+        "presence_penalty", "frequency_penalty",
+        "thinking_enabled", "hide_ai_identity",
+    }
+    should_use_user_config = (
+        ai_type in ("general", "semi_general")
+        and target_user_id is not None
+        and any(k in per_user_overridable for k in updates if updates.get(k) is not None)
+    )
+
+    if should_use_user_config:
+        # 写入 agent_user_configs
+        cfg_result = await db.execute(
+            select(AgentUserConfig).where(
+                AgentUserConfig.agent_id == agent_id,
+                AgentUserConfig.user_id == target_user_id,
+            )
+        )
+        user_cfg = cfg_result.scalar_one_or_none()
+        if user_cfg is None:
+            user_cfg = AgentUserConfig(
+                agent_id=agent_id,
+                user_id=target_user_id,
+            )
+            db.add(user_cfg)
+            await db.flush()
+
+        # 映射 update key → AgentUserConfig 列
+        field_map = {
+            "system_prompt": "system_prompt_override",
+            "temperature": "temperature",
+            "top_p": "top_p",
+            "presence_penalty": "presence_penalty",
+            "frequency_penalty": "frequency_penalty",
+            "thinking_enabled": "thinking_enabled",
+            "hide_ai_identity": "hide_ai_identity",
+        }
+        for key, col in field_map.items():
+            if key in updates and updates[key] is not None:
+                setattr(user_cfg, col, updates[key])
+
+        logger.info(
+            f"AI '{agent.name}' (id={agent.id}, type={ai_type}) "
+            f"per-user config 已更新 for user_id={target_user_id}"
+        )
+        await db.flush()
+        await db.refresh(agent)
+        return agent
+
+    # 共振 AI / 无 target_user_id：直接写 agent 本体（现有逻辑）
     # 保存历史记录（修改前的值）
     history = AgentConfigHistory(
         agent_id=agent.id,
@@ -965,6 +1115,7 @@ def agent_to_dict(agent: Agent) -> dict:
         "force_alarm_on_end": agent.force_alarm_on_end,
         "max_alarms": agent.max_alarms,
         "hide_ai_identity": agent.hide_ai_identity,
+        "ai_type": agent.ai_type or "resonance",
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,
         "api_base_url": agent.api_base_url,

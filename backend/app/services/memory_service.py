@@ -17,6 +17,8 @@ async def _text_search_memories(
     top_k: int = 5,
     group_id: int | None = None,
     scope: str | None = None,
+    user_id: int | None = None,
+    ai_type: str = "resonance",
 ) -> list[dict]:
     """
     文本关键词回退搜索（当 embedding 不可用或记忆向量为 NULL 时使用）。
@@ -31,6 +33,9 @@ async def _text_search_memories(
     - None：检索私有 + 群共享（auto-injection 用）
     - "private"：仅检索该 AI 的私有记忆
     - "group"：仅检索群共享记忆
+
+    v0.4.0: user_id 过滤 — 通用/半通用 AI 仅检索该用户的记忆，
+    共振 AI 检索 user_id IS NULL（全部记忆）。
     """
     # 提取关键词：全文 + 拆分片段
     parts = [query.strip()]
@@ -52,6 +57,13 @@ async def _text_search_memories(
         params[param_key] = f"%{kw}%"
 
     where_parts = ["(" + " OR ".join(conditions) + ")"]
+
+    # v0.4.0: per-user 记忆隔离
+    if ai_type == "resonance":
+        where_parts.append("rm.user_id IS NULL")
+    elif user_id is not None:
+        where_parts.append("(rm.user_id = :user_id OR rm.user_id IS NULL)")
+        params["user_id"] = user_id
 
     # 权限过滤
     if scope == "private":
@@ -114,6 +126,8 @@ async def recall_relevant_memories(
     top_k: int = 5,
     similarity_threshold: float = 0.35,
     group_id: int | None = None,
+    user_id: int | None = None,
+    ai_type: str = "resonance",
 ) -> list[dict]:
     """
     检索与当前对话相关的记忆（向量相似度搜索 + 文本关键词回退）。
@@ -127,6 +141,10 @@ async def recall_relevant_memories(
     2. 向量搜索失败或无结果时，自动回退到文本 ILIKE 搜索
     3. 文本搜索可以找到 embedding=NULL 的记忆
 
+    v0.4.0: user_id + ai_type 参数支持 per-user 记忆隔离。
+    共振 AI 检索所有记忆（user_id IS NULL），
+    通用/半通用 AI 仅检索该用户的记忆。
+
     返回: [{id, title, content, scope, similarity}]
     """
     from app.utils.embedding import get_embedding
@@ -138,8 +156,16 @@ async def recall_relevant_memories(
         query_embedding = await get_embedding(query, api_base_url=api_base_url, api_key=api_key)
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
 
+        # v0.4.0: 构建 user_id 过滤条件
+        if ai_type == "resonance":
+            user_filter = "AND rm.user_id IS NULL"
+        elif user_id is not None:
+            user_filter = "AND (rm.user_id = :user_id OR rm.user_id IS NULL)"
+        else:
+            user_filter = ""
+
         if group_id:
-            sql = text("""
+            sql = text(f"""
                 SELECT rm.id, rm.title, rm.scope,
                        1 - (rm.embedding <=> :embedding) AS similarity,
                        dm.content
@@ -147,6 +173,7 @@ async def recall_relevant_memories(
                 LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
                 WHERE rm.embedding IS NOT NULL
                   AND 1 - (rm.embedding <=> :embedding) > :threshold
+                  {user_filter}
                   AND (
                       (rm.owner_type = 'ai' AND rm.owner_id = :agent_id AND rm.scope = 'private')
                       OR
@@ -155,15 +182,18 @@ async def recall_relevant_memories(
                 ORDER BY rm.embedding <=> :embedding
                 LIMIT :top_k
             """)
-            result = await db.execute(sql, {
+            params = {
                 "embedding": embedding_str,
                 "agent_id": agent_id,
                 "group_id": group_id,
                 "threshold": similarity_threshold,
                 "top_k": top_k,
-            })
+            }
+            if user_id is not None and ai_type != "resonance":
+                params["user_id"] = user_id
+            result = await db.execute(sql, params)
         else:
-            sql = text("""
+            sql = text(f"""
                 SELECT rm.id, rm.title, rm.scope,
                        1 - (rm.embedding <=> :embedding) AS similarity,
                        dm.content
@@ -171,17 +201,21 @@ async def recall_relevant_memories(
                 LEFT JOIN detail_memories dm ON dm.rough_id = rm.id
                 WHERE rm.owner_type = 'ai'
                   AND rm.owner_id = :agent_id
+                  {user_filter}
                   AND rm.embedding IS NOT NULL
                   AND 1 - (rm.embedding <=> :embedding) > :threshold
                 ORDER BY rm.embedding <=> :embedding
                 LIMIT :top_k
             """)
-            result = await db.execute(sql, {
+            params = {
                 "embedding": embedding_str,
                 "agent_id": agent_id,
                 "threshold": similarity_threshold,
                 "top_k": top_k,
-            })
+            }
+            if user_id is not None and ai_type != "resonance":
+                params["user_id"] = user_id
+            result = await db.execute(sql, params)
 
         for row in result:
             memories.append({
@@ -202,6 +236,7 @@ async def recall_relevant_memories(
     if not memories:
         memories = await _text_search_memories(
             db, agent_id, query, top_k=top_k, group_id=group_id,
+            user_id=user_id, ai_type=ai_type,
         )
 
     return memories

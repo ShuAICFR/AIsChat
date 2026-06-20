@@ -332,12 +332,15 @@ async def _build_injected_skills(
     db: AsyncSession, agent, group_id: int,
     query_text: str,
     api_base_url: str | None, api_key: str | None,
+    trigger_user_id: int | None = None,
 ) -> str:
     """
     injected_skills 段：记忆注入 + Skill 引擎注入。
 
     这是最动态的段，每次请求都可能不同。
     记忆注入用最近消息内容作为检索查询。
+
+    v0.4.0: trigger_user_id 用于通用/半通用 AI 的 per-user 记忆隔离。
     """
     parts: list[str] = []
 
@@ -351,6 +354,8 @@ async def _build_injected_skills(
                 api_key=api_key,
                 top_k=5,
                 group_id=group_id,
+                user_id=trigger_user_id,
+                ai_type=agent.ai_type or "resonance",
             )
             if memories:
                 parts.append(format_memories_for_prompt(memories))
@@ -380,6 +385,7 @@ async def build_messages(
     vector_accelerated: bool = False,
     api_base_url: str | None = None,
     api_key: str | None = None,
+    trigger_user_id: int | None = None,
 ) -> list[dict]:
     """
     构建发送给 LLM 的消息列表（6 段系统提示词 + 历史消息）。
@@ -453,7 +459,7 @@ async def build_messages(
         "rules": RULES,
         "tools": await _build_tools_segment(db, agent, is_dm),
         "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
-        "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key),
+        "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key, trigger_user_id),
     }
 
     system_prompt = "\n\n".join(
@@ -514,6 +520,7 @@ async def build_dm_messages(
     limit: int = 20,
     api_base_url: str | None = None,
     api_key: str | None = None,
+    trigger_user_id: int | None = None,
 ) -> list[dict]:
     """构建 DM 私信的消息列表（6 段系统提示词 + DM 历史消息）"""
     from app.models.dm import DMMessage, DMSession
@@ -589,6 +596,7 @@ async def build_dm_messages(
             query_text=query_text,
             api_base_url=api_base_url,
             api_key=api_key,
+            trigger_user_id=trigger_user_id,
         ),
     }
 

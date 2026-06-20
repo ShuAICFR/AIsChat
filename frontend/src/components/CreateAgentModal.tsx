@@ -191,6 +191,7 @@ export default function CreateAgentModal({
   const [chatModel, setChatModel] = useState('')
   const [workModel, setWorkModel] = useState('')
   const [apiCreditCost, setApiCreditCost] = useState(0)
+  const [aiType, setAiType] = useState('resonance')  // v0.4.0
 
   // 弹窗状态
   const [showDetailSettings, setShowDetailSettings] = useState(false)
@@ -312,6 +313,7 @@ export default function CreateAgentModal({
         max_alarms: maxAlarms,
         is_ai_editable: isAiEditable,
         api_credit_cost: apiCreditCost,
+        ai_type: aiType,
       })
       onCreated()
     } catch (err: any) {
@@ -654,6 +656,32 @@ function DetailSettingsModal({
           <Section title="⏰ 闹钟 / 心跳" desc="AI 自主唤醒和周期性任务">
             <ToggleField label="🔔 强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止「睡死」" />
             <NumberField label="最大活跃闹钟数" value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc="AI 最多同时保有多个未触发的闹钟" />
+          </Section>
+
+          {/* ── 🤖 AI 类型 ── */}
+          <Section title="🤖 AI 类型" desc="决定 AI 的记忆隔离粒度和群聊权限">
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'general', label: '通用', emoji: '👤', desc: '每人独立记忆和配置，不能加群' },
+                { value: 'semi_general', label: '半通用', emoji: '🔄', desc: '每人独立配置 + 跨用户学习，可以加群' },
+                { value: 'resonance', label: '共振', emoji: '🌐', desc: '统一记忆和配置，所有用户共享（当前模式）' },
+              ] as const).map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setAiType(t.value)}
+                  className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-all ${
+                    aiType === t.value
+                      ? 'border-primary-400 bg-primary-500/10 text-primary-300'
+                      : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
+                  }`}
+                >
+                  <span className="text-lg">{t.emoji}</span>
+                  <span className="text-xs font-semibold">{t.label}</span>
+                  <span className="text-[9px] leading-tight text-textMuted">{t.desc}</span>
+                </button>
+              ))}
+            </div>
           </Section>
 
           {/* ── 🎭 行为开关 ── */}

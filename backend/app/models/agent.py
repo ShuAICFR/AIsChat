@@ -3,7 +3,7 @@ AI 代理模型
 """
 from sqlalchemy import (
     Column, Integer, String, Boolean, Float, Text, DateTime,
-    ForeignKey, func,
+    ForeignKey, UniqueConstraint, func,
 )
 from app.database import Base
 
@@ -86,6 +86,9 @@ class Agent(Base):
     # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
     hide_ai_identity = Column(Boolean, default=False)
 
+    # AI 类型 (v0.4.0): general(通用) | semi_general(半通用) | resonance(共振, 默认)
+    ai_type = Column(String(20), default="resonance")
+
     # 头像 URL
     avatar_url = Column(Text)
 
@@ -93,6 +96,34 @@ class Agent(Base):
     api_token = Column(String(64))
 
     created_at = Column(DateTime, server_default=func.now())
+
+
+class AgentUserConfig(Base):
+    """per-user AI 配置覆盖（通用/半通用 AI 专用）
+    每个(user_id, agent_id)对存储该用户对此 AI 的个性化配置。
+    NULL 值表示继承 AI 默认值。
+    """
+    __tablename__ = "agent_user_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # 以下均为覆盖值，NULL = 使用 agent 本体配置
+    temperature = Column(Float, nullable=True)
+    top_p = Column(Float, nullable=True)
+    presence_penalty = Column(Float, nullable=True)
+    frequency_penalty = Column(Float, nullable=True)
+    thinking_enabled = Column(Boolean, nullable=True)
+    hide_ai_identity = Column(Boolean, nullable=True)
+    system_prompt_override = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("agent_id", "user_id", name="uq_agent_user_config"),
+    )
 
 
 class AgentConfigHistory(Base):

@@ -18,8 +18,10 @@ class RoughMemory(Base):
     owner_id = Column(Integer, nullable=False)
     title = Column(String(200), nullable=False)
     embedding = Column(Vector(1536))  # 标题向量
-    scope = Column(String(10), default="private")  # private | group
+    scope = Column(String(10), default="private")  # private | group | cross_user
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
+    # v0.4.0: per-user 记忆隔离（共振 AI 为 NULL，通用/半通用填触发用户 ID）
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

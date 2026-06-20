@@ -40,6 +40,8 @@ async def run_migrations():
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
             await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
+            await _migrate_ai_types(db)               # v0.4.0 三种 AI 类型 + per-user 配置隔离
+            await _migrate_memory_user_isolation(db)  # v0.4.0 记忆 per-user 隔离
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -751,6 +753,59 @@ async def _migrate_archive_friend_tables(db):
     except Exception as e:
         logger.warning(f"  ⚠️ 归档好友表失败（可能已归档）: {e}")
         await db.rollback()
+
+
+async def _migrate_ai_types(db):
+    """v0.4.0: 三种 AI 类型 + agent_user_configs 表"""
+    logger.info("  🔧 迁移 AI 类型系统...")
+
+    # 1. 添加 agents.ai_type 列
+    if not await _column_exists(db, "agents", "ai_type"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN ai_type VARCHAR(20) NOT NULL DEFAULT 'resonance'"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.ai_type 迁移完成")
+    else:
+        logger.info("  ⏭ agents.ai_type 已存在，跳过")
+
+    # 2. 创建 agent_user_configs 表
+    if not await _table_exists(db, "agent_user_configs"):
+        await db.execute(text("""
+            CREATE TABLE agent_user_configs (
+                id SERIAL PRIMARY KEY,
+                agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                temperature DOUBLE PRECISION,
+                top_p DOUBLE PRECISION,
+                presence_penalty DOUBLE PRECISION,
+                frequency_penalty DOUBLE PRECISION,
+                thinking_enabled BOOLEAN,
+                hide_ai_identity BOOLEAN,
+                system_prompt_override TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+                CONSTRAINT uq_agent_user_config UNIQUE (agent_id, user_id)
+            )
+        """))
+        await db.commit()
+        logger.info("  ✅ agent_user_configs 表创建完成")
+    else:
+        logger.info("  ⏭ agent_user_configs 已存在，跳过")
+
+
+async def _migrate_memory_user_isolation(db):
+    """v0.4.0: 记忆 per-user 隔离 — rough_memories 加 user_id / scope 扩展"""
+    logger.info("  🔧 迁移记忆隔离字段...")
+
+    if not await _column_exists(db, "rough_memories", "user_id"):
+        await db.execute(text(
+            "ALTER TABLE rough_memories ADD COLUMN user_id INTEGER REFERENCES users(id)"
+        ))
+        await db.commit()
+        logger.info("  ✅ rough_memories.user_id 迁移完成")
+    else:
+        logger.info("  ⏭ rough_memories.user_id 已存在，跳过")
 
 
 async def _fix_column_types(db):

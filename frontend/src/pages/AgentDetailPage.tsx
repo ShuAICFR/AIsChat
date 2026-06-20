@@ -26,6 +26,7 @@ interface Agent {
   work_model: string | null
   thinking_enabled: boolean
   hide_ai_identity: boolean
+  ai_type: string
   config_profile: string
   delay_reply_enabled: boolean | null
   api_credit_cost: number
@@ -339,6 +340,11 @@ export default function AgentDetailPage() {
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${stateColors[agent.state] || ''}`}>
                   {agent.state}
                 </span>
+                {agent.ai_type && agent.ai_type !== 'resonance' && (
+                  <span className="text-xs px-2 py-0.5 rounded-full border border-accent-400/40 bg-accent-400/10 text-accent-400">
+                    {agent.ai_type === 'general' ? '👤 通用' : '🔄 半通用'}
+                  </span>
+                )}
                 <span className="text-xs text-textMuted">
                   创建于 {new Date(agent.created_at).toLocaleDateString('zh-CN')}
                 </span>

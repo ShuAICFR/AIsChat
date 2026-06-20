@@ -863,12 +863,23 @@ async def _handle_store_memory(
 ) -> dict:
     """工具: store_memory"""
     from app.models.memory import RoughMemory, DetailMemory
+    from app.models.agent import Agent
+    from sqlalchemy import select as _sel
     from app.utils.embedding import get_embedding
 
     title = arguments["title"]
     content = arguments["content"]
     scope = arguments["scope"]
     mem_group_id = arguments.get("group_id", group_id if scope == "group" else None)
+
+    # v0.4.0: 通用/半通用 AI 按 user_id 隔离记忆
+    agent_row = await db.execute(_sel(Agent).where(Agent.id == agent_id))
+    agent_obj = agent_row.scalar_one_or_none()
+    ai_type = agent_obj.ai_type if agent_obj else "resonance"
+    trigger_user_id = context.get("trigger_user_id")
+    memory_user_id = None
+    if ai_type in ("general", "semi_general") and trigger_user_id:
+        memory_user_id = trigger_user_id
 
     # 向量化标题
     api_key = context.get("api_key")
@@ -892,6 +903,7 @@ async def _handle_store_memory(
         embedding=embedding,
         scope=scope,
         group_id=mem_group_id,
+        user_id=memory_user_id,
     )
     db.add(rough)
     await db.flush()
@@ -1035,6 +1047,14 @@ async def _handle_create_group(
 ) -> dict:
     """工具: create_group（AI 主动创建群聊）"""
     from app.services.group_service import create_group, add_member
+    from sqlalchemy import select as _sel
+    from app.models.agent import Agent
+
+    # 通用 AI 不能创建群聊
+    agent_result = await db.execute(_sel(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent and (agent.ai_type or "resonance") == "general":
+        return {"error": True, "message": "通用AI不能创建群聊"}
 
     name = arguments["name"]
     initial_ids = arguments.get("initial_member_ids", [])
@@ -1059,6 +1079,14 @@ async def _handle_invite_to_group(
 ) -> dict:
     """工具: invite_to_group"""
     from app.services.group_service import add_member
+    from sqlalchemy import select as _sel2
+    from app.models.agent import Agent
+
+    # 通用 AI 不能邀请人进群
+    agent_result = await db.execute(_sel2(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent and (agent.ai_type or "resonance") == "general":
+        return {"error": True, "message": "通用AI不能邀请成员进群"}
 
     target_group = arguments.get("group_id", group_id)
     member_type = arguments["member_type"]

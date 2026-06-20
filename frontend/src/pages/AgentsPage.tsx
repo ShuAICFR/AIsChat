@@ -142,14 +142,14 @@ export default function AgentsPage() {
             className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 border border-border text-textSecondary rounded-lg hover:bg-elevated text-xs font-medium transition-colors"
           >
             <Upload size={13} className="md:w-3.5 md:h-3.5" />
-            <span className="hidden sm:inline">导入灵魂</span>
+            <span className="inline">导入</span>
           </button>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-400 text-xs font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             <Plus size={13} />
-            <span className="hidden sm:inline">创建 AI</span>
+            <span className="inline">创建</span>
           </button>
         </div>
       </div>

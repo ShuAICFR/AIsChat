@@ -23,7 +23,8 @@ class AgentCreateRequest(BaseModel):
     force_alarm_on_end: bool = Field(default=False, description="对话结束时强制要求 AI 设定闹钟")
     max_alarms: int = Field(default=10, ge=1, le=50, description="AI 最多可设活跃闹钟数")
     is_ai_editable: bool = Field(default=True, description="是否允许 AI 自修改配置")
-    reminder_not_count: bool = Field(default=True, description="系统提醒不计入工具调用轮次配额")
+    reminder_not_count: bool | None = Field(default=None, description="[已废弃] 请用 reminder_grace")
+    reminder_grace: str = Field(default="every_time", description="系统提醒额外轮次: every_time|once|off")
     ai_type: str = Field(default="resonance", description="AI 类型: general|semi_general|resonance")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
 
@@ -60,7 +61,7 @@ class AgentUpdateConfigRequest(BaseModel):
     alarm_max_tool_rounds: int | None = Field(default=None, ge=1, le=30, description="闹钟/心跳轮次上限")
     force_alarm_on_end: bool | None = None
     max_alarms: int | None = Field(default=None, ge=1, le=50, description="最大闹钟数")
-    reminder_not_count: bool | None = Field(default=None, description="系统提醒不计入轮次配额")
+    reminder_grace: str | None = Field(default=None, description="系统提醒额外轮次: every_time|once|off")
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None

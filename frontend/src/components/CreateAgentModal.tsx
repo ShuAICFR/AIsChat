@@ -23,7 +23,7 @@ interface PresetData {
   delay_reply_enabled: boolean
   is_ai_editable: boolean
   hide_ai_identity: boolean
-  reminder_not_count: boolean
+  reminder_grace: string
 }
 
 interface SubOption {
@@ -50,7 +50,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: false,
     is_ai_editable: false,
     hide_ai_identity: true,
-    reminder_not_count: true,
+    reminder_grace: 'every_time',
   },
   immersive: {
     key: 'immersive',
@@ -65,7 +65,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: true,
     is_ai_editable: true,
     hide_ai_identity: false,
-    reminder_not_count: true,
+    reminder_grace: 'every_time',
   },
   digital_life: {
     key: 'digital_life',
@@ -80,7 +80,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: true,
     is_ai_editable: true,
     hide_ai_identity: false,
-    reminder_not_count: true,
+    reminder_grace: 'every_time',
   },
 }
 
@@ -185,7 +185,7 @@ export default function CreateAgentModal({
   const [frequencyPenalty, setFrequencyPenalty] = useState(0.5)
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [hideAiIdentity, setHideAiIdentity] = useState(false)
-  const [reminderNotCount, setReminderNotCount] = useState(true)
+  const [reminderGrace, setReminderGrace] = useState('every_time')
   const [delayReplyEnabled, setDelayReplyEnabled] = useState<boolean | null>(null)
   const [configProfile, setConfigProfile] = useState('custom')
   const [maxToolRounds, setMaxToolRounds] = useState(3)
@@ -263,7 +263,7 @@ export default function CreateAgentModal({
     setDelayReplyEnabled(preset.delay_reply_enabled)
     setIsAiEditable(preset.is_ai_editable)
     setHideAiIdentity(preset.hide_ai_identity)
-    setReminderNotCount(preset.reminder_not_count)
+    setReminderGrace(preset.reminder_grace || 'every_time')
     setConfigProfile(presetKey)
 
     // 子选项覆盖
@@ -314,7 +314,7 @@ export default function CreateAgentModal({
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideAiIdentity,
         delay_reply_enabled: delayReplyEnabled,
-        reminder_not_count: reminderNotCount,
+        reminder_grace: reminderGrace,
         config_profile: selectedPreset || 'custom',
         max_tool_rounds: maxToolRounds,
         alarm_max_tool_rounds: alarmMaxToolRounds,
@@ -821,7 +821,18 @@ function DetailSettingsModal({
             </div>
             <ToggleField label="✏️ 允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
             <ToggleField label="🎭 隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
-            <ToggleField label="🔄 系统提醒不计入轮次" value={reminderNotCount} setValue={setReminderNotCount} desc="AI 忘调 send_message 时系统提醒额外给一次机会，不消耗工具调用轮次配额" />
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">🔄 系统提醒额外轮次</label>
+              <select
+                value={reminderGrace}
+                onChange={(e) => setReminderGrace(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="every_time">每次都不计 · 推荐 — AI 忘调 send_message 时每次都给额外机会</option>
+                <option value="once">仅一次 — 只给一次额外机会</option>
+                <option value="off">关闭 — 提醒计入正常轮次配额</option>
+              </select>
+            </div>
           </Section>
 
           {/* ── 💰 额度 ── */}

@@ -44,7 +44,7 @@ class BanUserRequest(BaseModel):
 
 class GenerateCodeRequest(BaseModel):
     quota_amount: int = Field(..., ge=1, le=100)
-    code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit)$")
+    code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit|file_size)$")
     expires_in_days: int = Field(..., ge=1, le=365)
 
 

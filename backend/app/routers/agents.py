@@ -151,7 +151,7 @@ async def create_new_agent(
             max_alarms=req.max_alarms,
             is_ai_editable=req.is_ai_editable,
             ai_type=req.ai_type,
-            reminder_not_count=req.reminder_not_count,
+            reminder_grace=req.reminder_grace,
         )
         return agent_to_dict(agent)
     except ValueError as e:

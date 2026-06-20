@@ -31,7 +31,7 @@ CONFIG_PROFILES = {
         "delay_reply_enabled": False,
         "is_ai_editable": False,
         "hide_ai_identity": True,
-        "reminder_not_count": True,
+        "reminder_grace": "every_time",
     },
     "immersive": {
         "name": "深度沉浸档",
@@ -49,7 +49,7 @@ CONFIG_PROFILES = {
         "delay_reply_enabled": True,
         "is_ai_editable": True,
         "hide_ai_identity": False,
-        "reminder_not_count": True,
+        "reminder_grace": "every_time",
     },
     "digital_life": {
         "name": "数字生命档",
@@ -197,7 +197,7 @@ async def apply_config_profile(
         "force_alarm_on_end": agent.force_alarm_on_end,
         "max_alarms": agent.max_alarms,
         "is_ai_editable": agent.is_ai_editable,
-        "reminder_not_count": agent.reminder_not_count,
+        "reminder_grace": agent.reminder_grace,
     }
 
     # 合并
@@ -274,7 +274,7 @@ async def create_agent(
     max_alarms: int = 10,
     is_ai_editable: bool = True,
     ai_type: str = "resonance",
-    reminder_not_count: bool = True,
+    reminder_grace: str = "every_time",
 ) -> Agent:
     """
     创建 AI 代理。
@@ -344,7 +344,7 @@ async def create_agent(
         max_alarms=max_alarms,
         is_ai_editable=is_ai_editable,
         ai_type=ai_type,
-        reminder_not_count=reminder_not_count,
+        reminder_grace=reminder_grace,
     )
     db.add(agent)
     await db.flush()

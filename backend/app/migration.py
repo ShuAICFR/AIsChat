@@ -741,15 +741,26 @@ async def _migrate_max_tool_rounds(db):
 
 
 async def _migrate_reminder_not_count(db):
-    """v0.4.1: 系统提醒不计入工具调用轮次（默认开启）"""
-    if not await _column_exists(db, "agents", "reminder_not_count"):
-        logger.info("  🔧 添加 agents.reminder_not_count 列 (DEFAULT true)")
-        await db.execute(text(
-            "ALTER TABLE agents ADD COLUMN reminder_not_count BOOLEAN NOT NULL DEFAULT true"
-        ))
-        logger.info("  ✅ agents.reminder_not_count 迁移完成")
+    """v0.4.1: 系统提醒额外轮次模式 (every_time/once/off, 默认 every_time)"""
+    if not await _column_exists(db, "agents", "reminder_grace"):
+        # 如果旧列存在，先按旧列值转换
+        if await _column_exists(db, "agents", "reminder_not_count"):
+            logger.info("  🔧 迁移 agents.reminder_not_count → reminder_grace")
+            await db.execute(text(
+                "ALTER TABLE agents ADD COLUMN reminder_grace VARCHAR(10) NOT NULL DEFAULT 'every_time'"
+            ))
+            await db.execute(text(
+                "UPDATE agents SET reminder_grace = CASE WHEN reminder_not_count THEN 'every_time' ELSE 'off' END"
+            ))
+            logger.info("  ✅ agents.reminder_grace 迁移完成（从旧列转换）")
+        else:
+            logger.info("  🔧 添加 agents.reminder_grace 列 (DEFAULT 'every_time')")
+            await db.execute(text(
+                "ALTER TABLE agents ADD COLUMN reminder_grace VARCHAR(10) NOT NULL DEFAULT 'every_time'"
+            ))
+            logger.info("  ✅ agents.reminder_grace 迁移完成")
     else:
-        logger.info("  ⏭ agents.reminder_not_count 已存在，跳过")
+        logger.info("  ⏭ agents.reminder_grace 已存在，跳过")
 
 
 async def _migrate_archive_friend_tables(db):

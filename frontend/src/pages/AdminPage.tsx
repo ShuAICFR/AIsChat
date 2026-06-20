@@ -335,7 +335,15 @@ function CodesTab() {
   const [codes, setCodes] = useState<any[]>([])
   const [quota, setQuota] = useState(3)
   const [days, setDays] = useState(30)
+  const [codeType, setCodeType] = useState('ai_quota')
   const [generatedCode, setGeneratedCode] = useState('')
+  const [generating, setGenerating] = useState(false)
+
+  const CODE_TYPES: Record<string, string> = {
+    ai_quota: '🤖 AI创建额度',
+    api_credit: '💳 API调用额度',
+    file_size: '📁 文件存储额度',
+  }
 
   const loadCodes = async () => {
     try {
@@ -347,14 +355,22 @@ function CodesTab() {
   useEffect(() => { loadCodes() }, [])
 
   const handleGenerate = async () => {
+    setGenerating(true)
+    setGeneratedCode('')
     try {
       const data = await api.post('/admin/redemption-codes', {
         quota_amount: quota,
         expires_in_days: days,
+        code_type: codeType,
       })
       setGeneratedCode(data.code)
       loadCodes()
-    } catch (err) { console.error(err) }
+    } catch (err: any) {
+      console.error('生成兑换码失败:', err)
+      alert(err?.message || err?.detail || '生成失败，请检查参数')
+    } finally {
+      setGenerating(false)
+    }
   }
 
   return (
@@ -362,25 +378,39 @@ function CodesTab() {
       {/* 生成兑换码 */}
       <div className="bg-surface rounded-xl border border-border p-5">
         <h3 className="font-semibold text-textPrimary mb-3">生成兑换码</h3>
-        <div className="flex items-end gap-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs mb-1 text-textSecondary">类型</label>
+            <select value={codeType} onChange={(e) => setCodeType(e.target.value)}
+              className="px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary">
+              {Object.entries(CODE_TYPES).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-xs mb-1 text-textSecondary">额度</label>
-            <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value))}
-              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
+            <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value) || 0)}
+              min={1} max={codeType === 'file_size' ? 1024 : 100}
+              className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <div>
             <label className="block text-xs mb-1 text-textSecondary">有效期（天）</label>
-            <input type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))}
+            <input type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value) || 1)}
+              min={1} max={365}
               className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
-          <button onClick={handleGenerate}
-            className="px-4 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
-            生成
+          <button
+            onClick={handleGenerate}
+            disabled={generating || quota < 1 || days < 1}
+            className="px-4 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          >
+            {generating ? '生成中...' : '生成'}
           </button>
         </div>
         {generatedCode && (
-          <div className="mt-3 p-3 bg-mint-400/10 rounded-xl">
-            <p className="text-sm font-mono text-mint-400">{generatedCode}</p>
+          <div className="mt-3 p-3 bg-mint-400/10 border border-mint-400/20 rounded-xl">
+            <p className="text-sm font-mono text-mint-400 break-all">{generatedCode}</p>
             <p className="text-xs text-mint-400 mt-1">请复制保管，此码仅显示一次</p>
           </div>
         )}
@@ -394,6 +424,7 @@ function CodesTab() {
             <thead>
               <tr className="border-b border-border">
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">兑换码</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">到期时间</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
@@ -403,7 +434,8 @@ function CodesTab() {
               {codes.map((c: any) => (
                 <tr key={c.code} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs text-textPrimary">{c.code}</td>
-                  <td className="py-2 px-3 text-textPrimary">{c.quota_amount}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || '🤖 AI创建额度'}</td>
+                  <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{c.code_type === 'file_size' ? ' MB' : ''}</td>
                   <td className="py-2 px-3 text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
                     {c.used_by ? (

@@ -353,7 +353,7 @@ export default function CreateAgentModal({
         </div>
 
         {/* 可滚动内容区 */}
-        <div className="flex-1 overflow-y-auto md:overflow-visible">"
+        <div className="flex-1 overflow-y-auto md:overflow-visible pb-[var(--safe-bottom)] md:pb-0">
 
         {/* ── 名称输入 ── */}
         <div className="mb-5">
@@ -382,7 +382,7 @@ export default function CreateAgentModal({
                 >
                   <button
                     onClick={() => handleCardClick(key)}
-                    className={`w-full h-full text-left rounded-xl border transition-colors duration-300 min-h-[200px] md:min-h-[210px]
+                    className={`w-full h-full text-left rounded-xl border transition-colors duration-300 min-h-[150px] md:min-h-[160px]
                       bg-gradient-to-b ${icon.color}
                       ${isSelected
                         ? 'border-primary-400/60 shadow-lg shadow-primary-500/10'
@@ -525,7 +525,7 @@ function SubOptionModal({
         </div>
 
         {/* 可滚动内容 */}
-        <div className="flex-1 overflow-y-auto md:overflow-visible">
+        <div className="flex-1 overflow-y-auto md:overflow-visible pb-[var(--safe-bottom)] md:pb-0">
         <p className="text-xs text-textMuted mb-4">{preset.description}</p>
         <p className="text-xs text-textMuted mb-4 italic text-center bg-canvas/50 rounded-lg py-2">
           这是预设模板，具体参数可在下一步详细调整。
@@ -627,7 +627,7 @@ function DetailSettingsModal({
           </button>
         </div>
 
-        <div className="space-y-5 flex-1 overflow-y-auto md:max-h-[65vh] pr-1">
+        <div className="space-y-5 flex-1 overflow-y-auto md:max-h-[65vh] pr-1 pb-[var(--safe-bottom)] md:pb-0">
 
           {/* ── 📝 基础信息 ── */}
           <Section title="📝 基础信息" desc="AI 的名称和性格描述">

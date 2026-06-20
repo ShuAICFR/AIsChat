@@ -73,7 +73,7 @@ export default function AdminPage() {
       </div>
 
       {/* 内容区 */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-canvas">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-[var(--safe-bottom)] md:pb-6 bg-canvas">
         {activeTab === 'overview' && <OverviewTab />}
         {activeTab === 'users' && <UsersTab />}
         {activeTab === 'agents' && <AgentsTab />}

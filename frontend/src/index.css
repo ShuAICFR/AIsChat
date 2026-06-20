@@ -61,6 +61,8 @@
 :root {
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  /* 底部导航栏高度 (h-14=3.5rem) + 安全区 + 少量呼吸空间 */
+  --safe-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px) + 0.5rem);
 }
 
 /* 使用 dvh 回退：iOS Safari 支持 dvh（动态视口高度），避免底部被地址栏遮挡 */

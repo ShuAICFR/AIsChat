@@ -660,7 +660,7 @@ export default function AgentDetailPage() {
       {/* Delete Confirm Modal */}
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-sm mx-4">
+          <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-sm mx-4 pb-[var(--safe-bottom)] md:pb-6">
             <h3 className="text-lg font-bold text-textPrimary mb-2">删除 AI</h3>
             <p className="text-sm text-textSecondary mb-4">
               此操作不可撤销。删除后将返还 <span className="text-mint-400 font-medium">{agent.api_credit_cost}</span> API 额度。

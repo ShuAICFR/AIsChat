@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { STATE_BADGE_COLORS } from '../constants'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
   Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot,
@@ -311,13 +312,6 @@ export default function AgentDetailPage() {
 
   if (!agent) return null
 
-  const stateColors: Record<string, string> = {
-    active: 'bg-mint-400/10 text-mint-400 border-mint-400/20',
-    dnd: 'bg-rose-400/10 text-rose-400 border-rose-400/20',
-    offline: 'bg-textMuted/10 text-textMuted border-textMuted/20',
-    blocked: 'bg-amber-400/10 text-amber-400 border-amber-400/20',
-  }
-
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
       <div className="max-w-3xl mx-auto">
@@ -337,7 +331,7 @@ export default function AgentDetailPage() {
             <div>
               <h1 className="text-xl font-bold text-textPrimary">{agent.name}</h1>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${stateColors[agent.state] || ''}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${STATE_BADGE_COLORS[agent.state] || ''}`}>
                   {agent.state}
                 </span>
                 {agent.ai_type && agent.ai_type !== 'resonance' && (

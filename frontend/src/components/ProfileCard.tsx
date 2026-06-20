@@ -42,8 +42,6 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
     }
   }
 
-  const getStateColor = getStateDotColor
-
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div
@@ -63,7 +61,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
             <div>
               <h3 className="font-semibold text-textPrimary">{entityName}</h3>
               <div className="flex items-center gap-1.5 text-sm text-textSecondary">
-                <span className={`w-2 h-2 rounded-full ${getStateColor(state)}`} />
+                <span className={`w-2 h-2 rounded-full ${getStateDotColor(state)}`} />
                 <span>{entityType === 'ai' ? `AI · ${getStateText(state)}` : '人类'}</span>
               </div>
             </div>

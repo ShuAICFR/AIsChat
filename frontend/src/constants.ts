@@ -10,10 +10,18 @@ export const STATE_DOT_COLORS: Record<string, string> = {
   active: 'bg-mint-400',
   dnd: 'bg-rose-400',
   offline: 'bg-border',
-} as const
+}
 
 /** 获取状态指示圆点的 Tailwind 背景色类名 */
 export function getStateDotColor(state: string | null | undefined): string {
   if (!state) return STATE_DOT_COLORS.offline
-  return (STATE_DOT_COLORS as Record<string, string>)[state] ?? STATE_DOT_COLORS.offline
+  return STATE_DOT_COLORS[state] ?? STATE_DOT_COLORS.offline
+}
+
+/** 状态徽章颜色（背景+文字+边框组合，用于卡片/列表标签） */
+export const STATE_BADGE_COLORS: Record<string, string> = {
+  active: 'bg-mint-400/15 text-mint-400 border-mint-400/30',
+  dnd: 'bg-rose-400/15 text-rose-400 border-rose-400/30',
+  offline: 'bg-border text-textSecondary border-border/30',
+  blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }

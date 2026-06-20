@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client'
 import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import CreateAgentModal from '../components/CreateAgentModal'
+import { STATE_BADGE_COLORS } from '../constants'
 
 interface ModelOption {
   value: string
@@ -72,13 +73,6 @@ const PARAM_LABELS: Record<string, string> = {
   alarm_max_tool_rounds: '闹钟轮次上限', force_alarm_on_end: '强制设闹钟',
   max_alarms: '最大闹钟数', is_ai_editable: '自修改人格',
   hide_ai_identity: '隐藏AI身份', delay_reply_enabled: '延迟回复',
-}
-
-const stateColors: Record<string, string> = {
-  active: 'bg-mint-400/15 text-mint-400 border-mint-400/30',
-  dnd: 'bg-rose-400/15 text-rose-400 border-rose-400/30',
-  offline: 'bg-border text-textSecondary border-border/30',
-  blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }
 
 export default function AgentsPage() {
@@ -196,7 +190,7 @@ export default function AgentsPage() {
                         </p>
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${stateColors[agent.state] || ''}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${STATE_BADGE_COLORS[agent.state] || ''}`}>
                       {stateLabels[agent.state] || agent.state}
                     </span>
                   </div>

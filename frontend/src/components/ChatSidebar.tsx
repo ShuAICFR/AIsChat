@@ -91,8 +91,6 @@ export default function ChatSidebar({
   // DM 会话按最后消息时间排序
   const sortedDMSessions = [...dmSessions].sort(sortByTime)
 
-  const stateColor = (s: string | null) => getStateDotColor(s)
-
   const formatTime = (isoStr: string | null) => {
     if (!isoStr) return ''
     try {
@@ -202,7 +200,7 @@ export default function ChatSidebar({
               >
                 <div className="flex items-center justify-between">
                   <div className="font-medium truncate flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${stateColor(s.partner.state)}`} />
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(s.partner.state)}`} />
                     <span className="truncate">{s.partner.name}</span>
                   </div>
                   {s.unread_count > 0 && (

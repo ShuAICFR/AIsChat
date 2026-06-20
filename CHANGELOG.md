@@ -31,14 +31,13 @@
 
 - 🏗️ **`is_ai_editable` 加入创建 API**：`AgentCreateRequest` 和 `create_agent` 服务函数新增 `is_ai_editable` 参数，创建时可直接指定 AI 是否允许自修改。
 
-- 📱 **移动端 UX 全面优化**：
-  - 底部栏「群聊」→「聊天」，点击自动全屏展开聊天列表（不再显示空白占位）
-  - 移动端侧边栏隐藏好友入口 + 好友申请徽章，统一通过底部栏 `/friends` 访问，消除两套好友列表不一致
-  - AgentsPage / AdminPage 头部新增 ☰ 菜单按钮（打开抽屉导航），解决移动端部分页面无法返回的问题
-  - 设置页外观/桌面通知增加 🟢「即时生效」标签 + 保存按钮下说明文字，消除即时生效 vs 需保存的困惑
-  - 设置页管理员用户手机端新增「管理面板」快捷入口
-  - 手册链接增加 `ExternalLink` 图标，标注为外部链接
-  - 全部页面统一 `p-4 md:p-6` 响应式内边距，按钮/Tab 移动端紧凑化
+- 🔄 **预设升级/降级智能预览**：切换预设时弹出变更预览弹窗，逐项展示 old→new 字段变化。`direction` 标注 upgrade/downgrade。`independent_untouched` 列出不受预设影响的独立字段（如 API Key、chat_model）。`GET /agents/{id}/preset-preview?profile=` 端点 + `POST /agents/{id}/apply-preset` 正式切换。
+
+- ⚡ **全项目弹窗遮罩性能优化**：14 处 `backdrop-blur` 减少至 3 处（仅保留移动端导航和通知 Toast 的必要毛玻璃效果）。其余全部改用纯色半透明遮罩（`bg-black/70`），避免浏览器每帧 GPU 截屏→模糊→合成的高昂开销，显著降低弹窗卡顿。
+
+- 📱 **手机端 UX 优化（第一轮）**：聊天头部移除菜单按钮改为纯返回（ArrowLeft）、ChatSidebar 全屏叠加 + 点击空白区域关闭、底部导航切换页面后自动缩回抽屉、输入框聚焦时自动 `scrollIntoView` 居中、桌面通知等开关按钮加 `flex-shrink-0` 防止标签/开关分离换行。
+
+- 📱 **手机端 UX 优化（第二轮）**：底部栏「群聊」→「聊天」，点击自动全屏展开聊天列表；移动端侧边栏隐藏好友入口 + 好友申请徽章，统一通过底部栏 `/friends` 访问；AgentsPage/AdminPage 头部新增 ☰ 菜单按钮；设置页外观/通知增加「即时生效」标签 + 说明文字；设置页管理员手机端新增管理面板入口；手册链接增加外链图标；全部页面 `p-4 md:p-6` 响应式内边距。
 
 ### Fixed
 
@@ -47,6 +46,20 @@
 - 🐛 **`_build_current_context` coroutine 泄漏**：定义为 `async def` 但两处调用未 `await`，coroutine 对象被当字符串拼入 system prompt。修复：添加 `await`。
 
 - 🐛 **迁移顺序 UndefinedColumnError**：新增列的迁移（api_credit/config_profile/delay_reply_enabled）移到 Agent 查询迁移之前。
+
+- 🐛 **Babel 解析失败**：CreateAgentModal 中两处中文弯引号（`""`）导致 Babel 解析异常，全部替换为直引号（`"`）。
+
+- 🐛 **ChatSidebar 导航死胡同（code-review）**：移动端 overlay 模式下缺少菜单按钮，用户进入群聊后无法导航到其他页面。修复：overlay 模式同时显示 ArrowLeft 和 Menu 按钮。
+
+- 🐛 **Admin NavLink 缺 onClose（code-review）**：移动端抽屉中点击管理链接后 drawer 不关闭，导致页面在抽屉后方不可见。
+
+- 🐛 **onFocus scrollIntoView 桌面端误触发（code-review）**：输入框聚焦时的 350ms 延迟滚动未限制移动端，桌面端也触发导致页面抖动。修复：加 `window.innerWidth >= 768` 守卫。
+
+- 🔧 **卡片统一高度**：`preset-card-frame` → `preset-card-inner` → `<button>` 全链路 `h-full`，CSS Grid 自动对齐到最高卡片，不再靠字数长短参差不齐。
+
+- 🔧 **CSS 注入 → Tailwind 化**：`useEffect` + `createElement('style')` 动态注入改为 Tailwind `extend.animation` + `index.css` `@layer components`，消除每渲染重复注入 `<style>` 的反模式。
+
+- 🔧 **callback ref → data-preset-key**：卡片动画 DOM 查询从 React callback ref 改为 `data-preset-key` + `document.querySelector()`，避免 ref 协调开销。
 
 ---
 

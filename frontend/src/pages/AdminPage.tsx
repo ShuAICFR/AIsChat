@@ -589,15 +589,15 @@ function OpenCLITab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex gap-2 bg-canvas border border-border rounded-xl p-1 w-full">
         {subTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-3 py-1.5 text-sm rounded-xl transition-colors ${
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors font-medium ${
               tab === t.key
-                ? 'bg-primary-500 text-white'
-                : 'bg-elevated text-textMuted hover:bg-border'
+                ? 'bg-elevated text-textPrimary shadow-sm'
+                : 'text-textMuted hover:text-textSecondary hover:bg-elevated'
             }`}
           >
             {t.label}

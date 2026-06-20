@@ -149,7 +149,7 @@ export default function ConversationLogTab() {
     <div className="flex flex-col gap-6">
       <div className="max-w-xl flex flex-col gap-6">
         {/* Section tabs */}
-        <div className="flex gap-2 bg-elevated rounded-xl p-1 w-fit">
+        <div className="flex gap-2 bg-canvas border border-border rounded-xl p-1 w-full">
         {[
           { k: 'config', label: '全局设置', icon: Settings },
           { k: 'agents', label: '按 AI 设置', icon: Sliders },
@@ -159,7 +159,7 @@ export default function ConversationLogTab() {
             key={s.k}
             onClick={() => setSection(s.k as any)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              section === s.k ? 'bg-canvas text-textPrimary shadow-sm' : 'text-textMuted hover:text-textSecondary'
+              section === s.k ? 'bg-elevated text-textPrimary shadow-sm' : 'text-textMuted hover:text-textSecondary hover:bg-elevated'
             }`}
           >
             <s.icon size={14} /> {s.label}

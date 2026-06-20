@@ -107,6 +107,12 @@
 
 - 🔒 **注册页管理员提示优化**：新增 `GET /auth/has-users` 公开接口，「首位注册自动成为管理员」仅在系统无用户时显示。
 
+- 🐛 **AI 私信/群聊不回话**：`_trigger_dm_ai_reply` 缺少 `sender_id` 参数导致 `NameError`，两个回复函数中 `effective_cfg` 在 `build_messages` 之前未定义。修复：添加参数 + 调整获取顺序。
+
+- 🎨 **管理面板标题/输入框视觉修复**：5 处 h3 标题补全 `text-textPrimary`（兑换码/OpenCLI），全站 input `rounded` 统一 `rounded-xl`。
+
+- 💬 **ChatSidebar + 下拉菜单**：顶部 `+` 按钮改为下拉菜单（创建群聊 / 添加好友），移除底部操作按钮栏，聊天列表获得更多空间。
+
 ---
 
 ## [v0.3.0] - 2026-06-19

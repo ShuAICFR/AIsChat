@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Bot, X, ChevronRight, Settings, ArrowLeft } from 'lucide-react'
+import { Bot, X, ChevronRight, Settings, ArrowLeft, Ticket, Key, Loader2, RotateCw } from 'lucide-react'
 
 // ── 类型 ──
 
@@ -192,6 +192,8 @@ export default function CreateAgentModal({
   const [workModel, setWorkModel] = useState('')
   const [apiCreditCost, setApiCreditCost] = useState(0)
   const [aiType, setAiType] = useState('resonance')  // v0.4.0
+  const [apiBaseUrl, setApiBaseUrl] = useState('')
+  const [apiKey, setApiKey] = useState('')
 
   // 弹窗状态
   const [showDetailSettings, setShowDetailSettings] = useState(false)
@@ -294,7 +296,7 @@ export default function CreateAgentModal({
     setLoading(true)
     setError('')
     try {
-      await api.post('/agents', {
+      const agent = await api.post<any>('/agents', {
         name: name.trim(),
         system_prompt: systemPrompt || null,
         temperature,
@@ -315,6 +317,15 @@ export default function CreateAgentModal({
         api_credit_cost: apiCreditCost,
         ai_type: aiType,
       })
+      // 如果填写了独立 API 配置，创建后立即设置
+      if (apiBaseUrl.trim() || apiKey.trim()) {
+        try {
+          await api.put(`/agents/${agent.id}/config`, {
+            api_base_url: apiBaseUrl.trim() || null,
+            api_key: apiKey.trim() || null,
+          })
+        } catch { /* 静默失败，不影响创建流程 */ }
+      }
       onCreated()
     } catch (err: any) {
       setError(err.message || '创建失败')
@@ -483,6 +494,8 @@ export default function CreateAgentModal({
             workModel={workModel} setWorkModel={setWorkModel}
             aiType={aiType} setAiType={setAiType}
             apiCreditCost={apiCreditCost} setApiCreditCost={setApiCreditCost}
+            apiBaseUrl={apiBaseUrl} setApiBaseUrl={setApiBaseUrl}
+            apiKey={apiKey} setApiKey={setApiKey}
             modelOptions={modelOptions}
             defaults={defaults}
             thinkingSupported={thinkingSupported}
@@ -591,6 +604,8 @@ function DetailSettingsModal({
   workModel, setWorkModel,
   apiCreditCost, setApiCreditCost,
   aiType, setAiType,
+  apiBaseUrl, setApiBaseUrl,
+  apiKey, setApiKey,
   modelOptions,
   defaults,
   thinkingSupported,
@@ -614,11 +629,51 @@ function DetailSettingsModal({
   workModel: string; setWorkModel: (v: string) => void
   apiCreditCost: number; setApiCreditCost: (v: number) => void
   aiType: string; setAiType: (v: string) => void
+  apiBaseUrl: string; setApiBaseUrl: (v: string) => void
+  apiKey: string; setApiKey: (v: string) => void
   modelOptions: ModelOption[]
   defaults: { chat_model: string; work_model: string }
   thinkingSupported: boolean
   onClose: () => void
 }) {
+  // 兑换码状态（弹窗内自管理）
+  const [redeemCode, setRedeemCode] = useState('')
+  const [redeeming, setRedeeming] = useState(false)
+  const [redeemMsg, setRedeemMsg] = useState('')
+  const [testingApi, setTestingApi] = useState(false)
+  const [testApiMsg, setTestApiMsg] = useState('')
+
+  const handleRedeem = async () => {
+    if (!redeemCode.trim()) return
+    setRedeeming(true)
+    setRedeemMsg('')
+    try {
+      const data = await api.post<{ message: string }>('/user/redeem', { code: redeemCode.trim() })
+      setRedeemMsg(data.message || '兑换成功')
+      setRedeemCode('')
+    } catch (err: any) {
+      setRedeemMsg(err.message || '兑换失败')
+    } finally {
+      setRedeeming(false)
+    }
+  }
+
+  const handleTestApi = async () => {
+    setTestingApi(true)
+    setTestApiMsg('')
+    try {
+      const data = await api.post<{ ok: boolean; message: string }>('/user/test-api-connection', {
+        api_base_url: apiBaseUrl || null,
+        api_key: apiKey || null,
+      })
+      setTestApiMsg(data.message || (data.ok ? '连接成功' : '连接失败'))
+    } catch (err: any) {
+      setTestApiMsg(err.message || '测试失败')
+    } finally {
+      setTestingApi(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 md:bg-black/70 flex items-start justify-center z-[60] md:pt-8 overflow-y-auto bg-surface" onClick={onClose}>
       <div
@@ -764,6 +819,71 @@ function DetailSettingsModal({
           {/* ── 💰 额度 ── */}
           <Section title="💰 额度成本" desc="创建和删除 AI 时的 API 额度处理">
             <NumberField label="API 额度成本" value={apiCreditCost} setValue={setApiCreditCost} min={0} max={100000} desc="创建时消耗，删除时返还（0=不消耗）" />
+          </Section>
+
+          {/* ── 🔌 API 提供商 ── */}
+          <Section title="🔌 API 提供商" desc="为此 AI 设置独立 API，留空则继承全局配置">
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">API Base URL</label>
+              <input
+                type="text"
+                value={apiBaseUrl}
+                onChange={(e) => setApiBaseUrl(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                placeholder="例: https://api.deepseek.com（留空继承全局）"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">API Key</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                placeholder="例: sk-xxxxxxxx（留空继承全局）"
+              />
+            </div>
+            <button
+              onClick={handleTestApi}
+              disabled={testingApi || (!apiBaseUrl.trim() && !apiKey.trim())}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-textSecondary hover:bg-elevated disabled:opacity-40 transition-colors"
+            >
+              {testingApi ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+              测试连接
+            </button>
+            {testApiMsg && (
+              <p className={`text-xs ${testApiMsg.includes('成功') ? 'text-mint-400' : 'text-rose-400'}`}>
+                {testApiMsg}
+              </p>
+            )}
+          </Section>
+
+          {/* ── 🎫 兑换码 ── */}
+          <Section title="🎫 兑换码" desc="兑换 API 调用额度，额度不足时无法创建 AI">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+                <input
+                  type="text"
+                  value={redeemCode}
+                  onChange={(e) => setRedeemCode(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  placeholder="输入兑换码（如 RC-xxxxxxxxxxxxxxxx）"
+                />
+              </div>
+              <button
+                onClick={handleRedeem}
+                disabled={redeeming || !redeemCode.trim()}
+                className="flex items-center gap-1 px-4 py-2 rounded-lg bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
+              >
+                {redeeming ? <Loader2 size={14} className="animate-spin" /> : <span>兑换</span>}
+              </button>
+            </div>
+            {redeemMsg && (
+              <p className={`text-xs ${redeemMsg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>
+                {redeemMsg}
+              </p>
+            )}
           </Section>
 
         </div>

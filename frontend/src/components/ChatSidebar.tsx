@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff } from 'lucide-react'
+import { Plus, BellOff, Menu } from 'lucide-react'
 
 interface Group {
   id: number
@@ -116,7 +116,14 @@ export default function ChatSidebar({
       {/* 标题 */}
       <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
         <div className="flex items-center gap-2">
-          聊天
+          <button
+            onClick={openDrawer}
+            className="md:hidden p-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            title="菜单"
+          >
+            <Menu size={18} />
+          </button>
+          <span>聊天</span>
         </div>
         <button
           onClick={onCreateGroup}
@@ -165,12 +172,12 @@ export default function ChatSidebar({
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-textMuted truncate mt-0.5">
-                {g.dnd_until && <BellOff size={10} className="inline mr-1 text-rose-400" />}
+              <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
+                {g.dnd_until && <BellOff size={10} className="text-rose-400 shrink-0" />}
                 {g.has_mention && !g.dnd_until && (
-                  <span className="text-rose-400 font-medium">[@你] </span>
+                  <span className="text-rose-400 font-medium shrink-0">[@你]</span>
                 )}
-                {g.last_message_preview || '暂无消息'}
+                <span className="truncate">{g.last_message_preview || '暂无消息'}</span>
               </div>
             </button>
           ))

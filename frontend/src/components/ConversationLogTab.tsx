@@ -147,8 +147,9 @@ export default function ConversationLogTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Section tabs */}
-      <div className="flex gap-2 bg-elevated rounded-xl p-1 w-fit">
+      <div className="max-w-xl flex flex-col gap-6">
+        {/* Section tabs */}
+        <div className="flex gap-2 bg-elevated rounded-xl p-1 w-fit">
         {[
           { k: 'config', label: '全局设置', icon: Settings },
           { k: 'agents', label: '按 AI 设置', icon: Sliders },
@@ -417,6 +418,7 @@ export default function ConversationLogTab() {
           )}
         </div>
       )}
+      </div>
     </div>
   )
 }

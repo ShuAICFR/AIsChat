@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
-import { X, Bell, BellOff, Download, Clock } from 'lucide-react'
+import { X, Bell, BellOff, Download, Clock, ArrowLeft } from 'lucide-react'
 
 interface Partner {
   id: number
@@ -110,20 +110,28 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      {/* 点击外部关闭 */}
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      {/* 点击外部关闭（桌面端） */}
+      <div className="absolute inset-0 bg-black/30 hidden md:block" onClick={onClose} />
 
-      <div className="relative w-80 max-w-full h-full bg-surface border-l border-border shadow-2xl flex flex-col animate-slide-in">
+      <div className="relative w-full md:w-80 max-w-full h-full bg-surface md:border-l border-border shadow-2xl flex flex-col animate-slide-in">
         {/* 头部 */}
         <div className="h-14 px-4 border-b border-border flex items-center justify-between shrink-0">
-          <h2 className="font-semibold text-sm text-textPrimary">私信设置</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-elevated text-textMuted">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="font-semibold text-sm text-textPrimary">私信设置</h2>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-elevated text-textMuted hidden md:block">
             <X size={16} />
           </button>
         </div>
 
         {/* 内容区 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-[var(--safe-bottom)] md:pb-4">
           {error && (
             <div className="text-xs text-rose-400 bg-rose-400/10 rounded-lg px-3 py-2">{error}</div>
           )}

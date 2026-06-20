@@ -33,6 +33,7 @@ class FriendResponse(BaseModel):
     friend_name: str
     state: str | None = None  # AI 在线状态
     created_at: str | None = None
+    last_dm_at: str | None = None  # 最近一次私信时间
 
 
 class SearchResult(BaseModel):

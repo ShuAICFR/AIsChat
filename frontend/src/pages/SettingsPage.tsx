@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle } from 'lucide-react'
-import { useNavigate, useBlocker } from 'react-router-dom'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, Menu } from 'lucide-react'
+import { useNavigate, useBlocker, useOutletContext } from 'react-router-dom'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com')
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -234,7 +235,16 @@ export default function SettingsPage() {
   return (
     <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
       <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-bold text-textPrimary mb-6 tracking-tight">设置</h1>
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={openDrawer}
+            className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            title="菜单"
+          >
+            <Menu size={20} />
+          </button>
+          <h1 className="text-2xl font-bold text-textPrimary tracking-tight">设置</h1>
+        </div>
 
         {/* 移动端管理员快捷入口 */}
         {user?.role === 'admin' && (
@@ -363,7 +373,7 @@ export default function SettingsPage() {
             >
               {showAgentApi ? <ChevronDown size={16} className="text-textMuted" /> : <ChevronRight size={16} className="text-textMuted" />}
               <Bot size={16} className="text-primary-400" />
-              <span className="text-sm font-medium text-textPrimary">单 AI API 配置</span>
+              <span className="text-sm font-medium text-textPrimary">单 AI 配置（设置独立 API）</span>
               <span className="text-[10px] text-textMuted">（为特定 AI 设置独立 API，覆盖全局）</span>
             </button>
 

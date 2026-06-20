@@ -41,17 +41,17 @@ export default function AdminPage() {
           </button>
           <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
         </div>
-        <p className="text-sm text-textSecondary mt-0.5">
-          系统管理与监控 ·{' '}
+        <div className="flex items-center gap-1.5 flex-wrap text-sm text-textSecondary mt-0.5">
+          <span>系统管理与监控 ·</span>
           <a
             href={MANUAL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors align-middle"
+            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors"
           >
             <BookOpen size={13} /> 使用手册
           </a>
-        </p>
+        </div>
       </div>
 
       {/* Tab 导航 */}

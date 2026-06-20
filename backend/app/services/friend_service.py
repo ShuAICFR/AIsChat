@@ -206,6 +206,8 @@ async def list_friends(
     from app.models.friendship import Friendship
     from app.models.user import User
     from app.models.agent import Agent
+    from app.models.dm import DMSession
+    from app.services.dm_service import generate_dm_session_id
 
     result = await db.execute(
         select(Friendship)
@@ -235,6 +237,17 @@ async def list_friends(
                 state = agent.state
                 friend_user_id = agent.user_id  # ai: 查 agent.user_id
 
+        # 查询最近私信时间
+        last_dm_at = None
+        if friend_user_id:
+            session_id = generate_dm_session_id(user_id, friend_user_id)
+            dm_result = await db.execute(
+                select(DMSession.last_message_at).where(DMSession.session_id == session_id)
+            )
+            dm_at = dm_result.scalar_one_or_none()
+            if dm_at:
+                last_dm_at = str(dm_at)
+
         friends.append({
             "id": f.id,
             "friend_type": f.friend_type,
@@ -243,6 +256,7 @@ async def list_friends(
             "friend_name": name,
             "state": state,
             "created_at": str(f.created_at) if f.created_at else None,
+            "last_dm_at": last_dm_at,
         })
 
     return friends

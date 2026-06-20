@@ -361,17 +361,17 @@ function CodesTab() {
     <div className="space-y-6">
       {/* 生成兑换码 */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold mb-3">生成兑换码</h3>
+        <h3 className="font-semibold text-textPrimary mb-3">生成兑换码</h3>
         <div className="flex items-end gap-4">
           <div>
             <label className="block text-xs mb-1 text-textSecondary">额度</label>
             <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value))}
-              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary" />
+              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <div>
             <label className="block text-xs mb-1 text-textSecondary">有效期（天）</label>
             <input type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value))}
-              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary" />
+              className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <button onClick={handleGenerate}
             className="px-4 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
@@ -388,7 +388,7 @@ function CodesTab() {
 
       {/* 已生成的兑换码 */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold mb-3">兑换码列表</h3>
+        <h3 className="font-semibold text-textPrimary mb-3">兑换码列表</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-textPrimary">
             <thead>
@@ -646,7 +646,7 @@ function OpenCLIConfigSection() {
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
-      <h3 className="font-semibold mb-4">全局设置</h3>
+      <h3 className="font-semibold text-textPrimary mb-4">全局设置</h3>
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-textPrimary">启用 OpenCLI</label>
@@ -660,12 +660,12 @@ function OpenCLIConfigSection() {
         <div>
           <label className="block text-sm font-medium mb-1 text-textSecondary">默认速率限制（次/分钟）</label>
           <input type="number" value={rate} onChange={(e) => setRate(parseInt(e.target.value))}
-            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary" />
+            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1 text-textSecondary">超时时间（秒）</label>
           <input type="number" value={timeout} onChange={(e) => setTimeout_(parseInt(e.target.value))}
-            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary" />
+            className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
         </div>
         <button onClick={handleSave} disabled={saving}
           className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
@@ -693,7 +693,7 @@ function OpenCLIAgentsSection() {
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
-      <h3 className="font-semibold mb-3">AI OpenCLI 白名单</h3>
+      <h3 className="font-semibold text-textPrimary mb-3">AI OpenCLI 白名单</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-textPrimary">
           <thead>
@@ -914,7 +914,7 @@ function OpenCLICommandsSection() {
           <div>
             <label className="block text-xs mb-1 text-textSecondary">命令/正则</label>
             <input value={pattern} onChange={(e) => setPattern(e.target.value)}
-              className="w-40 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary"
+              className="w-40 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary"
               placeholder="bilibili 或 gh .*" />
           </div>
           <div className="flex items-center gap-1.5 mb-1">
@@ -925,7 +925,7 @@ function OpenCLICommandsSection() {
           <div>
             <label className="block text-xs mb-1 text-textSecondary">描述</label>
             <input value={desc} onChange={(e) => setDesc(e.target.value)}
-              className="w-32 px-2 py-1.5 border border-border bg-canvas rounded text-sm text-textPrimary"
+              className="w-32 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary"
               placeholder="可选" />
           </div>
           <button onClick={handleAdd}
@@ -996,7 +996,7 @@ function OpenCLILogsSection() {
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
-      <h3 className="font-semibold mb-3">使用日志</h3>
+      <h3 className="font-semibold text-textPrimary mb-3">使用日志</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-textPrimary">
           <thead>

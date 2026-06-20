@@ -7,7 +7,7 @@
 
 ---
 
-## [v0.4.0] - unreleased
+## [v0.4.0] - 2026-06-20
 
 ### Added
 
@@ -90,6 +90,22 @@
 - 🔧 **CSS 注入 → Tailwind 化**：`useEffect` + `createElement('style')` 动态注入改为 Tailwind `extend.animation` + `index.css` `@layer components`，消除每渲染重复注入 `<style>` 的反模式。
 
 - 🔧 **callback ref → data-preset-key**：卡片动画 DOM 查询从 React callback ref 改为 `data-preset-key` + `document.querySelector()`，避免 ref 协调开销。
+
+- 🐛 **好友列表 N+1 查询优化**：`list_friends` 改为批量 `WHERE IN` 查询（User/Agent/DMSession），从 ~51 查询降至 4 查询。`list_friend_requests` 同理批量化 requester_name + target_name 查询。
+
+- 🎨 **STATE_COLORS 共享常量**：提取 `getStateDotColor()` 到 `constants.ts`，消除 9 处 `bg-[#6B7280]` 硬编码，同时新增 `STATE_BADGE_COLORS` 统一徽章风格状态颜色。
+
+- 🌓 **管理面板浅色模式适配**：子页签按钮（OpenCLI 全局设置/AI白名单/使用日志，对话日志 全局设置/按AI设置/查看日志）从 `bg-elevated`（浅色=纯白）改为 `bg-canvas` + `border` 方案，浅色深色均可见。
+
+- 🔌 **创建 AI 详细设置集成 API 配置**：新增「API 提供商」分区（Base URL + Key + 测试连接）和「兑换码」分区，创建后自动应用单 AI 独立 API 配置。
+
+- 📝 **创建 AI 主界面增加系统提示词字段**：名称下方直接填写性格描述，无需进详细设置。
+
+- 📱 **移动端底部安全区适配**：详细设置弹窗底部按钮区加 `pb-safe`，避免被手机菜单栏遮挡。
+
+- 🐛 **AgentsPage 滚动条贴边**：padding 从滚动容器移至内层 wrapper，滚动条紧贴右边缘。
+
+- 🔒 **注册页管理员提示优化**：新增 `GET /auth/has-users` 公开接口，「首位注册自动成为管理员」仅在系统无用户时显示。
 
 ---
 

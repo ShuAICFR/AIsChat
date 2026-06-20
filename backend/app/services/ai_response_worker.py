@@ -502,7 +502,8 @@ async def _tool_call_loop(
         # ── 提醒：有文字但没有工具调用 ──
         # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，
         # 但必须通过工具调用来发送。这里提醒 AI 补上工具调用。
-        # 注意：最多注入 1 次提醒，避免死循环。
+        # agent.reminder_not_count=true（默认）→ 提醒不消耗轮次配额
+        reminder_enabled = getattr(agent, 'reminder_not_count', True)
         if content and not tool_calls and _reminder_extra < 1:
             logger.info(
                 f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"
@@ -540,9 +541,11 @@ async def _tool_call_loop(
                     ),
                 }, ensure_ascii=False),
             })
-            # 给 AI 额外一次机会调 send_message，不计入 max_loops 配额
-            _reminder_extra += 1
-            logger.info(f"AI {agent.name}({agent.id}) system_reminder 注入，额外轮次 +1 (当前额外={_reminder_extra})")
+            # 给 AI 额外一次机会调 send_message（受 reminder_not_count 开关控制）
+            if reminder_enabled:
+                _reminder_extra += 1
+            logger.info(f"AI {agent.name}({agent.id}) system_reminder 注入"
+                        f"（不计入轮次={reminder_enabled}, 额外={_reminder_extra}）")
             await asyncio.sleep(0.3)
             continue
 

@@ -36,6 +36,7 @@ async def run_migrations():
             await _migrate_ai_types(db)               # v0.4.0 三种 AI 类型 + per-user 配置隔离
             await _migrate_memory_user_isolation(db)  # v0.4.0 记忆 per-user 隔离
             await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
+            await _migrate_reminder_not_count(db)     # v0.4.1 系统提醒不计入轮次
             await _migrate_agents_user_id(db)
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
@@ -737,6 +738,18 @@ async def _migrate_max_tool_rounds(db):
         logger.info("  ✅ agents.max_alarms 迁移完成")
     else:
         logger.info("  ⏭ agents.max_alarms 已存在，跳过")
+
+
+async def _migrate_reminder_not_count(db):
+    """v0.4.1: 系统提醒不计入工具调用轮次（默认开启）"""
+    if not await _column_exists(db, "agents", "reminder_not_count"):
+        logger.info("  🔧 添加 agents.reminder_not_count 列 (DEFAULT true)")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN reminder_not_count BOOLEAN NOT NULL DEFAULT true"
+        ))
+        logger.info("  ✅ agents.reminder_not_count 迁移完成")
+    else:
+        logger.info("  ⏭ agents.reminder_not_count 已存在，跳过")
 
 
 async def _migrate_archive_friend_tables(db):

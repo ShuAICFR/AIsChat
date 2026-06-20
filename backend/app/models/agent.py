@@ -83,6 +83,9 @@ class Agent(Base):
     # AI 最多可设多少个活跃闹钟（心跳节奏的边界）
     max_alarms = Column(Integer, default=10)
 
+    # 系统提醒不计入工具调用轮次（AI 忘调 send_message 时提醒不消耗配额，默认开启）
+    reminder_not_count = Column(Boolean, default=True)
+
     # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
     hide_ai_identity = Column(Boolean, default=False)
 

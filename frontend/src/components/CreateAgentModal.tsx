@@ -23,6 +23,7 @@ interface PresetData {
   delay_reply_enabled: boolean
   is_ai_editable: boolean
   hide_ai_identity: boolean
+  reminder_not_count: boolean
 }
 
 interface SubOption {
@@ -49,6 +50,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: false,
     is_ai_editable: false,
     hide_ai_identity: true,
+    reminder_not_count: true,
   },
   immersive: {
     key: 'immersive',
@@ -63,6 +65,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: true,
     is_ai_editable: true,
     hide_ai_identity: false,
+    reminder_not_count: true,
   },
   digital_life: {
     key: 'digital_life',
@@ -77,6 +80,7 @@ const PRESETS: Record<string, PresetData> = {
     delay_reply_enabled: true,
     is_ai_editable: true,
     hide_ai_identity: false,
+    reminder_not_count: true,
   },
 }
 
@@ -181,6 +185,7 @@ export default function CreateAgentModal({
   const [frequencyPenalty, setFrequencyPenalty] = useState(0.5)
   const [thinkingEnabled, setThinkingEnabled] = useState(false)
   const [hideAiIdentity, setHideAiIdentity] = useState(false)
+  const [reminderNotCount, setReminderNotCount] = useState(true)
   const [delayReplyEnabled, setDelayReplyEnabled] = useState<boolean | null>(null)
   const [configProfile, setConfigProfile] = useState('custom')
   const [maxToolRounds, setMaxToolRounds] = useState(3)
@@ -258,6 +263,7 @@ export default function CreateAgentModal({
     setDelayReplyEnabled(preset.delay_reply_enabled)
     setIsAiEditable(preset.is_ai_editable)
     setHideAiIdentity(preset.hide_ai_identity)
+    setReminderNotCount(preset.reminder_not_count)
     setConfigProfile(presetKey)
 
     // 子选项覆盖
@@ -308,6 +314,7 @@ export default function CreateAgentModal({
         thinking_enabled: thinkingEnabled,
         hide_ai_identity: hideAiIdentity,
         delay_reply_enabled: delayReplyEnabled,
+        reminder_not_count: reminderNotCount,
         config_profile: selectedPreset || 'custom',
         max_tool_rounds: maxToolRounds,
         alarm_max_tool_rounds: alarmMaxToolRounds,
@@ -814,6 +821,7 @@ function DetailSettingsModal({
             </div>
             <ToggleField label="✏️ 允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
             <ToggleField label="🎭 隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
+            <ToggleField label="🔄 系统提醒不计入轮次" value={reminderNotCount} setValue={setReminderNotCount} desc="AI 忘调 send_message 时系统提醒额外给一次机会，不消耗工具调用轮次配额" />
           </Section>
 
           {/* ── 💰 额度 ── */}

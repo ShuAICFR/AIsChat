@@ -89,6 +89,10 @@ class Agent(Base):
     # AI 类型 (v0.4.0): general(通用) | semi_general(半通用) | resonance(共振, 默认)
     ai_type = Column(String(20), default="resonance")
 
+    # 最近意愿评分和原因 (v0.4.0)
+    last_willingness_score = Column(Integer, nullable=True)
+    last_willingness_reason = Column(Text, nullable=True)
+
     # 头像 URL
     avatar_url = Column(Text)
 

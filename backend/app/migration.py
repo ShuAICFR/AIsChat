@@ -42,6 +42,7 @@ async def run_migrations():
             await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
             await _migrate_ai_types(db)               # v0.4.0 三种 AI 类型 + per-user 配置隔离
             await _migrate_memory_user_isolation(db)  # v0.4.0 记忆 per-user 隔离
+            await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -806,6 +807,29 @@ async def _migrate_memory_user_isolation(db):
         logger.info("  ✅ rough_memories.user_id 迁移完成")
     else:
         logger.info("  ⏭ rough_memories.user_id 已存在，跳过")
+
+
+async def _migrate_willingness_fields(db):
+    """v0.4.0: 意愿评分字段 — agents 表加 last_willingness_score / last_willingness_reason"""
+    logger.info("  🔧 迁移意愿评分字段...")
+
+    if not await _column_exists(db, "agents", "last_willingness_score"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN last_willingness_score INTEGER"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.last_willingness_score 迁移完成")
+    else:
+        logger.info("  ⏭ agents.last_willingness_score 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "last_willingness_reason"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN last_willingness_reason TEXT"
+        ))
+        await db.commit()
+        logger.info("  ✅ agents.last_willingness_reason 迁移完成")
+    else:
+        logger.info("  ⏭ agents.last_willingness_reason 已存在，跳过")
 
 
 async def _fix_column_types(db):

@@ -211,7 +211,7 @@ async def _maybe_trigger_ai_reply(
     sender_id: int | None = None,
 ):
     """检查单个 AI 是否应该回复，如果是则调用 LLM 生成回复"""
-    from app.services.agent_service import get_agent, calculate_willingness
+    from app.services.agent_service import get_agent, calculate_willingness, WillingnessResult
     from app.services.group_service import is_member_in_dnd, store_pending_message
 
     agent = await get_agent(db, agent_id)
@@ -251,27 +251,22 @@ async def _maybe_trigger_ai_reply(
         logger.info(f"AI {agent.name}({agent_id}) 在 DND，消息已暂存")
         return
 
-    # 3. 计算意愿
-    willingness = await calculate_willingness(db, agent_id, group_id, content)
-    threshold = agent.auto_dnd_threshold or settings.default_auto_dnd_threshold
-    logger.info(f"🔍 AI {agent.name}({agent_id}): willingness={willingness}, threshold={threshold}")
+    # 3. 计算意愿（v0.4.0: WillingnessResult 含逐因子原因 + 行为级别）
+    w = await calculate_willingness(db, agent_id, group_id, content)
+    logger.info(f"🔍 AI {agent.name}({agent_id}): {w.score}分 [{w.level}] — {w.reason}")
 
-    # @提及强制回复，跳过意愿检查
-    if not is_mentioned and willingness < threshold:
-        logger.info(
-            f"AI {agent.name}({agent_id}) 意愿分 {willingness} < {threshold}，跳过"
-        )
-        # 自动 DND（意愿过低）
-        if willingness < threshold // 2:
-            from app.services.group_service import set_group_dnd
-            try:
-                await set_group_dnd(
-                    db, agent_id, group_id,
-                    duration_minutes=agent.auto_dnd_duration or settings.default_auto_dnd_duration,
-                )
-                logger.info(f"AI {agent.name}({agent_id}) 自动进入 DND")
-            except Exception:
-                pass
+    # 保存最近意愿评分到 agent
+    agent.last_willingness_score = w.score
+    agent.last_willingness_reason = w.reason
+
+    # @提及强制回复（HIGH/MEDIUM 级），LOW 级跳过
+    if not is_mentioned and w.level == "low":
+        logger.info(f"AI {agent.name}({agent_id}) 意愿过低({w.score})，跳过")
+        return
+
+    # MEDIUM 级别仅 @提及回复（已在 is_mentioned 分支处理）
+    if not is_mentioned and w.level == "medium":
+        logger.info(f"AI {agent.name}({agent_id}) 中意愿({w.score})，仅 @提及 时回复")
         return
 
     # 4. 速率限制检查
@@ -337,11 +332,14 @@ async def _maybe_trigger_ai_reply(
     use_vector = group.is_vector_accelerated and ai_only
     if group.is_vector_accelerated and not ai_only:
         logger.info(f"群 {group_id} 含人类成员，跳过向量加速（使用常规历史窗口）")
+    # v0.4.0: trigger_user_id 用于通用/半通用 AI 的 per-user 记忆隔离
+    trigger_user_id = sender_id if sender_type == "human" else None
     messages = await build_messages(
         db, agent, group_id,
         vector_accelerated=use_vector,
         api_base_url=api_base,
         api_key=api_key,
+        trigger_user_id=trigger_user_id,
     )
     logger.info(f"🔍 AI {agent.name}: 构建了 {len(messages)} 条消息")
 
@@ -390,6 +388,7 @@ async def _maybe_trigger_ai_reply(
             max_loops=agent.max_tool_rounds,
             chain_depth=chain_depth,
             conversation_type="group",
+            trigger_user_id=trigger_user_id,
         )
     finally:
         await manager.broadcast_to_group(
@@ -423,11 +422,14 @@ async def _tool_call_loop(
     chain_depth: int = 0,
     conversation_type: str = "group",
     session_id: str | None = None,
+    trigger_user_id: int | None = None,
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
 
     铁律：文字不能自动发出去。想说话必须调 send_message。
+
+    v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     """
     from app.services.llm_service import chat_completion
     from app.services.tool_registry import dispatch_tool_call
@@ -440,6 +442,7 @@ async def _tool_call_loop(
         "chain_depth": chain_depth,
         "conversation_type": conversation_type,
         "session_id": session_id,
+        "trigger_user_id": trigger_user_id,
     }
 
     # 追踪 AI 在做什么（用于中断恢复）
@@ -693,7 +696,8 @@ async def _trigger_dm_ai_reply(
 
     # 构建消息
     from app.services.llm_service import build_dm_messages, resolve_model
-    messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key)
+    # v0.4.0: DM 中 sender_id 即为触发用户
+    messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key, trigger_user_id=sender_id)
 
     # 获取工具
     from app.services.tool_registry import get_allowed_tools
@@ -729,6 +733,7 @@ async def _trigger_dm_ai_reply(
             chain_depth=chain_depth,
             conversation_type="dm",
             session_id=session_id,
+            trigger_user_id=sender_id,
         )
     finally:
         await manager.broadcast_to_dm(
@@ -958,6 +963,7 @@ async def _process_alarm_event(db, event: dict):
             chain_depth=0,
             conversation_type="alarm",
             session_id=None,
+            trigger_user_id=None,
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

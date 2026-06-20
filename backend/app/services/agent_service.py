@@ -829,54 +829,85 @@ async def generate_agent_personality(
         return json.loads(content)
 
 
+class WillingnessResult:
+    """v0.4.0: 意愿评分结果，含逐因子原因和行为级别"""
+    def __init__(self, score: int, reason: str, level: str, details: dict):
+        self.score = score          # 0-100
+        self.reason = reason        # 人类可读的原因字符串
+        self.level = level          # "high" | "medium" | "low"
+        self.details = details      # 逐因子明细
+
+    def __repr__(self):
+        return f"WillingnessResult(score={self.score}, level={self.level}, reason={self.reason!r})"
+
+
 async def calculate_willingness(
     db: AsyncSession,
     agent_id: int,
     group_id: int,
     message_content: str,
-) -> int:
+) -> WillingnessResult:
     """
-    计算 AI 对某条消息的意愿评分（0-100）。
+    计算 AI 对某条消息的意愿评分（0-100），返回含逐因子原因的结果。
+
     考虑因素：
     - @ 提及：+40 分
-    - 群聊活跃度（最近1小时内消息数）：高活跃 -10，低活跃 +10
-    - 当前状态：offline 直接 0
-    - 消息长度：过短（<5字）-5，含实质性内容 +10
+    - 群聊活跃度：高活跃 -10，低活跃 +10
+    - 消息长度：过短 -5，实质性内容 +10
+    - 当前状态：offline/blocked → 0，dnd → -30
 
-    注：对话是否应该终止，由管理员通过群设置的「发言频率限制」硬性控制，
-    以及系统提示词中的「对话节奏」软性指导。算法层面不再对近期发言做额外惩罚，
-    以免错误抑制正常的激烈讨论。
-    返回 0-100 分。
+    level:
+    - high (>60): 可主动发言
+    - medium (30-60): 仅在 @提及 时回复
+    - low (<30): 跳过
     """
+    from datetime import datetime, timedelta
+    from app.models.message import Message
+
     agent = await get_agent(db, agent_id)
     if agent is None:
-        return 0
+        return WillingnessResult(0, "AI 不存在", "low", {})
 
     # offline/blocked 状态不处理
     if agent.state in ("offline", "blocked"):
-        return 0
+        return WillingnessResult(
+            0, f"状态为 {agent.state}，不参与对话", "low",
+            {"state": agent.state},
+        )
 
     score = 50  # 基础分
+    reason_parts = []
+    details = {"base": 50}
 
-    # 1. @ 提及检测（复用 utils.text 正则，避免子串误匹配）
+    # 1. @ 提及检测
     mentioned_names = extract_mentions(message_content)
     agent_name_mentioned = agent.name in mentioned_names
     generic_mention = "@ai" in message_content.lower() or "@all" in message_content.lower()
     if agent_name_mentioned:
         score += 40
+        reason_parts.append("@提及 +40")
+        details["mention"] = 40
     elif generic_mention:
         score += 20
+        reason_parts.append("@ai/@all +20")
+        details["mention"] = 20
+    else:
+        details["mention"] = 0
 
     # 2. 消息长度
-    if len(message_content) < 5:
+    msg_len = len(message_content)
+    if msg_len < 5:
         score -= 5
-    elif len(message_content) > 50:
+        reason_parts.append(f"短消息({msg_len}字) -5")
+        details["length"] = -5
+    elif msg_len > 50:
         score += 10
+        reason_parts.append(f"实质性内容({msg_len}字) +10")
+        details["length"] = 10
+    else:
+        details["length"] = 0
 
     # 3. 群聊活跃度（最近 1 小时消息数）
-    from datetime import datetime, timedelta, timezone
-    from app.models.message import Message
-
     one_hour_ago = datetime.utcnow() - timedelta(hours=1)
     count_result = await db.execute(
         select(func.count(Message.id)).where(
@@ -886,17 +917,41 @@ async def calculate_willingness(
     )
     recent_count = count_result.scalar() or 0
 
-    if recent_count > 50:       # 太活跃，可能不想被打扰
+    if recent_count > 50:
         score -= 10
-    elif recent_count < 5:      # 较安静，更愿意参与
+        reason_parts.append(f"群聊高活跃({recent_count}条/h) -10")
+        details["activity"] = -10
+    elif recent_count < 5:
         score += 10
+        reason_parts.append(f"群聊安静({recent_count}条/h) +10")
+        details["activity"] = 10
+    else:
+        details["activity"] = 0
+        details["recent_count"] = recent_count
 
-    # 4. 当前活跃状态的加权
+    # 4. 当前状态加权
     if agent.state == "dnd":
-        score -= 30  # 全局 DND 状态已经很不想被打扰了
+        score -= 30
+        reason_parts.append("DND状态 -30")
+        details["dnd_penalty"] = -30
 
     # 限制在 0-100
-    return max(0, min(100, score))
+    score = max(0, min(100, score))
+    details["final"] = score
+
+    # 拼接原因
+    reason = "基础分 50, " + ", ".join(reason_parts) if reason_parts else "基础分 50"
+    reason += f" → {score}"
+
+    # 行为级别
+    if score > 60:
+        level = "high"
+    elif score >= 30:
+        level = "medium"
+    else:
+        level = "low"
+
+    return WillingnessResult(score=score, reason=reason, level=level, details=details)
 
 
 async def export_agent_soul(

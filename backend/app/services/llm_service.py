@@ -134,6 +134,28 @@ RULES = (
     "- 私信中学到的重要信息，也可以通过 cross_post 带到相关群聊（如果合适的话——注意隐私）"
 )
 
+# v0.4.0: DM 精简 RULES（去掉群聊专属内容以节约 token）
+DM_RULES = (
+    "## 对话风格与节奏\n"
+    "这是一对一私信对话。保持自然亲切的语气。\n"
+    "除非工作需要，回答尽量简洁，不建议长篇大段。\n"
+    "观察对话的自然收束点——沉默比多余的礼貌性回复更得体。\n"
+    "\n"
+    "## 私信能力\n"
+    "你正在使用 send_dm 与对方私信。你的回复会直接发给对方，无需 @提及。\n"
+    "不要在私信中汇报工具测试结果或自言自语——这里只有对方能看到。\n"
+    "\n"
+    "## 状态管理\n"
+    "设置免打扰用 set_dnd 工具，离线用 switch_state 工具，不要只用嘴说。\n"
+    "\n"
+    "## 文件操作\n"
+    "通过 execute_command 工具操作个人文件空间（file_write/file_read/file_list/file_delete）。\n"
+    "\n"
+    "## 长期记忆\n"
+    "收到重要个人信息、偏好、决定时，主动调用 store_memory 存储（scope='private'）。\n"
+    "需要回溯过往时，可以主动调用 recall_memory 检索。\n"
+)
+
 # 段拼接顺序（固定段在前最大化缓存命中，变动段在后）
 SEGMENT_ORDER = [
     "core_identity",
@@ -159,27 +181,50 @@ async def chat_completion(
     response_format: dict | None = None,
     thinking_enabled: bool = False,
     user_id: str | None = None,
+    stream: bool = False,
 ) -> dict:
     """
-    非流式聊天补全。
+    LLM 聊天补全（支持流式/非流式，v0.4.0 拆分）。
 
-    参数:
-        messages: [{"role": "system"|"user"|"assistant"|"tool", "content": "..."}]
-        model: 模型名称
-        api_base_url: API 基础 URL
-        api_key: API 密钥
-        tools: OpenAI 格式的工具定义列表
-        temperature, top_p, presence_penalty, frequency_penalty: 采样参数
-        max_tokens: 最大生成 token 数
-        response_format: 如 {"type": "json_object"}
-        user_id: 缓存隔离 key（DeepSeek context caching），如 "agent_1"
+    v0.4.0: stream=False 调用非流式实现，stream=True 预留 SSE 接口。
 
-    返回:
+    返回 (非流式):
         {
-            "content": str | None,        # 文本回复（可能为 None）
-            "tool_calls": list | None,    # [{"id": "", "function": {"name": "", "arguments": "..."}}]
-            "usage": {"prompt_tokens": int, "completion_tokens": int, "total_tokens": int}
+            "content": str | None,
+            "tool_calls": list | None,
+            "usage": {...}
         }
+    """
+    if stream:
+        return await _chat_completion_streaming(
+            messages, model, api_base_url, api_key, tools,
+            temperature, top_p, presence_penalty, frequency_penalty,
+            max_tokens, response_format, thinking_enabled, user_id,
+        )
+    return await _chat_completion_non_streaming(
+        messages, model, api_base_url, api_key, tools,
+        temperature, top_p, presence_penalty, frequency_penalty,
+        max_tokens, response_format, thinking_enabled, user_id,
+    )
+
+
+async def _chat_completion_non_streaming(
+    messages: list[dict],
+    model: str,
+    api_base_url: str,
+    api_key: str | None = None,
+    tools: list[dict] | None = None,
+    temperature: float = 0.8,
+    top_p: float = 0.9,
+    presence_penalty: float = 0.5,
+    frequency_penalty: float = 0.5,
+    max_tokens: int = 2048,
+    response_format: dict | None = None,
+    thinking_enabled: bool = False,
+    user_id: str | None = None,
+) -> dict:
+    """
+    非流式聊天补全 — 当前生产路径。
     """
     url = f"{api_base_url}/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
@@ -230,6 +275,33 @@ async def chat_completion(
         if message.get("reasoning_content"):
             result["reasoning_content"] = message["reasoning_content"]
         return result
+
+
+async def _chat_completion_streaming(
+    messages: list[dict],
+    model: str,
+    api_base_url: str,
+    api_key: str | None = None,
+    tools: list[dict] | None = None,
+    temperature: float = 0.8,
+    top_p: float = 0.9,
+    presence_penalty: float = 0.5,
+    frequency_penalty: float = 0.5,
+    max_tokens: int = 2048,
+    response_format: dict | None = None,
+    thinking_enabled: bool = False,
+    user_id: str | None = None,
+) -> dict:
+    """
+    SSE 流式聊天补全（v0.4.0 预留接口）。
+
+    当前未实现，调用会抛出 NotImplementedError。
+    实现计划：
+    - 使用 httpx 流式请求 + SSE 解析
+    - 逐 chunk yield 到 WebSocket（通过 ai_thinking/ai_typing 事件）
+    - 最终组装完整 content + tool_calls 返回
+    """
+    raise NotImplementedError("流式聊天补全尚未实现（v0.4.0 预留接口）")
 
 
 def resolve_model(agent) -> str:
@@ -588,7 +660,7 @@ async def build_dm_messages(
     segments = {
         "core_identity": CORE_IDENTITY,
         "personality": _build_personality(agent, language),
-        "rules": RULES,
+        "rules": DM_RULES,
         "tools": await _build_tools_segment(db, agent, is_dm=True),
         "current_context": dm_context,
         "injected_skills": await _build_injected_skills(

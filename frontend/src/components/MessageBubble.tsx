@@ -3,6 +3,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
+import { getStateDotColor } from '../constants'
 
 function formatTime(utcStr: string, timezone: string): string {
   try {
@@ -33,8 +34,7 @@ export default function MessageBubble({
   const { user } = useAuth()
   const tz = user?.timezone || 'Asia/Shanghai'
 
-  const stateColor = state === 'active' ? 'bg-mint-400' :
-    state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
+  const stateColor = getStateDotColor(state)
 
   const bubbleBg = isMine
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'

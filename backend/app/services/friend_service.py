@@ -305,7 +305,7 @@ async def list_friend_requests(
     user_id: int,
     status: str = "pending",
 ) -> list[dict]:
-    """获取好友申请列表（收到 + 发出的）"""
+    """获取好友申请列表（收到 + 发出的），批量查询避免 N+1"""
     from app.models.friendship import FriendshipRequest
     from app.models.user import User
     from app.models.agent import Agent
@@ -326,26 +326,52 @@ async def list_friend_requests(
         ).order_by(FriendshipRequest.created_at.desc())
     )
 
-    requests = []
-    for req in list(received.scalars().all()) + list(sent.scalars().all()):
-        # 获取发起者名称
-        req_user_result = await db.execute(select(User).where(User.id == req.requester_id))
-        req_user = req_user_result.scalar_one_or_none()
-        requester_name = req_user.username if req_user else f"用户:{req.requester_id}"
+    all_requests = list(received.scalars().all()) + list(sent.scalars().all())
+    if not all_requests:
+        return []
 
-        # 获取目标名称（发出的申请用）
+    # ── 批量查询：所有发起者的用户名 ──
+    requester_ids = list({r.requester_id for r in all_requests})
+    users_map: dict[int, str] = {}
+    if requester_ids:
+        user_results = await db.execute(select(User.id, User.username).where(User.id.in_(requester_ids)))
+        for uid, uname in user_results.all():
+            users_map[uid] = uname
+
+    # ── 批量查询：发出的申请的目标名称 ──
+    sent_reqs = [r for r in all_requests if r.requester_id == user_id]
+    human_target_ids = [r.target_id for r in sent_reqs if r.target_type == "human"]
+    ai_target_ids = [r.target_id for r in sent_reqs if r.target_type == "ai"]
+
+    target_human_map: dict[int, str] = {}
+    if human_target_ids:
+        human_results = await db.execute(
+            select(User.id, User.username).where(User.id.in_(human_target_ids))
+        )
+        for uid, uname in human_results.all():
+            target_human_map[uid] = uname
+
+    target_ai_map: dict[int, str] = {}
+    if ai_target_ids:
+        ai_results = await db.execute(
+            select(Agent.id, Agent.name).where(Agent.id.in_(ai_target_ids))
+        )
+        for aid, aname in ai_results.all():
+            target_ai_map[aid] = aname
+
+    # ── 组装结果（纯内存操作，无 DB 查询） ──
+    results = []
+    for req in all_requests:
+        requester_name = users_map.get(req.requester_id, f"用户:{req.requester_id}")
+
         target_name = None
         if req.requester_id == user_id:
             if req.target_type == "human":
-                tgt_result = await db.execute(select(User).where(User.id == req.target_id))
-                tgt = tgt_result.scalar_one_or_none()
-                target_name = tgt.username if tgt else None
+                target_name = target_human_map.get(req.target_id)
             elif req.target_type == "ai":
-                tgt_result = await db.execute(select(Agent).where(Agent.id == req.target_id))
-                tgt = tgt_result.scalar_one_or_none()
-                target_name = tgt.name if tgt else None
+                target_name = target_ai_map.get(req.target_id)
 
-        requests.append({
+        results.append({
             "id": req.id,
             "requester_id": req.requester_id,
             "requester_name": requester_name,
@@ -359,7 +385,7 @@ async def list_friend_requests(
             "resolved_at": str(req.resolved_at) if req.resolved_at else None,
         })
 
-    return requests
+    return results
 
 
 async def search_entities(

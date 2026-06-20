@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+import { getStateDotColor } from '../constants'
 import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Check, Loader2, ArrowLeft } from 'lucide-react'
 
 // ── 联邦共享子组件 ──
@@ -626,11 +627,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {/* 状态圆点 */}
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${
-                        m.state === 'active' ? 'bg-mint-400' :
-                        m.state === 'dnd' ? 'bg-rose-400' :
-                        m.state === 'offline' ? 'bg-border' : 'bg-border'
-                      }`} />
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(m.state)}`} />
                       <div className="min-w-0">
                         <div className="text-sm text-textPrimary truncate flex items-center gap-1.5">
                           {m.name}

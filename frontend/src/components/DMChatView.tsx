@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
 import { ArrowLeft, Bell, BellOff, Settings } from 'lucide-react'
+import { getStateDotColor } from '../constants'
 
 interface DMChatViewProps {
   sessionId: string
@@ -36,8 +37,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
     } catch { /* ignore */ }
   }
 
-  const stateColor = partner?.state === 'active' ? 'bg-mint-400' :
-    partner?.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
+  const stateColor = getStateDotColor(partner?.state)
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

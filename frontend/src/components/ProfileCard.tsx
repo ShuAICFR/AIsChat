@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, MessageSquare } from 'lucide-react'
 import { api } from '../api/client'
+import { getStateDotColor } from '../constants'
 
 interface ProfileCardProps {
   entityType: 'human' | 'ai'
@@ -41,14 +42,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
     }
   }
 
-  const getStateColor = (s?: string) => {
-    switch (s) {
-      case 'active': return 'bg-mint-400'
-      case 'dnd': return 'bg-rose-400'
-      case 'offline': return 'bg-[#6B7280]'
-      default: return 'bg-[#6B7280]'
-    }
-  }
+  const getStateColor = getStateDotColor
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>

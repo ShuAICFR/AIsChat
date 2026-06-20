@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft } from 'lucide-react'
+import { getStateDotColor } from '../constants'
 
 interface Friend {
   friend_type: string
@@ -164,13 +165,9 @@ export default function FriendsPage() {
   const sentRequests = requests.filter(r => r.direction === 'sent')
   const pendingCount = receivedRequests.length
 
-  const stateIcon = (s: string | null) => {
-    switch (s) {
-      case 'active': return <span className="w-2 h-2 rounded-full bg-mint-400 shrink-0" />
-      case 'dnd': return <span className="w-2 h-2 rounded-full bg-rose-400 shrink-0" />
-      default: return <span className="w-2 h-2 rounded-full bg-[#6B7280] shrink-0" />
-    }
-  }
+  const stateIcon = (s: string | null) => (
+    <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(s)}`} />
+  )
 
   // 排序 + 搜索过滤
   const sortedFriends = useMemo(() => {
@@ -180,8 +177,8 @@ export default function FriendsPage() {
     return sorted.filter(f => f.friend_name.toLowerCase().includes(q))
   }, [friends, sortMode, searchQuery])
 
-  // 搜索框组件（复用）
-  const searchBox = (
+  // 搜索框组件（复用，缓存避免无关状态变化时重建）
+  const searchBox = useMemo(() => (
     <div className="relative">
       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
       <input
@@ -201,7 +198,7 @@ export default function FriendsPage() {
         </button>
       )}
     </div>
-  )
+  ), [searchQuery, showSearch])
 
   return (
     <div className="h-full flex flex-col bg-canvas">

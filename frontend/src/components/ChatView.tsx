@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
 import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp } from 'lucide-react'
+import { getStateDotColor } from '../constants'
 
 interface Message {
   id: number
@@ -632,10 +633,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                     : 'text-textPrimary hover:bg-elevated'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${
-                  m.state === 'active' ? 'bg-mint-400' :
-                  m.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
-                }`} />
+                <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(m.state)}`} />
                 <span className="font-medium">{m.name}</span>
                 <span className="text-textMuted text-xs ml-auto">
                   {m.type === 'ai' ? '🤖 AI' : '👤'}

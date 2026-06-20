@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Plus, BellOff, Menu, UserPlus } from 'lucide-react'
+import { getStateDotColor } from '../constants'
 
 interface Group {
   id: number
@@ -90,13 +91,7 @@ export default function ChatSidebar({
   // DM 会话按最后消息时间排序
   const sortedDMSessions = [...dmSessions].sort(sortByTime)
 
-  const stateColor = (s: string | null) => {
-    switch (s) {
-      case 'active': return 'bg-mint-400'
-      case 'dnd': return 'bg-rose-400'
-      default: return 'bg-[#6B7280]'
-    }
-  }
+  const stateColor = (s: string | null) => getStateDotColor(s)
 
   const formatTime = (isoStr: string | null) => {
     if (!isoStr) return ''

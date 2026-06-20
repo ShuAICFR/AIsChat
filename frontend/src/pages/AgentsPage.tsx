@@ -77,7 +77,7 @@ const PARAM_LABELS: Record<string, string> = {
 const stateColors: Record<string, string> = {
   active: 'bg-mint-400/15 text-mint-400 border-mint-400/30',
   dnd: 'bg-rose-400/15 text-rose-400 border-rose-400/30',
-  offline: 'bg-[#6B7280]/15 text-textSecondary border-[#6B7280]/30',
+  offline: 'bg-border text-textSecondary border-border/30',
   blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }
 

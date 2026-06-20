@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, X, MessageSquare } from 'lucide-react'
 import { api } from '../api/client'
+import { getStateDotColor } from '../constants'
 
 interface SearchResult {
   id: number
@@ -128,10 +129,7 @@ export default function SearchOverlay() {
                       {item.type === 'ai' ? '🤖AI' : '👤'}
                     </span>
                     {item.state && (
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                        item.state === 'active' ? 'bg-mint-400' :
-                        item.state === 'dnd' ? 'bg-rose-400' : 'bg-[#6B7280]'
-                      }`} />
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStateDotColor(item.state)}`} />
                     )}
                   </div>
                   {item.owner_name && (

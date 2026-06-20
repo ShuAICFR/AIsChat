@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import { Bot, X, ChevronRight, Settings } from 'lucide-react'
 
@@ -170,7 +170,7 @@ export default function CreateAgentModal({
   // 预设选择
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [selectedSub, setSelectedSub] = useState<string | null>(null)
-  const [showSubPopup, setShowSubPopup] = useState<string | null>(null) // 哪个卡片展开了子选项
+  const [showSubModal, setShowSubModal] = useState<string | null>(null) // 子选项弹窗（独立 modal）
 
   // 表单字段
   const [name, setName] = useState('')
@@ -203,6 +203,49 @@ export default function CreateAgentModal({
   // 错误/加载
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // ── sin() 浮动动画（JS 驱动，选完子项才启动） ──
+  const cardInnerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  useEffect(() => {
+    const key = selectedSub ? selectedPreset : null
+    // 重置所有卡片
+    Object.values(cardInnerRefs.current).forEach(el => {
+      if (el && el !== cardInnerRefs.current[key || '']) el.style.transform = 'translate3d(0, 0, 0)'
+    })
+    if (!key) return
+
+    let rafId: number
+    const start = performance.now()
+    const animate = (now: number) => {
+      const t = (now - start) / 1000
+      const y = Math.sin(t * 2.1) * 5
+      const el = cardInnerRefs.current[key]
+      if (el) el.style.transform = `translate3d(0, ${y}px, 0)`
+      rafId = requestAnimationFrame(animate)
+    }
+    rafId = requestAnimationFrame(animate)
+    return () => cancelAnimationFrame(rafId)
+  }, [selectedSub, selectedPreset])
+
+  // ── 一次性注入样式到 <head>（避免每帧重写 <style>） ──
+  useEffect(() => {
+    const id = 'create-agent-modal-styles'
+    if (document.getElementById(id)) return
+    const el = document.createElement('style')
+    el.id = id
+    el.textContent = `
+      .preset-card-frame { position: relative; }
+      .preset-card-inner { position: relative; }
+      @keyframes pop-in {
+        from { transform: translateY(-6px); opacity: 0; }
+        to   { transform: translateY(0); opacity: 1; }
+      }
+      .animate-pop-in { animation: pop-in 0.18s ease-out; }
+    `
+    document.head.appendChild(el)
+    return () => { el.remove() }
+  }, [])
 
   useEffect(() => {
     api.get<{ models: ModelOption[]; defaults: { chat_model: string; work_model: string }; provider: { thinking_supported: boolean } }>('/agents/models')
@@ -247,22 +290,17 @@ export default function CreateAgentModal({
     }
   }
 
-  // ── 选择卡片 ──
+  // ── 选择卡片 → 打开子选项弹窗 ──
   const handleCardClick = (key: string) => {
-    if (showSubPopup === key) {
-      setShowSubPopup(null)
-      return
-    }
-    setShowSubPopup(key)
     setSelectedPreset(key)
+    setShowSubModal(key)
   }
 
-  // ── 选择子项 ──
+  // ── 选择子项 → 关闭弹窗，开始浮动 ──
   const handleSubSelect = (presetKey: string, subId: string) => {
-    setSelectedPreset(presetKey)
     setSelectedSub(subId)
     applyPreset(presetKey, subId)
-    setShowSubPopup(null)
+    setShowSubModal(null)
   }
 
   // ── 创建 ──
@@ -308,7 +346,7 @@ export default function CreateAgentModal({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 overflow-y-auto" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl shadow-black/30 my-8"
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
@@ -330,66 +368,41 @@ export default function CreateAgentModal({
           />
         </div>
 
-        {/* ── 三档卡片（横排） ── */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        {/* ── 三档卡片（横排，放大） ── */}
+        <div className="grid grid-cols-3 gap-4 mb-5">
           {Object.entries(PRESETS).map(([key, preset]) => {
             const icon = CARD_ICONS[key]
             const isSelected = selectedPreset === key
-            const subOptions = SUB_OPTIONS[key] || []
+            const hasSub = selectedSub && isSelected
 
             return (
-              <div key={key} className="relative">
-                <button
-                  onClick={() => handleCardClick(key)}
-                  className={`w-full text-left rounded-xl border transition-colors duration-300
-                    bg-gradient-to-b ${icon.color}
-                    ${isSelected
-                      ? 'border-primary-400/60 shadow-lg shadow-primary-500/10 preset-card-selected'
-                      : 'border-border hover:border-primary-500/30'
-                    }`}
+              <div key={key} className="preset-card-frame">
+                <div
+                  ref={(el) => { cardInnerRefs.current[key] = el }}
+                  className="preset-card-inner"
                 >
-                  <div className="p-3 flex flex-col items-center text-center gap-1.5">
-                    <span className="text-2xl">{icon.emoji}</span>
-                    <span className="text-xs font-semibold text-textPrimary">{preset.name}</span>
-                    <p className="text-[10px] text-textSecondary leading-snug line-clamp-2">{preset.description}</p>
+                  <button
+                    onClick={() => handleCardClick(key)}
+                    className={`w-full text-left rounded-xl border transition-colors duration-300
+                      bg-gradient-to-b ${icon.color}
+                      ${isSelected
+                        ? 'border-primary-400/60 shadow-lg shadow-primary-500/10'
+                        : 'border-border hover:border-primary-500/30'
+                      }`}
+                  >
+                    <div className="p-5 flex flex-col items-center text-center gap-2">
+                      <span className="text-3xl">{icon.emoji}</span>
+                      <span className="text-sm font-semibold text-textPrimary">{preset.name}</span>
+                      <p className="text-xs text-textSecondary leading-snug">{preset.description}</p>
 
-                    {isSelected && selectedSub && (
-                      <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full mt-0.5">
-                        {SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.emoji} {selectedSubLabel}
-                      </span>
-                    )}
-                  </div>
-                </button>
-
-                {/* ── 子选项悬浮窗 ── */}
-                {showSubPopup === key && (
-                  <div className="absolute top-full left-0 right-0 mt-2 z-10 bg-canvas border border-border rounded-xl p-4 shadow-2xl animate-pop-in">
-                    <p className="text-xs text-textMuted mb-3 italic text-center">
-                      这是预设模板，具体参数可在下一步详细调整。
-                    </p>
-                    <div className="space-y-2">
-                      {subOptions.map(sub => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSubSelect(key, sub.id)}
-                          className={`w-full text-left p-2.5 rounded-lg border transition-colors duration-150
-                            ${selectedSub === sub.id
-                              ? 'border-primary-400/40 bg-primary-500/5'
-                              : 'border-transparent bg-elevated hover:bg-canvas hover:border-border'
-                            }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            <span className="text-base flex-shrink-0">{sub.emoji}</span>
-                            <div>
-                              <span className="text-[11px] font-semibold text-textPrimary">{sub.label}</span>
-                              <p className="text-[10px] text-textSecondary mt-0.5 leading-relaxed">{sub.description}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+                      {hasSub && (
+                        <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full mt-1">
+                          {SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.emoji} {selectedSubLabel}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                )}
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -428,6 +441,18 @@ export default function CreateAgentModal({
 
         {error && <div className="text-sm text-rose-400 mt-3 text-center">{error}</div>}
 
+        {/* ── 子选项弹窗（独立 modal，选中后关闭并开始浮动） ── */}
+        {showSubModal && selectedPreset && (
+          <SubOptionModal
+            presetKey={showSubModal}
+            preset={PRESETS[showSubModal]}
+            subOptions={SUB_OPTIONS[showSubModal] || []}
+            selectedSub={selectedSub}
+            onSelect={(subId) => handleSubSelect(showSubModal, subId)}
+            onClose={() => { setShowSubModal(null); setSelectedPreset(null) }}
+          />
+        )}
+
         {/* ── 详细设置弹窗 ── */}
         {showDetailSettings && (
           <DetailSettingsModal
@@ -456,24 +481,64 @@ export default function CreateAgentModal({
         )}
       </div>
 
-      {/* ── CSS 动画（仅选中卡片，GPU 加速） ── */}
-      <style>{`
-        .preset-card-selected {
-          animation: preset-float 3s ease-in-out infinite;
-          will-change: transform;
-        }
-        @keyframes preset-float {
-          0%, 100% { transform: translate3d(0, 0, 0); }
-          50% { transform: translate3d(0, -5px, 0); }
-        }
-        @keyframes pop-in {
-          from { transform: translateY(-6px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-pop-in {
-          animation: pop-in 0.18s ease-out;
-        }
-      `}</style>
+    </div>
+  )
+}
+
+// ── 子选项弹窗（独立 modal，居中显示） ──
+
+function SubOptionModal({
+  presetKey, preset, subOptions, selectedSub, onSelect, onClose,
+}: {
+  presetKey: string
+  preset: PresetData
+  subOptions: SubOption[]
+  selectedSub: string | null
+  onSelect: (subId: string) => void
+  onClose: () => void
+}) {
+  const icon = CARD_ICONS[presetKey]
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70]" onClick={onClose}>
+      <div
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 animate-pop-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">{icon.emoji}</span>
+            <h2 className="text-base font-semibold text-textPrimary">{preset.name}</h2>
+          </div>
+          <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-textMuted mb-4">{preset.description}</p>
+        <p className="text-xs text-textMuted mb-4 italic text-center bg-canvas/50 rounded-lg py-2">
+          这是预设模板，具体参数可在下一步详细调整。
+        </p>
+        <div className="space-y-3">
+          {subOptions.map(sub => (
+            <button
+              key={sub.id}
+              onClick={() => onSelect(sub.id)}
+              className={`w-full text-left p-4 rounded-xl border transition-all duration-150
+                ${selectedSub === sub.id
+                  ? 'border-primary-400/60 bg-primary-500/10 shadow-md shadow-primary-500/5'
+                  : 'border-border/50 bg-elevated hover:border-primary-500/30 hover:bg-canvas'
+                }`}
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">{sub.emoji}</span>
+                <div>
+                  <span className="text-sm font-semibold text-textPrimary">{sub.label}</span>
+                  <p className="text-xs text-textSecondary mt-1 leading-relaxed">{sub.description}</p>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -528,7 +593,7 @@ function DetailSettingsModal({
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[60] pt-8 overflow-y-auto" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-lg mx-4 shadow-2xl shadow-black/30 my-4"
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">

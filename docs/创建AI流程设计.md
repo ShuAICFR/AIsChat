@@ -91,32 +91,25 @@ CONFIG_PROFILES = {
 └─────────────────────────────────┘
 ```
 
-**动画方案**：
-```css
-/* 呼吸浮动 — 三张卡片各错开周期 */
-@keyframes float-card-1 {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-@keyframes float-card-2 {
-  0%, 100% { transform: translateY(-3px); }
-  50% { transform: translateY(3px); }
-}
-@keyframes float-card-3 {
-  0%, 100% { transform: translateY(3px); }
-  50% { transform: translateY(-6px); }
-}
+**动画方案**（已实现）：
+```
+架构：preset-card-frame（外层，position:relative，参与 grid 排版，静态）
+     └─ preset-card-inner（内层，position:relative，JS 直接操作 transform）
 
-/* 描边呼吸 */
-@keyframes border-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.3); }
-  50% { box-shadow: 0 0 16px rgba(139, 92, 246, 0.5); }
-}
+触发时机：选中子项关闭弹窗后 → 启动浮动；未选子项 / 弹窗打开期间 → 完全静止
+驱动方式：requestAnimationFrame + Math.sin(t * 2.1) * 5
+         周期 ≈ 3s，振幅 5px，translate3d GPU 合成层
+样式注入：useEffect 一次性注入 document.head，组件卸载才移除，避免每渲染重复
 ```
 
-#### 1b. 子选项悬浮窗
+#### 1b. 子选项独立弹窗
 
-点击卡片 → 弹窗从卡片位置放大展开，含 3 个子选项。
+点击卡片 → **居中 modal**（`z-[70]`），含 3 个子选项卡片。
+
+- 弹窗显示：预设 emoji + 名称 + 描述 + 提示语
+- 3 个子选项以大卡片形式纵向排列（emoji + 标签 + 行为描述）
+- 选中后弹窗关闭，主界面卡片开始浮动动画，底部显示已选子项标签
+- 点击 X / 遮罩层关闭弹窗 → 取消选择，回到初始状态
 
 **顶部提示语**："这是预设模板，具体参数可在下一步详细调整。"
 
@@ -144,7 +137,7 @@ CONFIG_PROFILES = {
 | 🔥 社交体 | 主动社交 | temp=0.95, rounds=10, social=on |
 | 🛡️ 守护者 | 长期陪伴 | temp=0.85, rounds=6, social=mid |
 
-**子选项 UI**：只展示文字描述，不展示参数值。选中后悬浮窗缩小回卡片，卡片底部显示已选子项标签。
+**子选项 UI**：只展示行为描述文字和 emoji，不展示参数值。以独立 modal 居中呈现，3 个子项以大卡片形式纵向排列。选中后弹窗关闭，主卡片底部显示已选子项标签，同时开始 sin() 浮动动画。
 
 #### 1c. 详细设置弹窗（分区）
 

@@ -2,7 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { MessageCircle, Users, Settings } from 'lucide-react'
 
 const tabs = [
-  { path: '/chat', label: '群聊', icon: MessageCircle },
+  { path: '/chat', label: '聊天', icon: MessageCircle },
   { path: '/friends', label: '好友', icon: Users },
   { path: '/settings', label: '设置', icon: Settings },
 ]

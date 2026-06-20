@@ -56,6 +56,13 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const hasActiveConversation = !!(groupId || dmSessionId)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
+  // 移动端无活跃对话时自动全屏展示侧边栏
+  useEffect(() => {
+    if (!hasActiveConversation && window.innerWidth < 768) {
+      setMobileSidebarOpen(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // 选中对话后自动关闭手机侧边栏
   useEffect(() => {
     if (hasActiveConversation) setMobileSidebarOpen(false)

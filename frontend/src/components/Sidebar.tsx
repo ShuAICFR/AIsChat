@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
-import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen } from 'lucide-react'
+import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import SearchOverlay from './SearchOverlay'
 import FriendList from './FriendList'
@@ -87,7 +87,8 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               )}
             </p>
           </div>
-          <FriendRequestBadge />
+          {/* 桌面端才显示好友申请徽章（移动端通过底部「好友」入口管理） */}
+          {!mobile && <FriendRequestBadge />}
         </div>
       )}
 
@@ -99,13 +100,16 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             <span>聊天</span>
           </NavLink>
 
-          <button
-            onClick={() => { setShowFriendList(true); setFriendRefresh(Date.now()) }}
-            className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated text-left"
-          >
-            <Users size={18} />
-            <span>好友</span>
-          </button>
+          {/* 桌面端显示好友入口（移动端通过底部栏访问 /friends） */}
+          {!mobile && (
+            <button
+              onClick={() => { setShowFriendList(true); setFriendRefresh(Date.now()) }}
+              className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated text-left"
+            >
+              <Users size={18} />
+              <span>好友</span>
+            </button>
+          )}
 
           {mainNavItems.filter(i => i.to !== '/chat').map((item) => (
             <NavLink
@@ -132,10 +136,13 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             target="_blank"
             rel="noopener noreferrer"
             className={navLinkClass({ isActive: false })}
-            title={collapsed ? '使用手册' : undefined}
+            title={collapsed ? '使用手册（外部链接）' : undefined}
           >
             <BookOpen size={18} />
-            <span>手册</span>
+            <span className="flex items-center gap-1">
+              手册
+              <ExternalLink size={10} className="text-textMuted" />
+            </span>
           </a>
         </nav>
       )}
@@ -192,13 +199,16 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               <item.icon size={18} />
             </NavLink>
           ))}
-          <button
-            onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
-            className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
-            title="好友"
-          >
-            <Users size={18} />
-          </button>
+          {/* 桌面端折叠时显示好友入口（移动端通过底部栏访问） */}
+          {!mobile && (
+            <button
+              onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
+              className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
+              title="好友"
+            >
+              <Users size={18} />
+            </button>
+          )}
           {user?.role === 'admin' && (
             <NavLink
               to="/admin"
@@ -220,7 +230,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
-            title="使用手册"
+            title="使用手册（外部链接）"
           >
             <BookOpen size={18} />
           </a>

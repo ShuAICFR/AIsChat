@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, Menu } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
@@ -22,12 +23,23 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
       <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
-        <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
+        <div className="flex items-center gap-2 mb-1">
+          {/* 移动端：菜单按钮 */}
+          <button
+            onClick={openDrawer}
+            className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            title="菜单"
+          >
+            <Menu size={20} />
+          </button>
+          <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
+        </div>
         <p className="text-sm text-textSecondary mt-0.5">
           系统管理与监控 ·{' '}
           <a
@@ -47,7 +59,7 @@ export default function AdminPage() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-primary-400 text-primary-300'
                 : 'border-transparent text-textMuted hover:text-textSecondary'

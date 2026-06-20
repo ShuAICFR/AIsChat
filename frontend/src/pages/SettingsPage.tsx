@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight } from 'lucide-react'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -39,6 +40,7 @@ const CHAT_STYLES = [
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const navigate = useNavigate()
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com')
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -174,9 +176,20 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 bg-canvas">
+    <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
       <div className="max-w-2xl mx-auto">
         <h1 className="text-2xl font-bold text-textPrimary mb-6 tracking-tight">设置</h1>
+
+        {/* 移动端管理员快捷入口 */}
+        {user?.role === 'admin' && (
+          <button
+            onClick={() => navigate('/admin')}
+            className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 rounded-xl bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-sm font-medium transition-colors"
+          >
+            <Shield size={16} />
+            管理面板
+          </button>
+        )}
 
         {/* 额度 */}
         <div className="bg-surface rounded-xl border border-border p-6 mb-4">
@@ -473,6 +486,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2 mb-4">
             <Palette size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">外观</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">即时生效</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -509,6 +523,7 @@ export default function SettingsPage() {
           <div className="flex items-center gap-2 mb-4">
             <Bell size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">桌面通知</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">即时生效</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -553,6 +568,9 @@ export default function SettingsPage() {
           <Save size={16} />
           {saving ? '保存中...' : '保存设置'}
         </button>
+        <p className="text-xs text-textMuted mt-2">
+          💡 标有「即时生效」的选项修改后立即应用，无需点击保存。其余选项需点击保存后生效。
+        </p>
       </div>
     </div>
   )

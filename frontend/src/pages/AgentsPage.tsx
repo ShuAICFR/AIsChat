@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
-import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff } from 'lucide-react'
+import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import CreateAgentModal from '../components/CreateAgentModal'
 
@@ -89,6 +89,7 @@ export default function AgentsPage() {
   const [historyAgent, setHistoryAgent] = useState<Agent | null>(null)
   const [stateAgent, setStateAgent] = useState<Agent | null>(null)
   const { refreshUser } = useAuth()
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   const loadAgents = async () => {
     try {
@@ -129,29 +130,39 @@ export default function AgentsPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="h-full overflow-y-auto p-6 bg-canvas">
+    <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
       <div className="max-w-4xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-textPrimary tracking-tight">我的 AI</h1>
-            <p className="text-sm text-textSecondary mt-1">
-              创建和管理你的 AI 角色
-            </p>
+          <div className="flex items-center gap-2">
+            {/* 移动端：菜单按钮（打开侧边栏抽屉） */}
+            <button
+              onClick={openDrawer}
+              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="菜单"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-textPrimary tracking-tight">我的 AI</h1>
+              <p className="text-sm text-textSecondary mt-1">
+                创建和管理你的 AI 角色
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowImport(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-border text-textSecondary rounded-xl hover:bg-elevated text-sm font-medium transition-colors"
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 border border-border text-textSecondary rounded-xl hover:bg-elevated text-xs md:text-sm font-medium transition-colors"
             >
-              <Upload size={16} />
+              <Upload size={15} className="md:w-4 md:h-4" />
               导入灵魂
             </button>
             <button
               onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-xs md:text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
             >
-              <Plus size={16} />
+              <Plus size={15} className="md:w-4 md:h-4" />
               创建 AI
             </button>
           </div>

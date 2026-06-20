@@ -356,7 +356,7 @@ export default function CreateAgentModal({
         <div className="flex-1 overflow-y-auto md:overflow-visible pb-[var(--safe-bottom)] md:pb-0">
 
         {/* ── 名称输入 ── */}
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block text-xs font-medium mb-1.5 text-textSecondary">名称 *</label>
           <input
             type="text"
@@ -364,6 +364,18 @@ export default function CreateAgentModal({
             onChange={(e) => setName(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             placeholder="给 AI 起个名字"
+          />
+        </div>
+
+        {/* ── 系统提示词 ── */}
+        <div className="mb-5">
+          <label className="block text-xs font-medium mb-1.5 text-textSecondary">系统提示词（性格描述）</label>
+          <textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            rows={3}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
+            placeholder="描述 AI 的性格和行为..."
           />
         </div>
 
@@ -610,7 +622,7 @@ function DetailSettingsModal({
   return (
     <div className="fixed inset-0 md:bg-black/70 flex items-start justify-center z-[60] md:pt-8 overflow-y-auto bg-surface" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-none md:rounded-2xl p-6 w-full max-w-full md:max-w-2xl mx-0 md:mx-4 shadow-2xl shadow-black/30 my-0 md:my-4 h-full md:h-auto flex flex-col"
+        className="bg-elevated border border-border rounded-none md:rounded-2xl p-6 w-full max-w-full md:max-w-2xl mx-0 md:mx-4 shadow-2xl shadow-black/30 my-0 md:my-4 h-full md:h-auto flex flex-col pb-[var(--safe-bottom)] md:pb-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 移动端头部 */}

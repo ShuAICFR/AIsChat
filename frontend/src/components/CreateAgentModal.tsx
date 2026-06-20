@@ -330,73 +330,59 @@ export default function CreateAgentModal({
           />
         </div>
 
-        {/* ── 三档卡片 ── */}
-        <div className="space-y-3 mb-5">
-          {Object.entries(PRESETS).map(([key, preset], idx) => {
+        {/* ── 三档卡片（横排） ── */}
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          {Object.entries(PRESETS).map(([key, preset]) => {
             const icon = CARD_ICONS[key]
             const isSelected = selectedPreset === key
             const subOptions = SUB_OPTIONS[key] || []
 
             return (
-              <div key={key}>
+              <div key={key} className="relative">
                 <button
                   onClick={() => handleCardClick(key)}
-                  className={`w-full text-left relative overflow-hidden rounded-xl border transition-all duration-300 group
+                  className={`w-full text-left rounded-xl border transition-colors duration-300
+                    bg-gradient-to-b ${icon.color}
                     ${isSelected
-                      ? 'border-primary-400/60 shadow-lg shadow-primary-500/10 selected-card'
-                      : 'border-border hover:border-primary-500/30 hover:shadow-md'
-                    }
-                    bg-gradient-to-r ${icon.color}
-                  `}
-                  style={{
-                    animation: `float-card-${idx + 1} ${3.5 + idx * 0.7}s ease-in-out infinite`,
-                  }}
+                      ? 'border-primary-400/60 shadow-lg shadow-primary-500/10 preset-card-selected'
+                      : 'border-border hover:border-primary-500/30'
+                    }`}
                 >
-                  <div className="px-4 py-3.5 flex items-start gap-3">
-                    <span className="text-2xl flex-shrink-0 mt-0.5">{icon.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-sm font-semibold text-textPrimary">{preset.name}</span>
-                        <span className="text-[10px] text-textMuted bg-canvas/60 px-1.5 py-0.5 rounded">预设</span>
-                      </div>
-                      <p className="text-xs text-textSecondary leading-relaxed">{preset.description}</p>
+                  <div className="p-3 flex flex-col items-center text-center gap-1.5">
+                    <span className="text-2xl">{icon.emoji}</span>
+                    <span className="text-xs font-semibold text-textPrimary">{preset.name}</span>
+                    <p className="text-[10px] text-textSecondary leading-snug line-clamp-2">{preset.description}</p>
 
-                      {/* 已选子项标签 */}
-                      {isSelected && selectedSub && (
-                        <div className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full">
-                          {SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.emoji} {selectedSubLabel}
-                        </div>
-                      )}
-                    </div>
-                    <ChevronRight
-                      size={16}
-                      className={`flex-shrink-0 mt-1.5 text-textMuted transition-transform duration-300 ${showSubPopup === key ? 'rotate-90' : ''}`}
-                    />
+                    {isSelected && selectedSub && (
+                      <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full mt-0.5">
+                        {SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.emoji} {selectedSubLabel}
+                      </span>
+                    )}
                   </div>
                 </button>
 
                 {/* ── 子选项悬浮窗 ── */}
                 {showSubPopup === key && (
-                  <div className="mt-2 mx-2 bg-canvas border border-border rounded-xl p-4 shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
-                    <p className="text-xs text-textMuted mb-3 italic">
-                      "这是预设模板，具体参数可在下一步详细调整。"
+                  <div className="absolute top-full left-0 right-0 mt-2 z-10 bg-canvas border border-border rounded-xl p-4 shadow-2xl animate-pop-in">
+                    <p className="text-xs text-textMuted mb-3 italic text-center">
+                      这是预设模板，具体参数可在下一步详细调整。
                     </p>
                     <div className="space-y-2">
                       {subOptions.map(sub => (
                         <button
                           key={sub.id}
                           onClick={() => handleSubSelect(key, sub.id)}
-                          className={`w-full text-left p-3 rounded-lg border transition-all duration-200
+                          className={`w-full text-left p-2.5 rounded-lg border transition-colors duration-150
                             ${selectedSub === sub.id
                               ? 'border-primary-400/40 bg-primary-500/5'
                               : 'border-transparent bg-elevated hover:bg-canvas hover:border-border'
                             }`}
                         >
-                          <div className="flex items-start gap-2.5">
-                            <span className="text-lg flex-shrink-0">{sub.emoji}</span>
+                          <div className="flex items-start gap-2">
+                            <span className="text-base flex-shrink-0">{sub.emoji}</span>
                             <div>
-                              <span className="text-xs font-semibold text-textPrimary">{sub.label}</span>
-                              <p className="text-[11px] text-textSecondary mt-0.5 leading-relaxed">{sub.description}</p>
+                              <span className="text-[11px] font-semibold text-textPrimary">{sub.label}</span>
+                              <p className="text-[10px] text-textSecondary mt-0.5 leading-relaxed">{sub.description}</p>
                             </div>
                           </div>
                         </button>
@@ -470,37 +456,22 @@ export default function CreateAgentModal({
         )}
       </div>
 
-      {/* ── CSS 动画 ── */}
+      {/* ── CSS 动画（仅选中卡片，GPU 加速） ── */}
       <style>{`
-        @keyframes float-card-1 {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-5px); }
+        .preset-card-selected {
+          animation: preset-float 3s ease-in-out infinite;
+          will-change: transform;
         }
-        @keyframes float-card-2 {
-          0%, 100% { transform: translateY(-2px); }
-          50% { transform: translateY(3px); }
+        @keyframes preset-float {
+          0%, 100% { transform: translate3d(0, 0, 0); }
+          50% { transform: translate3d(0, -5px, 0); }
         }
-        @keyframes float-card-3 {
-          0%, 100% { transform: translateY(2px); }
-          50% { transform: translateY(-5px); }
-        }
-        @keyframes border-breathe {
-          0%, 100% { border-color: rgba(139, 92, 246, 0.3); box-shadow: 0 0 8px rgba(139, 92, 246, 0.15); }
-          50% { border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 0 14px rgba(139, 92, 246, 0.25); }
-        }
-        .selected-card {
-          animation: border-breathe 3s ease-in-out infinite !important;
-        }
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes slide-in-from-top-2 {
-          from { transform: translateY(-8px); opacity: 0; }
+        @keyframes pop-in {
+          from { transform: translateY(-6px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
-        .animate-in {
-          animation: fade-in 0.2s ease-out, slide-in-from-top-2 0.2s ease-out;
+        .animate-pop-in {
+          animation: pop-in 0.18s ease-out;
         }
       `}</style>
     </div>

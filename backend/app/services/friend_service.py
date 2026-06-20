@@ -202,7 +202,7 @@ async def list_friends(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
-    """获取好友列表"""
+    """获取好友列表（批量查询优化，避免 N+1）"""
     from app.models.friendship import Friendship
     from app.models.user import User
     from app.models.agent import Agent
@@ -218,35 +218,73 @@ async def list_friends(
     )
     friendships = result.scalars().all()
 
+    if not friendships:
+        return []
+
+    # ── 批量查询：分离 human / ai ──
+    human_ids = [f.friend_id for f in friendships if f.friend_type == "human"]
+    ai_ids = [f.friend_id for f in friendships if f.friend_type == "ai"]
+
+    users_map: dict[int, User] = {}
+    if human_ids:
+        user_results = await db.execute(select(User).where(User.id.in_(human_ids)))
+        for u in user_results.scalars().all():
+            users_map[u.id] = u
+
+    agents_map: dict[int, Agent] = {}
+    if ai_ids:
+        agent_results = await db.execute(select(Agent).where(Agent.id.in_(ai_ids)))
+        for a in agent_results.scalars().all():
+            agents_map[a.id] = a
+
+    # ── 批量查询：所有 DM session 的 last_message_at ──
+    session_ids: list[str] = []
+    for f in friendships:
+        friend_user_id = None
+        if f.friend_type == "human":
+            u = users_map.get(f.friend_id)
+            if u:
+                friend_user_id = u.id
+        elif f.friend_type == "ai":
+            a = agents_map.get(f.friend_id)
+            if a:
+                friend_user_id = a.user_id
+        if friend_user_id:
+            session_ids.append(generate_dm_session_id(user_id, friend_user_id))
+
+    dm_map: dict[str, str] = {}
+    if session_ids:
+        dm_results = await db.execute(
+            select(DMSession.session_id, DMSession.last_message_at)
+            .where(DMSession.session_id.in_(session_ids))
+        )
+        for row in dm_results.all():
+            if row.last_message_at:
+                dm_map[row.session_id] = str(row.last_message_at)
+
+    # ── 组装结果 ──
     friends = []
     for f in friendships:
         name = f"未知:{f.friend_id}"
         state = None
         friend_user_id = None
-        if f.friend_type == "human":
-            user_result = await db.execute(select(User).where(User.id == f.friend_id))
-            user = user_result.scalar_one_or_none()
-            if user:
-                name = user.username
-                friend_user_id = user.id  # human: friend_id 即 users.id
-        elif f.friend_type == "ai":
-            agent_result = await db.execute(select(Agent).where(Agent.id == f.friend_id))
-            agent = agent_result.scalar_one_or_none()
-            if agent:
-                name = agent.name
-                state = agent.state
-                friend_user_id = agent.user_id  # ai: 查 agent.user_id
 
-        # 查询最近私信时间
+        if f.friend_type == "human":
+            u = users_map.get(f.friend_id)
+            if u:
+                name = u.username
+                friend_user_id = u.id
+        elif f.friend_type == "ai":
+            a = agents_map.get(f.friend_id)
+            if a:
+                name = a.name
+                state = a.state
+                friend_user_id = a.user_id
+
         last_dm_at = None
         if friend_user_id:
-            session_id = generate_dm_session_id(user_id, friend_user_id)
-            dm_result = await db.execute(
-                select(DMSession.last_message_at).where(DMSession.session_id == session_id)
-            )
-            dm_at = dm_result.scalar_one_or_none()
-            if dm_at:
-                last_dm_at = str(dm_at)
+            sid = generate_dm_session_id(user_id, friend_user_id)
+            last_dm_at = dm_map.get(sid)
 
         friends.append({
             "id": f.id,

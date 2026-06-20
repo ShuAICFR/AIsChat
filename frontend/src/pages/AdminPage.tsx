@@ -194,7 +194,7 @@ function UsersTab() {
                           await api.put(`/admin/users/${u.id}/role`, { role: 'user' })
                           setPage(page)
                         }}
-                        className="text-xs text-rose-400 hover:text-rose-300"
+                        className="text-xs text-rose-400 hover:text-rose-500"
                       >
                         降级
                       </button>
@@ -318,7 +318,7 @@ function GroupsTab() {
                       setData(newData)
                     }
                   }}
-                  className="text-xs text-rose-400 hover:text-rose-300"
+                  className="text-xs text-rose-400 hover:text-rose-500"
                 >
                   解散
                 </button>
@@ -966,7 +966,7 @@ function OpenCLICommandsSection() {
                       {c.enabled ? '禁用' : '启用'}
                     </button>
                     <button onClick={() => handleDelete(c.id)}
-                      className="text-xs text-rose-400 hover:text-rose-300">
+                      className="text-xs text-rose-400 hover:text-rose-500">
                       删除
                     </button>
                   </td>

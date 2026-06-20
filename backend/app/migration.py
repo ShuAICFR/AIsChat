@@ -898,5 +898,6 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
         await db.execute(text(
             f'ALTER TABLE {table} ALTER COLUMN {column} TYPE VARCHAR({target_length})'
         ))
-        await db.commit()
+        # 注意：不在此处 commit，由外层 db.begin() 统一提交
+        await db.flush()
 

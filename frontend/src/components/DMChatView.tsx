@@ -7,9 +7,10 @@ import { ArrowLeft, Bell, BellOff, Settings, Menu } from 'lucide-react'
 
 interface DMChatViewProps {
   sessionId: string
+  onMobileBack?: () => void
 }
 
-export default function DMChatView({ sessionId }: DMChatViewProps) {
+export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps) {
   const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -45,7 +46,7 @@ export default function DMChatView({ sessionId }: DMChatViewProps) {
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         {/* 移动端：返回 + 抽屉菜单 */}
         <button
-          onClick={() => navigate('/chat')}
+          onClick={() => onMobileBack ? onMobileBack() : navigate('/chat')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
         >
           <ArrowLeft size={20} />

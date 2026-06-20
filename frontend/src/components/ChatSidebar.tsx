@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, Menu, BellOff, MessageSquare } from 'lucide-react'
+import { Plus, Menu, BellOff, MessageSquare, ArrowLeft } from 'lucide-react'
 
 interface Group {
   id: number
@@ -28,6 +28,8 @@ interface ChatSidebarProps {
   openDrawer: () => void
   /** 移动端选中对话后隐藏侧边栏 */
   hideOnMobile: boolean
+  /** 移动端返回当前对话（侧边栏作为 overlay 时） */
+  onMobileBack?: () => void
 }
 
 export default function ChatSidebar({
@@ -36,6 +38,7 @@ export default function ChatSidebar({
   onCreateGroup,
   openDrawer,
   hideOnMobile,
+  onMobileBack,
 }: ChatSidebarProps) {
   const [groups, setGroups] = useState<Group[]>([])
   const [dmSessions, setDmSessions] = useState<DMSession[]>([])
@@ -108,13 +111,23 @@ export default function ChatSidebar({
       {/* 标题 */}
       <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
         <div className="flex items-center gap-2">
-          <button
-            onClick={openDrawer}
-            className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="菜单"
-          >
-            <Menu size={18} />
-          </button>
+          {onMobileBack ? (
+            <button
+              onClick={onMobileBack}
+              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="返回对话"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          ) : (
+            <button
+              onClick={openDrawer}
+              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="菜单"
+            >
+              <Menu size={18} />
+            </button>
+          )}
           聊天
         </div>
         <button

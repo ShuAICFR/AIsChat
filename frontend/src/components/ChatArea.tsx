@@ -54,16 +54,23 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const currentGroup = groups.find((g) => g.id === groupId)
 
   const hasActiveConversation = !!(groupId || dmSessionId)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  // 选中对话后自动关闭手机侧边栏
+  useEffect(() => {
+    if (hasActiveConversation) setMobileSidebarOpen(false)
+  }, [groupId, dmSessionId])
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full relative">
       {/* 统一侧边栏：群聊 + 私信列表 */}
       <ChatSidebar
         activeGroupId={groupId}
         activeSessionId={dmSessionId}
         onCreateGroup={() => setShowCreateGroup(true)}
         openDrawer={openDrawer}
-        hideOnMobile={hasActiveConversation}
+        hideOnMobile={hasActiveConversation && !mobileSidebarOpen}
+        onMobileBack={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
       />
 
       {/* ── 右侧主区域 ── */}
@@ -87,7 +94,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
             <button
-              onClick={() => navigate('/chat')}
+              onClick={() => setMobileSidebarOpen(true)}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
             >
               <ArrowLeft size={20} />
@@ -149,7 +156,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
       ) : (
         /* ── 私信 ── */
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          <DMChatView sessionId={dmSessionId!} />
+          <DMChatView sessionId={dmSessionId!} onMobileBack={() => setMobileSidebarOpen(true)} />
         </div>
       )}
 

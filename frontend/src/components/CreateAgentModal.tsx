@@ -204,15 +204,17 @@ export default function CreateAgentModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // ── sin() 浮动动画（JS 驱动，选完子项才启动） ──
-  const cardInnerRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  // ── sin() 浮动动画（JS 驱动，选完子项才启动，data-attr 查询无 ref 开销） ──
+  const animKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     const key = selectedSub ? selectedPreset : null
-    // 重置所有卡片
-    Object.values(cardInnerRefs.current).forEach(el => {
-      if (el && el !== cardInnerRefs.current[key || '']) el.style.transform = 'translate3d(0, 0, 0)'
-    })
+    // 复位上一个动画卡片
+    if (animKeyRef.current && animKeyRef.current !== key) {
+      const prev = document.querySelector(`[data-preset-key="${animKeyRef.current}"]`) as HTMLDivElement | null
+      if (prev) prev.style.transform = 'translate3d(0, 0, 0)'
+    }
+    animKeyRef.current = key
     if (!key) return
 
     let rafId: number
@@ -220,32 +222,13 @@ export default function CreateAgentModal({
     const animate = (now: number) => {
       const t = (now - start) / 1000
       const y = Math.sin(t * 2.1) * 5
-      const el = cardInnerRefs.current[key]
+      const el = document.querySelector(`[data-preset-key="${key}"]`) as HTMLDivElement | null
       if (el) el.style.transform = `translate3d(0, ${y}px, 0)`
       rafId = requestAnimationFrame(animate)
     }
     rafId = requestAnimationFrame(animate)
     return () => cancelAnimationFrame(rafId)
   }, [selectedSub, selectedPreset])
-
-  // ── 一次性注入样式到 <head>（避免每帧重写 <style>） ──
-  useEffect(() => {
-    const id = 'create-agent-modal-styles'
-    if (document.getElementById(id)) return
-    const el = document.createElement('style')
-    el.id = id
-    el.textContent = `
-      .preset-card-frame { position: relative; }
-      .preset-card-inner { position: relative; }
-      @keyframes pop-in {
-        from { transform: translateY(-6px); opacity: 0; }
-        to   { transform: translateY(0); opacity: 1; }
-      }
-      .animate-pop-in { animation: pop-in 0.18s ease-out; }
-    `
-    document.head.appendChild(el)
-    return () => { el.remove() }
-  }, [])
 
   useEffect(() => {
     api.get<{ models: ModelOption[]; defaults: { chat_model: string; work_model: string }; provider: { thinking_supported: boolean } }>('/agents/models')
@@ -298,6 +281,7 @@ export default function CreateAgentModal({
 
   // ── 选择子项 → 关闭弹窗，开始浮动 ──
   const handleSubSelect = (presetKey: string, subId: string) => {
+    setSelectedPreset(presetKey)
     setSelectedSub(subId)
     applyPreset(presetKey, subId)
     setShowSubModal(null)
@@ -376,14 +360,14 @@ export default function CreateAgentModal({
             const hasSub = selectedSub && isSelected
 
             return (
-              <div key={key} className="preset-card-frame">
+              <div key={key} className="preset-card-frame h-full">
                 <div
-                  ref={(el) => { cardInnerRefs.current[key] = el }}
-                  className="preset-card-inner"
+                  data-preset-key={key}
+                  className="preset-card-inner h-full"
                 >
                   <button
                     onClick={() => handleCardClick(key)}
-                    className={`w-full text-left rounded-xl border transition-colors duration-300
+                    className={`w-full h-full text-left rounded-xl border transition-colors duration-300
                       bg-gradient-to-b ${icon.color}
                       ${isSelected
                         ? 'border-primary-400/60 shadow-lg shadow-primary-500/10'
@@ -444,9 +428,7 @@ export default function CreateAgentModal({
         {/* ── 子选项弹窗（独立 modal，选中后关闭并开始浮动） ── */}
         {showSubModal && selectedPreset && (
           <SubOptionModal
-            presetKey={showSubModal}
             preset={PRESETS[showSubModal]}
-            subOptions={SUB_OPTIONS[showSubModal] || []}
             selectedSub={selectedSub}
             onSelect={(subId) => handleSubSelect(showSubModal, subId)}
             onClose={() => { setShowSubModal(null); setSelectedPreset(null) }}
@@ -488,16 +470,15 @@ export default function CreateAgentModal({
 // ── 子选项弹窗（独立 modal，居中显示） ──
 
 function SubOptionModal({
-  presetKey, preset, subOptions, selectedSub, onSelect, onClose,
+  preset, selectedSub, onSelect, onClose,
 }: {
-  presetKey: string
   preset: PresetData
-  subOptions: SubOption[]
   selectedSub: string | null
   onSelect: (subId: string) => void
   onClose: () => void
 }) {
-  const icon = CARD_ICONS[presetKey]
+  const icon = CARD_ICONS[preset.key]
+  const subOptions = SUB_OPTIONS[preset.key] || []
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70]" onClick={onClose}>
       <div

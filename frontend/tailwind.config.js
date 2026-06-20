@@ -58,6 +58,7 @@ export default {
         'shimmer': 'shimmer 2.5s ease-in-out infinite',
         'fade-in': 'fadeIn 0.3s ease-out',
         'slide-up': 'slideUp 0.3s ease-out',
+        'pop-in': 'popIn 0.18s ease-out',
       },
       keyframes: {
         pulseRing: {
@@ -75,6 +76,10 @@ export default {
         },
         slideUp: {
           '0%':   { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        popIn: {
+          '0%':   { opacity: '0', transform: 'translateY(-6px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },

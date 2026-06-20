@@ -200,7 +200,7 @@ export default function ConversationLogTab() {
                 <button
                   onClick={() => setConfig({ ...config, default_user_log_access: !config.default_user_log_access })}
                   className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-                    config.default_user_log_access ? 'bg-mint-400' : 'bg-[#3a3a4a]'
+                    config.default_user_log_access ? 'bg-mint-400' : 'bg-border'
                   }`}
                 >
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -216,7 +216,7 @@ export default function ConversationLogTab() {
                 <button
                   onClick={() => setConfig({ ...config, default_delay_reply_enabled: !config.default_delay_reply_enabled })}
                   className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-                    config.default_delay_reply_enabled ? 'bg-mint-400' : 'bg-[#3a3a4a]'
+                    config.default_delay_reply_enabled ? 'bg-mint-400' : 'bg-border'
                   }`}
                 >
                   <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -287,7 +287,7 @@ export default function ConversationLogTab() {
                     className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
                       agentAccess === true ? 'bg-mint-400' :
                       agentAccess === false ? 'bg-rose-400' :
-                      'bg-[#3a3a4a]'
+                      'bg-border'
                     }`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${

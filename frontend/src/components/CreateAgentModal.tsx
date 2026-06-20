@@ -842,7 +842,7 @@ function ToggleField({
       <button
         onClick={() => setValue(!value)}
         className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-          value ? 'bg-mint-400' : 'bg-[#3a3a4a]'
+          value ? 'bg-mint-400' : 'bg-border'
         }`}
       >
         <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${

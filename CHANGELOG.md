@@ -11,6 +11,21 @@
 
 ### Added
 
+- 🗑️ **好友机制完整删除**：`friendships`/`friendship_requests` 表重命名归档（安全回滚），`send_friend_request` 工具定义+handler+白名单全部移除。`search_entities()` 提取为独立的 `search_service.py` + `routers/search.py`。DM 不再需要先加好友——`send_dm` 可直接向任何人发送私信。前端删除 FriendsPage、FriendList、FriendRequestBadge 三个组件，搜索器中「加好友」改为「发私信」直接进入 DM 对话，ProfileCard 重写为 DM 入口，InviteMemberModal 从好友列表改为搜索邀请。移动端底部导航从 4 栏改为 3 栏（聊天 | AI | 设置）。
+
+- 🏗️ **三种 AI 类型架构**：`agents.ai_type` 列（`general`=通用 | `semi_general`=半通用 | `resonance`=共振，默认 `resonance`）。通用 AI 每人独立记忆和配置（不能加群），半通用 AI 独立配置 + 跨用户学习（可加群），共振 AI 完全向后兼容（统一行为）。新建 `agent_user_configs` 表（`agent_id`+`user_id` 唯一），per-user 覆盖 `temperature`/`top_p`/`presence_penalty`/`frequency_penalty`/`thinking_enabled`/`hide_ai_identity`/`system_prompt_override`。`get_effective_config(agent_id, user_id)` 按 AI 类型自动选择读取路径。通用 AI 调用 `create_group`/`invite_to_group` 返回错误。
+
+- 🔒 **Per-user 记忆隔离**：`rough_memories.user_id` 列（共振 AI 为 NULL，通用/半通用填触发用户 ID）。`recall_relevant_memories` + `_text_search_memories` 按 `ai_type` 自动过滤：共振→全部记忆，通用/半通用→仅该用户记忆。`store_memory` 工具自动记录 `user_id`。
+
+- 🎯 **意愿系统全面改版**：`WillingnessResult` 类（`score` + `reason` + `level` + `details` 逐因子明细）。原因字符串示例：「基础分 50, @提及 +40, 实质性内容(128字) +10, 群聊安静(3条/h) +10 → 100」。行为驱动：`HIGH`(>60) 可主动发言，`MEDIUM`(30-60) 仅 @提及 时回复，`LOW`(<30) 跳过。`agents` 表新增 `last_willingness_score` + `last_willingness_reason`。
+
+- 📝 **DM prompt 精简**：新增 `DM_RULES` 常量（~15 行），仅保留私信相关规则（对话风格、私信能力、状态管理、文件操作、长期记忆），去掉 @提及、群聊专属、跨对话记忆共享、`cross_post` 等群聊内容。每次 DM 请求约省 ~65 行 token。
+
+- 🌊 **流式接口预留**：`chat_completion` 拆分为 `_chat_completion_non_streaming`（当前生产路径）+ `_chat_completion_streaming`（SSE 占位，raise NotImplementedError）。保留 `ai_thinking`/`ai_typing` WebSocket 事件用于未来 SSE chunk 推送。
+
+- 🤖 **前端 AI 类型选择器**：`CreateAgentModal` 新增「AI 类型」三选一卡片（👤通用 | 🔄半通用 | 🌐共振），带描述文字。`AgentDetailPage` 头像旁显示 AI 类型徽章（仅非共振类型显示）。
+
+
 - 🔧 **工具调用轮次分级控制**：新增 `max_tool_rounds` 列（单次回复最大 LLM 调用轮次）和 `alarm_max_tool_rounds` 列（闹钟/心跳独立轮次上限）。三档预设：聊天档 2/5、沉浸档 4/8、数字生命档 10/15。群聊/DM 使用 `max_tool_rounds`，闹钟使用 `alarm_max_tool_rounds`，互不干扰。
 
 - ⏰ **闹钟上限控制**：新增 `max_alarms` 列（AI 最多活跃闹钟数，默认 10），`set_alarm` 工具触发时检查上限，超限拒绝。新增 `force_alarm_on_end` 列（对话结束强制设闹钟，数字生命档默认开启，防止"睡死"）。
@@ -27,6 +42,12 @@
 
 ### Changed
 
+- 🔄 **DM 能力独立化**：`send_dm` 描述改为「向任何人发送私信」，不再提及好友列表。搜索器「加好友」→「发私信」，直接调 `POST /api/dm/{id}`。ProfileCard 重写为 DM 入口。
+
+- 🔄 **意愿行为分层**：旧 `auto_dnd_threshold` 门控逻辑改为 `WillingnessResult` 三层行为——`HIGH` 主动、`MEDIUM` 仅 @提及、`LOW` 跳过。列保留不读，未来兼容。
+
+- 🔄 **Worker 全链路 trigger_user_id**：`_tool_call_loop` 加 `trigger_user_id` 参数 → 传入工具 `context` → `store_memory`/`recall_relevant_memories` 可获取触发用户。
+
 - 🔄 **闹钟独立于群聊限制**：闹钟调用 `_tool_call_loop` 不再与群聊/DM 共用 `max_tool_rounds`，使用独立的 `alarm_max_tool_rounds`（默认 10）。闹钟是心跳机制的基础，需要比普通回复更高的轮次以完成深度自主任务。
 
 - 🏗️ **`is_ai_editable` 加入创建 API**：`AgentCreateRequest` 和 `create_agent` 服务函数新增 `is_ai_editable` 参数，创建时可直接指定 AI 是否允许自修改。
@@ -37,7 +58,12 @@
 
 - 📱 **手机端 UX 优化（第一轮）**：聊天头部移除菜单按钮改为纯返回（ArrowLeft）、ChatSidebar 全屏叠加 + 点击空白区域关闭、底部导航切换页面后自动缩回抽屉、输入框聚焦时自动 `scrollIntoView` 居中、桌面通知等开关按钮加 `flex-shrink-0` 防止标签/开关分离换行。
 
-- 📱 **手机端 UX 优化（第二轮）**：底部栏「群聊」→「聊天」，点击自动全屏展开聊天列表；移动端侧边栏隐藏好友入口 + 好友申请徽章，统一通过底部栏 `/friends` 访问；AgentsPage/AdminPage 头部新增 ☰ 菜单按钮；设置页外观/通知增加「即时生效」标签 + 说明文字；设置页管理员手机端新增管理面板入口；手册链接增加外链图标；全部页面 `p-4 md:p-6` 响应式内边距。
+- 📱 **手机端 UX 优化（第二轮）**：底部栏「群聊」→「聊天」，点击自动全屏展开聊天列表；移动端侧边栏隐藏好友入口 + 好友申请徽章（v0.4.0 好友机制已移除）；底部导航新增「AI」Tab 设为 4 栏；AgentsPage/AdminPage 头部新增 ☰ 菜单按钮；设置页外观/通知增加「即时生效」标签 + 说明文字；设置页管理员手机端新增管理面板入口；手册链接增加外链图标；全部页面 `p-4 md:p-6` 响应式内边距。
+
+### Removed
+
+- 🗑️ **好友系统全链路移除**：`FriendsPage`、`FriendList`、`FriendRequestBadge` 三个前端组件删除。`/friends` 路由删除。`Friendship`/`FriendshipRequest` 模型保留仅用于归档表引用。`Sidebar`/`ChatSidebar`/`MobileNav` 中好友入口全部移除。`send_friend_request` 工具定义+handler+白名单全部删除。`export_agent_soul()` 中好友导出代码移除。
+
 
 ### Fixed
 

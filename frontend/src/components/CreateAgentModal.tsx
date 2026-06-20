@@ -635,7 +635,7 @@ function DetailSettingsModal({
 
           {/* ── ⏰ 闹钟 / 心跳 ── */}
           <Section title="⏰ 闹钟 / 心跳" desc="AI 自主唤醒和周期性任务">
-            <ToggleField label="🔔 强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止"睡死"" />
+            <ToggleField label="🔔 强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止「睡死」" />
             <NumberField label="最大活跃闹钟数" value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc="AI 最多同时保有多个未触发的闹钟" />
           </Section>
 

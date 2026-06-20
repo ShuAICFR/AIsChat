@@ -121,7 +121,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           ))}
 
           {user?.role === 'admin' && (
-            <NavLink to="/admin" onClick={() => setShowFriendList(false)} className={navLinkClass}>
+            <NavLink to="/admin" onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }} className={navLinkClass}>
               <Shield size={18} />
               <span>管理</span>
             </NavLink>

@@ -116,7 +116,7 @@ export default function ChatSidebar({
       {/* 标题 */}
       <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
         <div className="flex items-center gap-2">
-          {onMobileBack ? (
+          {onMobileBack && (
             <button
               onClick={onMobileBack}
               className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
@@ -124,15 +124,14 @@ export default function ChatSidebar({
             >
               <ArrowLeft size={18} />
             </button>
-          ) : (
-            <button
-              onClick={openDrawer}
-              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="菜单"
-            >
-              <Menu size={18} />
-            </button>
           )}
+          <button
+            onClick={openDrawer}
+            className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+            title="菜单"
+          >
+            <Menu size={18} />
+          </button>
           聊天
         </div>
         <button

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
@@ -15,7 +15,6 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const navigate = useNavigate()
-  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   useEffect(() => {
     if (!sessionId) return

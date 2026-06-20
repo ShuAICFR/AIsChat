@@ -668,10 +668,17 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
             }}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              // 手机端键盘弹出时重新计算可视区域，防止布局错乱
-              setTimeout(() => {
+              // 仅手机端：键盘弹出时滚动输入框到可见区域
+              if (window.innerWidth >= 768) return
+              const timer = setTimeout(() => {
                 textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }, 350)
+              // 失焦时清除未触发的定时器，防止累积
+              const onBlur = () => {
+                clearTimeout(timer)
+                textareaRef.current?.removeEventListener('blur', onBlur)
+              }
+              textareaRef.current?.addEventListener('blur', onBlur, { once: true })
             }}
             placeholder={conversationType === 'dm' ? '输入私信... Enter 发送' : '输入消息... @AI名称 提及, Enter 发送'}
             rows={1}

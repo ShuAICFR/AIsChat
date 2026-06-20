@@ -834,7 +834,6 @@ function HistoryModal({ agent, onClose, onRollback }: {
 
         {error && <div className="text-sm text-rose-400 mt-3">{error}</div>}
       </div>
-      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
-import { Menu, Bell, BellOff, Settings } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings } from 'lucide-react'
 
 interface DMChatViewProps {
   sessionId: string
@@ -49,7 +49,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
           title="会话列表"
         >
-          <Menu size={20} />
+          <ArrowLeft size={20} />
         </button>
 
         {/* 对方头像 */}

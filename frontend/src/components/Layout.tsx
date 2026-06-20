@@ -36,11 +36,11 @@ export default function Layout() {
 
       {/* ── 主内容区 ── */}
       <main className="flex-1 min-w-0 overflow-hidden bg-canvas pb-14 md:pb-0">
-        <Outlet context={{ openDrawer: () => setDrawerOpen(true) }} />
+        <Outlet context={{ openDrawer: () => setDrawerOpen(true), closeDrawer: () => setDrawerOpen(false) }} />
       </main>
 
       {/* ── 移动端底部导航 ── */}
-      <MobileNav />
+      <MobileNav closeDrawer={() => setDrawerOpen(false)} />
     </div>
   )
 }

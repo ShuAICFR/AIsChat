@@ -8,6 +8,7 @@ import AgentsPage from './pages/AgentsPage'
 import AgentDetailPage from './pages/AgentDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AdminPage from './pages/AdminPage'
+import FriendsPage from './pages/FriendsPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: 'chat/:groupId', element: <ChatPage /> },
       { path: 'dm', element: <Navigate to="/chat" replace /> },
       { path: 'dm/:sessionId', element: <DMPage /> },
+      { path: 'friends', element: <FriendsPage /> },
       { path: 'agents', element: <AgentsPage /> },
       { path: 'agents/:id', element: <AgentDetailPage /> },
       { path: 'settings', element: <SettingsPage /> },

@@ -110,28 +110,6 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
             )
             unread_count = count_result.scalar() or 0
 
-            # 最后一条消息预览
-            last_msg_result = await db.execute(
-                select(Message).where(
-                    Message.group_id == group.id,
-                ).order_by(Message.created_at.desc()).limit(1)
-            )
-            last_msg = last_msg_result.scalar_one_or_none()
-            if last_msg:
-                last_message_at = str(last_msg.created_at) if last_msg.created_at else None
-            if last_msg and (m.last_read_at is None or last_msg.created_at > m.last_read_at):
-                preview = last_msg.content[:50]
-                if len(last_msg.content) > 50:
-                    preview += "..."
-                # 解析发送者名称
-                if last_msg.sender_type == "ai":
-                    a = await db.get(AgentModel, last_msg.sender_id)
-                    sender = a.name if a else "AI"
-                else:
-                    u = await db.get(User, last_msg.sender_id)
-                    sender = u.username if u else "用户"
-                last_message_preview = f"{sender}: {preview}"
-
             # @提及检测
             if username and unread_count > 0:
                 mention_result = await db.execute(
@@ -151,6 +129,27 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
                 )
             )
             unread_count = count_result.scalar() or 0
+
+        # 最后一条消息预览（始终查询，无论是否访问过）
+        last_msg_result = await db.execute(
+            select(Message).where(
+                Message.group_id == group.id,
+            ).order_by(Message.created_at.desc()).limit(1)
+        )
+        last_msg = last_msg_result.scalar_one_or_none()
+        if last_msg:
+            last_message_at = str(last_msg.created_at) if last_msg.created_at else None
+            preview = last_msg.content[:50]
+            if len(last_msg.content) > 50:
+                preview += "..."
+            # 解析发送者名称
+            if last_msg.sender_type == "ai":
+                a = await db.get(AgentModel, last_msg.sender_id)
+                sender = a.name if a else "AI"
+            else:
+                u = await db.get(User, last_msg.sender_id)
+                sender = u.username if u else "用户"
+            last_message_preview = f"{sender}: {preview}"
 
         groups.append({
             "id": group.id,

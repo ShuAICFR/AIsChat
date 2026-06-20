@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Bot, X, ChevronRight, Settings } from 'lucide-react'
+import { Bot, X, ChevronRight, Settings, ArrowLeft } from 'lucide-react'
 
 // ── 类型 ──
 
@@ -330,17 +330,30 @@ export default function CreateAgentModal({
     : ''
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 md:bg-black/70 flex items-center justify-center z-50 overflow-y-auto bg-surface" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-8"
+        className="bg-elevated border border-border rounded-none md:rounded-2xl p-6 w-full max-w-full md:max-w-2xl mx-0 md:mx-4 shadow-2xl shadow-black/30 my-0 md:my-8 h-full md:h-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* 移动端头部：ArrowLeft + 标题 */}
+        <div className="flex items-center justify-between mb-5 md:hidden shrink-0">
+          <button onClick={onClose} className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <h2 className="text-base font-semibold text-textPrimary">创建新 AI</h2>
+          <div className="w-6" />
+        </div>
+
+        {/* 桌面端头部：标题 + X */}
+        <div className="hidden md:flex items-center justify-between mb-5">
           <h2 className="text-lg font-semibold text-textPrimary">创建新 AI</h2>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
             <X size={20} />
           </button>
         </div>
+
+        {/* 可滚动内容区 */}
+        <div className="flex-1 overflow-y-auto md:overflow-visible">"
 
         {/* ── 名称输入 ── */}
         <div className="mb-5">
@@ -355,21 +368,21 @@ export default function CreateAgentModal({
         </div>
 
         {/* ── 三档卡片（横排，放大） ── */}
-        <div className="grid grid-cols-3 gap-4 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-5">
           {Object.entries(PRESETS).map(([key, preset]) => {
             const icon = CARD_ICONS[key]
             const isSelected = selectedPreset === key
             const hasSub = selectedSub && isSelected
 
             return (
-              <div key={key} className="preset-card-frame h-full">
+              <div key={key} className="preset-card-frame h-full pb-[7px] overflow-visible">
                 <div
                   data-preset-key={key}
                   className="preset-card-inner h-full"
                 >
                   <button
                     onClick={() => handleCardClick(key)}
-                    className={`w-full h-full text-left rounded-xl border transition-colors duration-300
+                    className={`w-full h-full text-left rounded-xl border transition-colors duration-300 min-h-[200px] md:min-h-[210px]
                       bg-gradient-to-b ${icon.color}
                       ${isSelected
                         ? 'border-primary-400/60 shadow-lg shadow-primary-500/10'
@@ -463,6 +476,7 @@ export default function CreateAgentModal({
             onClose={() => setShowDetailSettings(false)}
           />
         )}
+        </div>
       </div>
 
     </div>
@@ -482,12 +496,25 @@ function SubOptionModal({
   const icon = CARD_ICONS[preset.key]
   const subOptions = SUB_OPTIONS[preset.key] || []
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70]" onClick={onClose}>
+    <div className="fixed inset-0 md:bg-black/60 flex items-center justify-center z-[70] bg-surface" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 animate-pop-in"
+        className="bg-elevated border border-border rounded-none md:rounded-2xl p-6 w-full max-w-full md:max-w-md mx-0 md:mx-4 shadow-2xl shadow-black/30 md:animate-pop-in h-full md:h-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-1">
+        {/* 移动端头部 */}
+        <div className="flex items-center justify-between mb-3 md:hidden shrink-0">
+          <button onClick={onClose} className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{icon.emoji}</span>
+            <h2 className="text-sm font-semibold text-textPrimary">{preset.name}</h2>
+          </div>
+          <div className="w-6" />
+        </div>
+
+        {/* 桌面端头部 */}
+        <div className="hidden md:flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <span className="text-2xl">{icon.emoji}</span>
             <h2 className="text-base font-semibold text-textPrimary">{preset.name}</h2>
@@ -496,6 +523,9 @@ function SubOptionModal({
             <X size={18} />
           </button>
         </div>
+
+        {/* 可滚动内容 */}
+        <div className="flex-1 overflow-y-auto md:overflow-visible">
         <p className="text-xs text-textMuted mb-4">{preset.description}</p>
         <p className="text-xs text-textMuted mb-4 italic text-center bg-canvas/50 rounded-lg py-2">
           这是预设模板，具体参数可在下一步详细调整。
@@ -520,6 +550,7 @@ function SubOptionModal({
               </div>
             </button>
           ))}
+        </div>
         </div>
       </div>
     </div>
@@ -574,19 +605,29 @@ function DetailSettingsModal({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-[60] pt-8 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 md:bg-black/70 flex items-start justify-center z-[60] md:pt-8 overflow-y-auto bg-surface" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 my-4"
+        className="bg-elevated border border-border rounded-none md:rounded-2xl p-6 w-full max-w-full md:max-w-2xl mx-0 md:mx-4 shadow-2xl shadow-black/30 my-0 md:my-4 h-full md:h-auto flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between mb-5">
+        {/* 移动端头部 */}
+        <div className="flex items-center justify-between mb-5 md:hidden shrink-0">
+          <button onClick={onClose} className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors">
+            <ArrowLeft size={20} />
+          </button>
+          <h2 className="text-base font-semibold text-textPrimary">详细设置</h2>
+          <div className="w-6" />
+        </div>
+
+        {/* 桌面端头部 */}
+        <div className="hidden md:flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-textPrimary">详细设置</h2>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
             <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-5 max-h-[65vh] overflow-y-auto pr-1">
+        <div className="space-y-5 flex-1 overflow-y-auto md:max-h-[65vh] pr-1">
 
           {/* ── 📝 基础信息 ── */}
           <Section title="📝 基础信息" desc="AI 的名称和性格描述">

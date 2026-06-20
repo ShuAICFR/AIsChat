@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, Menu } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
@@ -24,19 +24,20 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
+  const navigate = useNavigate()
 
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
       <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
         <div className="flex items-center gap-2 mb-1">
-          {/* 移动端：菜单按钮 */}
+          {/* 移动端：返回设置 */}
           <button
-            onClick={openDrawer}
+            onClick={() => navigate('/settings')}
             className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="菜单"
+            title="返回设置"
           >
-            <Menu size={20} />
+            <ArrowLeft size={20} />
           </button>
           <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
         </div>

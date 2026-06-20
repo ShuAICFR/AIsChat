@@ -44,6 +44,7 @@ async def run_migrations():
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
             await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
+            await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -739,21 +740,37 @@ async def _migrate_max_tool_rounds(db):
 
 
 async def _migrate_archive_friend_tables(db):
-    """v0.4.0: 归档好友表（删除好友机制，保留数据以便回滚）"""
-    if await _table_exists(db, "friendships_archived"):
-        logger.info("  ⏭ friendships_archived 已存在，跳过")
+    """v0.4.0: 归档好友表（已废弃 — 好友机制已恢复，此迁移不再执行）"""
+    logger.info("  ⏭ 好友机制已恢复，跳过归档迁移")
+    return
+
+
+async def _migrate_restore_friend_tables(db):
+    """v0.4.0+: 恢复好友表（好友机制回滚 — 从 archived 恢复）"""
+    if not await _table_exists(db, "friendships_archived"):
+        logger.info("  ⏭ friendships_archived 不存在，无需恢复")
         return
-    logger.info("  📦 归档好友相关表...")
+    # 如果 friendships 已存在且有数据，说明已恢复过，跳过
+    if await _table_exists(db, "friendships"):
+        result = await db.execute(text("SELECT COUNT(*) FROM friendships"))
+        if result.scalar() > 0:
+            logger.info("  ⏭ friendships 已有数据，跳过恢复")
+            return
+    logger.info("  🔄 恢复好友相关表...")
     try:
+        # 先删掉可能被 ORM 自动创建的空表
         if await _table_exists(db, "friendships"):
-            await db.execute(text("ALTER TABLE friendships RENAME TO friendships_archived"))
-            logger.info("  ✅ friendships → friendships_archived")
+            await db.execute(text("DROP TABLE IF EXISTS friendships CASCADE"))
         if await _table_exists(db, "friendship_requests"):
-            await db.execute(text("ALTER TABLE friendship_requests RENAME TO friendship_requests_archived"))
-            logger.info("  ✅ friendship_requests → friendship_requests_archived")
+            await db.execute(text("DROP TABLE IF EXISTS friendship_requests CASCADE"))
+        # 归档表改回原名
+        await db.execute(text("ALTER TABLE friendships_archived RENAME TO friendships"))
+        logger.info("  ✅ friendships_archived → friendships")
+        await db.execute(text("ALTER TABLE friendship_requests_archived RENAME TO friendship_requests"))
+        logger.info("  ✅ friendship_requests_archived → friendship_requests")
         await db.commit()
     except Exception as e:
-        logger.warning(f"  ⚠️ 归档好友表失败（可能已归档）: {e}")
+        logger.warning(f"  ⚠️ 恢复好友表失败: {e}")
         await db.rollback()
 
 

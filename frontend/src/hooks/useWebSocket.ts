@@ -217,12 +217,15 @@ export function useWebSocket(
     }
   }, [conversationType, conversationId, connect])
 
-  const sendMessage = useCallback((content: string, replyTo?: number) => {
+  const sendMessage = useCallback((content: string, replyTo?: number, attachments?: Array<{file_id: number, name: string, size: number, mime_type: string}>) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const payload: any = {
         type: 'send',
         content,
         reply_to: replyTo ?? null,
+      }
+      if (attachments && attachments.length > 0) {
+        payload.attachments = attachments
       }
       if (conversationType === 'group') {
         payload.group_id = conversationId

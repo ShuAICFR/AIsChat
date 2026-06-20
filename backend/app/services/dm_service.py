@@ -205,11 +205,13 @@ async def send_dm_message(
     content: str,
     reply_to: int | None = None,
     created_at: datetime | None = None,
+    attachments: list[dict] | None = None,
 ) -> dict:
     """发送私信消息（可指定 created_at 用于注入历史消息）"""
     if not content.strip():
         raise ValueError("消息内容不能为空")
 
+    import json
     result = await db.execute(
         select(DMSession).where(DMSession.session_id == session_id)
     )
@@ -226,6 +228,7 @@ async def send_dm_message(
         sender_id=sender_id,
         content=content.strip(),
         reply_to=reply_to,
+        attachments=json.dumps(attachments) if attachments else None,
         created_at=created_at or now,
     )
     db.add(msg)
@@ -245,6 +248,13 @@ async def send_dm_message(
     row = result.one_or_none()
     sender_name = row[0] if row else f"用户{sender_id}"
     sender_type = (row[1] or "human") if row else "human"
+    # 解析 attachments
+    parsed_attachments = None
+    if msg.attachments:
+        try:
+            parsed_attachments = json.loads(msg.attachments)
+        except (json.JSONDecodeError, TypeError):
+            pass
     return {
         "id": msg.id,
         "session_id": msg.session_id,
@@ -253,6 +263,7 @@ async def send_dm_message(
         "sender_type": sender_type,
         "content": msg.content,
         "reply_to": msg.reply_to,
+        "attachments": parsed_attachments,
         "read_at": str(msg.read_at) if msg.read_at else None,
         "created_at": str(msg.created_at) if msg.created_at else None,
     }

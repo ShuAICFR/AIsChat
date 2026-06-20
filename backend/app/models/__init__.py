@@ -7,7 +7,7 @@ from app.models.group import Group, GroupMember
 from app.models.message import Message, GroupMessageEmbedding, PendingMessage
 from app.models.memory import RoughMemory, DetailMemory
 from app.models.vector_request import VectorAccelerationRequest
-from app.models.file import FileMetadata
+from app.models.file import FileMetadata, FileReference, FileCollaborator
 from app.models.redemption import RedemptionCode
 from app.models.system_log import SystemLog
 from app.models.summary_cache import UnreadSummaryCache
@@ -44,6 +44,8 @@ __all__ = [
     "DetailMemory",
     "VectorAccelerationRequest",
     "FileMetadata",
+    "FileReference",
+    "FileCollaborator",
     "RedemptionCode",
     "SystemLog",
     "Friendship",

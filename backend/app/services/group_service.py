@@ -218,14 +218,16 @@ async def create_message(
     sender_id: int,
     content: str,
     reply_to: int | None = None,
+    attachments: list[dict] | None = None,
 ) -> Message:
-    """创建消息"""
+    """创建消息（支持附件）"""
     message = Message(
         group_id=group_id,
         sender_type=sender_type,
         sender_id=sender_id,
         content=content,
         reply_to=reply_to,
+        attachments=attachments,
     )
     db.add(message)
     await db.flush()
@@ -272,6 +274,7 @@ def message_to_dict(message: Message, sender_name: str | None = None) -> dict:
         "content": message.content,
         "reply_to": message.reply_to,
         "source_public_id": getattr(message, "source_public_id", None),
+        "attachments": getattr(message, "attachments", None),
         "created_at": str(message.created_at) if message.created_at else None,
     }
 

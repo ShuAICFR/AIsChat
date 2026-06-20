@@ -4,6 +4,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
+import { FileIcon, Download } from 'lucide-react'
 
 function formatTime(utcStr: string, timezone: string): string {
   try {
@@ -24,12 +25,27 @@ interface MessageBubbleProps {
   senderId?: number
   thinking?: boolean
   sourcePublicId?: string | null
+  attachments?: Array<{file_id: number, name: string, size: number, mime_type: string}> | null
   onAvatarClick?: (type: string, id: number, name: string, state?: string) => void
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+function fileIconColor(mimeType: string): string {
+  if (mimeType.startsWith('image/')) return 'text-mint-400'
+  if (mimeType.startsWith('video/')) return 'text-rose-400'
+  if (mimeType.includes('pdf')) return 'text-rose-400'
+  if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('gz')) return 'text-amber-400'
+  return 'text-primary-400'
 }
 
 export default function MessageBubble({
   senderName, content, isMine, createdAt, state,
-  senderType, senderId, thinking, sourcePublicId, onAvatarClick,
+  senderType, senderId, thinking, sourcePublicId, attachments, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
   const tz = user?.timezone || 'Asia/Shanghai'
@@ -99,6 +115,30 @@ export default function MessageBubble({
             <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
               {content}
             </Markdown>
+          )}
+          {/* 附件列表 */}
+          {attachments && attachments.length > 0 && (
+            <div className={`mt-2 pt-2 border-t flex flex-wrap gap-1.5 ${isMine ? 'border-white/20' : 'border-border'}`}>
+              {attachments.map((att) => (
+                <a
+                  key={att.file_id}
+                  href={`/api/fs/download/${att.file_id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                    isMine
+                      ? 'bg-white/10 hover:bg-white/20 text-white/90'
+                      : 'bg-canvas hover:bg-elevated text-textSecondary hover:text-textPrimary border border-border'
+                  }`}
+                  title={`${att.name} (${formatFileSize(att.size)})`}
+                >
+                  <FileIcon size={12} className={fileIconColor(att.mime_type)} />
+                  <span className="max-w-[100px] truncate">{att.name}</span>
+                  <span className="text-[10px] opacity-60">{formatFileSize(att.size)}</span>
+                  <Download size={11} className="opacity-60" />
+                </a>
+              ))}
+            </div>
           )}
         </div>
       </div>

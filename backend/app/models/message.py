@@ -20,6 +20,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     reply_to = Column(Integer, nullable=True)
     source_public_id = Column(String(50), nullable=True)  # 远程消息来源实例公网 ID（NULL=本地）
+    attachments = Column(JSONB, nullable=True)  # [{file_id, path, name, size, mime_type}, ...]
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (

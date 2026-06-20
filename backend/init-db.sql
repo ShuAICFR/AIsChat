@@ -106,6 +106,8 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_id INT,
     content TEXT NOT NULL,
     reply_to INT,
+    source_public_id VARCHAR(50),
+    attachments JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -149,6 +151,7 @@ CREATE TABLE IF NOT EXISTS dm_messages (
     sender_id INT NOT NULL REFERENCES users(id),
     content TEXT NOT NULL,
     reply_to INT,
+    attachments TEXT,
     read_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -201,7 +204,34 @@ CREATE TABLE IF NOT EXISTS file_metadata (
     size BIGINT,
     mime_type VARCHAR(100),
     permissions JSONB,
+    collaboration_mode VARCHAR(10) DEFAULT 'solo' CHECK (collaboration_mode IN ('solo', 'shared', 'open')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================================
+-- 文件引用追踪（记录哪些 AI/消息引用了哪些文件）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS file_references (
+    id SERIAL PRIMARY KEY,
+    file_id INT NOT NULL REFERENCES file_metadata(id) ON DELETE CASCADE,
+    referrer_type VARCHAR(10) NOT NULL CHECK (referrer_type IN ('ai', 'message', 'group')),
+    referrer_id INT NOT NULL,
+    ref_type VARCHAR(20) DEFAULT 'read' CHECK (ref_type IN ('read', 'write', 'import', 'share')),
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================================
+-- 文件协作者（shared 模式下的显式协作者）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS file_collaborators (
+    id SERIAL PRIMARY KEY,
+    file_id INT NOT NULL REFERENCES file_metadata(id) ON DELETE CASCADE,
+    collaborator_type VARCHAR(10) NOT NULL CHECK (collaborator_type IN ('ai', 'user')),
+    collaborator_id INT NOT NULL,
+    role VARCHAR(20) DEFAULT 'collaborator' CHECK (role IN ('collaborator', 'viewer')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(file_id, collaborator_type, collaborator_id)
 );
 
 -- ============================================================
@@ -455,5 +485,9 @@ CREATE INDEX IF NOT EXISTS idx_dm_messages_session ON dm_messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_dm_messages_created_at ON dm_messages(created_at);
 CREATE INDEX IF NOT EXISTS idx_rough_memories_owner ON rough_memories(owner_type, owner_id);
 CREATE INDEX IF NOT EXISTS idx_file_metadata_path ON file_metadata(path);
+CREATE INDEX IF NOT EXISTS idx_file_metadata_owner ON file_metadata(owner_type, owner_id);
+CREATE INDEX IF NOT EXISTS idx_file_refs_file ON file_references(file_id);
+CREATE INDEX IF NOT EXISTS idx_file_refs_ref ON file_references(referrer_type, referrer_id);
+CREATE INDEX IF NOT EXISTS idx_file_collabs_file ON file_collaborators(file_id);
 CREATE INDEX IF NOT EXISTS idx_system_logs_type ON system_logs(log_type);
 CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at);

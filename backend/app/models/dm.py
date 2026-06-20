@@ -44,6 +44,7 @@ class DMMessage(Base):
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
     reply_to = Column(Integer)  # 回复的消息 ID
+    attachments = Column("attachments", Text)  # JSON array of {file_id, name, size, mime_type}
 
     # 对方阅读时间：发送时为 NULL，用户查看会话后批量标记
     read_at = Column(DateTime)

@@ -227,12 +227,15 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         await ws.send_json(build_ws_error("MISSING_FIELD", "缺少 content"))
                         continue
 
+                    dm_attachments = data.get("attachments")
+
                     async with async_session() as db:
                         try:
                             from app.services.dm_service import send_dm_message as send_dm_msg, is_user_in_dm_dnd
                             msg = await send_dm_msg(
                                 db, session_id, sender_id=user_id,
                                 content=content, reply_to=reply_to,
+                                attachments=dm_attachments,
                             )
                             await db.commit()
                         except ValueError as e:
@@ -275,11 +278,14 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         await ws.send_json(build_ws_error("MISSING_FIELD", "缺少 group_id 或 content"))
                         continue
 
+                    attachments = data.get("attachments")
+
                     async with async_session() as db:
                         try:
                             message = await create_message(
                                 db, group_id=group_id, sender_type=sender_type,
                                 sender_id=user_id, content=content, reply_to=reply_to,
+                                attachments=attachments,
                             )
                             await db.flush()
                         except Exception as e:

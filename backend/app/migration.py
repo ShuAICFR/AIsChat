@@ -46,6 +46,8 @@ async def run_migrations():
             await _migrate_agent_skills(db)
             await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
             await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
+            await _migrate_file_system(db)             # v0.5.0 文件协作系统
+            await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -84,7 +86,7 @@ async def _migrate_users_type(db):
     logger.info("  ➕ 添加 users.type 列")
     await db.execute(text("ALTER TABLE users ADD COLUMN type VARCHAR(10) DEFAULT 'human'"))
     await db.execute(text("UPDATE users SET type = 'human' WHERE type IS NULL"))
-    await db.commit()
+    await db.flush()
 
 
 async def _migrate_agents_user_id(db):
@@ -94,7 +96,7 @@ async def _migrate_agents_user_id(db):
         return
     logger.info("  ➕ 添加 agents.user_id 列")
     await db.execute(text("ALTER TABLE agents ADD COLUMN user_id INT REFERENCES users(id)"))
-    await db.commit()
+    await db.flush()
 
 
 async def _migrate_create_dm_tables(db):
@@ -134,7 +136,7 @@ async def _migrate_create_dm_tables(db):
     await db.execute(text("""
         CREATE INDEX IF NOT EXISTS idx_dm_messages_created_at ON dm_messages(created_at)
     """))
-    await db.commit()
+    await db.flush()
 
 
 async def _migrate_agent_users(db):
@@ -164,7 +166,7 @@ async def _migrate_agent_users(db):
         await db.flush()
         agent.user_id = user.id
         logger.info(f"    agent {agent.name}({agent.id}) → user {user.id}")
-    await db.commit()
+    await db.flush()
 
 
 async def _migrate_dm_messages(db):
@@ -275,7 +277,7 @@ async def _migrate_dm_messages(db):
             db.add(dm_msg)
             imported_messages += 1
 
-    await db.commit()
+    await db.flush()
     logger.info(f"  ✅ 导入完成: {imported_sessions} 个会话, {imported_messages} 条消息")
 
 
@@ -296,7 +298,7 @@ async def _migrate_agent_alarms(db):
             fired_at TIMESTAMPTZ
         )
     """))
-    await db.commit()
+    await db.flush()
     logger.info("  ✅ agent_alarms 表创建完成")
 
 
@@ -317,7 +319,7 @@ async def _migrate_workspace(db):
                 updated_at TIMESTAMP DEFAULT NOW()
             )
         """))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agent_workspace 表创建完成")
     else:
         logger.info("  ⏭ agent_workspace 表已存在，检查新列...")
@@ -335,7 +337,7 @@ async def _migrate_workspace(db):
             cols_added = True
             logger.info("  📝 添加 agent_workspace.journal 列")
         if cols_added:
-            await db.commit()
+            await db.flush()
             logger.info("  ✅ agent_workspace 扩展完成")
         else:
             logger.info("  ⏭ agent_workspace 新列均已存在，跳过")
@@ -366,7 +368,7 @@ async def _migrate_agent_skills(db):
     await db.execute(text("""
         CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id)
     """))
-    await db.commit()
+    await db.flush()
     logger.info("  ✅ agent_skills 表创建完成")
 
 
@@ -493,7 +495,7 @@ async def _migrate_federation_tables(db):
         logger.info("  ⏭ federation_peers.url_rotation_count 已存在，跳过")
 
     if created_any:
-        await db.commit()
+        await db.flush()
 
 
 async def _migrate_conversation_logs(db):
@@ -570,7 +572,7 @@ async def _migrate_conversation_logs(db):
         logger.info("  ⏭ users.conversation_logs_limit 已存在，跳过")
 
     if created_any:
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ 对话日志系统迁移完成")
     else:
         logger.info("  ⏭ 对话日志系统均已存在，跳过")
@@ -653,7 +655,7 @@ async def _migrate_api_credit(db):
         logger.info("  ⏭ redemption_codes.code_type 已存在，跳过")
 
     if created_any:
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ API 额度/配置系统迁移完成")
     else:
         logger.info("  ⏭ API 额度/配置系统均已存在，跳过")
@@ -668,7 +670,7 @@ async def _migrate_config_profile(db):
     await db.execute(text(
         "ALTER TABLE agents ADD COLUMN config_profile VARCHAR(20) NOT NULL DEFAULT 'custom'"
     ))
-    await db.commit()
+    await db.flush()
     logger.info("  ✅ config_profile 迁移完成")
 
 
@@ -680,7 +682,7 @@ async def _migrate_delay_reply_enabled(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN delay_reply_enabled BOOLEAN DEFAULT NULL"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.delay_reply_enabled 迁移完成")
     else:
         logger.info("  ⏭ agents.delay_reply_enabled 已存在，跳过")
@@ -691,7 +693,7 @@ async def _migrate_delay_reply_enabled(db):
         await db.execute(text(
             "ALTER TABLE conversation_log_config ADD COLUMN default_delay_reply_enabled BOOLEAN NOT NULL DEFAULT false"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ default_delay_reply_enabled 迁移完成")
     else:
         logger.info("  ⏭ conversation_log_config.default_delay_reply_enabled 已存在，跳过")
@@ -704,7 +706,7 @@ async def _migrate_max_tool_rounds(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN max_tool_rounds INTEGER NOT NULL DEFAULT 3"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.max_tool_rounds 迁移完成")
     else:
         logger.info("  ⏭ agents.max_tool_rounds 已存在，跳过")
@@ -714,7 +716,7 @@ async def _migrate_max_tool_rounds(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN alarm_max_tool_rounds INTEGER NOT NULL DEFAULT 10"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.alarm_max_tool_rounds 迁移完成")
     else:
         logger.info("  ⏭ agents.alarm_max_tool_rounds 已存在，跳过")
@@ -724,7 +726,7 @@ async def _migrate_max_tool_rounds(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN force_alarm_on_end BOOLEAN NOT NULL DEFAULT false"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.force_alarm_on_end 迁移完成")
     else:
         logger.info("  ⏭ agents.force_alarm_on_end 已存在，跳过")
@@ -734,7 +736,7 @@ async def _migrate_max_tool_rounds(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN max_alarms INTEGER NOT NULL DEFAULT 10"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.max_alarms 迁移完成")
     else:
         logger.info("  ⏭ agents.max_alarms 已存在，跳过")
@@ -792,7 +794,7 @@ async def _migrate_restore_friend_tables(db):
         logger.info("  ✅ friendships_archived → friendships")
         await db.execute(text("ALTER TABLE friendship_requests_archived RENAME TO friendship_requests"))
         logger.info("  ✅ friendship_requests_archived → friendship_requests")
-        await db.commit()
+        await db.flush()
     except Exception as e:
         logger.warning(f"  ⚠️ 恢复好友表失败: {e}")
         await db.rollback()
@@ -807,7 +809,7 @@ async def _migrate_ai_types(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN ai_type VARCHAR(20) NOT NULL DEFAULT 'resonance'"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.ai_type 迁移完成")
     else:
         logger.info("  ⏭ agents.ai_type 已存在，跳过")
@@ -831,7 +833,7 @@ async def _migrate_ai_types(db):
                 CONSTRAINT uq_agent_user_config UNIQUE (agent_id, user_id)
             )
         """))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agent_user_configs 表创建完成")
     else:
         logger.info("  ⏭ agent_user_configs 已存在，跳过")
@@ -845,7 +847,7 @@ async def _migrate_memory_user_isolation(db):
         await db.execute(text(
             "ALTER TABLE rough_memories ADD COLUMN user_id INTEGER REFERENCES users(id)"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ rough_memories.user_id 迁移完成")
     else:
         logger.info("  ⏭ rough_memories.user_id 已存在，跳过")
@@ -859,7 +861,7 @@ async def _migrate_willingness_fields(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN last_willingness_score INTEGER"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.last_willingness_score 迁移完成")
     else:
         logger.info("  ⏭ agents.last_willingness_score 已存在，跳过")
@@ -868,10 +870,109 @@ async def _migrate_willingness_fields(db):
         await db.execute(text(
             "ALTER TABLE agents ADD COLUMN last_willingness_reason TEXT"
         ))
-        await db.commit()
+        await db.flush()
         logger.info("  ✅ agents.last_willingness_reason 迁移完成")
     else:
         logger.info("  ⏭ agents.last_willingness_reason 已存在，跳过")
+
+
+async def _migrate_file_system(db):
+    """v0.5.0: 文件协作系统 — file_metadata 扩展 + file_references + file_collaborators"""
+    logger.info("  🔧 迁移文件协作系统...")
+
+    # file_metadata.collaboration_mode
+    if not await _column_exists(db, "file_metadata", "collaboration_mode"):
+        await db.execute(text(
+            "ALTER TABLE file_metadata ADD COLUMN collaboration_mode VARCHAR(10) "
+            "DEFAULT 'solo' NOT NULL CHECK (collaboration_mode IN ('solo', 'shared', 'open'))"
+        ))
+        await db.flush()
+        logger.info("  ✅ file_metadata.collaboration_mode 迁移完成")
+    else:
+        logger.info("  ⏭ file_metadata.collaboration_mode 已存在，跳过")
+
+    # file_metadata.updated_at
+    if not await _column_exists(db, "file_metadata", "updated_at"):
+        await db.execute(text(
+            "ALTER TABLE file_metadata ADD COLUMN updated_at TIMESTAMP DEFAULT NOW()"
+        ))
+        await db.flush()
+        logger.info("  ✅ file_metadata.updated_at 迁移完成")
+    else:
+        logger.info("  ⏭ file_metadata.updated_at 已存在，跳过")
+
+    # file_references 表
+    if not await _table_exists(db, "file_references"):
+        await db.execute(text("""
+            CREATE TABLE file_references (
+                id SERIAL PRIMARY KEY,
+                file_id INT NOT NULL REFERENCES file_metadata(id) ON DELETE CASCADE,
+                referrer_type VARCHAR(10) NOT NULL CHECK (referrer_type IN ('ai', 'message', 'group')),
+                referrer_id INT NOT NULL,
+                ref_type VARCHAR(20) DEFAULT 'read' CHECK (ref_type IN ('read', 'write', 'import', 'share')),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_file_refs_file ON file_references(file_id)"
+        ))
+        await db.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_file_refs_ref ON file_references(referrer_type, referrer_id)"
+        ))
+        await db.flush()
+        logger.info("  ✅ file_references 表创建完成")
+    else:
+        logger.info("  ⏭ file_references 已存在，跳过")
+
+    # file_collaborators 表
+    if not await _table_exists(db, "file_collaborators"):
+        await db.execute(text("""
+            CREATE TABLE file_collaborators (
+                id SERIAL PRIMARY KEY,
+                file_id INT NOT NULL REFERENCES file_metadata(id) ON DELETE CASCADE,
+                collaborator_type VARCHAR(10) NOT NULL CHECK (collaborator_type IN ('ai', 'user')),
+                collaborator_id INT NOT NULL,
+                role VARCHAR(20) DEFAULT 'collaborator' CHECK (role IN ('collaborator', 'viewer')),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(file_id, collaborator_type, collaborator_id)
+            )
+        """))
+        await db.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_file_collabs_file ON file_collaborators(file_id)"
+        ))
+        await db.flush()
+        logger.info("  ✅ file_collaborators 表创建完成")
+    else:
+        logger.info("  ⏭ file_collaborators 已存在，跳过")
+
+    # file_metadata 所有者索引
+    await db.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_file_metadata_owner ON file_metadata(owner_type, owner_id)"
+    ))
+    await db.flush()
+
+
+async def _migrate_message_attachments(db):
+    """v0.5.0: 消息附件 — messages 表加 attachments JSONB + dm_messages 加 attachments TEXT"""
+    logger.info("  🔧 迁移消息附件...")
+
+    if not await _column_exists(db, "messages", "attachments"):
+        await db.execute(text(
+            "ALTER TABLE messages ADD COLUMN attachments JSONB"
+        ))
+        await db.flush()
+        logger.info("  ✅ messages.attachments 迁移完成")
+    else:
+        logger.info("  ⏭ messages.attachments 已存在，跳过")
+
+    if not await _column_exists(db, "dm_messages", "attachments"):
+        await db.execute(text(
+            "ALTER TABLE dm_messages ADD COLUMN attachments TEXT"
+        ))
+        await db.flush()
+        logger.info("  ✅ dm_messages.attachments 迁移完成")
+    else:
+        logger.info("  ⏭ dm_messages.attachments 已存在，跳过")
 
 
 async def _fix_column_types(db):

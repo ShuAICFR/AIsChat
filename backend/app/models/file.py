@@ -1,14 +1,16 @@
 """
-文件元数据模型
+文件元数据 + 引用追踪 + 协作模式模型
 """
 from sqlalchemy import (
-    Column, Integer, String, BigInteger, DateTime, func, CheckConstraint,
+    Column, Integer, String, BigInteger, DateTime, ForeignKey, func, CheckConstraint,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 
 
 class FileMetadata(Base):
+    """文件元数据（存储物理文件信息、权限、协作模式）"""
     __tablename__ = "file_metadata"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -18,11 +20,74 @@ class FileMetadata(Base):
     size = Column(BigInteger)
     mime_type = Column(String(100))
     permissions = Column(JSONB)
+    # 协作模式: solo(仅自己) | shared(指定协作者) | open(全群可见)
+    collaboration_mode = Column(String(10), default="solo", nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         CheckConstraint(
             "owner_type IN ('ai', 'group', 'system')",
             name="ck_file_owner_type",
         ),
+        CheckConstraint(
+            "collaboration_mode IN ('solo', 'shared', 'open')",
+            name="ck_file_collaboration_mode",
+        ),
+    )
+
+
+class FileReference(Base):
+    """文件引用追踪：记录哪些 AI/消息引用了哪些文件
+
+    用途：
+    1. O(n) 通知：文件变更时通知所有引用方
+    2. 依赖分析：查看文件被哪些 AI 依赖
+    3. 协作判定：引用方自动成为协作者候选
+    """
+    __tablename__ = "file_references"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey("file_metadata.id", ondelete="CASCADE"), nullable=False)
+    referrer_type = Column(String(10), nullable=False)  # 'ai' | 'message' | 'group'
+    referrer_id = Column(Integer, nullable=False)
+    ref_type = Column(String(20), default="read")  # 'read' | 'write' | 'import' | 'share'
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "referrer_type IN ('ai', 'message', 'group')",
+            name="ck_ref_referrer_type",
+        ),
+        CheckConstraint(
+            "ref_type IN ('read', 'write', 'import', 'share')",
+            name="ck_ref_type",
+        ),
+    )
+
+
+class FileCollaborator(Base):
+    """文件协作者：显式指定的文件协作者（用于 shared 模式）
+
+    当 collaboration_mode='shared' 时，此表中的 AI/用户拥有该文件的协作权限。
+    """
+    __tablename__ = "file_collaborators"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    file_id = Column(Integer, ForeignKey("file_metadata.id", ondelete="CASCADE"), nullable=False)
+    collaborator_type = Column(String(10), nullable=False)  # 'ai' | 'user'
+    collaborator_id = Column(Integer, nullable=False)
+    role = Column(String(20), default="collaborator")  # 'collaborator' | 'viewer'
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "collaborator_type IN ('ai', 'user')",
+            name="ck_collab_type",
+        ),
+        CheckConstraint(
+            "role IN ('collaborator', 'viewer')",
+            name="ck_collab_role",
+        ),
+        UniqueConstraint("file_id", "collaborator_type", "collaborator_id", name="uq_file_collab"),
     )

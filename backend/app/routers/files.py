@@ -1,63 +1,56 @@
 """
 文件系统路由
+上传、下载、删除、列表、协作模式管理、消息附件
 """
 import os
 import uuid
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Form
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from app.database import get_db
-from app.models.file import FileMetadata
+from app.models.file import FileMetadata, FileReference, FileCollaborator
 from app.utils.auth import get_current_user
 from app.config import settings
+from app.services.file_service import (
+    upload_file, list_files, get_file, get_file_physical_path,
+    delete_file, check_file_access, track_file_reference,
+    set_collaboration_mode, add_file_collaborator, remove_file_collaborator,
+    get_file_collaborators, get_file_referrers,
+    _check_path_safe, _get_physical_path,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/fs", tags=["文件"])
 
 
-def _check_path_safe(path: str) -> bool:
-    """检查路径是否安全（防目录穿越）"""
-    normalized = os.path.normpath(path)
-    if normalized.startswith("..") or normalized.startswith("/"):
-        return False
-    return True
-
+# ============================================================
+# 目录列表
+# ============================================================
 
 @router.get("/list")
-async def list_files(
+async def list_directory(
     path: str = Query("/", description="目录路径"),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出目录内容"""
+    """列出目录内容（自动过滤无权条目）"""
     if not _check_path_safe(path):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径不合法")
 
-    # 查询文件元数据
-    result = await db.execute(
-        select(FileMetadata).where(FileMetadata.path.like(f"{path}%"))
-    )
-    files = result.scalars().all()
+    files = await list_files(db, path, "human", current_user["user_id"])
+    return files
 
-    return [
-        {
-            "id": f.id,
-            "path": f.path,
-            "owner_type": f.owner_type,
-            "owner_id": f.owner_id,
-            "size": f.size,
-            "mime_type": f.mime_type,
-            "created_at": str(f.created_at) if f.created_at else None,
-        }
-        for f in files
-    ]
 
+# ============================================================
+# 文件上传
+# ============================================================
 
 @router.post("/upload")
-async def upload_file(
+async def upload_file_endpoint(
     path: str = Query("/"),
+    collaboration_mode: str = Query("solo", pattern="^(solo|shared|open)$"),
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -66,46 +59,60 @@ async def upload_file(
     if not _check_path_safe(path):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径不合法")
 
-    # 构建物理存储路径
-    relative_path = os.path.join(path, file.filename or f"unnamed_{uuid.uuid4().hex[:8]}")
-    physical_path = os.path.join(settings.data_dir, relative_path)
-
-    # 确保目录存在
-    os.makedirs(os.path.dirname(physical_path), exist_ok=True)
-
-    # 写入文件
     content = await file.read()
-    with open(physical_path, "wb") as f:
-        f.write(content)
-
-    # 记录元数据
-    metadata = FileMetadata(
-        path=relative_path,
-        owner_type="ai",  # 当前版本：个人文件
-        owner_id=current_user["user_id"],
-        size=len(content),
-        mime_type=file.content_type,
-        permissions={
-            "owner": f"user:{current_user['user_id']}",
-            "rules": [
-                {"role": "owner", "perm": "rwcdm"},
-                {"role": "admin", "perm": "rwcd"},
-                {"role": "collaborator", "perm": "rwc"},
-                {"role": "viewer", "perm": "r"},
-            ],
-        },
+    metadata = await upload_file(
+        db, path, file.filename or f"unnamed_{uuid.uuid4().hex[:8]}",
+        content, file.content_type, "human", current_user["user_id"],
+        collaboration_mode=collaboration_mode,
     )
-    db.add(metadata)
-    await db.flush()
-    await db.refresh(metadata)
 
     return {
         "id": metadata.id,
-        "path": relative_path,
+        "path": metadata.path,
+        "size": metadata.size,
+        "mime_type": metadata.mime_type,
+        "collaboration_mode": metadata.collaboration_mode,
+        "created_at": str(metadata.created_at) if metadata.created_at else None,
+    }
+
+
+# ============================================================
+# 消息附件上传（独立端点，上传后返回 file_id 供消息引用）
+# ============================================================
+
+@router.post("/upload-attachment")
+async def upload_attachment(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传消息附件（存入 attachments/ 子目录）"""
+    content = await file.read()
+
+    # 限制附件大小（50MB）
+    max_size = 50 * 1024 * 1024
+    if len(content) > max_size:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                          detail="附件大小不能超过 50MB")
+
+    metadata = await upload_file(
+        db, "attachments/", file.filename or f"att_{uuid.uuid4().hex[:8]}",
+        content, file.content_type, "human", current_user["user_id"],
+        collaboration_mode="solo",
+    )
+
+    return {
+        "file_id": metadata.id,
+        "name": os.path.basename(metadata.path),
+        "path": metadata.path,
         "size": metadata.size,
         "mime_type": metadata.mime_type,
     }
 
+
+# ============================================================
+# 文件下载
+# ============================================================
 
 @router.get("/download/{file_id}")
 async def download_file(
@@ -113,18 +120,23 @@ async def download_file(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """下载文件"""
-    result = await db.execute(select(FileMetadata).where(FileMetadata.id == file_id))
-    metadata = result.scalar_one_or_none()
-
+    """下载文件（含权限检查）"""
+    metadata = await get_file(db, file_id)
     if metadata is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
 
-    physical_path = os.path.join(settings.data_dir, metadata.path)
+    # 权限检查
+    can_access = await check_file_access(db, file_id, "human", current_user["user_id"], "read")
+    if not can_access:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问此文件")
+
+    physical_path = _get_physical_path(metadata.path)
     if not os.path.exists(physical_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="物理文件不存在")
 
-    from fastapi.responses import FileResponse
+    # 追踪引用
+    await track_file_reference(db, file_id, "human", current_user["user_id"], "read")
+
     return FileResponse(
         physical_path,
         media_type=metadata.mime_type or "application/octet-stream",
@@ -132,39 +144,119 @@ async def download_file(
     )
 
 
-@router.delete("/delete")
-async def delete_file(
-    path: str = Query(...),
+# ============================================================
+# 文件删除
+# ============================================================
+
+@router.delete("/delete/{file_id}")
+async def delete_file_endpoint(
+    file_id: int,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """删除文件"""
-    if not _check_path_safe(path):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径不合法")
+    try:
+        await delete_file(db, file_id, "human", current_user["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    result = await db.execute(
-        select(FileMetadata).where(FileMetadata.path == path)
-    )
-    metadata = result.scalar_one_or_none()
+    return {"message": "文件已删除", "file_id": file_id}
 
+
+# ============================================================
+# 协作模式管理
+# ============================================================
+
+@router.put("/{file_id}/collaboration-mode")
+async def update_collaboration_mode(
+    file_id: int,
+    mode: str = Query(..., pattern="^(solo|shared|open)$"),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """修改文件协作模式（仅 owner）"""
+    try:
+        metadata = await set_collaboration_mode(db, file_id, mode, "human", current_user["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return {
+        "file_id": metadata.id,
+        "path": metadata.path,
+        "collaboration_mode": metadata.collaboration_mode,
+    }
+
+
+@router.post("/{file_id}/collaborators")
+async def add_collaborator(
+    file_id: int,
+    collaborator_type: str = Query(..., pattern="^(ai|user)$"),
+    collaborator_id: int = Query(...),
+    role: str = Query("collaborator", pattern="^(collaborator|viewer)$"),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加文件协作者（仅 owner）"""
+    try:
+        collab = await add_file_collaborator(
+            db, file_id, collaborator_type, collaborator_id, role,
+            requester_type="human", requester_id=current_user["user_id"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return {
+        "id": collab.id,
+        "file_id": collab.file_id,
+        "collaborator_type": collab.collaborator_type,
+        "collaborator_id": collab.collaborator_id,
+        "role": collab.role,
+    }
+
+
+@router.delete("/{file_id}/collaborators/{collaborator_type}/{collaborator_id}")
+async def remove_collaborator(
+    file_id: int,
+    collaborator_type: str,
+    collaborator_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """移除文件协作者"""
+    try:
+        await remove_file_collaborator(db, file_id, collaborator_type, collaborator_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return {"message": "协作者已移除"}
+
+
+@router.get("/{file_id}/collaborators")
+async def list_collaborators(
+    file_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出文件的协作者"""
+    metadata = await get_file(db, file_id)
     if metadata is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
 
-    # 检查权限
-    if metadata.owner_id != current_user["user_id"] and current_user["role"] != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权删除")
+    collaborators = await get_file_collaborators(db, file_id)
+    referrers = await get_file_referrers(db, file_id)
 
-    # 删除物理文件
-    physical_path = os.path.join(settings.data_dir, metadata.path)
-    if os.path.exists(physical_path):
-        os.remove(physical_path)
+    return {
+        "file_id": file_id,
+        "path": metadata.path,
+        "collaboration_mode": metadata.collaboration_mode,
+        "collaborators": collaborators,
+        "referrers": referrers,
+    }
 
-    # 删除元数据
-    await db.delete(metadata)
-    await db.flush()
 
-    return {"message": "文件已删除", "path": path}
-
+# ============================================================
+# 创建目录
+# ============================================================
 
 @router.post("/mkdir")
 async def create_directory(

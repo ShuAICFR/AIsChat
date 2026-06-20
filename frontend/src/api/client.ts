@@ -48,6 +48,36 @@ async function request<T = any>(
   return data
 }
 
+/** 上传文件（multipart/form-data），返回 {file_id, name, path, size, mime_type} */
+async function uploadFile(path: string, file: File): Promise<any> {
+  const token = localStorage.getItem('access_token')
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const headers: Record<string, string> = {}
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  if (res.status === 401) {
+    localStorage.removeItem('access_token')
+    window.location.href = '/login'
+    throw new ApiError('未授权', 401)
+  }
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new ApiError(data.detail || '上传失败', res.status)
+  }
+  return data
+}
+
 export const api = {
   get: <T = any>(path: string) => request<T>(path),
   post: <T = any>(path: string, body?: any) =>
@@ -58,6 +88,7 @@ export const api = {
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T = any>(path: string) =>
     request<T>(path, { method: 'DELETE' }),
+  upload: uploadFile,
 }
 
 export { ApiError }

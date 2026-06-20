@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
-import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp } from 'lucide-react'
+import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Message {
@@ -17,6 +17,8 @@ interface Message {
   content: string
   reply_to: number | null
   read_at?: string | null
+  attachments?: Array<{file_id: number, name: string, size: number, mime_type: string}> | null
+  source_public_id?: string | null
   created_at: string
 }
 
@@ -46,6 +48,21 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
   const [mentionActive, setMentionActive] = useState(false)
   const [mentionQuery, setMentionQuery] = useState('')
   const [mentionIdx, setMentionIdx] = useState(0)
+
+  // 文件附件
+  interface PendingAttachment {
+    id: string        // 临时前端 ID（用于删除/去重）
+    file: File | null // null=上传完成，有值=上传中
+    file_id?: number  // 服务端返回的 ID
+    name: string
+    size: number
+    mime_type: string
+    uploading: boolean
+    error?: string
+  }
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingCount, setUploadingCount] = useState(0)
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -448,10 +465,77 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     })
   }
 
+  // 文件上传处理
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const tempId = `att_${Date.now()}_${i}`
+      const newAtt: PendingAttachment = {
+        id: tempId,
+        file,
+        name: file.name,
+        size: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        uploading: true,
+      }
+      setPendingAttachments(prev => [...prev, newAtt])
+      setUploadingCount(c => c + 1)
+
+      try {
+        const result = await api.upload('/fs/upload-attachment', file)
+        setPendingAttachments(prev =>
+          prev.map(a => a.id === tempId
+            ? { ...a, file: null, file_id: result.file_id, uploading: false }
+            : a
+          )
+        )
+        setUploadingCount(c => c - 1)
+      } catch (err: any) {
+        setPendingAttachments(prev =>
+          prev.map(a => a.id === tempId
+            ? { ...a, uploading: false, error: err.message || '上传失败' }
+            : a
+          )
+        )
+        setUploadingCount(c => c - 1)
+      }
+    }
+    // 清空 input 以便重复选择同一文件
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeAttachment = (tempId: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== tempId))
+  }
+
   const handleSend = () => {
-    if (!input.trim() || !conversationId) return
-    sendMessage(input.trim())
+    if (!input.trim() && pendingAttachments.length === 0) return
+    if (!conversationId) return
+
+    // 检查是否有未上传完的文件
+    const stillUploading = pendingAttachments.some(a => a.uploading)
+    if (stillUploading) return
+
+    // 检查是否有上传失败的文件
+    const hasErrors = pendingAttachments.some(a => a.error)
+    if (hasErrors) return
+
+    // 收集已上传完成的附件
+    const readyAttachments = pendingAttachments
+      .filter(a => a.file_id)
+      .map(a => ({
+        file_id: a.file_id!,
+        name: a.name,
+        size: a.size,
+        mime_type: a.mime_type,
+      }))
+
+    sendMessage(input.trim() || '(附件)', undefined, readyAttachments.length > 0 ? readyAttachments : undefined)
     setInput('')
+    setPendingAttachments([])
     setMentionActive(false)
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'message_sent' } }))
@@ -569,6 +653,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                 senderType={msg.sender_type}
                 senderId={msg.sender_id}
                 sourcePublicId={msg.source_public_id}
+                attachments={msg.attachments}
                 onAvatarClick={(type, id, name, state) =>
                   setProfileCard({ type, id, name, state })
                 }
@@ -620,6 +705,44 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
       {/* 输入框 */}
       <div className="p-3 bg-surface border-t border-border relative">
+        {/* 附件预览列表 */}
+        {pendingAttachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {pendingAttachments.map((att) => (
+              <div
+                key={att.id}
+                className={`relative group flex items-center gap-2 pl-3 pr-1 py-1.5 rounded-xl text-xs border transition-colors ${
+                  att.error
+                    ? 'bg-rose-500/10 border-rose-500/30'
+                    : att.uploading
+                    ? 'bg-canvas border-border animate-pulse'
+                    : 'bg-canvas border-border hover:bg-elevated'
+                }`}
+              >
+                <FileIcon size={14} className={att.error ? 'text-rose-400' : att.uploading ? 'text-textMuted' : 'text-primary-400'} />
+                <span className={`max-w-[120px] truncate ${att.error ? 'text-rose-400' : 'text-textSecondary'}`}>
+                  {att.name}
+                </span>
+                {att.uploading && (
+                  <Loader2 size={12} className="animate-spin text-textMuted shrink-0" />
+                )}
+                {att.error && (
+                  <span className="text-rose-400 text-[10px] shrink-0" title={att.error}>失败</span>
+                )}
+                <span className="text-textMuted text-[10px] shrink-0">
+                  {(att.size / 1024).toFixed(0)}KB
+                </span>
+                <button
+                  onClick={() => removeAttachment(att.id)}
+                  className="p-0.5 rounded-lg hover:bg-rose-500/10 text-textMuted hover:text-rose-400 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* @提及 自动补全下拉 */}
         {mentionActive && mentionFiltered.length > 0 && (
           <div className="absolute bottom-full left-3 right-3 mb-1 bg-elevated border border-border rounded-xl shadow-2xl shadow-black/20 z-50 max-h-48 overflow-y-auto">
@@ -644,6 +767,23 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         )}
 
         <div className="flex items-end gap-2">
+          {/* 文件上传按钮 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileSelect}
+            className="hidden"
+            accept="image/*,.pdf,.doc,.docx,.txt,.md,.json,.csv,.zip,.tar,.gz"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2.5 rounded-xl border border-border bg-canvas text-textMuted hover:text-textPrimary hover:border-primary-500/30 hover:bg-elevated transition-colors"
+            title="添加附件"
+          >
+            <Paperclip size={18} />
+          </button>
+
           <textarea
             ref={textareaRef}
             value={input}
@@ -684,7 +824,16 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={(!input.trim() && pendingAttachments.length === 0) || uploadingCount > 0 || pendingAttachments.some(a => a.error)}
+            title={
+              uploadingCount > 0
+                ? `还有 ${uploadingCount} 个文件正在上传...`
+                : pendingAttachments.some(a => a.error)
+                ? '有文件上传失败，请先移除'
+                : pendingAttachments.length > 0 && !input.trim()
+                ? '发送附件'
+                : ''
+            }
             className="p-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-500/20"
           >
             <Send size={18} />

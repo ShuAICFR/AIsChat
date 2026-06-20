@@ -666,6 +666,115 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── 文件操作工具（v0.5.0）──
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "file_read",
+            "description": "读取你自己文件空间中的一个文本文件。只能访问 /app/data/agents/{your_id}/ 下的文件。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要读取的文件路径（相对于你的文件空间根目录）",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "file_write",
+            "description": "在你的文件空间中创建或覆盖一个文件。会自动创建不存在的目录。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要写入的文件路径（相对于你的文件空间根目录）",
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "要写入的文件内容",
+                    },
+                    "collaboration_mode": {
+                        "type": "string",
+                        "enum": ["solo", "shared", "open"],
+                        "description": "协作模式：solo=仅自己, shared=指定协作者, open=所有AI可读。默认 solo。",
+                    },
+                },
+                "required": ["path", "content"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "file_list",
+            "description": "列出你文件空间中的文件和子目录。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要列出的目录路径（相对于根目录），默认为根目录 '/'",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "file_delete",
+            "description": "删除你文件空间中的一个文件。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要删除的文件路径（相对于你的文件空间根目录）",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "segment": "file_operations",
+        "function": {
+            "name": "file_share",
+            "description": "将你的一个文件分享给其他 AI。分享后对方可以读取该文件，你也可以设置对方的权限为 viewer(只读) 或 collaborator(可编辑)。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "要分享的文件路径（相对于你的文件空间根目录）",
+                    },
+                    "target_ai_id": {
+                        "type": "integer",
+                        "description": "目标 AI 的 ID",
+                    },
+                    "role": {
+                        "type": "string",
+                        "enum": ["collaborator", "viewer"],
+                        "description": "对方的角色：collaborator=可读写, viewer=只读。默认 collaborator。",
+                    },
+                },
+                "required": ["path", "target_ai_id"],
+            },
+        },
+    },
 ]
 
 # 从 TOOL_DEFINITIONS 自动推导 SKILL_SEGMENTS（单一数据源，避免三方维护）
@@ -695,12 +804,14 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
+        "file_read", "file_write", "file_list", "file_delete", "file_share",
     ],
     "dnd": [
         "switch_state", "recall_memory", "view_unread", "toggle_thinking",
         "execute_command", "list_available_skills", "manage_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
+        "file_read", "file_write", "file_list", "file_delete", "file_share",
     ],
     "offline": [
         "switch_state", "list_available_skills",
@@ -1770,6 +1881,100 @@ async def _handle_cross_post(
         return {"error": True, "message": f"跨对话发消息失败: {e}"}
 
 
+async def _handle_file_read(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """file_read 工具：AI 读取自己的文件"""
+    from app.services.file_service import ai_read_file
+    path = arguments.get("path", "")
+    try:
+        content = await ai_read_file(db, agent_id, path)
+        return {"success": True, "path": path, "content": content}
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"file_read 失败: {e}", exc_info=True)
+        return {"error": True, "message": f"读取文件失败: {str(e)}"}
+
+
+async def _handle_file_write(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """file_write 工具：AI 写入自己的文件"""
+    from app.services.file_service import ai_write_file
+    path = arguments["path"]
+    content = arguments["content"]
+    collaboration_mode = arguments.get("collaboration_mode", "solo")
+    try:
+        metadata = await ai_write_file(db, agent_id, path, content, collaboration_mode)
+        return {
+            "success": True,
+            "path": metadata.path,
+            "size": metadata.size,
+            "collaboration_mode": metadata.collaboration_mode,
+        }
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"file_write 失败: {e}", exc_info=True)
+        return {"error": True, "message": f"写入文件失败: {str(e)}"}
+
+
+async def _handle_file_list(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """file_list 工具：AI 列出自己的文件"""
+    from app.services.file_service import ai_list_files
+    path = arguments.get("path", "/")
+    try:
+        files = await ai_list_files(db, agent_id, path)
+        return {"success": True, "path": path, "files": files, "count": len(files)}
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"file_list 失败: {e}", exc_info=True)
+        return {"error": True, "message": f"列出文件失败: {str(e)}"}
+
+
+async def _handle_file_delete(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """file_delete 工具：AI 删除自己的文件"""
+    from app.services.file_service import ai_delete_file
+    path = arguments["path"]
+    try:
+        await ai_delete_file(db, agent_id, path)
+        return {"success": True, "path": path, "message": "文件已删除"}
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"file_delete 失败: {e}", exc_info=True)
+        return {"error": True, "message": f"删除文件失败: {str(e)}"}
+
+
+async def _handle_file_share(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """file_share 工具：AI 分享文件给其他 AI"""
+    from app.services.file_service import ai_share_file
+    path = arguments["path"]
+    target_ai_id = arguments["target_ai_id"]
+    role = arguments.get("role", "collaborator")
+    try:
+        result = await ai_share_file(db, agent_id, path, "ai", target_ai_id, role)
+        return {"success": True, **result}
+    except ValueError as e:
+        return {"error": True, "message": str(e)}
+    except Exception as e:
+        logger.error(f"file_share 失败: {e}", exc_info=True)
+        return {"error": True, "message": f"分享文件失败: {str(e)}"}
+
+
 # Handler 注册表
 TOOL_HANDLERS: dict[str, callable] = {
     "send_message": _handle_send_message,
@@ -1794,6 +1999,11 @@ TOOL_HANDLERS: dict[str, callable] = {
     "check_workspace": _handle_check_workspace,
     "clear_current_task": _handle_clear_current_task,
     "manage_workspace": _handle_manage_workspace,
+    "file_read": _handle_file_read,
+    "file_write": _handle_file_write,
+    "file_list": _handle_file_list,
+    "file_delete": _handle_file_delete,
+    "file_share": _handle_file_share,
 }
 
 

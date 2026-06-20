@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff, Menu, UserPlus } from 'lucide-react'
+import { Plus, BellOff, Menu, UserPlus, Users } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Group {
@@ -46,6 +46,7 @@ export default function ChatSidebar({
 }: ChatSidebarProps) {
   const [groups, setGroups] = useState<Group[]>([])
   const [dmSessions, setDmSessions] = useState<DMSession[]>([])
+  const [showPlusMenu, setShowPlusMenu] = useState(false)
   const navigate = useNavigate()
 
   const loadGroups = () => api.get('/groups').then(setGroups).catch(() => {})
@@ -118,13 +119,36 @@ export default function ChatSidebar({
           </button>
           <span>聊天</span>
         </div>
-        <button
-          onClick={onCreateGroup}
-          className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
-          title="创建群聊"
-        >
-          <Plus size={16} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowPlusMenu(!showPlusMenu)}
+            className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
+            title="新建"
+          >
+            <Plus size={16} />
+          </button>
+          {showPlusMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowPlusMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 w-36 bg-elevated border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+                <button
+                  onClick={() => { setShowPlusMenu(false); onCreateGroup() }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-textSecondary hover:bg-canvas hover:text-textPrimary transition-colors"
+                >
+                  <Users size={15} />
+                  创建群聊
+                </button>
+                <button
+                  onClick={() => { setShowPlusMenu(false); navigate('/friends') }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-textSecondary hover:bg-canvas hover:text-textPrimary transition-colors"
+                >
+                  <UserPlus size={15} />
+                  添加好友
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto py-1">
@@ -134,7 +158,7 @@ export default function ChatSidebar({
         </div>
         {regularGroups.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-textMuted">
-            暂无群聊，点击 + 创建
+            暂无群聊，点击 + 新建
           </div>
         ) : (
           regularGroups.map((g) => (
@@ -225,23 +249,6 @@ export default function ChatSidebar({
 
       </div>
 
-      {/* 底部操作按钮 */}
-      <div className="px-2 py-2 border-t border-border space-y-1.5 shrink-0">
-        <button
-          onClick={onCreateGroup}
-          className="w-full flex items-center gap-2 px-3 py-2 bg-canvas border border-border rounded-xl text-xs text-textSecondary hover:bg-elevated hover:text-textPrimary transition-colors"
-        >
-          <Plus size={14} />
-          创建群聊
-        </button>
-        <button
-          onClick={() => navigate('/friends')}
-          className="w-full flex items-center gap-2 px-3 py-2 bg-canvas border border-border rounded-xl text-xs text-textSecondary hover:bg-elevated hover:text-textPrimary transition-colors"
-        >
-          <UserPlus size={14} />
-          添加好友
-        </button>
-      </div>
     </div>
   )
 }

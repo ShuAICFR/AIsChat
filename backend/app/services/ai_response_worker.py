@@ -121,6 +121,7 @@ async def _process_dm_event(db, event: dict):
     await _trigger_dm_ai_reply(
         db, agent, session_id, content, message_id,
         chain_depth=chain_depth + 1,
+        sender_id=sender_id,
     )
 
 
@@ -323,7 +324,16 @@ async def _maybe_trigger_ai_reply(
             logger.info(f"🧠 AI {agent.name} 技能延迟 {skill_result.delay_seconds}s")
             await asyncio.sleep(skill_result.delay_seconds)
 
-    # 6. 构建消息
+    # v0.4.0: trigger_user_id 用于通用/半通用 AI 的 per-user 记忆隔离
+    trigger_user_id = sender_id if sender_type == "human" else None
+
+    # 6. 获取有效配置（v0.4.0: per-user 覆盖 — 需在 build_messages 前获取）
+    from app.services.agent_service import get_effective_config
+    effective_cfg = await get_effective_config(db, agent.id, trigger_user_id)
+    logger.info(f"🔍 AI {agent.name}: effective_cfg ai_type={effective_cfg['ai_type']}, "
+                f"thinking={effective_cfg['thinking_enabled']}, temp={effective_cfg['temperature']}")
+
+    # 7. 构建消息
     from app.services.llm_service import build_messages, resolve_model
     # 向量加速混合检索仅在 AI 全群启用（AI 内部协作场景）
     # 普通人类群聊使用常规历史窗口，避免不必要的向量化开销
@@ -332,8 +342,6 @@ async def _maybe_trigger_ai_reply(
     use_vector = group.is_vector_accelerated and ai_only
     if group.is_vector_accelerated and not ai_only:
         logger.info(f"群 {group_id} 含人类成员，跳过向量加速（使用常规历史窗口）")
-    # v0.4.0: trigger_user_id 用于通用/半通用 AI 的 per-user 记忆隔离
-    trigger_user_id = sender_id if sender_type == "human" else None
     messages = await build_messages(
         db, agent, group_id,
         vector_accelerated=use_vector,
@@ -355,12 +363,6 @@ async def _maybe_trigger_ai_reply(
             "3. 调用 store_memory 记下这个交互模式，以后遇到此人时优先快速响应"
         )
         messages.append({"role": "system", "content": delay_hint})
-
-    # 7. 获取有效配置（v0.4.0: per-user 覆盖）
-    from app.services.agent_service import get_effective_config
-    effective_cfg = await get_effective_config(db, agent.id, trigger_user_id)
-    logger.info(f"🔍 AI {agent.name}: effective_cfg ai_type={effective_cfg['ai_type']}, "
-                f"thinking={effective_cfg['thinking_enabled']}, temp={effective_cfg['temperature']}")
 
     # 7.5 获取工具
     from app.services.tool_registry import get_allowed_tools
@@ -657,6 +659,7 @@ async def _trigger_dm_ai_reply(
     content: str,
     trigger_message_id: int,
     chain_depth: int = 0,
+    sender_id: int | None = None,
 ):
     """触发 AI 对私信的自动回复"""
     from app.services.agent_service import get_agent
@@ -671,6 +674,10 @@ async def _trigger_dm_ai_reply(
     if not _check_rate_limit(agent.id):
         logger.info(f"AI {agent.name}({agent.id}) 速率限制，跳过 DM 回复")
         return
+
+    # 获取有效配置（v0.4.0: per-user 覆盖 — DM 场景 trigger_user_id=sender_id）
+    from app.services.agent_service import get_effective_config as _get_eff_cfg
+    effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
     # 获取 API 配置（Agent 级优先）
     user_result = await db.execute(select(User).where(User.id == agent.owner_id))
@@ -710,10 +717,6 @@ async def _trigger_dm_ai_reply(
     from app.services.llm_service import build_dm_messages, resolve_model
     # v0.4.0: DM 中 sender_id 即为触发用户
     messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key, trigger_user_id=sender_id, system_prompt_override=effective_cfg.get("system_prompt"))
-
-    # 获取有效配置（v0.4.0: per-user 覆盖 — DM 场景 trigger_user_id=sender_id）
-    from app.services.agent_service import get_effective_config as _get_eff_cfg
-    effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
     # 获取工具
     from app.services.tool_registry import get_allowed_tools

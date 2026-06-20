@@ -469,6 +469,7 @@ export default function CreateAgentModal({
             isAiEditable={isAiEditable} setIsAiEditable={setIsAiEditable}
             chatModel={chatModel} setChatModel={setChatModel}
             workModel={workModel} setWorkModel={setWorkModel}
+            aiType={aiType} setAiType={setAiType}
             apiCreditCost={apiCreditCost} setApiCreditCost={setApiCreditCost}
             modelOptions={modelOptions}
             defaults={defaults}
@@ -577,6 +578,7 @@ function DetailSettingsModal({
   chatModel, setChatModel,
   workModel, setWorkModel,
   apiCreditCost, setApiCreditCost,
+  aiType, setAiType,
   modelOptions,
   defaults,
   thinkingSupported,
@@ -599,6 +601,7 @@ function DetailSettingsModal({
   chatModel: string; setChatModel: (v: string) => void
   workModel: string; setWorkModel: (v: string) => void
   apiCreditCost: number; setApiCreditCost: (v: number) => void
+  aiType: string; setAiType: (v: string) => void
   modelOptions: ModelOption[]
   defaults: { chat_model: string; work_model: string }
   thinkingSupported: boolean

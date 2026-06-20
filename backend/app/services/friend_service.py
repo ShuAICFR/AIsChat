@@ -295,12 +295,25 @@ async def list_friend_requests(
         req_user = req_user_result.scalar_one_or_none()
         requester_name = req_user.username if req_user else f"用户:{req.requester_id}"
 
+        # 获取目标名称（发出的申请用）
+        target_name = None
+        if req.requester_id == user_id:
+            if req.target_type == "human":
+                tgt_result = await db.execute(select(User).where(User.id == req.target_id))
+                tgt = tgt_result.scalar_one_or_none()
+                target_name = tgt.username if tgt else None
+            elif req.target_type == "ai":
+                tgt_result = await db.execute(select(Agent).where(Agent.id == req.target_id))
+                tgt = tgt_result.scalar_one_or_none()
+                target_name = tgt.name if tgt else None
+
         requests.append({
             "id": req.id,
             "requester_id": req.requester_id,
             "requester_name": requester_name,
             "target_type": req.target_type,
             "target_id": req.target_id,
+            "target_name": target_name,
             "status": req.status,
             "message": req.message,
             "direction": "received" if req.target_id == user_id else "sent",

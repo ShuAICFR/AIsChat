@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft } from 'lucide-react'
 
 interface Friend {
@@ -19,7 +20,9 @@ interface FriendRequest {
   requester_name: string | null
   target_type: string
   target_id: number
+  target_name: string | null
   status: string
+  direction: string | null
   message: string | null
   created_at: string | null
 }
@@ -93,6 +96,7 @@ export default function FriendsPage() {
   const [sortMode, setSortMode] = useState<SortMode>('smart')
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
+  const { user } = useAuth()
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
@@ -145,6 +149,20 @@ export default function FriendsPage() {
       console.error('拒绝好友申请失败:', err)
     }
   }
+
+  const handleCancelSent = async (requestId: number) => {
+    try {
+      await api.post(`/friends/requests/${requestId}/reject`)
+      loadAll()
+    } catch (err: any) {
+      console.error('撤回好友申请失败:', err)
+    }
+  }
+
+  // 拆分收到和发出的申请
+  const receivedRequests = requests.filter(r => r.direction === 'received')
+  const sentRequests = requests.filter(r => r.direction === 'sent')
+  const pendingCount = receivedRequests.length
 
   const stateIcon = (s: string | null) => {
     switch (s) {
@@ -308,7 +326,7 @@ export default function FriendsPage() {
           )
         ) : (
           /* 好友申请 */
-          requests.length === 0 ? (
+          receivedRequests.length === 0 && sentRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-textMuted">
               <UserPlus size={40} className="mb-3 opacity-30" />
               <p className="text-sm">暂无待处理的好友申请</p>
@@ -316,11 +334,9 @@ export default function FriendsPage() {
             </div>
           ) : (
             <div className="divide-y divide-border/50">
-              {requests.map((req) => (
-                <div
-                  key={req.id}
-                  className="px-4 py-3.5"
-                >
+              {/* 收到的申请 */}
+              {receivedRequests.map((req) => (
+                <div key={`recv-${req.id}`} className="px-4 py-3.5">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-lg shrink-0">
                       {req.requester_name?.charAt(0) || '?'}
@@ -330,6 +346,7 @@ export default function FriendsPage() {
                         <span className="text-sm font-medium text-textPrimary truncate">
                           {req.requester_name || `用户${req.requester_id}`}
                         </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400 shrink-0">收到</span>
                       </div>
                       <span className="text-xs text-textMuted">
                         {req.message || '请求添加你为好友'}
@@ -347,6 +364,36 @@ export default function FriendsPage() {
                         onClick={() => handleReject(req.id)}
                         className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
                         title="拒绝"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {/* 发出的申请 */}
+              {sentRequests.map((req) => (
+                <div key={`sent-${req.id}`} className="px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-500/20 to-accent-700/20 flex items-center justify-center text-lg shrink-0">
+                      {req.target_name?.charAt(0) || '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-textPrimary truncate">
+                          {req.target_name || `用户${req.target_id}`}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-500/10 text-accent-400 shrink-0">待回复</span>
+                      </div>
+                      <span className="text-xs text-textMuted">
+                        {req.message || '你发送了好友申请'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => handleCancelSent(req.id)}
+                        className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
+                        title="撤回申请"
                       >
                         <X size={16} />
                       </button>

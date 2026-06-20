@@ -18,8 +18,10 @@ class FriendRequestResponse(BaseModel):
     requester_name: str | None = None
     target_type: str
     target_id: int
+    target_name: str | None = None  # 目标名称（发出的申请用）
     status: str
     message: str | None = None
+    direction: str | None = None  # received 或 sent
     created_at: str | None = None
     resolved_at: str | None = None
 

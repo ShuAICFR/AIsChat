@@ -130,43 +130,39 @@ export default function AgentsPage() {
   const navigate = useNavigate()
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
-      <div className="max-w-4xl mx-auto">
-        {/* 头部 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            {/* 移动端：菜单按钮（打开侧边栏抽屉） */}
-            <button
-              onClick={openDrawer}
-              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="菜单"
-            >
-              <Menu size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-textPrimary tracking-tight">我的 AI</h1>
-              <p className="text-sm text-textSecondary mt-1">
-                创建和管理你的 AI 角色
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowImport(true)}
-              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 border border-border text-textSecondary rounded-xl hover:bg-elevated text-xs md:text-sm font-medium transition-colors"
-            >
-              <Upload size={15} className="md:w-4 md:h-4" />
-              导入灵魂
-            </button>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-xs md:text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
-            >
-              <Plus size={15} className="md:w-4 md:h-4" />
-              创建 AI
-            </button>
-          </div>
+    <div className="h-full flex flex-col bg-canvas">
+      {/* 头部 */}
+      <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
+        <button
+          onClick={openDrawer}
+          className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          title="菜单"
+        >
+          <Menu size={18} />
+        </button>
+        <h1 className="font-semibold text-textPrimary text-sm">我的 AI</h1>
+        <span className="text-xs text-textMuted hidden sm:inline">创建和管理你的 AI 角色</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 border border-border text-textSecondary rounded-lg hover:bg-elevated text-xs font-medium transition-colors"
+          >
+            <Upload size={13} className="md:w-3.5 md:h-3.5" />
+            <span className="hidden sm:inline">导入灵魂</span>
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-400 text-xs font-medium transition-all shadow-lg shadow-primary-500/20"
+          >
+            <Plus size={13} />
+            <span className="hidden sm:inline">创建 AI</span>
+          </button>
         </div>
+      </div>
+
+      {/* 内容 */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="max-w-4xl mx-auto">
 
         {/* AI 卡片列表 */}
         {agents.length === 0 ? (
@@ -323,6 +319,7 @@ export default function AgentsPage() {
             }}
           />
         )}
+        </div>
       </div>
     </div>
   )

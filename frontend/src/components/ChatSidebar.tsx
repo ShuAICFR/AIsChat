@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff, Menu } from 'lucide-react'
+import { Plus, BellOff, Menu, UserPlus } from 'lucide-react'
 
 interface Group {
   id: number
@@ -177,7 +177,7 @@ export default function ChatSidebar({
                 {g.has_mention && !g.dnd_until && (
                   <span className="text-rose-400 font-medium shrink-0">[@你]</span>
                 )}
-                <span className="truncate">{g.last_message_preview || '暂无消息'}</span>
+                <span className="truncate min-w-0 flex-1">{g.last_message_preview || '暂无消息'}</span>
               </div>
             </button>
           ))
@@ -216,9 +216,9 @@ export default function ChatSidebar({
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-textMuted truncate mt-0.5 flex items-center gap-1">
-                  {s.partner.type === 'ai' && <span className="text-[10px]">🤖</span>}
-                  <span className="truncate flex-1">
+                <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
+                  {s.partner.type === 'ai' && <span className="text-[10px] shrink-0">🤖</span>}
+                  <span className="truncate min-w-0 flex-1">
                     {s.last_message_preview || '暂无消息'}
                   </span>
                   {s.last_message_at && (
@@ -230,6 +230,24 @@ export default function ChatSidebar({
           </>
         )}
 
+      </div>
+
+      {/* 底部操作按钮 */}
+      <div className="px-2 py-2 border-t border-border space-y-1.5 shrink-0">
+        <button
+          onClick={onCreateGroup}
+          className="w-full flex items-center gap-2 px-3 py-2 bg-canvas border border-border rounded-xl text-xs text-textSecondary hover:bg-elevated hover:text-textPrimary transition-colors"
+        >
+          <Plus size={14} />
+          创建群聊
+        </button>
+        <button
+          onClick={() => navigate('/friends')}
+          className="w-full flex items-center gap-2 px-3 py-2 bg-canvas border border-border rounded-xl text-xs text-textSecondary hover:bg-elevated hover:text-textPrimary transition-colors"
+        >
+          <UserPlus size={14} />
+          添加好友
+        </button>
       </div>
     </div>
   )

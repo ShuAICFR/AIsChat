@@ -233,18 +233,22 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto p-4 md:p-6 bg-canvas">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-2 mb-6">
-          <button
-            onClick={openDrawer}
-            className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="菜单"
-          >
-            <Menu size={20} />
-          </button>
-          <h1 className="text-2xl font-bold text-textPrimary tracking-tight">设置</h1>
-        </div>
+    <div className="h-full flex flex-col bg-canvas">
+      {/* 头部 */}
+      <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
+        <button
+          onClick={openDrawer}
+          className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          title="菜单"
+        >
+          <Menu size={18} />
+        </button>
+        <h1 className="font-semibold text-textPrimary text-sm">设置</h1>
+      </div>
+
+      {/* 内容 */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="max-w-2xl mx-auto">
 
         {/* 移动端管理员快捷入口 */}
         {user?.role === 'admin' && (
@@ -671,6 +675,8 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+        </div>
+      </div>
     </div>
   )
 }

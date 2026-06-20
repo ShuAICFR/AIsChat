@@ -657,7 +657,7 @@ function DetailSettingsModal({
               </select>
             </div>
             <ToggleField label="✏️ 允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
-            <ToggleField label="🎭 隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含"你是 AI"相关表述" />
+            <ToggleField label="🎭 隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
           </Section>
 
           {/* ── 💰 额度 ── */}

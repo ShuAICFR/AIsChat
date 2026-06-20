@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, Menu, BellOff, MessageSquare, ArrowLeft } from 'lucide-react'
+import { Plus, Menu, BellOff, MessageSquare } from 'lucide-react'
 
 interface Group {
   id: number
@@ -116,15 +116,6 @@ export default function ChatSidebar({
       {/* 标题 */}
       <div className="px-3 h-14 border-b border-border font-medium text-sm flex items-center justify-between text-textPrimary shrink-0">
         <div className="flex items-center gap-2">
-          {onMobileBack && (
-            <button
-              onClick={onMobileBack}
-              className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="返回对话"
-            >
-              <ArrowLeft size={18} />
-            </button>
-          )}
           <button
             onClick={openDrawer}
             className="md:hidden p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
@@ -156,7 +147,13 @@ export default function ChatSidebar({
           regularGroups.map((g) => (
             <button
               key={`group-${g.id}`}
-              onClick={() => navigate(`/chat/${g.id}`)}
+              onClick={() => {
+                if (g.id === activeGroupId && mobileFullscreen) {
+                  onMobileBack?.()
+                } else {
+                  navigate(`/chat/${g.id}`)
+                }
+              }}
               className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                 g.id === activeGroupId
                   ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
@@ -195,7 +192,13 @@ export default function ChatSidebar({
             {sortedDMSessions.map((s) => (
               <button
                 key={`dm-${s.session_id}`}
-                onClick={() => navigate(`/chat/dm/${s.session_id}`)}
+                onClick={() => {
+                  if (s.session_id === activeSessionId && mobileFullscreen) {
+                    onMobileBack?.()
+                  } else {
+                    navigate(`/chat/dm/${s.session_id}`)
+                  }
+                }}
                 className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                   s.session_id === activeSessionId
                     ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'

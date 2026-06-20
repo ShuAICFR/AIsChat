@@ -32,17 +32,18 @@ async def run_migrations():
             await _migrate_config_profile(db)      # v0.4.0 三档配置，也要在查询 Agent 之前
             await _migrate_delay_reply_enabled(db) # v0.4.0 延迟回复开关，也要在查询 Agent 之前
             await _migrate_max_tool_rounds(db)     # v0.4.0 工具调用轮次上限
+            # ⚠️ 以下三个 v0.4.0 新增列迁移必须在任何 select(Agent) ORM 查询之前
+            await _migrate_ai_types(db)               # v0.4.0 三种 AI 类型 + per-user 配置隔离
+            await _migrate_memory_user_isolation(db)  # v0.4.0 记忆 per-user 隔离
+            await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
             await _migrate_agents_user_id(db)
-            await _migrate_agent_users(db)
+            await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
             await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
-            await _migrate_ai_types(db)               # v0.4.0 三种 AI 类型 + per-user 配置隔离
-            await _migrate_memory_user_isolation(db)  # v0.4.0 记忆 per-user 隔离
-            await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:

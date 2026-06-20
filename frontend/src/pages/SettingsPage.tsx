@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
-import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Settings, Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle } from 'lucide-react'
+import { useNavigate, useBlocker } from 'react-router-dom'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -67,6 +67,40 @@ export default function SettingsPage() {
   const [redeemMsg, setRedeemMsg] = useState('')
   const [showAgentApi, setShowAgentApi] = useState(false)
 
+  // ── 未保存修改检测 ──
+  const [savedValues, setSavedValues] = useState<{
+    apiBaseUrl: string; autoTimeout: number; autoDefault: boolean
+    timezone: string; language: string; chatStyle: string
+  } | null>(null)
+
+  // 判断是否有未保存修改（apiKey 非空才算修改）
+  const hasUnsavedChanges = savedValues !== null && (
+    apiBaseUrl !== savedValues.apiBaseUrl ||
+    autoTimeout !== savedValues.autoTimeout ||
+    autoDefault !== savedValues.autoDefault ||
+    timezone !== savedValues.timezone ||
+    language !== savedValues.language ||
+    chatStyle !== savedValues.chatStyle ||
+    apiKey.trim() !== ''  // 有输入即视为修改
+  )
+
+  // 导航拦截
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  )
+
+  // 浏览器关闭/刷新拦截
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [hasUnsavedChanges])
+
   // 通知开关立即生效，不需点保存
   const handleNotificationToggle = (enabled: boolean) => {
     setNotifications(enabled)
@@ -76,14 +110,27 @@ export default function SettingsPage() {
   useEffect(() => {
     if (user) {
       api.get('/auth/me').then((data) => {
-        if (data.api_base_url) setApiBaseUrl(data.api_base_url)
-        setAutoTimeout(data.auto_approve_vector_timeout)
-        setAutoDefault(data.auto_approve_vector_default)
-        if (data.timezone) setTimezone(data.timezone)
-        if (data.language) setLanguage(data.language)
-        if (data.ui_prefs?.chat_style) {
-          setChatStyle(data.ui_prefs.chat_style)
-        }
+        const apiUrl = data.api_base_url || 'https://api.deepseek.com'
+        const tz = data.timezone || 'Asia/Shanghai'
+        const lang = data.language || 'zh'
+        const style = data.ui_prefs?.chat_style || 'cozy'
+        const to = data.auto_approve_vector_timeout ?? 60
+        const ad = data.auto_approve_vector_default ?? false
+        setApiBaseUrl(apiUrl)
+        setAutoTimeout(to)
+        setAutoDefault(ad)
+        if (data.timezone) setTimezone(tz)
+        if (data.language) setLanguage(lang)
+        if (data.ui_prefs?.chat_style) setChatStyle(style)
+        // 保存快照用于未保存修改检测
+        setSavedValues({
+          apiBaseUrl: apiUrl,
+          autoTimeout: to,
+          autoDefault: ad,
+          timezone: tz,
+          language: lang,
+          chatStyle: style,
+        })
       }).catch(console.error)
       // 加载我的 AI 列表（用于单 AI API 配置）
       api.get<any[]>('/agents').then(list => {
@@ -124,6 +171,15 @@ export default function SettingsPage() {
       })
       setApiKey('')
       setMessage('设置已保存')
+      // 更新快照以清除"未保存"状态
+      setSavedValues({
+        apiBaseUrl: apiBaseUrl || '',
+        autoTimeout,
+        autoDefault,
+        timezone,
+        language,
+        chatStyle,
+      })
       refreshUser()
       // 刷新 AI 列表以更新独立 API 状态
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
@@ -572,6 +628,39 @@ export default function SettingsPage() {
           💡 标有「即时生效」的选项修改后立即应用，无需点击保存。其余选项需点击保存后生效。
         </p>
       </div>
+
+      {/* ── 未保存修改离开确认弹窗 ── */}
+      {blocker.state === 'blocked' && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/30">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-accent-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} className="text-accent-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-textPrimary">未保存的修改</h3>
+                <p className="text-sm text-textSecondary mt-1">
+                  你有尚未保存的设置修改。离开此页面将丢失这些更改。确定要离开吗？
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => blocker.reset?.()}
+                className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
+              >
+                继续编辑
+              </button>
+              <button
+                onClick={() => blocker.proceed?.()}
+                className="flex-1 py-2.5 text-sm bg-rose-500 text-white rounded-xl hover:bg-rose-400 font-medium transition-all"
+              >
+                放弃修改
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

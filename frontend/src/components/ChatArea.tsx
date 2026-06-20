@@ -5,7 +5,7 @@ import ChatView from './ChatView'
 import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, UserPlus, Settings, ArrowLeft } from 'lucide-react'
+import { Bell, BellOff, UserPlus, Settings, Menu } from 'lucide-react'
 
 interface Group {
   id: number
@@ -109,9 +109,9 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
             <button
               onClick={() => setMobileSidebarOpen(true)}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="返回聊天列表"
+              title="会话列表"
             >
-              <ArrowLeft size={20} />
+              <Menu size={20} />
             </button>
             <h2 className="font-semibold text-textPrimary text-sm truncate">
               # {currentGroup?.name || '加载中...'}

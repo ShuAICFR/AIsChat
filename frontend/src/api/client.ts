@@ -39,10 +39,20 @@ async function request<T = any>(
     throw new ApiError('未授权', 401)
   }
 
-  const data = await res.json()
+  // 安全解析 JSON：处理空 body / 非 JSON 响应
+  let data: any
+  try {
+    const text = await res.text()
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    if (!res.ok) {
+      throw new ApiError(`请求失败 (${res.status})`, res.status)
+    }
+    return {} as T
+  }
 
   if (!res.ok) {
-    throw new ApiError(data.detail || '请求失败', res.status)
+    throw new ApiError(data.detail || `请求失败 (${res.status})`, res.status)
   }
 
   return data
@@ -71,9 +81,20 @@ async function uploadFile(path: string, file: File): Promise<any> {
     throw new ApiError('未授权', 401)
   }
 
-  const data = await res.json()
+  // 安全解析 JSON：处理空 body / 非 JSON 响应
+  let data: any
+  try {
+    const text = await res.text()
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    if (!res.ok) {
+      throw new ApiError(`上传失败 (${res.status})`, res.status)
+    }
+    return {}
+  }
+
   if (!res.ok) {
-    throw new ApiError(data.detail || '上传失败', res.status)
+    throw new ApiError(data.detail || `上传失败 (${res.status})`, res.status)
   }
   return data
 }

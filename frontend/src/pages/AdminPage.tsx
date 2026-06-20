@@ -47,7 +47,7 @@ export default function AdminPage() {
             href={MANUAL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors"
+            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors align-middle"
           >
             <BookOpen size={13} /> 使用手册
           </a>

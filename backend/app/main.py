@@ -104,7 +104,7 @@ app.add_middleware(
 
 
 # 注册路由
-from app.routers import auth, agents, groups, ws, user, memories, files, admin, search, dm, federation_ws, conversation_log
+from app.routers import auth, agents, groups, ws, user, memories, files, admin, search, dm, federation_ws, conversation_log, friends
 
 app.include_router(auth.router)
 app.include_router(agents.router)
@@ -118,6 +118,7 @@ app.include_router(search.router)
 app.include_router(dm.router)
 app.include_router(federation_ws.router)
 app.include_router(conversation_log.router)
+app.include_router(friends.router)
 
 
 @app.get("/")

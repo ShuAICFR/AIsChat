@@ -22,6 +22,8 @@ interface Group {
   last_message_preview: string | null
   dnd_until: string | null
   created_at: string | null
+  member_count: number
+  online_count: number
 }
 
 interface ChatAreaProps {
@@ -124,7 +126,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
               <UserPlus size={16} />
             </button>
             <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线
+              <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线人数: {currentGroup?.online_count ?? 0}
             </span>
             <button
               onClick={async () => {

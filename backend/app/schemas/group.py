@@ -43,6 +43,8 @@ class GroupResponse(BaseModel):
     last_message_preview: str | None = None
     dnd_until: str | None = None
     created_at: str | None
+    member_count: int = 0
+    online_count: int = 0
 
 
 class GroupMemberResponse(BaseModel):

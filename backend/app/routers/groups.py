@@ -84,6 +84,26 @@ async def get_group_detail(
     group = await get_group(db, group_id)
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="群聊不存在")
+
+    # 统计成员数量 & 在线人数（AI 成员中 state=active 的）
+    from app.models.group import GroupMember
+    from app.models.agent import Agent as AgentModel
+    member_result = await db.execute(
+        select(GroupMember).where(GroupMember.group_id == group_id)
+    )
+    members = member_result.scalars().all()
+    member_count = len(members)
+    online_count = 0
+    ai_member_ids = [m.member_id for m in members if m.member_type == "ai"]
+    if ai_member_ids:
+        ai_result = await db.execute(
+            select(AgentModel).where(
+                AgentModel.id.in_(ai_member_ids),
+                AgentModel.state == "active",
+            )
+        )
+        online_count = len(ai_result.scalars().all())
+
     return {
         "id": group.id,
         "name": group.name,
@@ -92,6 +112,8 @@ async def get_group_detail(
         "is_vector_accelerated": group.is_vector_accelerated,
         "is_federated": getattr(group, "is_federated", False),
         "created_at": str(group.created_at) if group.created_at else None,
+        "member_count": member_count,
+        "online_count": online_count,
     }
 
 

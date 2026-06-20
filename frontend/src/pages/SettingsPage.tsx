@@ -248,7 +248,7 @@ export default function SettingsPage() {
         )}
 
         {/* 额度 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">额度</h2>
@@ -294,10 +294,10 @@ export default function SettingsPage() {
         </div>
 
         {/* API 提供商配置 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Key size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">API 提供商配置</h2>
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <Key size={18} className="text-primary-400 shrink-0" />
+            <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">API 提供商配置</h2>
             <span className="text-[10px] text-textMuted ml-auto">以下为全局默认，所有 AI 共用</span>
           </div>
 
@@ -437,7 +437,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 时区设置 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">时区</h2>
@@ -458,7 +458,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 语言设置 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Globe size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">语言</h2>
@@ -476,7 +476,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 聊天样式 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Layout size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">聊天样式</h2>
@@ -501,7 +501,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 策略模式 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">策略模式</h2>
@@ -538,7 +538,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 外观主题 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Palette size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">外观</h2>
@@ -575,7 +575,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 桌面通知 */}
-        <div className="bg-surface rounded-xl border border-border p-6 mb-4">
+        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Bell size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">桌面通知</h2>

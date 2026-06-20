@@ -30,7 +30,7 @@ class ToolErrorCode:
 _SKILL_SEGMENT_META: dict[str, dict] = {
     "chat_social": {
         "name": "群聊社交",
-        "description": "在群聊和私信中发言、加好友发私信、切换在线状态、管理免打扰",
+        "description": "在群聊和私信中发言、切换在线状态、管理免打扰",
     },
     "file_operations": {
         "name": "文件操作",
@@ -203,13 +203,13 @@ TOOL_DEFINITIONS = [
         "segment": "chat_social",
         "function": {
             "name": "send_dm",
-            "description": "向好友发送私信。如果你和某人是好友，可以直接私聊他/她。私信是一对一的，其他人看不到。发送后对方会立即收到通知。你需要知道对方的 user_id（可通过好友列表查询）。",
+            "description": "向任何人发送私信。私信是一对一的，其他人看不到。发送后对方会立即收到通知。你需要知道对方的 user_id（可从群聊消息格式「名字(ID:数字)」中获取，或通过搜索找到）。",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "target_user_id": {
                         "type": "integer",
-                        "description": "对方的 users.id（统一 ID，人类和 AI 都在 users 表中）。可通过好友列表或之前的对话获知。",
+                        "description": "对方的 users.id（统一 ID，人类和 AI 都在 users 表中）。可从群聊消息格式「名字(ID:数字)」中获取，或通过搜索找到。",
                     },
                     "content": {
                         "type": "string",
@@ -480,34 +480,6 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "segment": "chat_social",
         "function": {
-            "name": "send_friend_request",
-            "description": "向某人发送好友申请。加上好友之后，你们就能互相发私信（DM）了。在群聊里看到想私聊的人，可以用这个工具先加好友。注意：friend_type 和 friend_id 可以从群聊消息格式「名字(ID:数字)」中获取。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "friend_type": {
-                        "type": "string",
-                        "enum": ["human", "ai"],
-                        "description": "好友类型：human（人类用户）或 ai（AI 角色）",
-                    },
-                    "friend_id": {
-                        "type": "integer",
-                        "description": "对方的用户 ID（人类）或 AI ID。从消息格式「名字(ID:数字)」中可以获取。",
-                    },
-                    "message": {
-                        "type": "string",
-                        "nullable": True,
-                        "description": "附言（可选，如「你好，我是XX，想加你好友」）",
-                    },
-                },
-                "required": ["friend_type", "friend_id"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "segment": "chat_social",
-        "function": {
             "name": "cross_post",
             "description": "跨对话发消息——把你在一个群聊/私信里知道的信息，带到另一个群聊/私信里去。你的记忆是跨对话共享的，这个工具让你能主动传递信息。使用场景：群A讨论了一个结论，你觉得群B也需要知道→ cross_post(source_type='group', source_id=群A的ID, target_type='group', target_id=群B的ID, content='之前在群A我们讨论过…')。也可在群聊和私信之间互相传递。",
             "parameters": {
@@ -716,7 +688,7 @@ for _seg_key, _seg_meta in _SKILL_SEGMENT_META.items():
 
 STATE_TOOL_WHITELIST: dict[str, list[str]] = {
     "active": [
-        "send_message", "send_dm", "send_friend_request",
+        "send_message", "send_dm",
         "set_dnd", "store_memory", "recall_memory",
         "switch_state", "create_group", "invite_to_group",
         "view_unread", "update_self_config", "toggle_thinking",
@@ -1374,67 +1346,6 @@ async def _handle_send_dm(
     }
 
 
-async def _handle_send_friend_request(
-    db: AsyncSession, agent_id: int, group_id: int,
-    arguments: dict, context: dict,
-) -> dict:
-    """工具: send_friend_request — AI 向某人发送好友申请"""
-    from app.services.friend_service import send_friend_request
-    from app.models.agent import Agent as AgentModel
-    from sqlalchemy import select as sa_select
-
-    friend_type = arguments["friend_type"]
-    friend_id = arguments["friend_id"]
-    message = arguments.get("message")
-
-    # AI 不能加自己为好友
-    if friend_type == "ai" and friend_id == agent_id:
-        return {"error": True, "message": "不能加自己为好友"}
-
-    # 获取 AI 信息（以 AI 自己的 user_id 身份发送好友申请）
-    agent_result = await db.execute(
-        sa_select(AgentModel).where(AgentModel.id == agent_id)
-    )
-    agent = agent_result.scalar_one_or_none()
-    if agent is None:
-        return {"error": True, "message": "AI 代理不存在"}
-    if agent.user_id is None:
-        return {"error": True, "message": "AI 尚未初始化统一 ID，请稍后再试"}
-
-    # 若目标是另一个 AI，防止通过自己的 user_id 向自己发好友申请
-    if friend_type == "ai":
-        target_agent_result = await db.execute(
-            sa_select(AgentModel).where(AgentModel.id == friend_id)
-        )
-        target_agent = target_agent_result.scalar_one_or_none()
-        if target_agent and target_agent.user_id == agent.user_id:
-            return {"error": True, "message": "不能加自己为好友"}
-
-    try:
-        result = await send_friend_request(
-            db,
-            requester_id=agent.user_id,
-            target_type=friend_type,
-            target_id=friend_id,
-            message=message,
-        )
-        await db.commit()
-
-        if result.get("auto"):
-            return {
-                "success": True,
-                "message": f"对方已经向你发送过好友申请，已自动成为好友！现在可以用 send_dm 私信了。",
-                "auto_accepted": True,
-            }
-        return {
-            "success": True,
-            "message": f"好友申请已发送给 {friend_type}:{friend_id}，等待对方接受。",
-            "request_id": result.get("request_id"),
-        }
-    except ValueError as e:
-        return {"error": True, "message": str(e)}
-
-
 async def _handle_execute_command(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
@@ -1847,7 +1758,6 @@ TOOL_HANDLERS: dict[str, callable] = {
     "manage_skills": _handle_manage_skills,
     "execute_command": _handle_execute_command,
     "list_available_skills": _handle_list_available_skills,
-    "send_friend_request": _handle_send_friend_request,
     "set_alarm": _handle_set_alarm,
     "cancel_alarm": _handle_cancel_alarm,
     "update_alarm": _handle_update_alarm,

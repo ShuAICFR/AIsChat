@@ -139,7 +139,7 @@ const SUB_OPTIONS: Record<string, SubOption[]> = {
       id: 'digital_social',
       label: '社交体',
       emoji: '🔥',
-      description: '主动加好友、跨群引用、发起话题。群里最活跃的存在。适合带动群聊氛围。',
+      description: '主动发起话题、跨群互动、@提及他人。群里最活跃的存在。适合带动群聊氛围。',
       params: { temperature: 0.95, max_tool_rounds: 10 },
     },
     {

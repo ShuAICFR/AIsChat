@@ -300,16 +300,17 @@ function InviteMemberModal({
   groupId: number
   onClose: () => void
 }) {
-  interface Friend {
-    friend_type: string
-    friend_id: number
-    friend_name: string
+  interface SearchResult {
+    id: number
+    type: 'human' | 'ai'
+    name: string
     state?: string
   }
 
-  const [friends, setFriends] = useState<Friend[]>([])
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<SearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [friendsLoading, setFriendsLoading] = useState(true)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState<string[]>([])
@@ -317,14 +318,29 @@ function InviteMemberModal({
   const [manualType, setManualType] = useState<'ai' | 'human'>('ai')
   const [manualId, setManualId] = useState('')
 
+  // 防抖搜索
   useEffect(() => {
-    api.get<Friend[]>('/friends')
-      .then(setFriends)
-      .catch(() => setError('加载好友列表失败'))
-      .finally(() => setFriendsLoading(false))
-  }, [])
+    if (query.length < 1) {
+      setResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setSearchLoading(true)
+      try {
+        const data = await api.get<{ results: SearchResult[] }>(
+          `/search?q=${encodeURIComponent(query)}`
+        )
+        setResults(data.results)
+      } catch {
+        // 静默失败
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
 
-  const toggleFriend = (type: string, id: number) => {
+  const toggleMember = (type: string, id: number) => {
     const key = `${type}:${id}`
     setSelected((prev) => {
       const next = new Set(prev)
@@ -332,14 +348,6 @@ function InviteMemberModal({
       else next.add(key)
       return next
     })
-  }
-
-  const selectAll = () => {
-    if (selected.size === friends.length) {
-      setSelected(new Set())
-    } else {
-      setSelected(new Set(friends.map((f) => `${f.friend_type}:${f.friend_id}`)))
-    }
   }
 
   const handleInviteSelected = async () => {
@@ -391,9 +399,9 @@ function InviteMemberModal({
 
   const getStateIcon = (s?: string) => {
     switch (s) {
-      case 'active': return '🟢'
-      case 'dnd': return '🔴'
-      case 'offline': return '⚫'
+      case 'active': return '\u{1F7E2}'
+      case 'dnd': return '\u{1F534}'
+      case 'offline': return '\u26AB'
       default: return ''
     }
   }
@@ -405,55 +413,68 @@ function InviteMemberModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold mb-1 text-textPrimary">邀请成员</h2>
-        <p className="text-xs text-textMuted mb-4">从好友列表勾选要邀请的成员</p>
+        <p className="text-xs text-textMuted mb-4">搜索用户或 AI 并选择邀请</p>
 
-        {friendsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500" />
-          </div>
-        ) : friends.length === 0 ? (
-          <div className="py-8 text-center text-sm text-textMuted">
-            暂无好友，请先在搜索框中添加好友
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={selectAll}
-              className="text-xs text-primary-400 hover:text-primary-300 mb-2 self-start"
-            >
-              {selected.size === friends.length ? '取消全选' : '全选'}
-            </button>
-            <div className="flex-1 overflow-y-auto border border-border rounded-xl divide-y divide-border/50 mb-4 max-h-64">
-              {friends.map((f) => {
-                const key = `${f.friend_type}:${f.friend_id}`
-                const checked = selected.has(key)
-                return (
-                  <label
-                    key={key}
-                    className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
-                      checked ? 'bg-primary-500/10' : 'hover:bg-elevated'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleFriend(f.friend_type, f.friend_id)}
-                      className="w-4 h-4 rounded border-border bg-canvas text-primary-500 focus:ring-primary-500/50"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-textPrimary truncate">{f.friend_name}</span>
-                        <span className="text-xs">{getStateIcon(f.state)}</span>
-                      </div>
-                    </div>
-                    <span className="text-xs text-textMuted shrink-0">
-                      {f.friend_type === 'ai' ? '🤖 AI' : '👤'}
-                    </span>
-                  </label>
-                )
-              })}
+        {/* 搜索框 */}
+        <div className="relative mb-3">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="输入名称搜索..."
+            className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+        </div>
+
+        {/* 搜索结果 */}
+        <div className="flex-1 overflow-y-auto border border-border rounded-xl divide-y divide-border/50 mb-4 max-h-48">
+          {query.length < 1 ? (
+            <div className="py-6 text-center text-xs text-textMuted">
+              输入关键词搜索要邀请的成员
             </div>
-          </>
+          ) : searchLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500" />
+            </div>
+          ) : results.length === 0 ? (
+            <div className="py-6 text-center text-xs text-textMuted">无结果</div>
+          ) : (
+            results.map((r) => {
+              const key = `${r.type}:${r.id}`
+              const checked = selected.has(key)
+              return (
+                <label
+                  key={key}
+                  className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${
+                    checked ? 'bg-primary-500/10' : 'hover:bg-elevated'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleMember(r.type, r.id)}
+                    className="w-4 h-4 rounded border-border bg-canvas text-primary-500 focus:ring-primary-500/50"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-textPrimary truncate">{r.name}</span>
+                      <span className="text-xs">{getStateIcon(r.state)}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs text-textMuted shrink-0">
+                    {r.type === 'ai' ? '🤖 AI' : '👤'}
+                  </span>
+                </label>
+              )
+            })
+          )}
+        </div>
+
+        {/* 已选成员摘要 */}
+        {selected.size > 0 && (
+          <div className="mb-3 text-xs text-textMuted">
+            已选 {selected.size} 位成员
+          </div>
         )}
 
         {!showManual ? (
@@ -506,7 +527,7 @@ function InviteMemberModal({
 
         {error && <div className="text-sm text-rose-400 mb-2">{error}</div>}
         {success.length > 0 && (
-          <div className="text-sm text-mint-400 mb-2">已成功邀请 {success.length} 位好友</div>
+          <div className="text-sm text-mint-400 mb-2">已成功邀请 {success.length} 位成员</div>
         )}
 
         <div className="flex gap-2">

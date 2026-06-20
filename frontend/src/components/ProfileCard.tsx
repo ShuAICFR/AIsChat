@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
-import { X, UserPlus, UserCheck, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { X, MessageSquare } from 'lucide-react'
 import { api } from '../api/client'
 
 interface ProfileCardProps {
@@ -11,42 +12,22 @@ interface ProfileCardProps {
 }
 
 export default function ProfileCard({ entityType, entityId, entityName, state, onClose }: ProfileCardProps) {
-  const [isFriend, setIsFriend] = useState(false)
-  const [requestStatus, setRequestStatus] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const navigate = useNavigate()
+  const [sending, setSending] = useState(false)
 
-  useEffect(() => {
-    // 检查好友状态
-    api.get<{ results: Array<{ is_friend: boolean }> }>(`/search?q=${encodeURIComponent(entityName)}`)
-      .then(data => {
-        const match = data.results.find(
-          (r: any) => r.type === entityType && r.id === entityId
-        )
-        if (match) {
-          setIsFriend(match.is_friend)
-        }
-      })
-      .catch(console.error)
-  }, [entityType, entityId, entityName])
-
-  const handleAddFriend = async () => {
-    setLoading(true)
+  const handleSendDM = async () => {
+    setSending(true)
     try {
-      const result = await api.post<{ status: string; message?: string }>('/friends/requests', {
-        target_type: entityType,
-        target_id: entityId,
-        message: message || undefined,
-      })
-      if (result.status === 'accepted') {
-        setIsFriend(true)
-      } else {
-        setRequestStatus('pending')
+      // 注意：DM API 使用 target_user_id（Human 的 user_id 或 AI 绑定的 user_id）
+      const dm = await api.post<{ session_id: string }>(`/dm/${entityId}`)
+      if (dm.session_id) {
+        onClose()
+        navigate(`/chat/dm/${dm.session_id}`)
       }
     } catch (err: any) {
-      alert(err.message || '发送失败')
+      alert(err.message || '发起私信失败')
     } finally {
-      setLoading(false)
+      setSending(false)
     }
   }
 
@@ -98,39 +79,15 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
           </button>
         </div>
 
-        {/* 好友操作 */}
-        <div className="space-y-3">
-          {isFriend ? (
-            <div className="flex items-center gap-2 text-mint-400 bg-mint-400/10 rounded-xl px-3 py-2">
-              <UserCheck size={16} />
-              <span className="text-sm font-medium">已是好友</span>
-            </div>
-          ) : requestStatus === 'pending' ? (
-            <div className="flex items-center gap-2 text-accent-400 bg-accent-400/10 rounded-xl px-3 py-2">
-              <Clock size={16} />
-              <span className="text-sm font-medium">好友申请已发送</span>
-            </div>
-          ) : (
-            <>
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="附言（可选）"
-                rows={2}
-                maxLength={200}
-                className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
-              />
-              <button
-                onClick={handleAddFriend}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 transition-all text-sm font-medium shadow-lg shadow-primary-500/20"
-              >
-                <UserPlus size={16} />
-                {loading ? '发送中...' : '添加好友'}
-              </button>
-            </>
-          )}
-        </div>
+        {/* 操作区 — 直接发私信 */}
+        <button
+          onClick={handleSendDM}
+          disabled={sending}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 transition-all text-sm font-medium shadow-lg shadow-primary-500/20"
+        >
+          <MessageSquare size={16} />
+          {sending ? '发起中...' : '发私信'}
+        </button>
       </div>
     </div>
   )

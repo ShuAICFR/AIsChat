@@ -1,9 +1,8 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, Users, Bot, Settings } from 'lucide-react'
+import { MessageCircle, Bot, Settings } from 'lucide-react'
 
 const tabs = [
   { path: '/chat', label: '聊天', icon: MessageCircle },
-  { path: '/friends', label: '好友', icon: Users },
   { path: '/agents', label: 'AI', icon: Bot },
   { path: '/settings', label: '设置', icon: Settings },
 ]
@@ -14,7 +13,6 @@ export default function MobileNav() {
 
   const isActive = (path: string) => {
     if (path === '/chat') return location.pathname.startsWith('/chat') || location.pathname === '/'
-    if (path === '/friends') return location.pathname.startsWith('/friends')
     if (path === '/agents') return location.pathname.startsWith('/agents')
     if (path === '/settings') return location.pathname.startsWith('/settings')
     return false

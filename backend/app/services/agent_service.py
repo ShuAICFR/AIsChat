@@ -8,7 +8,6 @@ from sqlalchemy import select, func, update
 from app.models.user import User
 from app.models.agent import Agent, AgentConfigHistory
 from app.models.memory import RoughMemory, DetailMemory
-from app.models.friendship import Friendship
 from app.config import settings
 from app.utils.text import extract_mentions
 
@@ -336,15 +335,6 @@ async def create_agent(
     db.add(agent)
     await db.flush()
     await db.refresh(agent)
-
-    # 自动添加好友关系：创建者与 AI 互为好友
-    from app.models.friendship import Friendship
-    friendship = Friendship(
-        user_id=owner_id,
-        friend_type="ai",
-        friend_id=agent.id,
-    )
-    db.add(friendship)
 
     logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，api_credit_cost={api_credit_cost}")
     return agent
@@ -764,7 +754,7 @@ async def export_agent_soul(
     agent_id: int,
 ) -> dict:
     """
-    导出 AI 灵魂档案：配置 + 历史 + 记忆 + 好友
+    导出 AI 灵魂档案：配置 + 历史 + 记忆
     """
     from datetime import datetime, timezone as tz
 
@@ -822,24 +812,6 @@ async def export_agent_soul(
                 "created_at": str(d.created_at) if d.created_at else None,
             })
 
-    # 好友
-    friend_result = await db.execute(
-        select(Friendship)
-        .where(
-            Friendship.user_id == agent.owner_id,
-            Friendship.friend_type == "ai",
-            Friendship.friend_id == agent_id,
-        )
-    )
-    friendships = friend_result.scalars().all()
-
-    friends = []
-    for f in friendships:
-        friends.append({
-            "friend_type": f.friend_type,
-            "friend_id": f.friend_id,
-        })
-
     return {
         "export_version": "1.0",
         "exported_at": datetime.now(tz).isoformat(),
@@ -863,7 +835,6 @@ async def export_agent_soul(
         },
         "config_history": config_history,
         "memories": memories,
-        "friends": friends,
     }
 
 
@@ -957,7 +928,7 @@ async def import_agent_soul(
     logger.info(
         f"导入灵魂档案成功: agent_id={agent.id}, name={name}, "
         f"memories={len(data.get('memories', []))}, "
-        f"friends={len(data.get('friends', []))}"
+        f"friends=0"
     )
     return agent
 

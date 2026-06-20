@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { api } from '../api/client'
-import { MessageCircle, Users, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink } from 'lucide-react'
+import { MessageCircle, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import SearchOverlay from './SearchOverlay'
-import FriendList from './FriendList'
-import FriendRequestBadge from './FriendRequestBadge'
 
 const mainNavItems = [
   { to: '/chat', label: '聊天', icon: MessageCircle },
@@ -25,8 +22,6 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
-  const [showFriendList, setShowFriendList] = useState(false)
-  const [friendRefresh, setFriendRefresh] = useState(0)
 
   const handleLogout = () => {
     logout()
@@ -87,35 +82,17 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               )}
             </p>
           </div>
-          {/* 桌面端才显示好友申请徽章（移动端通过底部「好友」入口管理） */}
-          {!mobile && <FriendRequestBadge />}
         </div>
       )}
 
       {/* 主导航 */}
-      {!collapsed && !showFriendList && (
+      {!collapsed && (
         <nav className="flex-1 py-3 space-y-0.5">
-          <NavLink to="/chat" onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }} className={navLinkClass}>
-            <MessageCircle size={18} />
-            <span>聊天</span>
-          </NavLink>
-
-          {/* 桌面端显示好友入口（移动端通过底部栏访问 /friends） */}
-          {!mobile && (
-            <button
-              onClick={() => { setShowFriendList(true); setFriendRefresh(Date.now()) }}
-              className="flex items-center gap-3 w-full px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated text-left"
-            >
-              <Users size={18} />
-              <span>好友</span>
-            </button>
-          )}
-
-          {mainNavItems.filter(i => i.to !== '/chat').map((item) => (
+          {mainNavItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }}
+              onClick={() => { if (mobile) onClose?.() }}
               className={navLinkClass}
               title={collapsed ? item.label : undefined}
             >
@@ -125,7 +102,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           ))}
 
           {user?.role === 'admin' && (
-            <NavLink to="/admin" onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }} className={navLinkClass}>
+            <NavLink to="/admin" onClick={() => { if (mobile) onClose?.() }} className={navLinkClass}>
               <Shield size={18} />
               <span>管理</span>
             </NavLink>
@@ -145,34 +122,6 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             </span>
           </a>
         </nav>
-      )}
-
-      {/* 好友列表面板 */}
-      {!collapsed && showFriendList && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-            <span className="text-sm font-medium text-textPrimary">好友列表</span>
-            <button
-              onClick={() => { setShowFriendList(false); if (mobile) onClose?.() }}
-              className="p-1 rounded hover:bg-elevated text-textMuted hover:text-textSecondary"
-              title="返回导航"
-            >
-              <X size={14} />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto py-2 px-2">
-            <FriendList
-              refreshTrigger={friendRefresh}
-              onSelectFriend={async (friend) => {
-                const targetUserId = (friend as any).friend_user_id || friend.friend_id
-                try {
-                  const dm = await api.post(`/dm/${targetUserId}`)
-                  if (dm.session_id) { navigate(`/chat/dm/${dm.session_id}`); if (mobile) onClose?.() }
-                } catch { /* ignore */ }
-              }}
-            />
-          </div>
-        </div>
       )}
 
       {/* 折叠时的最小导航 */}
@@ -199,16 +148,6 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               <item.icon size={18} />
             </NavLink>
           ))}
-          {/* 桌面端折叠时显示好友入口（移动端通过底部栏访问） */}
-          {!mobile && (
-            <button
-              onClick={() => { setCollapsed(false); setShowFriendList(true); setFriendRefresh(Date.now()) }}
-              className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
-              title="好友"
-            >
-              <Users size={18} />
-            </button>
-          )}
           {user?.role === 'admin' && (
             <NavLink
               to="/admin"

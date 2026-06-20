@@ -4,7 +4,6 @@ import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import ChatPage from './pages/ChatPage'
 import DMPage from './pages/DMPage'
-import FriendsPage from './pages/FriendsPage'
 import AgentsPage from './pages/AgentsPage'
 import AgentDetailPage from './pages/AgentDetailPage'
 import SettingsPage from './pages/SettingsPage'
@@ -49,7 +48,6 @@ export default function App() {
         {/* 旧 /dm 路由重定向到统一 /chat 路径 */}
         <Route path="dm" element={<Navigate to="/chat" replace />} />
         <Route path="dm/:sessionId" element={<DMPage />} />
-        <Route path="friends" element={<FriendsPage />} />
         <Route path="agents" element={<AgentsPage />} />
         <Route path="agents/:id" element={<AgentDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />

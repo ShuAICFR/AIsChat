@@ -39,6 +39,7 @@ async def run_migrations():
             await _migrate_agent_alarms(db)
             await _migrate_workspace(db)
             await _migrate_agent_skills(db)
+            await _migrate_archive_friend_tables(db)  # v0.4.0 删除好友机制：归档表
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -731,6 +732,25 @@ async def _migrate_max_tool_rounds(db):
         logger.info("  ✅ agents.max_alarms 迁移完成")
     else:
         logger.info("  ⏭ agents.max_alarms 已存在，跳过")
+
+
+async def _migrate_archive_friend_tables(db):
+    """v0.4.0: 归档好友表（删除好友机制，保留数据以便回滚）"""
+    if await _table_exists(db, "friendships_archived"):
+        logger.info("  ⏭ friendships_archived 已存在，跳过")
+        return
+    logger.info("  📦 归档好友相关表...")
+    try:
+        if await _table_exists(db, "friendships"):
+            await db.execute(text("ALTER TABLE friendships RENAME TO friendships_archived"))
+            logger.info("  ✅ friendships → friendships_archived")
+        if await _table_exists(db, "friendship_requests"):
+            await db.execute(text("ALTER TABLE friendship_requests RENAME TO friendship_requests_archived"))
+            logger.info("  ✅ friendship_requests → friendship_requests_archived")
+        await db.commit()
+    except Exception as e:
+        logger.warning(f"  ⚠️ 归档好友表失败（可能已归档）: {e}")
+        await db.rollback()
 
 
 async def _fix_column_types(db):

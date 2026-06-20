@@ -227,11 +227,6 @@ export default function ChatSidebar({
           </>
         )}
 
-        {/* 底部提示：好友列表入口 */}
-        <div className="px-3 pt-3 pb-6">
-          <p className="text-[10px] text-textMuted leading-relaxed">
-            在群聊中点击头像可添加好友，或通过左侧「好友」入口管理。
-          </p>
         </div>
       </div>
     </div>

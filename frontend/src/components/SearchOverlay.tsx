@@ -174,7 +174,7 @@ export default function SearchOverlay() {
 
       {/* 加好友附言弹窗 */}
       {addFriendTarget && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]" onClick={() => setAddFriendTarget(null)}>
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]" onClick={() => setAddFriendTarget(null)}>
           <div
             className="bg-elevated border border-border rounded-2xl p-5 w-full max-w-sm mx-4 shadow-2xl shadow-black/30"
             onClick={(e) => e.stopPropagation()}

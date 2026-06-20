@@ -386,7 +386,7 @@ export default function ConversationLogTab() {
 
           {/* Log detail modal */}
           {selectedLog && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 pt-10 overflow-y-auto" onClick={() => { setSelectedLog(null); setLogDetail(null) }}>
+            <div className="fixed inset-0 bg-black/70 flex items-start justify-center z-50 pt-10 overflow-y-auto" onClick={() => { setSelectedLog(null); setLogDetail(null) }}>
               <div
                 className="bg-elevated border border-border rounded-2xl p-5 w-full max-w-2xl mx-4 shadow-2xl shadow-black/30 max-h-[80vh] overflow-y-auto"
                 onClick={e => e.stopPropagation()}

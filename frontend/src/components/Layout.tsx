@@ -20,7 +20,7 @@ export default function Layout() {
       {/* ── 移动端抽屉遮罩 ── */}
       {drawerOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
+          className="md:hidden fixed inset-0 z-40 bg-black/60 transition-opacity"
           onClick={() => setDrawerOpen(false)}
         />
       )}

@@ -463,8 +463,11 @@ async def _tool_call_loop(
     last_task = None
     # 累积 token 消耗（跨多轮工具调用）
     total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    # system_reminder 额外轮次：AI 返回文字但忘了调 send_message 时，提醒不消耗配额
+    _reminder_extra = 0
 
-    for loop_idx in range(max_loops):
+    loop_idx = 0
+    while loop_idx < max_loops + _reminder_extra:
         try:
             response = await chat_completion(
                 messages=messages,
@@ -499,7 +502,8 @@ async def _tool_call_loop(
         # ── 提醒：有文字但没有工具调用 ──
         # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，
         # 但必须通过工具调用来发送。这里提醒 AI 补上工具调用。
-        if content and not tool_calls:
+        # 注意：最多注入 1 次提醒，避免死循环。
+        if content and not tool_calls and _reminder_extra < 1:
             logger.info(
                 f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"
                 f"注入提醒: {content[:80]}"
@@ -536,6 +540,9 @@ async def _tool_call_loop(
                     ),
                 }, ensure_ascii=False),
             })
+            # 给 AI 额外一次机会调 send_message，不计入 max_loops 配额
+            _reminder_extra += 1
+            logger.info(f"AI {agent.name}({agent.id}) system_reminder 注入，额外轮次 +1 (当前额外={_reminder_extra})")
             await asyncio.sleep(0.3)
             continue
 
@@ -633,6 +640,7 @@ async def _tool_call_loop(
 
         # 短暂延迟，避免过于频繁的 API 调用
         await asyncio.sleep(0.5)
+        loop_idx += 1
 
     # 循环耗尽（LLM 持续请求 tool_calls 达到 max_loops），仍需保存
     if last_task:

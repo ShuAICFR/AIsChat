@@ -172,8 +172,6 @@ export default function FriendsPage() {
     }
   }
 
-  const pendingCount = requests.length
-
   // 排序 + 搜索过滤
   const sortedFriends = useMemo(() => {
     const sorted = sortFriends(friends, sortMode)

@@ -340,6 +340,7 @@ async def _maybe_trigger_ai_reply(
         api_base_url=api_base,
         api_key=api_key,
         trigger_user_id=trigger_user_id,
+        system_prompt_override=effective_cfg.get("system_prompt"),
     )
     logger.info(f"🔍 AI {agent.name}: 构建了 {len(messages)} 条消息")
 
@@ -355,10 +356,16 @@ async def _maybe_trigger_ai_reply(
         )
         messages.append({"role": "system", "content": delay_hint})
 
-    # 7. 获取工具
+    # 7. 获取有效配置（v0.4.0: per-user 覆盖）
+    from app.services.agent_service import get_effective_config
+    effective_cfg = await get_effective_config(db, agent.id, trigger_user_id)
+    logger.info(f"🔍 AI {agent.name}: effective_cfg ai_type={effective_cfg['ai_type']}, "
+                f"thinking={effective_cfg['thinking_enabled']}, temp={effective_cfg['temperature']}")
+
+    # 7.5 获取工具
     from app.services.tool_registry import get_allowed_tools
     delay_allowed = await _is_delay_reply_allowed(db, agent)
-    tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
+    tools = get_allowed_tools(agent.state, thinking_enabled=effective_cfg["thinking_enabled"], delay_reply_allowed=delay_allowed)
     model = resolve_model(agent)
     logger.info(f"🔍 AI {agent.name}: model={model}, tools={len(tools)}")
 
@@ -385,10 +392,11 @@ async def _maybe_trigger_ai_reply(
             model=model,
             api_base_url=api_base,
             api_key=api_key,
-            max_loops=agent.max_tool_rounds,
+            max_loops=effective_cfg["max_tool_rounds"],
             chain_depth=chain_depth,
             conversation_type="group",
             trigger_user_id=trigger_user_id,
+            effective_cfg=effective_cfg,
         )
     finally:
         await manager.broadcast_to_group(
@@ -423,6 +431,7 @@ async def _tool_call_loop(
     conversation_type: str = "group",
     session_id: str | None = None,
     trigger_user_id: int | None = None,
+    effective_cfg: dict | None = None,
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
@@ -430,7 +439,10 @@ async def _tool_call_loop(
     铁律：文字不能自动发出去。想说话必须调 send_message。
 
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
+    effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
     """
+    if effective_cfg is None:
+        effective_cfg = {}
     from app.services.llm_service import chat_completion
     from app.services.tool_registry import dispatch_tool_call
 
@@ -458,11 +470,11 @@ async def _tool_call_loop(
                 api_base_url=api_base_url,
                 api_key=api_key,
                 tools=tools if tools else None,
-                temperature=agent.current_temperature or 0.8,
-                top_p=agent.current_top_p or 0.9,
-                presence_penalty=agent.current_presence_penalty or 0.5,
-                frequency_penalty=agent.current_frequency_penalty or 0.5,
-                thinking_enabled=agent.thinking_enabled,
+                temperature=effective_cfg["temperature"] or 0.8,
+                top_p=effective_cfg["top_p"] or 0.9,
+                presence_penalty=effective_cfg["presence_penalty"] or 0.5,
+                frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
+                thinking_enabled=effective_cfg["thinking_enabled"],
             )
         except Exception as e:
             logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
@@ -697,12 +709,16 @@ async def _trigger_dm_ai_reply(
     # 构建消息
     from app.services.llm_service import build_dm_messages, resolve_model
     # v0.4.0: DM 中 sender_id 即为触发用户
-    messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key, trigger_user_id=sender_id)
+    messages = await build_dm_messages(db, agent, session_id, api_base_url=api_base, api_key=api_key, trigger_user_id=sender_id, system_prompt_override=effective_cfg.get("system_prompt"))
+
+    # 获取有效配置（v0.4.0: per-user 覆盖 — DM 场景 trigger_user_id=sender_id）
+    from app.services.agent_service import get_effective_config as _get_eff_cfg
+    effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
     # 获取工具
     from app.services.tool_registry import get_allowed_tools
     delay_allowed = await _is_delay_reply_allowed(db, agent)
-    tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
+    tools = get_allowed_tools(agent.state, thinking_enabled=effective_cfg["thinking_enabled"], delay_reply_allowed=delay_allowed)
     model = resolve_model(agent)
 
     logger.info(f"🚀 AI {agent.name}: 开始 DM 回复 (session={session_id})")
@@ -729,11 +745,12 @@ async def _trigger_dm_ai_reply(
             model=model,
             api_base_url=api_base,
             api_key=api_key,
-            max_loops=agent.max_tool_rounds,
+            max_loops=effective_cfg["max_tool_rounds"],
             chain_depth=chain_depth,
             conversation_type="dm",
             session_id=session_id,
             trigger_user_id=sender_id,
+            effective_cfg=effective_cfg,
         )
     finally:
         await manager.broadcast_to_dm(
@@ -909,10 +926,14 @@ async def _process_alarm_event(db, event: dict):
         "- 如果需要私信某人，请使用 send_dm\n"
     )
 
+    # 获取有效配置（v0.4.0: 闹钟无触发用户，使用 agent 级配置）
+    from app.services.agent_service import get_effective_config as _get_eff_cfg2
+    effective_cfg = await _get_eff_cfg2(db, agent.id, user_id=None)
+
     # 可用工具
     from app.services.skill_engine import _is_delay_reply_allowed
     delay_allowed = await _is_delay_reply_allowed(db, agent)
-    tools = get_allowed_tools("active", thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
+    tools = get_allowed_tools("active", thinking_enabled=effective_cfg["thinking_enabled"], delay_reply_allowed=delay_allowed)
     tool_names = [t["function"]["name"] for t in tools]
     tool_list = "、".join(tool_names)
     system_prompt += (
@@ -959,11 +980,12 @@ async def _process_alarm_event(db, event: dict):
             model=model,
             api_base_url=api_base,
             api_key=api_key,
-            max_loops=agent.alarm_max_tool_rounds,
+            max_loops=effective_cfg["alarm_max_tool_rounds"],
             chain_depth=0,
             conversation_type="alarm",
             session_id=None,
             trigger_user_id=None,
+            effective_cfg=effective_cfg,
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

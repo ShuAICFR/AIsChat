@@ -318,14 +318,16 @@ def resolve_model(agent) -> str:
 # 系统提示词段 builder（每个段独立构建，便于缓存优化）
 # ============================================================
 
-def _build_personality(agent, language: str = "zh") -> str:
+def _build_personality(agent, language: str = "zh", system_prompt_override: str | None = None) -> str:
     """personality 段：AI 当前人格（Agent 可修改，独立缓存）
 
     hide_ai_identity=True 时，不出现"AI 群聊参与者"字样。
     language='en' 时使用英文 fallback。
+    v0.4.0: system_prompt_override 为 per-user 配置覆盖（通用/半通用 AI）。
     """
-    if agent.current_system_prompt:
-        return agent.current_system_prompt
+    effective_prompt = system_prompt_override or agent.current_system_prompt
+    if effective_prompt:
+        return effective_prompt
 
     if agent.hide_ai_identity:
         if language == "en":
@@ -458,6 +460,7 @@ async def build_messages(
     api_base_url: str | None = None,
     api_key: str | None = None,
     trigger_user_id: int | None = None,
+    system_prompt_override: str | None = None,
 ) -> list[dict]:
     """
     构建发送给 LLM 的消息列表（6 段系统提示词 + 历史消息）。
@@ -469,6 +472,8 @@ async def build_messages(
     4. tools           — 当前可用工具清单
     5. current_context — 群名/ID/时间/DM状态/工作区
     6. injected_skills — 记忆注入 + Skill 引擎注入
+
+    v0.4.0: system_prompt_override 用于通用/半通用 AI 的 per-user 人格覆盖。
     """
 
     # ── 并行获取所有上下文 ──
@@ -527,7 +532,7 @@ async def build_messages(
     # ── 构建六段 ──
     segments = {
         "core_identity": CORE_IDENTITY,
-        "personality": _build_personality(agent, language),
+        "personality": _build_personality(agent, language, system_prompt_override),
         "rules": RULES,
         "tools": await _build_tools_segment(db, agent, is_dm),
         "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
@@ -593,8 +598,10 @@ async def build_dm_messages(
     api_base_url: str | None = None,
     api_key: str | None = None,
     trigger_user_id: int | None = None,
+    system_prompt_override: str | None = None,
 ) -> list[dict]:
-    """构建 DM 私信的消息列表（6 段系统提示词 + DM 历史消息）"""
+    """构建 DM 私信的消息列表（6 段系统提示词 + DM 历史消息）
+    v0.4.0: system_prompt_override 用于通用/半通用 AI 的 per-user 人格覆盖。"""
     from app.models.dm import DMMessage, DMSession
     from app.models.user import User
     from sqlalchemy import select as sa_select
@@ -659,7 +666,7 @@ async def build_dm_messages(
     # ── 构建六段 ──
     segments = {
         "core_identity": CORE_IDENTITY,
-        "personality": _build_personality(agent, language),
+        "personality": _build_personality(agent, language, system_prompt_override),
         "rules": DM_RULES,
         "tools": await _build_tools_segment(db, agent, is_dm=True),
         "current_context": dm_context,

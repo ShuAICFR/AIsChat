@@ -344,12 +344,21 @@ async def export_soul(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     json_str = json.dumps(data, ensure_ascii=False, indent=2)
-    safe_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in agent.name)[:30]
+    # 文件名只保留 ASCII（中文 isalnum()=True 会突破 latin-1 编码限制）
+    safe_name = "".join(c if (c.isascii() and c.isalnum()) or c in "._- " else "_" for c in agent.name)[:30]
+    safe_name = safe_name.strip().replace(" ", "_") or "agent"
+    # RFC 5987: UTF-8 编码真实文件名，latin-1 safe 文件名作为 fallback
+    from urllib.parse import quote
+    full_name = f"soul_{agent.name}.json"
+    encoded = quote(full_name, safe="")
     return Response(
         content=json_str.encode("utf-8"),
         media_type="application/json; charset=utf-8",
         headers={
-            "Content-Disposition": f'attachment; filename="soul_{safe_name}.json"',
+            "Content-Disposition": (
+                f"attachment; filename=\"{safe_name}.json\"; "
+                f"filename*=UTF-8''{encoded}"
+            ),
         },
     )
 

@@ -1025,7 +1025,7 @@ async def export_agent_soul(
 
     return {
         "export_version": "1.0",
-        "exported_at": datetime.now(tz).isoformat(),
+        "exported_at": datetime.now(tz.utc).isoformat(),
         "agent_name": agent.name,
         "agent_config": {
             "system_prompt": agent.current_system_prompt,

@@ -208,9 +208,9 @@ export default function ChatSidebar({
                 <GroupAvatarGroup avatars={g.member_avatars || []} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="font-medium truncate flex items-center gap-1">
+                    <div className="font-medium flex items-center gap-1 min-w-0">
                       {g.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
-                      <span className="truncate">{g.name}</span>
+                      <span className="truncate block">{g.name}</span>
                     </div>
                     {g.unread_count > 0 && (
                       <span className={`shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
@@ -227,7 +227,9 @@ export default function ChatSidebar({
                     {g.has_mention && !g.dnd_until && (
                       <span className="text-rose-400 font-medium shrink-0">{t('chatlist.atYou')}</span>
                     )}
-                    <span className="truncate min-w-0 flex-1">{g.last_message_preview || t('chatlist.noMessages')}</span>
+                    <span className="min-w-0 flex-1" style={{ display: 'block' }}>
+                      <span className="truncate block">{g.last_message_preview || t('chatlist.noMessages')}</span>
+                    </span>
                     {g.last_message_at && (
                       <span className="shrink-0">{formatRelativeTime(g.last_message_at, lang)}</span>
                     )}
@@ -272,10 +274,10 @@ export default function ChatSidebar({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <div className="font-medium truncate flex items-center gap-1.5">
+                      <div className="font-medium flex items-center gap-1.5 min-w-0">
                         {s.partner.type === 'ai' && <Bot size={11} className="shrink-0 text-mint-400" />}
                         {s.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
-                        <span className="truncate">{s.partner.name}</span>
+                        <span className="truncate block">{s.partner.name}</span>
                       </div>
                       {s.unread_count > 0 && (
                         <span className="shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-primary-500/80">
@@ -284,8 +286,8 @@ export default function ChatSidebar({
                       )}
                     </div>
                     <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
-                      <span className="truncate min-w-0 flex-1">
-                        {s.last_message_preview || t('chatlist.noMessages')}
+                      <span className="min-w-0 flex-1" style={{ display: 'block' }}>
+                        <span className="truncate block">{s.last_message_preview || t('chatlist.noMessages')}</span>
                       </span>
                       {s.last_message_at && (
                         <span className="shrink-0">{formatRelativeTime(s.last_message_at, lang)}</span>

@@ -888,7 +888,7 @@ async def _process_alarm_event(db, event: dict):
     from app.models.agent import Agent as AgentModel
     from app.models.user import User
     from app.utils.crypto import decrypt_api_key
-    from app.services.llm_service import CORE_IDENTITY, RULES, resolve_model
+    from app.services.llm_service import CORE_IDENTITY, resolve_model, PROTOCOL_BY_PROFILE, PROTOCOL_CHAT
     from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
     from app.services.tool_registry import get_allowed_tools
 
@@ -927,12 +927,14 @@ async def _process_alarm_event(db, event: dict):
         api_key = decrypt_api_key(user.api_key_encrypted)
         api_base = user.api_base_url or settings.deepseek_base_url
 
-    # 构建系统提示词
+    # 构建系统提示词（层级化：内核 + 人格 + 协议）
+    profile = getattr(agent, 'config_profile', 'chat') or 'chat'
+    protocol = PROTOCOL_BY_PROFILE.get(profile, PROTOCOL_CHAT)
     custom_prompt = agent.current_system_prompt or (
         f"你是 {agent.name}，一个 AI 群聊参与者。请自然地参与对话，"
         "可以调用工具来发送消息、存储记忆、切换状态等。"
     )
-    system_prompt = CORE_IDENTITY + "\n\n" + custom_prompt + "\n\n" + RULES
+    system_prompt = CORE_IDENTITY + "\n\n" + custom_prompt + "\n\n" + protocol
 
     # 注入相关记忆（用 task 作为检索查询）
     try:

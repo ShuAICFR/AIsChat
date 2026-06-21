@@ -41,6 +41,7 @@ interface Agent {
   api_base_url: string | null
   has_api_key: boolean
   avatar_url: string | null
+  ai_type: string
   created_at: string
 }
 

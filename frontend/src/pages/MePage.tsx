@@ -15,6 +15,14 @@ interface AgentBrief {
   state: string
   chat_model: string | null
   avatar_url: string | null
+  ai_type: string
+}
+
+// AI 类型 → 显示标签 + 颜色
+const AI_TYPE_LABEL: Record<string, { text: string; cls: string }> = {
+  resonance: { text: '共振', cls: 'bg-violet-500/10 text-violet-400' },
+  general: { text: '通用', cls: 'bg-primary-500/10 text-primary-400' },
+  semi_general: { text: '半通用', cls: 'bg-amber-500/10 text-amber-400' },
 }
 
 interface UsageOverview {
@@ -225,6 +233,11 @@ export default function MePage() {
                 </div>
                 <div className="text-xs font-medium text-textPrimary truncate">{a.name}</div>
                 <div className="text-[10px] text-textMuted mt-0.5">{a.state === 'active' ? '在线' : a.state === 'dnd' ? '勿扰' : '离线'}</div>
+                {(AI_TYPE_LABEL[a.ai_type]) && (
+                  <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-full mt-1 font-medium ${AI_TYPE_LABEL[a.ai_type].cls}`}>
+                    {AI_TYPE_LABEL[a.ai_type].text}
+                  </span>
+                )}
               </Link>
             ))}
           </div>

@@ -116,7 +116,7 @@ export default function MessageBubble({
       {/* 消息内容 */}
       <div className={`max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
         <div className={`flex items-center gap-2 mb-1 flex-wrap ${isMine ? 'flex-row-reverse' : ''}`}>
-          <span className="text-xs font-medium text-textSecondary truncate min-w-0">{senderName}</span>
+          <span className="text-xs font-medium text-textSecondary">{senderName}</span>
           {sourcePublicId && (
             <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={t('chat.fromInstance').replace('{publicId}', sourcePublicId)}>
               <Globe size={10} className="inline" /> {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}

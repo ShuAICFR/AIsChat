@@ -1045,6 +1045,7 @@ function OpenCLICommandsSection() {
     { pattern: 'discord .*', is_regex: true, description: t('opencli.preset.discordCli'), category: t('opencli.category.cliBridge') },
     { pattern: 'wx .*',     is_regex: true,  description: t('opencli.preset.wxCli'), category: t('opencli.category.cliBridge') },
   ]
+  const [data, setData] = useState<any[]>([])
   const [pattern, setPattern] = useState('')
   const [isRegex, setIsRegex] = useState(false)
   const [desc, setDesc] = useState('')

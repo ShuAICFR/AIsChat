@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(20) DEFAULT 'user',
     is_active BOOLEAN DEFAULT TRUE,
     ai_quota INT DEFAULT 3,
+    platform_gifted_credit INT DEFAULT 0,   -- 平台赠送额度（独立于兑换码额度 api_credit）
     -- 策略模式设置
     auto_approve_vector_timeout INT DEFAULT 60,
     auto_approve_vector_default BOOLEAN DEFAULT FALSE,

@@ -1335,55 +1335,109 @@ function SystemSettingsTab() {
   const t = useT()
   const [config, setConfig] = useState<any>(null)
   const [lang, setLang] = useState('en')
+  const [platformCredit, setPlatformCredit] = useState(0)
+  const [hasActiveKeys, setHasActiveKeys] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
   useEffect(() => {
-    api.get('/admin/system-settings').then(d => {
-      setConfig(d)
-      setLang(d.default_language || 'en')
+    Promise.all([
+      api.get('/admin/system-settings'),
+      api.get('/admin/api-key-pool'),
+    ]).then(([settings, keys]) => {
+      setConfig(settings)
+      setLang(settings.default_language || 'en')
+      setPlatformCredit(settings.default_platform_credit || 0)
+      setHasActiveKeys(keys.some((k: any) => k.is_active))
     }).catch(console.error)
   }, [])
 
-  const handleSave = async () => {
+  const handleSave = async (field: string, value: any) => {
     setSaving(true)
     setMsg('')
     try {
-      const updated = await api.put('/admin/system-settings', { default_language: lang })
+      const payload: any = {}
+      if (field === 'language') payload.default_language = value
+      else if (field === 'platform_credit') payload.default_platform_credit = value
+      const updated = await api.put('/admin/system-settings', payload)
       setConfig(updated)
       setMsg(t('admin.saveSuccess'))
     } catch (err: any) {
-      setMsg(err.message || t('admin.saveFailed'))
+      setMsg(err?.message || err?.detail || t('admin.saveFailed'))
     }
     setSaving(false)
+  }
+
+  const handlePlatformCreditSave = () => {
+    const old = config?.default_platform_credit || 0
+    if (platformCredit === old) return
+    if (platformCredit > 0 && !hasActiveKeys) {
+      setMsg(t('admin.platformCreditNoActiveKey'))
+      return
+    }
+    const delta = platformCredit - old
+    const confirmed = confirm(
+      t('admin.platformCreditConfirm')
+        .replace('{old}', String(old))
+        .replace('{new}', String(platformCredit))
+        .replace('{delta}', (delta >= 0 ? '+' : '') + delta)
+        .replace('{userCount}', t('admin.allUsers'))
+    )
+    if (!confirmed) return
+    handleSave('platform_credit', platformCredit)
   }
 
   if (!config) return <p className="text-textMuted p-6">{t('common.loading')}</p>
 
   return (
-    <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
-      <h3 className="font-semibold text-textPrimary mb-4">{t('admin.systemSettings')}</h3>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.defaultLanguage')}</label>
-          <p className="text-xs text-textMuted mb-2">
-            {t('admin.defaultLanguageDesc')}
-          </p>
-          <select
-            value={lang}
-            onChange={(e) => setLang(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary"
-          >
-            <option value="zh">{t('settings.chinese')}</option>
-            <option value="en">{t('settings.english')}</option>
-          </select>
-        </div>
-        <button onClick={handleSave} disabled={saving}
-          className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm disabled:opacity-40">
-          {saving ? t('admin.saving') : t('settings.save')}
-        </button>
-        {msg && <p className={`text-sm mt-2 ${msg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>{msg}</p>}
+    <div className="bg-surface rounded-xl border border-border p-5 max-w-lg space-y-6">
+      <h3 className="font-semibold text-textPrimary">{t('admin.systemSettings')}</h3>
+
+      {/* 默认语言 */}
+      <div>
+        <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.defaultLanguage')}</label>
+        <p className="text-xs text-textMuted mb-2">{t('admin.defaultLanguageDesc')}</p>
+        <select
+          value={lang}
+          onChange={(e) => {
+            setLang(e.target.value)
+            handleSave('language', e.target.value)
+          }}
+          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary"
+        >
+          <option value="zh">{t('settings.chinese')}</option>
+          <option value="en">{t('settings.english')}</option>
+        </select>
       </div>
+
+      {/* 平台赠送额度 */}
+      <div>
+        <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.defaultPlatformCredit')}</label>
+        <p className="text-xs text-textMuted mb-2">{t('admin.defaultPlatformCreditDesc')}</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={platformCredit}
+            onChange={(e) => setPlatformCredit(parseInt(e.target.value) || 0)}
+            min={0}
+            max={999999}
+            disabled={platformCredit > 0 && !hasActiveKeys}
+            className="w-32 px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50 disabled:opacity-40"
+          />
+          <button
+            onClick={handlePlatformCreditSave}
+            disabled={saving || platformCredit === (config?.default_platform_credit || 0)}
+            className="px-3 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm disabled:opacity-40 transition-colors"
+          >
+            {t('settings.save')}
+          </button>
+        </div>
+        {!hasActiveKeys && (
+          <p className="text-xs text-amber-400 mt-1.5">{t('admin.platformCreditNoActiveKey')}</p>
+        )}
+      </div>
+
+      {msg && <p className={`text-sm ${msg.includes('失败') || msg.includes('无法') || msg.includes('No active') ? 'text-rose-400' : 'text-mint-400'}`}>{msg}</p>}
     </div>
   )
 }

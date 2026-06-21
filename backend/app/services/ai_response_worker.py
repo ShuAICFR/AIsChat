@@ -571,6 +571,7 @@ async def _tool_call_loop(
                             frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
                             thinking_enabled=effective_cfg["thinking_enabled"],
                             stream=True,
+                            pool_key_id=current_pool_key_id,
                         )
                         # 更新池 Key ID（可能已切换）
                         pool_key_id = current_pool_key_id

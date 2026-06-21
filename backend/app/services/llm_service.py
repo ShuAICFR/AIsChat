@@ -153,6 +153,7 @@ async def chat_completion(
     thinking_enabled: bool = False,
     user_id: str | None = None,
     stream: bool = False,
+    pool_key_id: int | None = None,
 ) -> dict:
     """
     LLM 聊天补全（支持流式/非流式，v0.4.0 拆分）。
@@ -175,12 +176,14 @@ async def chat_completion(
                 messages, model, api_base_url, api_key, tools,
                 temperature, top_p, presence_penalty, frequency_penalty,
                 max_tokens, response_format, thinking_enabled, user_id,
+                pool_key_id,
             )
         else:
             result = await _chat_completion_non_streaming(
                 messages, model, api_base_url, api_key, tools,
                 temperature, top_p, presence_penalty, frequency_penalty,
                 max_tokens, response_format, thinking_enabled, user_id,
+                pool_key_id,
             )
         elapsed = _time.monotonic() - t0
         await metrics.record_llm_call(elapsed, success=True)
@@ -205,6 +208,7 @@ async def _chat_completion_non_streaming(
     response_format: dict | None = None,
     thinking_enabled: bool = False,
     user_id: str | None = None,
+    pool_key_id: int | None = None,
 ) -> dict:
     """
     非流式聊天补全 — 当前生产路径。
@@ -242,7 +246,7 @@ async def _chat_completion_non_streaming(
         if response.status_code != 200:
             error_text = response.text[:500]
             logger.error(f"LLM API 错误 ({response.status_code}): {error_text}")
-            _raise_classified_error(response.status_code, error_text)
+            _raise_classified_error(response.status_code, error_text, pool_key_id=pool_key_id)
             return {}  # unreachable, 但保持类型安全
 
         data = response.json()
@@ -282,6 +286,7 @@ async def _chat_completion_streaming(
     response_format: dict | None = None,
     thinking_enabled: bool = False,
     user_id: str | None = None,
+    pool_key_id: int | None = None,
 ) -> dict:
     """
     SSE 流式聊天补全。
@@ -334,7 +339,7 @@ async def _chat_completion_streaming(
             if response.status_code != 200:
                 error_text = (await response.aread()).decode()[:500]
                 logger.error(f"LLM API 错误 ({response.status_code}): {error_text}")
-                _raise_classified_error(response.status_code, error_text)
+                _raise_classified_error(response.status_code, error_text, pool_key_id=pool_key_id)
 
             async for line in response.aiter_lines():
                 line = line.strip()

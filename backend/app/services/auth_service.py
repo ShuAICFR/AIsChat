@@ -122,6 +122,8 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "is_active": user.is_active,
         "ai_quota": user.ai_quota,
         "api_credit": user.api_credit,
+        "platform_gifted_credit": getattr(user, 'platform_gifted_credit', 0) or 0,
+        "total_effective": max(0, getattr(user, 'platform_gifted_credit', 0) or 0) + (user.api_credit or 0),
         "agent_bundle_credit": user.agent_bundle_credit,
         "file_quota_mb": user.file_quota_mb,
         "avatar_url": getattr(user, 'avatar_url', None),

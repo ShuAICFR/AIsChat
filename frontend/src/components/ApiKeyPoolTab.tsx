@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
-import { Key, Plus, Trash2, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react'
+import { Key, Plus, Trash2, ToggleLeft, ToggleRight, Loader2, BarChart3, X } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
 interface PoolKey {
   id: number
@@ -10,15 +11,33 @@ interface PoolKey {
   api_key_preview: string
   is_active: boolean
   priority: number
+  concurrent_limit: number | null
   created_at: string | null
   updated_at: string | null
 }
+
+interface KeyStats {
+  key_id: number
+  key_name: string
+  overview: {
+    total_requests: number
+    total_tokens: number
+    total_credit: number
+    active_users: number
+    days: number
+  }
+  daily: Array<{ day: string; tokens: number; requests: number }>
+  model_distribution: Array<{ model: string; count: number; tokens: number }>
+}
+
+const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899']
 
 export default function ApiKeyPoolTab() {
   const t = useT()
   const [keys, setKeys] = useState<PoolKey[]>([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
+  const [statsKeyId, setStatsKeyId] = useState<number | null>(null)
 
   const loadKeys = async () => {
     try {
@@ -89,7 +108,7 @@ export default function ApiKeyPoolTab() {
           </button>
         </div>
       ) : (
-        <div className="bg-surface rounded-xl border border-border overflow-hidden">
+        <div className="bg-surface rounded-xl border border-border overflow-x-auto">
           <table className="w-full text-sm text-textPrimary">
             <thead>
               <tr className="border-b border-border bg-canvas">
@@ -97,7 +116,9 @@ export default function ApiKeyPoolTab() {
                 <th className="text-left py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColApiUrl')}</th>
                 <th className="text-left py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColKey')}</th>
                 <th className="text-center py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColPriority')}</th>
+                <th className="text-center py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColConcurrent')}</th>
                 <th className="text-center py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColStatus')}</th>
+                <th className="text-center py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColStats')}</th>
                 <th className="text-right py-2.5 px-3 text-xs font-medium text-textSecondary">{t('admin.keyColAction')}</th>
               </tr>
             </thead>
@@ -105,11 +126,14 @@ export default function ApiKeyPoolTab() {
               {keys.map(k => (
                 <tr key={k.id} className={`hover:bg-elevated/50 transition-colors ${!k.is_active ? 'opacity-50' : ''}`}>
                   <td className="py-2.5 px-3 font-medium">{k.name}</td>
-                  <td className="py-2.5 px-3 text-xs text-textMuted font-mono">{k.api_base_url}</td>
+                  <td className="py-2.5 px-3 text-xs text-textMuted font-mono max-w-[160px] truncate">{k.api_base_url}</td>
                   <td className="py-2.5 px-3 text-xs text-textMuted font-mono">
                     <span title={t('admin.keyEncryptedHint')}>{k.api_key_preview || '—'}</span>
                   </td>
                   <td className="py-2.5 px-3 text-center">{k.priority}</td>
+                  <td className="py-2.5 px-3 text-center text-xs text-textMuted">
+                    {k.concurrent_limit ?? t('admin.keyConcurrentDefault')}
+                  </td>
                   <td className="py-2.5 px-3 text-center">
                     <button
                       onClick={() => handleToggle(k.id, k.is_active)}
@@ -122,6 +146,15 @@ export default function ApiKeyPoolTab() {
                     >
                       {k.is_active ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
                       {k.is_active ? t('common.enabled') : t('common.disabled')}
+                    </button>
+                  </td>
+                  <td className="py-2.5 px-3 text-center">
+                    <button
+                      onClick={() => setStatsKeyId(k.id)}
+                      className="p-1.5 rounded-lg hover:bg-primary-500/10 text-textMuted hover:text-primary-400 transition-colors"
+                      title={t('admin.viewKeyStats')}
+                    >
+                      <BarChart3 size={14} />
                     </button>
                   </td>
                   <td className="py-2.5 px-3 text-right">
@@ -142,6 +175,9 @@ export default function ApiKeyPoolTab() {
 
       {/* 添加弹窗 */}
       {showAdd && <AddPoolKeyModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); loadKeys() }} />}
+
+      {/* Key 统计弹窗 */}
+      {statsKeyId && <KeyStatsModal keyId={statsKeyId} onClose={() => setStatsKeyId(null)} />}
     </div>
   )
 }
@@ -245,6 +281,154 @@ function AddPoolKeyModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             {loading ? t('admin.adding') : t('admin.add')}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function KeyStatsModal({ keyId, onClose }: { keyId: number; onClose: () => void }) {
+  const t = useT()
+  const [stats, setStats] = useState<KeyStats | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [days, setDays] = useState(30)
+
+  const loadStats = async (d: number) => {
+    setLoading(true)
+    try {
+      const data = await api.get(`/admin/api-key-pool/${keyId}/stats?days=${d}`)
+      setStats(data)
+    } catch (err) { console.error(err) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadStats(days) }, [keyId, days])
+
+  const handleDaysChange = (newDays: number) => {
+    setDays(newDays)
+    loadStats(newDays)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto" onClick={onClose}>
+      <div
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-3xl mx-4 my-8 shadow-2xl shadow-black/30 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-textPrimary flex items-center gap-2">
+            <BarChart3 size={18} className="text-primary-400" />
+            {t('admin.keyStatsTitle').replace('{name}', stats?.key_name || `#${keyId}`)}
+          </h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={days}
+              onChange={(e) => handleDaysChange(parseInt(e.target.value))}
+              className="px-2 py-1 rounded-lg border border-border bg-canvas text-xs text-textPrimary"
+            >
+              <option value={7}>{t('admin.lastNDays').replace('{n}', '7')}</option>
+              <option value={30}>{t('admin.lastNDays').replace('{n}', '30')}</option>
+              <option value={90}>{t('admin.lastNDays').replace('{n}', '90')}</option>
+            </select>
+            <button onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textPrimary transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="animate-spin text-textSecondary" size={28} />
+          </div>
+        ) : !stats ? (
+          <p className="text-textMuted text-center py-10">{t('common.loadFailed')}</p>
+        ) : (
+          <div className="space-y-5">
+            {/* 概览卡片 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-canvas rounded-xl border border-border p-3 text-center">
+                <div className="text-2xl font-bold text-primary-400">{stats.overview.total_requests.toLocaleString()}</div>
+                <div className="text-xs text-textMuted mt-1">{t('admin.keyStatsTotalReqs')}</div>
+              </div>
+              <div className="bg-canvas rounded-xl border border-border p-3 text-center">
+                <div className="text-2xl font-bold text-amber-400">{(stats.overview.total_tokens / 1000).toFixed(0)}K</div>
+                <div className="text-xs text-textMuted mt-1">{t('admin.keyStatsTotalTokens')}</div>
+              </div>
+              <div className="bg-canvas rounded-xl border border-border p-3 text-center">
+                <div className="text-2xl font-bold text-mint-400">{stats.overview.total_credit.toFixed(1)}</div>
+                <div className="text-xs text-textMuted mt-1">{t('admin.keyStatsTotalCredit')}</div>
+              </div>
+              <div className="bg-canvas rounded-xl border border-border p-3 text-center">
+                <div className="text-2xl font-bold text-textPrimary">{stats.overview.active_users}</div>
+                <div className="text-xs text-textMuted mt-1">{t('admin.keyStatsActiveUsers')}</div>
+              </div>
+            </div>
+
+            {/* Token 消耗趋势 */}
+            {stats.daily.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-textPrimary mb-2">{t('admin.keyStatsTokenTrend')}</h4>
+                <div className="bg-canvas rounded-xl border border-border p-3">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={stats.daily}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                      <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="var(--color-text-muted)" />
+                      <YAxis tick={{ fontSize: 11 }} stroke="var(--color-text-muted)" />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--color-elevated)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                        }}
+                        formatter={(value: number) => [(value / 1000).toFixed(0) + 'K', t('admin.tokens')]}
+                      />
+                      <Line type="monotone" dataKey="tokens" stroke="#3b82f6" strokeWidth={2} dot={false} name={t('admin.tokens')} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            {/* 模型分布饼图 */}
+            {stats.model_distribution.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-textPrimary mb-2">{t('admin.keyStatsModelDist')}</h4>
+                <div className="bg-canvas rounded-xl border border-border p-3">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={stats.model_distribution}
+                        dataKey="tokens"
+                        nameKey="model"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={({ model, percent }) => `${model} ${(percent * 100).toFixed(0)}%`}
+                        labelLine
+                      >
+                        {stats.model_distribution.map((_, idx) => (
+                          <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'var(--color-elevated)',
+                          border: '1px solid var(--color-border)',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                        }}
+                        formatter={(value: number) => [(value / 1000).toFixed(0) + 'K', t('admin.tokens')]}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

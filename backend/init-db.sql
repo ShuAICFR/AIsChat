@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS agents (
     offline_until TIMESTAMP,
     is_ai_editable BOOLEAN DEFAULT TRUE,
     thinking_enabled BOOLEAN DEFAULT FALSE,
+    allow_friend_requests BOOLEAN DEFAULT TRUE,
+    auto_respond_friend_request BOOLEAN DEFAULT FALSE,
     user_id INT REFERENCES users(id),
     created_at TIMESTAMP DEFAULT NOW()
 );

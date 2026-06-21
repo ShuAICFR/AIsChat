@@ -52,6 +52,7 @@ async def run_migrations():
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志
             await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
+            await _migrate_friend_controls(db)         # v1.0.0 好友控制字段
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1194,6 +1195,33 @@ async def _migrate_redemption_code_details(db):
         logger.info("  ✅ redemption_codes.created_at 列添加完成")
     else:
         logger.info("  ⏭ redemption_codes.created_at 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+
+
+async def _migrate_friend_controls(db):
+    """v1.0.0: 好友控制字段——是否允许好友申请、是否自动响应"""
+    logger.info("  👥 迁移好友控制字段...")
+    created_any = False
+
+    if not await _column_exists(db, "agents", "allow_friend_requests"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN allow_friend_requests BOOLEAN NOT NULL DEFAULT TRUE"
+        ))
+        created_any = True
+        logger.info("  ✅ agents.allow_friend_requests 列添加完成")
+    else:
+        logger.info("  ⏭ agents.allow_friend_requests 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "auto_respond_friend_request"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN auto_respond_friend_request BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        created_any = True
+        logger.info("  ✅ agents.auto_respond_friend_request 列添加完成")
+    else:
+        logger.info("  ⏭ agents.auto_respond_friend_request 已存在，跳过")
 
     if created_any:
         await db.flush()

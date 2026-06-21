@@ -275,6 +275,8 @@ async def create_agent(
     is_ai_editable: bool = True,
     ai_type: str = "resonance",
     reminder_grace: str = "every_time",
+    allow_friend_requests: bool = True,
+    auto_respond_friend_request: bool = False,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -345,6 +347,8 @@ async def create_agent(
         is_ai_editable=is_ai_editable,
         ai_type=ai_type,
         reminder_grace=reminder_grace,
+        allow_friend_requests=allow_friend_requests,
+        auto_respond_friend_request=auto_respond_friend_request,
     )
     db.add(agent)
     await db.flush()
@@ -1259,6 +1263,8 @@ def agent_to_dict(agent: Agent) -> dict:
         "max_alarms": agent.max_alarms,
         "hide_ai_identity": agent.hide_ai_identity,
         "ai_type": agent.ai_type or "resonance",
+        "allow_friend_requests": agent.allow_friend_requests if agent.allow_friend_requests is not None else True,
+        "auto_respond_friend_request": agent.auto_respond_friend_request if agent.auto_respond_friend_request is not None else False,
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,
         "api_base_url": agent.api_base_url,

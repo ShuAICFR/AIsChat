@@ -28,6 +28,7 @@ interface FriendRequest {
   status: string
   direction: string | null
   message: string | null
+  auto_respond_friend_request?: boolean
   created_at: string | null
 }
 
@@ -150,6 +151,12 @@ export default function FriendsPage() {
   }
 
   const handleAccept = async (requestId: number) => {
+    const req = requests.find(r => r.id === requestId)
+    if (req && req.direction === 'received' && req.auto_respond_friend_request) {
+      if (!confirm('该 AI 已开启「自动回应好友申请」，接受后将自动触发其 API 响应（消耗额度）。是否继续？')) {
+        return
+      }
+    }
     try {
       await api.post(`/friends/requests/${requestId}/accept`)
       loadAll()
@@ -362,6 +369,11 @@ export default function FriendsPage() {
                           <span className="text-xs text-textMuted">
                             {req.message || '请求添加你为好友'}
                           </span>
+                          {req.auto_respond_friend_request && (
+                            <span className="inline-block mt-0.5 text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                              接受后将触发 AI 响应（消耗额度）
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button

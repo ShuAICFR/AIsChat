@@ -213,6 +213,8 @@ export default function CreateAgentModal({
   const [forceAlarmOnEnd, setForceAlarmOnEnd] = useState(false)
   const [maxAlarms, setMaxAlarms] = useState(10)
   const [isAiEditable, setIsAiEditable] = useState(true)
+  const [allowFriendRequests, setAllowFriendRequests] = useState(true)
+  const [autoRespondFriendRequest, setAutoRespondFriendRequest] = useState(false)
   const [chatModel, setChatModel] = useState('')
   const [workModel, setWorkModel] = useState('')
   const [apiCreditCost, setApiCreditCost] = useState(0)
@@ -341,6 +343,8 @@ export default function CreateAgentModal({
         force_alarm_on_end: forceAlarmOnEnd,
         max_alarms: maxAlarms,
         is_ai_editable: isAiEditable,
+        allow_friend_requests: allowFriendRequests,
+        auto_respond_friend_request: autoRespondFriendRequest,
         api_credit_cost: apiCreditCost,
         ai_type: aiType,
       })
@@ -517,6 +521,8 @@ export default function CreateAgentModal({
             forceAlarmOnEnd={forceAlarmOnEnd} setForceAlarmOnEnd={setForceAlarmOnEnd}
             maxAlarms={maxAlarms} setMaxAlarms={setMaxAlarms}
             isAiEditable={isAiEditable} setIsAiEditable={setIsAiEditable}
+            allowFriendRequests={allowFriendRequests} setAllowFriendRequests={setAllowFriendRequests}
+            autoRespondFriendRequest={autoRespondFriendRequest} setAutoRespondFriendRequest={setAutoRespondFriendRequest}
             chatModel={chatModel} setChatModel={setChatModel}
             workModel={workModel} setWorkModel={setWorkModel}
             aiType={aiType} setAiType={setAiType}
@@ -652,6 +658,8 @@ function DetailSettingsModal({
   forceAlarmOnEnd: boolean; setForceAlarmOnEnd: (v: boolean) => void
   maxAlarms: number; setMaxAlarms: (v: number) => void
   isAiEditable: boolean; setIsAiEditable: (v: boolean) => void
+  allowFriendRequests: boolean; setAllowFriendRequests: (v: boolean) => void
+  autoRespondFriendRequest: boolean; setAutoRespondFriendRequest: (v: boolean) => void
   chatModel: string; setChatModel: (v: string) => void
   workModel: string; setWorkModel: (v: string) => void
   apiCreditCost: number; setApiCreditCost: (v: number) => void
@@ -853,6 +861,14 @@ function DetailSettingsModal({
                 <option value="off">关闭 — 提醒计入正常轮次配额</option>
               </select>
             </div>
+          </Section>
+
+          {/* ── 好友与社交 ── */}
+          <Section title="好友与社交" desc="控制 AI 如何响应好友申请">
+            <ToggleField label="允许接收好友申请" value={allowFriendRequests} setValue={setAllowFriendRequests} desc="关闭后其他用户无法向该 AI 发送好友申请" />
+            {allowFriendRequests && (
+              <ToggleField label="自动回应好友申请" value={autoRespondFriendRequest} setValue={setAutoRespondFriendRequest} desc="开启后 AI 收到好友申请时会自动触发 API 响应（消耗额度），发起者将看到提示" />
+            )}
           </Section>
 
           {/* ── 额度 ── */}

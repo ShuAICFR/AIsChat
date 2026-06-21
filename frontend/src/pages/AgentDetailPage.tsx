@@ -36,6 +36,8 @@ interface Agent {
   alarm_max_tool_rounds: number
   force_alarm_on_end: boolean
   max_alarms: number
+  allow_friend_requests: boolean
+  auto_respond_friend_request: boolean
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -600,6 +602,39 @@ export default function AgentDetailPage() {
                         className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
                       >+</button>
                     </span>
+                  </div>
+                </div>
+              </div>
+              {/* 好友与社交 */}
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <h4 className="text-xs font-medium text-textSecondary mb-3">好友与社交</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-textMuted">接收好友申请：</span>
+                    <button
+                      onClick={() => handleUpdateAgentField('allow_friend_requests', !agent.allow_friend_requests)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
+                        agent.allow_friend_requests ? 'bg-mint-400' : 'bg-border'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        agent.allow_friend_requests ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                      }`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-textMuted">自动回应申请：</span>
+                    <button
+                      onClick={() => handleUpdateAgentField('auto_respond_friend_request', !agent.auto_respond_friend_request)}
+                      disabled={!agent.allow_friend_requests}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
+                        agent.auto_respond_friend_request ? 'bg-mint-400' : 'bg-border'
+                      } ${!agent.allow_friend_requests ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        agent.auto_respond_friend_request ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                      }`} />
+                    </button>
                   </div>
                 </div>
               </div>

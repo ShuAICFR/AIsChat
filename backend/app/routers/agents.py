@@ -152,6 +152,8 @@ async def create_new_agent(
             is_ai_editable=req.is_ai_editable,
             ai_type=req.ai_type,
             reminder_grace=req.reminder_grace,
+            allow_friend_requests=req.allow_friend_requests,
+            auto_respond_friend_request=req.auto_respond_friend_request,
         )
         return agent_to_dict(agent)
     except ValueError as e:

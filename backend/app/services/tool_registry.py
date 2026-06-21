@@ -1389,6 +1389,7 @@ async def _handle_update_self_config(
         "frequency_penalty", "thinking_enabled", "config_profile",
         "hide_ai_identity", "max_tool_rounds", "alarm_max_tool_rounds",
         "force_alarm_on_end", "max_alarms", "delay_reply_enabled",
+        "allow_friend_requests", "auto_respond_friend_request",
     ]
 
     updates = {}

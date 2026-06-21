@@ -66,12 +66,38 @@ async def send_friend_request(
             reverse_name = name_result.scalar_one_or_none()
         except Exception:
             pass
-        return {
+        # 获取目标 AI 的 auto_respond 状态
+        auto_respond = None
+        if target_type == "ai":
+            target_agent = await db.execute(
+                select(AgentModel).where(AgentModel.id == target_id)
+            )
+            target_agent_obj = target_agent.scalar_one_or_none()
+            if target_agent_obj:
+                auto_respond = target_agent_obj.auto_respond_friend_request
+        result = {
             "status": "accepted", "auto": True,
             "message": "对方已向你发送申请，已自动成为好友",
             "reverse_message": reverse.message,
             "reverse_target_name": reverse_name or f"用户{r_user_id}",
         }
+        if auto_respond is not None:
+            result["auto_respond"] = auto_respond
+        return result
+
+    # 如果目标是 AI，检查是否允许接收好友申请
+    auto_respond = None
+    if target_type == "ai":
+        from app.models.agent import Agent as AgentModelInner
+        agent = await db.execute(
+            select(AgentModelInner).where(AgentModelInner.id == target_id)
+        )
+        agent_obj = agent.scalar_one_or_none()
+        if agent_obj is None:
+            raise ValueError("AI 不存在")
+        if not agent_obj.allow_friend_requests:
+            raise ValueError(f"AI「{agent_obj.name}」已关闭好友申请，无法发送")
+        auto_respond = agent_obj.auto_respond_friend_request
 
     # 创建申请
     req = FriendshipRequest(
@@ -85,7 +111,10 @@ async def send_friend_request(
     await db.refresh(req)
 
     logger.info(f"用户 {requester_id} 向 {target_type}:{target_id} 发送好友申请")
-    return {"status": "pending", "request_id": req.id}
+    result = {"status": "pending", "request_id": req.id}
+    if auto_respond is not None:
+        result["auto_respond"] = auto_respond
+    return result
 
 
 async def accept_friend_request(
@@ -360,13 +389,13 @@ async def list_friend_requests(
         for uid, uname, uavatar in human_results.all():
             target_human_map[uid] = (uname, uavatar)
 
-    target_ai_map: dict[int, tuple[str, str | None]] = {}
+    target_ai_map: dict[int, tuple[str, str | None, bool]] = {}
     if ai_target_ids:
         ai_results = await db.execute(
-            select(Agent.id, Agent.name, Agent.avatar_url).where(Agent.id.in_(ai_target_ids))
+            select(Agent.id, Agent.name, Agent.avatar_url, Agent.auto_respond_friend_request).where(Agent.id.in_(ai_target_ids))
         )
-        for aid, aname, aavatar in ai_results.all():
-            target_ai_map[aid] = (aname, aavatar)
+        for aid, aname, aavatar, aauto in ai_results.all():
+            target_ai_map[aid] = (aname, aavatar, aauto)
 
     # ── 组装结果（纯内存操作，无 DB 查询） ──
     results = []
@@ -377,6 +406,7 @@ async def list_friend_requests(
 
         target_name = None
         target_avatar = None
+        target_auto_respond = None
         if req.requester_id == user_id:
             if req.target_type == "human":
                 tu = target_human_map.get(req.target_id)
@@ -385,9 +415,9 @@ async def list_friend_requests(
             elif req.target_type == "ai":
                 ta = target_ai_map.get(req.target_id)
                 if ta:
-                    target_name, target_avatar = ta
+                    target_name, target_avatar, target_auto_respond = ta
 
-        results.append({
+        result_item = {
             "id": req.id,
             "requester_id": req.requester_id,
             "requester_name": requester_name,
@@ -401,7 +431,10 @@ async def list_friend_requests(
             "direction": "received" if req.target_id == user_id else "sent",
             "created_at": str(req.created_at) if req.created_at else None,
             "resolved_at": str(req.resolved_at) if req.resolved_at else None,
-        })
+        }
+        if target_auto_respond is not None:
+            result_item["auto_respond_friend_request"] = target_auto_respond
+        results.append(result_item)
 
     return results
 
@@ -460,6 +493,7 @@ async def search_entities(
             "owner_name": owner.username if owner else None,
             "is_friend": is_friend,
             "state": agent.state,
+            "auto_respond_friend_request": agent.auto_respond_friend_request,
         })
 
     # 限制总结果数

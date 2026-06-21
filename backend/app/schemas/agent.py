@@ -27,6 +27,8 @@ class AgentCreateRequest(BaseModel):
     reminder_grace: str = Field(default="every_time", description="系统提醒额外轮次: every_time|once|off")
     ai_type: str = Field(default="resonance", description="AI 类型: general|semi_general|resonance")
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
+    allow_friend_requests: bool = Field(default=True, description="是否允许接收好友申请")
+    auto_respond_friend_request: bool = Field(default=False, description="收到好友申请时是否自动触发 API 响应")
 
 
 class AgentGenerateRequest(BaseModel):
@@ -62,6 +64,8 @@ class AgentUpdateConfigRequest(BaseModel):
     force_alarm_on_end: bool | None = None
     max_alarms: int | None = Field(default=None, ge=1, le=50, description="最大闹钟数")
     reminder_grace: str | None = Field(default=None, description="系统提醒额外轮次: every_time|once|off")
+    allow_friend_requests: bool | None = Field(default=None, description="是否允许接收好友申请")
+    auto_respond_friend_request: bool | None = Field(default=None, description="收到好友申请时是否自动触发 API 响应")
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None
@@ -102,6 +106,8 @@ class AgentResponse(BaseModel):
     force_alarm_on_end: bool = False
     max_alarms: int = 10
     ai_type: str = "resonance"
+    allow_friend_requests: bool = True
+    auto_respond_friend_request: bool = False
     created_at: str | None
 
 

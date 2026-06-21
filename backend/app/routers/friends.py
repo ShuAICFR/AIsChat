@@ -96,6 +96,7 @@ async def create_friend_request(
                 "target_id": req.target_id,
                 "message": req.message,
                 "status": result.get("status", "pending"),
+                "auto_respond": result.get("auto_respond", False),
             }, target_uid)
 
         # 双向自动接受：注入双方附言到 DM

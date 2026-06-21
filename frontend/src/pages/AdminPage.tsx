@@ -459,11 +459,24 @@ function CodesTab() {
    ================================================================ */
 function BackupTab() {
   const [downloading, setDownloading] = useState(false)
+  const [downloadingFull, setDownloadingFull] = useState(false)
   const [restoring, setRestoring] = useState(false)
+  const [restoringFull, setRestoringFull] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const fullFileInputRef = useRef<HTMLInputElement>(null)
 
+  const downloadFile = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // ── 仅数据库备份 ──
   const handleBackup = async () => {
     setDownloading(true)
     setError('')
@@ -478,13 +491,8 @@ function BackupTab() {
         throw new Error(err.detail || '下载失败')
       }
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `aischat_backup_${new Date().toISOString().slice(0, 10)}.sql`
-      a.click()
-      URL.revokeObjectURL(url)
-      setMessage('备份下载成功')
+      downloadFile(blob, `aischat_backup_${new Date().toISOString().slice(0, 10)}.sql`)
+      setMessage('✓ 数据库备份下载成功')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -492,6 +500,31 @@ function BackupTab() {
     }
   }
 
+  // ── 完整备份（数据库 + 文件）──
+  const handleFullBackup = async () => {
+    setDownloadingFull(true)
+    setError('')
+    setMessage('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch('/api/admin/backup/full/download', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '下载失败')
+      }
+      const blob = await res.blob()
+      downloadFile(blob, `aischat_full_${new Date().toISOString().slice(0, 10)}.tar.gz`)
+      setMessage('✓ 完整备份下载成功（数据库 + 所有文件）')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setDownloadingFull(false)
+    }
+  }
+
+  // ── 仅数据库恢复 ──
   const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -512,7 +545,7 @@ function BackupTab() {
         const err = await res.json()
         throw new Error(err.detail || '恢复失败')
       }
-      setMessage('数据库已恢复，请刷新页面')
+      setMessage('✓ 数据库已恢复，请刷新页面')
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -521,36 +554,136 @@ function BackupTab() {
     }
   }
 
+  // ── 完整恢复（数据库 + 文件）──
+  const handleFullRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!confirm('⚠️ 确定要完整恢复？当前数据库和所有文件将被覆盖！')) return
+    setRestoringFull(true)
+    setError('')
+    setMessage('')
+    try {
+      const token = localStorage.getItem('access_token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/admin/backup/full/restore', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || '恢复失败')
+      }
+      setMessage('✓ 完整备份已恢复：数据库 + 所有文件，请刷新页面')
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setRestoringFull(false)
+      if (fullFileInputRef.current) fullFileInputRef.current.value = ''
+    }
+  }
+
   return (
     <div className="space-y-5">
+      {/* ========== 导出区 ========== */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-textPrimary mb-2">数据库备份</h3>
-        <p className="text-sm text-textSecondary mb-4">
-          导出完整的 .sql 文件，包含所有数据表结构和数据。
-        </p>
-        <button
-          onClick={handleBackup}
-          disabled={downloading}
-          className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
-        >
-          {downloading ? '正在导出...' : '下载备份文件 (.sql)'}
-        </button>
+        <h3 className="font-semibold text-textPrimary mb-1">📦 数据导出</h3>
+        <p className="text-sm text-textMuted mb-5">两种备份格式，按需选择。</p>
+
+        {/* 完整备份 */}
+        <div className="bg-mint-400/5 border border-mint-400/20 rounded-xl p-4 mb-3">
+          <div className="flex items-start gap-3">
+            <span className="text-lg shrink-0">🗄️</span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-mint-400">完整备份（推荐）</h4>
+              <p className="text-xs text-textSecondary mt-1">
+                导出 <code className="text-[11px] bg-canvas px-1 py-0.5 rounded">.tar.gz</code> 文件，包含：<strong>数据库全部数据</strong> + <strong>/app/data/ 下所有文件</strong>（AI 文件、附件、头像等）。
+                可用于完整迁移到新服务器。
+              </p>
+            </div>
+            <button
+              onClick={handleFullBackup}
+              disabled={downloadingFull}
+              className="shrink-0 px-4 py-2 bg-mint-400 text-white rounded-xl hover:bg-mint-500 disabled:opacity-40 text-sm font-medium transition-colors"
+            >
+              {downloadingFull ? '正在打包...' : '下载完整备份'}
+            </button>
+          </div>
+        </div>
+
+        {/* 仅数据库 */}
+        <div className="bg-canvas border border-border rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-lg shrink-0">🗃️</span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-textPrimary">仅数据库</h4>
+              <p className="text-xs text-textSecondary mt-1">
+                导出 <code className="text-[11px] bg-surface px-1 py-0.5 rounded">.sql</code> 文件，仅含数据表结构和数据。
+                文件较小但<strong>不含上传的附件和 AI 文件</strong>。
+              </p>
+            </div>
+            <button
+              onClick={handleBackup}
+              disabled={downloading}
+              className="shrink-0 px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
+            >
+              {downloading ? '正在导出...' : '下载仅数据库'}
+            </button>
+          </div>
+        </div>
       </div>
 
+      {/* ========== 导入区 ========== */}
       <div className="bg-surface rounded-xl border border-rose-500/30 p-5">
-        <h3 className="font-semibold text-textPrimary mb-2">数据库恢复</h3>
-        <p className="text-sm text-rose-400 mb-4">
-          ⚠️ 警告：恢复操作将覆盖当前数据库所有数据，请确认后再操作。
+        <h3 className="font-semibold text-textPrimary mb-1">📥 数据恢复</h3>
+        <p className="text-sm text-rose-400 mb-5">
+          ⚠️ 恢复将<strong>覆盖</strong>当前所有数据，请确认备份文件无误后再操作。
         </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".sql"
-          onChange={handleRestore}
-          disabled={restoring}
-          className="block text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
-        />
-        {restoring && <p className="text-sm text-textMuted mt-2">正在恢复...</p>}
+
+        {/* 完整恢复 */}
+        <div className="bg-rose-400/5 border border-rose-400/20 rounded-xl p-4 mb-3">
+          <div className="flex items-start gap-3">
+            <span className="text-lg shrink-0">🗄️</span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-rose-400">完整恢复</h4>
+              <p className="text-xs text-textSecondary mt-1">
+                上传 <code className="text-[11px] bg-canvas px-1 py-0.5 rounded">.tar.gz</code> 完整备份文件，还原数据库 + 所有文件。
+              </p>
+              <input
+                ref={fullFileInputRef}
+                type="file"
+                accept=".tar.gz,.tgz"
+                onChange={handleFullRestore}
+                disabled={restoringFull}
+                className="block mt-2 text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
+              />
+              {restoringFull && <p className="text-sm text-textMuted mt-2">正在完整恢复...</p>}
+            </div>
+          </div>
+        </div>
+
+        {/* 仅数据库恢复 */}
+        <div className="bg-canvas border border-border rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-lg shrink-0">🗃️</span>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-semibold text-textPrimary">仅数据库恢复</h4>
+              <p className="text-xs text-textSecondary mt-1">
+                上传 <code className="text-[11px] bg-surface px-1 py-0.5 rounded">.sql</code> 文件，仅还原数据库。
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".sql"
+                onChange={handleRestore}
+                disabled={restoring}
+                className="block mt-2 text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
+              />
+              {restoring && <p className="text-sm text-textMuted mt-2">正在恢复...</p>}
+            </div>
+          </div>
+        </div>
       </div>
 
       {message && (

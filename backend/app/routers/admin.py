@@ -523,6 +523,64 @@ async def upload_restore(
     return result
 
 
+@router.get("/backup/full/download")
+async def download_full_backup(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """下载完整备份（.tar.gz = 数据库 .sql + 文件目录 /app/data/）"""
+    from app.services.backup_service import create_full_backup
+
+    try:
+        tar_bytes, sql_size, file_count = await create_full_backup()
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    await _log_admin_action(
+        db, admin["user_id"],
+        "full_backup", "system", 0,
+        {"sql_size": sql_size, "file_count": file_count, "total_bytes": len(tar_bytes)},
+    )
+
+    return Response(
+        content=tar_bytes,
+        media_type="application/gzip",
+        headers={
+            "Content-Disposition": f'attachment; filename="aischat_full_{timestamp}.tar.gz"',
+        },
+    )
+
+
+@router.post("/backup/full/restore")
+async def upload_full_restore(
+    file: UploadFile = File(...),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传 .tar.gz 完整备份并恢复（⚠️ 覆盖数据库 + 所有文件）"""
+    from app.services.backup_service import restore_full_backup
+
+    if not file.filename or not (file.filename.endswith(".tar.gz") or file.filename.endswith(".tgz")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="仅支持 .tar.gz / .tgz 完整备份文件",
+        )
+
+    try:
+        content = await file.read()
+        result = await restore_full_backup(content)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    await _log_admin_action(
+        db, admin["user_id"], "full_restore", "system", 0,
+        {"filename": file.filename, "size_bytes": len(content)},
+    )
+
+    return result
+
+
 # ============================================================
 # OpenCLI 权限管理
 # ============================================================

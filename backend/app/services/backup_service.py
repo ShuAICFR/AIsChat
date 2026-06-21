@@ -176,3 +176,125 @@ async def restore_backup(sql_content: bytes) -> dict:
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+# ============================================================
+# 完整备份（数据库 + 文件）
+# ============================================================
+
+async def create_full_backup() -> tuple[bytes, int, int]:
+    """
+    创建完整备份（.tar.gz）：
+    - 包含 pg_dump 导出的 .sql 文件
+    - 包含 /app/data/ 目录下所有文件
+    返回 (tar_bytes, sql_size, file_count)
+    """
+    import tarfile
+    import io
+
+    # 1. 先导出数据库
+    logger.info("开始创建完整备份...")
+    sql_bytes = await create_backup()
+    sql_size = len(sql_bytes)
+    logger.info(f"数据库导出完成: {sql_size} bytes")
+
+    # 2. 打包为 tar.gz
+    data_dir = settings.data_dir
+    buf = io.BytesIO()
+    file_count = 0
+
+    try:
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            # 添加数据库 dump
+            sql_info = tarfile.TarInfo(name="backup.sql")
+            sql_info.size = len(sql_bytes)
+            tar.addfile(sql_info, io.BytesIO(sql_bytes))
+            logger.info("  ✅ backup.sql 已打包")
+
+            # 添加 data/ 目录下所有文件
+            if os.path.isdir(data_dir):
+                for root, dirs, files in os.walk(data_dir):
+                    for fname in files:
+                        fpath = os.path.join(root, fname)
+                        # 计算相对路径（在 tar 中以 data/ 为前缀）
+                        arcname = os.path.join("data", os.path.relpath(fpath, data_dir))
+                        # 替换 Windows 反斜杠为 Unix 正斜杠
+                        arcname = arcname.replace("\\", "/")
+                        tar.add(fpath, arcname=arcname)
+                        file_count += 1
+            logger.info(f"  ✅ {file_count} 个文件已打包")
+
+    except Exception as e:
+        logger.error(f"创建完整备份失败: {e}")
+        raise RuntimeError(f"打包备份失败: {str(e)}")
+
+    tar_bytes = buf.getvalue()
+    logger.info(f"完整备份创建完成: {len(tar_bytes)} bytes (SQL={sql_size}, files={file_count})")
+    return tar_bytes, sql_size, file_count
+
+
+async def restore_full_backup(tar_bytes: bytes) -> dict:
+    """
+    从完整备份 .tar.gz 恢复：
+    - 从 backup.sql 恢复数据库
+    - 将所有 data/ 下的文件还原到 /app/data/
+    ⚠️ 覆盖当前所有数据
+    """
+    import tarfile
+    import io
+    import shutil
+
+    data_dir = settings.data_dir
+    sql_bytes = None
+    restored_files = 0
+
+    try:
+        with tarfile.open(fileobj=io.BytesIO(tar_bytes), mode="r:gz") as tar:
+            for member in tar.getmembers():
+                if member.name == "backup.sql":
+                    # 提取 SQL
+                    f = tar.extractfile(member)
+                    if f:
+                        sql_bytes = f.read()
+                    logger.info(f"  📄 读取 backup.sql: {len(sql_bytes)} bytes" if sql_bytes else "  ❌ backup.sql 为空")
+                elif member.name.startswith("data/"):
+                    # 提取文件到 /app/data/
+                    # 去掉 "data/" 前缀，得到相对路径
+                    rel_path = member.name[5:]  # 去掉 "data/"
+                    dest = os.path.join(data_dir, rel_path)
+                    # 安全：拒绝绝对路径和目录穿越
+                    dest = os.path.normpath(dest)
+                    if not dest.startswith(os.path.normpath(data_dir)):
+                        logger.warning(f"  ⚠️ 拒绝不安全路径: {member.name} → {dest}")
+                        continue
+                    if member.isdir():
+                        os.makedirs(dest, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(dest), exist_ok=True)
+                        f = tar.extractfile(member)
+                        if f:
+                            with open(dest, "wb") as out:
+                                shutil.copyfileobj(f, out)
+                            restored_files += 1
+
+        if sql_bytes is None:
+            raise RuntimeError("备份文件中未找到 backup.sql，无法恢复数据库")
+
+        logger.info(f"文件还原完成: {restored_files} 个文件")
+        logger.info("开始恢复数据库...")
+        result = await restore_backup(sql_bytes)
+        logger.info("完整备份恢复完成")
+
+        return {
+            "success": True,
+            "message": f"完整备份已恢复：数据库 + {restored_files} 个文件",
+            "restored_files": restored_files,
+        }
+
+    except tarfile.ReadError as e:
+        raise RuntimeError(f"无法读取备份文件（可能已损坏或不是 .tar.gz 格式）: {str(e)}")
+    except RuntimeError:
+        raise
+    except Exception as e:
+        logger.error(f"完整备份恢复失败: {e}", exc_info=True)
+        raise RuntimeError(f"恢复失败: {str(e)}")

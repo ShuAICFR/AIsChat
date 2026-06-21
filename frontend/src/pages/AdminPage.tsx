@@ -33,11 +33,11 @@ export default function AdminPage() {
       {/* 头部 */}
       <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
         <div className="flex items-center gap-2 mb-1">
-          {/* 移动端：返回设置 */}
+          {/* 移动端：返回我的 */}
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => navigate('/me')}
             className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="返回设置"
+            title="返回我的"
           >
             <ArrowLeft size={20} />
           </button>

@@ -83,6 +83,9 @@ async def redeem_code(
     user_result = await db.execute(select(User).where(User.id == current_user["user_id"]))
     user = user_result.scalar_one()
     code_type = code_obj.code_type or "ai_quota"
+    # 兼容旧版 file_size（自动映射到 file_quota）
+    if code_type == "file_size":
+        code_type = "file_quota"
     if code_type == "api_credit":
         user.api_credit += code_obj.quota_amount
         msg = f"兑换成功，获得 {code_obj.quota_amount} 通用 API 额度"

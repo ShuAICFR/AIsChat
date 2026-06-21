@@ -575,8 +575,8 @@ export default function AgentDetailPage() {
                       }`}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.force_alarm_on_end ? 'translate-x-4.5' : 'translate-x-0.5'
-                      }`} style={agent.force_alarm_on_end ? {transform: 'translateX(18px)'} : {transform: 'translateX(2px)'}} />
+                        agent.force_alarm_on_end ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                      }`} />
                     </button>
                   </div>
                   <div>

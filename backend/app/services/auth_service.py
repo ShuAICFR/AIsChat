@@ -99,6 +99,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "api_credit": user.api_credit,
         "agent_bundle_credit": user.agent_bundle_credit,
         "file_quota_mb": user.file_quota_mb,
+        "avatar_url": getattr(user, 'avatar_url', None),
         "api_base_url": user.api_base_url,
         "has_api_key": user.api_key_encrypted is not None,
         "auto_approve_vector_timeout": user.auto_approve_vector_timeout,

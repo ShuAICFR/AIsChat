@@ -672,16 +672,25 @@ async def _migrate_api_credit(db):
         logger.info("  ⏭ users.file_quota_mb 已存在，跳过")
 
     # 更新兑换码 CHECK 约束：支持 4 种类型
+    # 先迁移旧 file_size → file_quota，再改约束
+    try:
+        logger.info("  🔄 迁移 redemption_codes.code_type: file_size → file_quota")
+        result = await db.execute(text(
+            "UPDATE redemption_codes SET code_type = 'file_quota' WHERE code_type = 'file_size'"
+        ))
+        logger.info(f"  ✅ 已更新 {result.rowcount} 条 file_size → file_quota")
+    except Exception as e:
+        logger.warning(f"  ⚠️ file_size 迁移跳过: {e}")
+
     try:
         logger.info("  🔄 更新 redemption_codes.code_type CHECK 约束")
-        await db.execute(text("""
-            ALTER TABLE redemption_codes DROP CONSTRAINT IF EXISTS ck_redemption_code_type
-        """))
+        await db.execute(text(
+            "ALTER TABLE redemption_codes DROP CONSTRAINT IF EXISTS ck_redemption_code_type"
+        ))
         await db.execute(text("""
             ALTER TABLE redemption_codes ADD CONSTRAINT ck_redemption_code_type
             CHECK (code_type IN ('ai_quota', 'api_credit', 'agent_bundle', 'file_quota'))
         """))
-        # 同时扩宽列
         await db.execute(text("ALTER TABLE redemption_codes ALTER COLUMN code_type TYPE VARCHAR(20)"))
         created_any = True
     except Exception as e:

@@ -64,7 +64,7 @@ export default function MePage() {
   const totalCalls = usage.reduce((s, u) => s + (u.total_calls || 0), 0)
   const totalReasoning = usage.reduce((s, u) => s + (u.reasoning_tokens || 0), 0)
   const totalCached = usage.reduce((s, u) => s + (u.cached_tokens || 0), 0)
-  const cacheRate = totalTokens > 0 ? Math.round(totalCached / (totalTokens + totalCached) * 100) : 0
+  const cacheRate = totalTokens + totalCached > 0 ? Math.round(totalCached / (totalTokens + totalCached) * 100) : 0
 
   // 上线天数
   const daysSince = user?.created_at
@@ -151,8 +151,8 @@ export default function MePage() {
           {[
             { label: 'AI 创建', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400' },
             { label: '通用额度', value: user.api_credit ?? 0, icon: CreditCard, color: 'text-mint-400' },
-            { label: '包断额度', value: (user as any).agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400' },
-            { label: '文件配额', value: `${(user as any).file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400' },
+            { label: '包断额度', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400' },
+            { label: '文件配额', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400' },
           ].map(item => (
             <div key={item.label} className="bg-canvas rounded-xl p-3 text-center">
               <item.icon size={16} className={`${item.color} mx-auto mb-1`} />

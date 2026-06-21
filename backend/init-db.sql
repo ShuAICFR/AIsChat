@@ -199,7 +199,7 @@ CREATE TABLE IF NOT EXISTS vector_acceleration_requests (
 CREATE TABLE IF NOT EXISTS file_metadata (
     id SERIAL PRIMARY KEY,
     path TEXT NOT NULL,
-    owner_type VARCHAR(10) CHECK (owner_type IN ('ai', 'group', 'system')),
+    owner_type VARCHAR(10) CHECK (owner_type IN ('human', 'ai', 'group', 'system')),
     owner_id INT,
     size BIGINT,
     mime_type VARCHAR(100),

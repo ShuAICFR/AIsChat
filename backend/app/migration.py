@@ -48,6 +48,7 @@ async def run_migrations():
             await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
             await _migrate_file_system(db)             # v0.5.0 文件协作系统
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
+            await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
@@ -973,6 +974,31 @@ async def _migrate_message_attachments(db):
         logger.info("  ✅ dm_messages.attachments 迁移完成")
     else:
         logger.info("  ⏭ dm_messages.attachments 已存在，跳过")
+
+
+async def _fix_file_owner_type_check(db):
+    """v0.5.0+: 修复 file_metadata.owner_type CHECK 约束缺少 'human'（消息附件上传需要）"""
+    result = await db.execute(text("""
+        SELECT pg_get_constraintdef(oid)
+        FROM pg_constraint
+        WHERE conname = 'ck_file_owner_type' AND contype = 'c'
+    """))
+    row = result.fetchone()
+    if row is None:
+        logger.info("  ⏭ ck_file_owner_type 约束不存在，跳过")
+        return
+    current_def = row[0]
+    if "'human'" in current_def:
+        logger.info("  ⏭ ck_file_owner_type 已包含 human，跳过")
+        return
+    logger.info("  🔧 修复 ck_file_owner_type：添加 'human' 到 owner_type 约束")
+    await db.execute(text("ALTER TABLE file_metadata DROP CONSTRAINT ck_file_owner_type"))
+    await db.execute(text(
+        "ALTER TABLE file_metadata ADD CONSTRAINT ck_file_owner_type "
+        "CHECK (owner_type IN ('human', 'ai', 'group', 'system'))"
+    ))
+    await db.flush()
+    logger.info("  ✅ ck_file_owner_type 修复完成")
 
 
 async def _fix_column_types(db):

@@ -27,7 +27,7 @@ class FileMetadata(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "owner_type IN ('ai', 'group', 'system')",
+            "owner_type IN ('human', 'ai', 'group', 'system')",
             name="ck_file_owner_type",
         ),
         CheckConstraint(

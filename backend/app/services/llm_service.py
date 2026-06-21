@@ -266,16 +266,12 @@ async def _chat_completion_non_streaming(
         message = choice["message"]
 
         usage = data.get("usage", {})
-        # 提取 reasoning_tokens（DeepSeek thinking 模式）
-        completion_details = usage.get("completion_tokens_details", {})
-        if completion_details.get("reasoning_tokens"):
-            usage = dict(usage)
-            usage["reasoning_tokens"] = completion_details["reasoning_tokens"]
-        # 提取 cached_tokens（prompt cache 命中）
-        prompt_details = usage.get("prompt_tokens_details", {})
-        if prompt_details.get("cached_tokens"):
-            usage = dict(usage)
-            usage["cached_tokens"] = prompt_details["cached_tokens"]
+        # 提取 reasoning_tokens（DeepSeek thinking 模式）— 始终写入，缺失时 = 0
+        completion_details = usage.get("completion_tokens_details") or {}
+        prompt_details = usage.get("prompt_tokens_details") or {}
+        usage = dict(usage)
+        usage["reasoning_tokens"] = completion_details.get("reasoning_tokens", 0)
+        usage["cached_tokens"] = prompt_details.get("cached_tokens", 0)
 
         result = {
             "content": message.get("content"),

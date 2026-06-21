@@ -45,7 +45,7 @@ function fileIconColor(mimeType: string): string {
 }
 
 export default function MessageBubble({
-  senderName, content, isMine, createdAt, state,
+  senderName, senderAvatarUrl, content, isMine, createdAt, state,
   senderType, senderId, thinking, sourcePublicId, attachments, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()

@@ -27,7 +27,8 @@ export function formatRelativeTime(
 
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  // 负数修正：服务器时间略微超前客户端时，新消息 diffDays 可能为 -1
+  const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 
   // 今天：显示时间 HH:MM
   if (diffDays === 0) {
@@ -74,7 +75,8 @@ export function formatMessageTime(
 
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  // 负数修正：服务器时间略微超前客户端时，新消息 diffDays 可能为 -1
+  const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 
   const timeStr = date.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', {
     hour: '2-digit',

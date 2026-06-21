@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+import { useIsDark } from '../hooks/useIsDark'
+import { fmtTokenNum } from '../utils/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area
@@ -50,15 +52,7 @@ export default function UsageDashboardTab() {
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null)
   const [agentDaily, setAgentDaily] = useState<DailyPoint[]>([])
   const [agentDailyLoading, setAgentDailyLoading] = useState(false)
-  const [isDark, setIsDark] = useState(false)
-
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains('dark'))
-    check()
-    const obs = new MutationObserver(check)
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    return () => obs.disconnect()
-  }, [])
+  const isDark = useIsDark()
 
   const loadData = async (d: number) => {
     setLoading(true)
@@ -103,7 +97,7 @@ export default function UsageDashboardTab() {
     })
   }
 
-  const fmtNum = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : (n || 0).toLocaleString()
+  // fmtTokenNum 从 ../utils/format 引入
 
   const colors = isDark ? {
     prompt: '#A78BFA',
@@ -160,7 +154,7 @@ export default function UsageDashboardTab() {
           {global && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: '总 Token', value: fmtNum(global.total_tokens), icon: Activity },
+                { label: '总 Token', value: fmtTokenNum(global.total_tokens), icon: Activity },
                 { label: '总调用次数', value: global.total_calls, icon: BarChart3 },
                 { label: '活跃 AI', value: global.unique_agents, icon: Activity },
                 { label: '活跃用户', value: global.unique_users, icon: Users },
@@ -191,7 +185,7 @@ export default function UsageDashboardTab() {
                         borderRadius: '12px',
                         fontSize: '12px',
                       }}
-                      formatter={(value: number) => [fmtNum(value), '']}
+                      formatter={(value: number) => [fmtTokenNum(value), '']}
                     />
                     <Area type="monotone" dataKey="total_tokens" stroke={colors.prompt} fill={colors.prompt} fillOpacity={0.15} name="总 Token" />
                   </AreaChart>
@@ -216,7 +210,7 @@ export default function UsageDashboardTab() {
                     {expandedUsers.has(uid) ? <ChevronDown size={14} className="text-textMuted" /> : <ChevronRight size={14} className="text-textMuted" />}
                     <span className="text-sm font-medium text-textPrimary">{ug.username}</span>
                     <span className="text-xs text-textMuted ml-auto">{ug.agents.length} 个 AI</span>
-                    <span className="text-sm font-mono text-textPrimary ml-4">{fmtNum(ug.total)} Token</span>
+                    <span className="text-sm font-mono text-textPrimary ml-4">{fmtTokenNum(ug.total)} Token</span>
                   </button>
                   {/* AI 子行 */}
                   {expandedUsers.has(uid) && (
@@ -232,7 +226,7 @@ export default function UsageDashboardTab() {
                           <span className="text-textPrimary font-medium">{a.agent_name}</span>
                           <span className="text-textMuted hidden md:inline">{a.model || '-'}</span>
                           <span className="text-textMuted ml-auto">{a.total_calls} 次调用</span>
-                          <span className="text-textPrimary font-mono ml-4">{fmtNum(a.total_tokens)}</span>
+                          <span className="text-textPrimary font-mono ml-4">{fmtTokenNum(a.total_tokens)}</span>
                         </button>
                       ))}
                     </div>
@@ -267,7 +261,7 @@ export default function UsageDashboardTab() {
                           borderRadius: '12px',
                           fontSize: '12px',
                         }}
-                        formatter={(value: number) => [fmtNum(value), '']}
+                        formatter={(value: number) => [fmtTokenNum(value), '']}
                       />
                       <Legend />
                       <Bar dataKey="prompt_tokens" stackId="a" fill={colors.prompt} name="Prompt" />

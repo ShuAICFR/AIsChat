@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useIsDark } from '../hooks/useIsDark'
+import { fmtTokenNum } from '../utils/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
@@ -37,16 +39,7 @@ export default function UsagePage() {
   const [dailyData, setDailyData] = useState<DailyPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(false)
-  const [isDark, setIsDark] = useState(false)
-
-  // 监听日夜模式
-  useEffect(() => {
-    const check = () => setIsDark(document.documentElement.classList.contains('dark'))
-    check()
-    const obs = new MutationObserver(check)
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    return () => obs.disconnect()
-  }, [])
+  const isDark = useIsDark()
 
   // 加载概览
   useEffect(() => {
@@ -98,7 +91,7 @@ export default function UsagePage() {
   }
 
   // 格式化
-  const fmtNum = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n.toLocaleString()
+  // fmtTokenNum 从 ../utils/format 引入
   const selectedInfo = overview.find(a => a.agent_id === selectedAgent)
 
   return (
@@ -133,10 +126,10 @@ export default function UsagePage() {
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: '总 Token', value: fmtNum(totalTokens), icon: '📊' },
+          { label: '总 Token', value: fmtTokenNum(totalTokens), icon: '📊' },
           { label: '调用次数', value: totalCalls, icon: '📞' },
           { label: '缓存命中率', value: `${cacheRate}%`, icon: '💾' },
-          { label: '思考 Token', value: fmtNum(totalReasoning), icon: '🧠' },
+          { label: '思考 Token', value: fmtTokenNum(totalReasoning), icon: '🧠' },
         ].map(item => (
           <div key={item.label} className="bg-surface rounded-xl border border-border p-4 text-center">
             <div className="text-xl mb-1">{item.icon}</div>
@@ -201,7 +194,7 @@ export default function UsagePage() {
                         fontSize: '12px',
                         color: isDark ? '#F9FAFB' : '#111827',
                       }}
-                      formatter={(value: number, name: string) => [fmtNum(value),
+                      formatter={(value: number, name: string) => [fmtTokenNum(value),
                         name === 'prompt_tokens' ? 'Prompt' :
                         name === 'completion_tokens' ? 'Completion' :
                         name === 'reasoning_tokens' ? '思考' : '缓存'
@@ -254,10 +247,10 @@ export default function UsagePage() {
                   >
                     <td className="py-2.5 px-4 text-textPrimary font-medium">{a.agent_name}</td>
                     <td className="py-2.5 px-4 text-textMuted hidden md:table-cell">{a.model || '-'}</td>
-                    <td className="py-2.5 px-4 text-right text-textPrimary font-mono">{fmtNum(a.total_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtNum(a.prompt_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtNum(a.completion_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtNum(a.reasoning_tokens)}</td>
+                    <td className="py-2.5 px-4 text-right text-textPrimary font-mono">{fmtTokenNum(a.total_tokens)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.prompt_tokens)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.completion_tokens)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.reasoning_tokens)}</td>
                     <td className="py-2.5 px-4 text-right text-textMuted">{a.total_calls}</td>
                   </tr>
                 ))}

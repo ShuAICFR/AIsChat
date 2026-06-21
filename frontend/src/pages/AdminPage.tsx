@@ -8,19 +8,20 @@ import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
 
 type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage'
+type TabCategory = '核心管理' | '系统配置' | '运维分析'
 
-const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string }[] = [
-  { key: 'overview', label: '概览', icon: Activity, desc: '系统统计总览' },
-  { key: 'users', label: '用户', icon: Users, desc: '用户列表与封禁管理' },
-  { key: 'agents', label: 'AI 管理', icon: Bot, desc: 'AI 列表与自修改开关' },
-  { key: 'groups', label: '群聊审查', icon: MessageCircle, desc: '群聊列表与解散操作' },
-  { key: 'codes', label: '兑换码', icon: Ticket, desc: '生成与管理兑换码' },
-  { key: 'opencli', label: 'OpenCLI', icon: Terminal, desc: '命令行白名单与全局设置' },
-  { key: 'convlog', label: '对话日志', icon: ScrollText, desc: '全局日志设置与查看' },
-  { key: 'backup', label: '备份', icon: Database, desc: '数据库与完整备份管理' },
-  { key: 'logs', label: '审计', icon: FileText, desc: '系统操作日志记录' },
-  { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表' },
-  { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计' },
+const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: TabCategory }[] = [
+  { key: 'overview', label: '概览', icon: Activity, desc: '系统统计总览', category: '核心管理' },
+  { key: 'users', label: '用户', icon: Users, desc: '用户列表与封禁管理', category: '核心管理' },
+  { key: 'agents', label: 'AI 管理', icon: Bot, desc: 'AI 列表与自修改开关', category: '核心管理' },
+  { key: 'groups', label: '群聊审查', icon: MessageCircle, desc: '群聊列表与解散操作', category: '核心管理' },
+  { key: 'codes', label: '兑换码', icon: Ticket, desc: '生成与管理兑换码', category: '系统配置' },
+  { key: 'opencli', label: 'OpenCLI', icon: Terminal, desc: '命令行白名单与全局设置', category: '系统配置' },
+  { key: 'convlog', label: '对话日志', icon: ScrollText, desc: '全局日志设置与查看', category: '系统配置' },
+  { key: 'backup', label: '备份', icon: Database, desc: '数据库与完整备份管理', category: '运维分析' },
+  { key: 'logs', label: '审计', icon: FileText, desc: '系统操作日志记录', category: '运维分析' },
+  { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表', category: '运维分析' },
+  { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计', category: '运维分析' },
 ]
 
 const renderContent = (activeTab: Tab) => {
@@ -106,41 +107,55 @@ export default function AdminPage() {
 
       {/* 桌面端 Tab 导航 */}
       <div className="hidden md:flex gap-0 bg-surface border-b border-border px-4 md:px-6 overflow-x-auto shrink-0">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => switchTab(tab.key)}
-            className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.key
-                ? 'border-primary-400 text-primary-600 dark:text-primary-300'
-                : 'border-transparent text-textMuted hover:text-textSecondary'
-            }`}
-          >
-            <tab.icon size={16} />
-            {tab.label}
-          </button>
+        {tabs.map((tab, i) => (
+          <span key={tab.key} className="flex items-center">
+            {i > 0 && tabs[i - 1].category !== tab.category && (
+              <span className="w-px h-5 bg-border mx-1 shrink-0" />
+            )}
+            <button
+              onClick={() => switchTab(tab.key)}
+              className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === tab.key
+                  ? 'border-primary-400 text-primary-600 dark:text-primary-300'
+                  : 'border-transparent text-textMuted hover:text-textSecondary'
+              }`}
+            >
+              <tab.icon size={16} />
+              {tab.label}
+            </button>
+          </span>
         ))}
       </div>
 
-      {/* 移动端：导航列表视图 */}
+      {/* 移动端：导航列表视图（按分类分组） */}
       {mobileView === 'list' && (
-        <div className="md:hidden flex-1 overflow-y-auto p-4 pb-[var(--safe-bottom)] bg-canvas space-y-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => switchTab(tab.key)}
-              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-elevated active:bg-border/50 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
-                <tab.icon size={18} className="text-primary-400" />
+        <div className="md:hidden flex-1 overflow-y-auto p-4 pb-[var(--safe-bottom)] bg-canvas space-y-4">
+          {(['核心管理', '系统配置', '运维分析'] as TabCategory[]).map(cat => {
+            const catTabs = tabs.filter(t => t.category === cat)
+            return (
+              <div key={cat}>
+                <div className="text-xs font-semibold text-textMuted uppercase tracking-wider px-1 mb-1.5">{cat}</div>
+                <div className="space-y-1">
+                  {catTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => switchTab(tab.key)}
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-elevated active:bg-border/50 transition-colors text-left"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
+                        <tab.icon size={18} className="text-primary-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-textPrimary">{tab.label}</div>
+                        <div className="text-xs text-textMuted mt-0.5">{tab.desc}</div>
+                      </div>
+                      <ChevronRight size={16} className="text-textMuted shrink-0" />
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-textPrimary">{tab.label}</div>
-                <div className="text-xs text-textMuted mt-0.5">{tab.desc}</div>
-              </div>
-              <ChevronRight size={16} className="text-textMuted shrink-0" />
-            </button>
-          ))}
+            )
+          })}
         </div>
       )}
 

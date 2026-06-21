@@ -7,6 +7,33 @@
 
 ---
 
+## [v0.5.0] - 2026-06-21
+
+### Added
+
+- 📊 **API 用量仪表盘**：用户端「我的」→ API 用量概览 + 详情页（recharts 堆叠柱状图）。显示总 Token、调用次数、缓存命中率、思考 Token，按 AI 分组明细表，支持 7/30/60/90 天日期范围切换。图表自动适配日夜模式。
+- 🛡️ **管理员用量分析面板**：AdminPage 新增「用量分析」tab。全站 token 消耗总览 + 按用户展开查看各 AI 明细 + 每日 AreaChart 趋势图。
+- 🧠 **Token 追踪增强**：`token_usage` JSONB 新增 `reasoning_tokens`（DeepSeek 思考 token）和 `cached_tokens`（prompt cache 命中 token）。`llm_service.py` 自动从 API 响应提取，`ai_response_worker.py` 跨轮累积。
+- 👤 **「我的」页面**：底部导航「设置」→「我的」。个人资料卡（头像、好友数、上线天数、额度概览）+ 我的 AI 横向卡片 + API 用量概览 + 兑换码输入 + 设置/管理入口 + 退出登录。支持编辑用户名/密码。
+- 🎛️ **AgentDetailPage 工具轮次编辑**：「模型配置」新增「工具调用 & 闹钟」子区。`max_tool_rounds`/`alarm_max_tool_rounds`/`max_alarms` 支持 ± 按钮 inline 编辑，`force_alarm_on_end` 开关切换。调用 `PUT /agents/{id}/config` 即时生效。
+- 🏷️ **兑换码 4 种类型**：新增 `agent_bundle`（AI 包断额度，创建时一次付清该 AI 全免）和 `file_quota`（文件存储配额 MB）。原有 `ai_quota` 和 `api_credit`（1 余额=1 万 token pay-as-you-go）。`users` 表新增 `agent_bundle_credit` + `file_quota_mb` 列。
+
+### Changed
+
+- 🔄 **导航重构**：底部导航栏和侧边栏「设置」→「我的」（`/me`），原设置页保留可继续访问。`/me` 整合设置入口、管理入口。
+- 🔄 **用户信息扩展**：`get_user_info` 返回 `agent_bundle_credit`、`file_quota_mb`、`avatar_url`、`created_at`。AdminPage 用户列表同步展示。
+
+### Backend API
+
+- `GET /conversation-log/usage/overview?days=30` — 用户所有 AI token 汇总
+- `GET /conversation-log/usage/agents/{id}/daily?days=30` — 单 AI 每日分布
+- `GET /admin/usage/global?days=30` — 全站 token 总览
+- `GET /admin/usage/by-user?days=30` — 按用户分组明细
+- `GET /admin/usage/agents/{id}/daily?days=30` — 管理员查单 AI 分布
+- 聚合查询基于 PostgreSQL JSONB `->>` 操作符，`ai_conversation_logs.token_usage` 字段
+
+---
+
 ## [v0.4.0] - 2026-06-20
 
 ### Added

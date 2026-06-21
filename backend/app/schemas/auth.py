@@ -41,6 +41,7 @@ class UserInfoResponse(BaseModel):
     agent_bundle_credit: int = 0
     file_quota_mb: int = 100
     avatar_url: str | None = None
+    bio: str | None = None
     language: str = "zh"
     ui_prefs: dict = {}
     created_at: str | None = None

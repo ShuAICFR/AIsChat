@@ -6,7 +6,7 @@ import {
   User, Settings, LogOut, Shield, Globe, Tag,
   CreditCard, Gift, BarChart3, Bot, ChevronRight, Edit3,
   Loader2, Check, X, ArrowRight, Activity,
-  FileText, HardDrive
+  FileText, HardDrive, Camera
 } from 'lucide-react'
 
 interface AgentBrief {
@@ -48,6 +48,9 @@ export default function MePage() {
   const [showEditProfile, setShowEditProfile] = useState(false)
   const [editUsername, setEditUsername] = useState('')
   const [editPassword, setEditPassword] = useState('')
+  const [editBio, setEditBio] = useState('')
+  const [editAvatarUrl, setEditAvatarUrl] = useState('')
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
 
   useEffect(() => {
@@ -100,7 +103,20 @@ export default function MePage() {
   const openEditProfile = () => {
     setEditUsername(user?.username || '')
     setEditPassword('')
+    setEditBio(user?.bio || '')
+    setEditAvatarUrl(user?.avatar_url || '')
     setShowEditProfile(true)
+  }
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarUploading(true)
+    try {
+      const res = await api.upload('/files/upload', file)
+      setEditAvatarUrl(`/api/files/download/${res.file_id}`)
+    } catch (err: any) {
+      alert(err.message || '上传失败')
+    } finally { setAvatarUploading(false) }
   }
   const handleSaveProfile = async () => {
     setEditSaving(true)
@@ -108,6 +124,8 @@ export default function MePage() {
       const body: any = {}
       if (editUsername && editUsername !== user?.username) body.username = editUsername
       if (editPassword) body.password = editPassword
+      if (editBio !== (user?.bio || '')) body.bio = editBio
+      if (editAvatarUrl !== (user?.avatar_url || '')) body.avatar_url = editAvatarUrl
       if (Object.keys(body).length > 0) {
         await api.put('/user/settings', body)
       }
@@ -373,6 +391,21 @@ export default function MePage() {
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {/* 头像 */}
+              <div className="flex flex-col items-center gap-2">
+                <div className="w-20 h-20 rounded-full bg-primary-500/10 flex items-center justify-center overflow-hidden border-2 border-border">
+                  {editAvatarUrl ? (
+                    <img src={editAvatarUrl} className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={32} className="text-primary-400" />
+                  )}
+                </div>
+                <label className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 cursor-pointer transition-colors">
+                  <Camera size={12} />
+                  {avatarUploading ? '上传中...' : '更换头像'}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+                </label>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1">用户名</label>
                 <input
@@ -381,6 +414,16 @@ export default function MePage() {
                   onChange={e => setEditUsername(e.target.value)}
                   placeholder={user.username}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-textSecondary mb-1">简介</label>
+                <textarea
+                  value={editBio}
+                  onChange={e => setEditBio(e.target.value)}
+                  placeholder="写一句话介绍自己..."
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
                 />
               </div>
               <div>

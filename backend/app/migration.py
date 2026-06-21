@@ -671,6 +671,20 @@ async def _migrate_api_credit(db):
     else:
         logger.info("  ⏭ users.file_quota_mb 已存在，跳过")
 
+    if not await _column_exists(db, "users", "avatar_url"):
+        logger.info("  🖼 添加 users.avatar_url 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN avatar_url TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.avatar_url 已存在，跳过")
+
+    if not await _column_exists(db, "users", "bio"):
+        logger.info("  📝 添加 users.bio 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN bio TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.bio 已存在，跳过")
+
     # 更新兑换码 CHECK 约束：支持 4 种类型
     # 先迁移旧 file_size → file_quota，再改约束
     try:

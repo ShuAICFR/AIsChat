@@ -100,6 +100,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "agent_bundle_credit": user.agent_bundle_credit,
         "file_quota_mb": user.file_quota_mb,
         "avatar_url": getattr(user, 'avatar_url', None),
+        "bio": getattr(user, 'bio', None),
         "api_base_url": user.api_base_url,
         "has_api_key": user.api_key_encrypted is not None,
         "auto_approve_vector_timeout": user.auto_approve_vector_timeout,
@@ -121,6 +122,8 @@ async def update_user_settings(
     timezone: str | None = None,
     language: str | None = None,
     ui_prefs: dict | None = None,
+    avatar_url: str | None = None,
+    bio: str | None = None,
 ) -> dict:
     """更新用户设置"""
     result = await db.execute(select(User).where(User.id == user_id))
@@ -142,6 +145,10 @@ async def update_user_settings(
         user.language = language
     if ui_prefs is not None:
         user.ui_prefs = ui_prefs
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
+    if bio is not None:
+        user.bio = bio
 
     await db.flush()
     await db.refresh(user)

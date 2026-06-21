@@ -22,6 +22,8 @@ class UpdateSettingsRequest(BaseModel):
     timezone: str | None = None
     language: str | None = None
     ui_prefs: dict | None = None
+    avatar_url: str | None = None
+    bio: str | None = None
 
 
 class RedeemRequest(BaseModel):

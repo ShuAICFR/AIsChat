@@ -48,4 +48,8 @@ class User(Base):
     # 界面偏好（JSONB：chat_style, mobile_layout 等）
     ui_prefs = Column(JSONB, default=dict)
 
+    # 个人资料
+    avatar_url = Column(Text, nullable=True)
+    bio = Column(Text, nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())

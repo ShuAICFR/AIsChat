@@ -15,6 +15,7 @@ interface User {
   language: string
   ui_prefs: Record<string, any>
   avatar_url: string | null
+  bio: string | null
   created_at: string | null
 }
 

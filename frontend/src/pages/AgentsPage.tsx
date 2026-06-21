@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
-import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, ArrowLeft, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
 import CreateAgentModal from '../components/CreateAgentModal'
@@ -111,17 +111,18 @@ export default function AgentsPage() {
   }
 
   const navigate = useNavigate()
+  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         <button
-          onClick={() => navigate('/me')}
+          onClick={openDrawer}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title={t('nav.me')}
+          title={t('chatlist.menu')}
         >
-          <ArrowLeft size={18} />
+          <Menu size={18} />
         </button>
         <h1 className="font-semibold text-textPrimary text-sm">{t('agents.title')}</h1>
         <span className="text-xs text-textMuted hidden sm:inline">{t('agents.subtitle')}</span>

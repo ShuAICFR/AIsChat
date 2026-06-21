@@ -795,7 +795,8 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               if (!e.target.value && input) sendTyping(false)
             }}
             onKeyUp={(e) => {
-              if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(e.key)) {
+              if (mentionActive && ['ArrowUp','ArrowDown','Enter','Tab','Escape'].includes(e.key)) return
+              if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) {
                 const ta = e.currentTarget
                 detectMention(ta.value, ta.selectionStart)
               }

@@ -25,3 +25,14 @@ export const STATE_BADGE_COLORS: Record<string, string> = {
   offline: 'bg-border text-textSecondary border-border/30',
   blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }
+
+// ============================================================
+// AI 类型标签（统一数据源，避免 AgentsPage / MePage 重复定义）
+// ============================================================
+
+/** AI 类型 → 显示标签 + Tailwind 颜色 */
+export const AI_TYPE_LABEL: Record<string, { text: string; cls: string }> = {
+  resonance: { text: '共振', cls: 'bg-violet-500/10 text-violet-400' },
+  general: { text: '通用', cls: 'bg-primary-500/10 text-primary-400' },
+  semi_general: { text: '半通用', cls: 'bg-amber-500/10 text-amber-400' },
+}

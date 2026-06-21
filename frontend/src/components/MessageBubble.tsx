@@ -57,6 +57,10 @@ export default function MessageBubble({
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
     : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
 
+  const avatarGradientBase = isMine ? 'from-primary-500 to-primary-700' : 'from-mint-400 to-emerald-600'
+  const avatarGradientOpacity = senderAvatarUrl ? '/30' : ''
+  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : 'shadow-mint-400/20'
+
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
       {/* 头像 — 思考时带脉动光环 */}
@@ -72,11 +76,7 @@ export default function MessageBubble({
               onAvatarClick(senderType, senderId, senderName, state)
             }
           }}
-          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${
-            isMine
-              ? senderAvatarUrl ? 'from-primary-500/30 to-primary-700/30 shadow-primary-500/25' : 'from-primary-500 to-primary-700 shadow-primary-500/25'
-              : senderAvatarUrl ? 'from-mint-400/30 to-emerald-600/30 shadow-mint-400/20' : 'from-mint-400 to-emerald-600 shadow-mint-400/20'
-          }`}
+          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
           title={thinking ? `${senderName} 思考中...` : `查看 ${senderName} 资料`}
         >
           {thinking ? (

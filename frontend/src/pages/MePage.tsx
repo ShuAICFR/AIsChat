@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
+import { AI_TYPE_LABEL } from '../constants'
 import {
   User, Settings, LogOut, Shield, Globe, Tag,
   CreditCard, Gift, BarChart3, Bot, ChevronRight, Edit3,
@@ -16,13 +17,6 @@ interface AgentBrief {
   chat_model: string | null
   avatar_url: string | null
   ai_type: string
-}
-
-// AI 类型 → 显示标签 + 颜色
-const AI_TYPE_LABEL: Record<string, { text: string; cls: string }> = {
-  resonance: { text: '共振', cls: 'bg-violet-500/10 text-violet-400' },
-  general: { text: '通用', cls: 'bg-primary-500/10 text-primary-400' },
-  semi_general: { text: '半通用', cls: 'bg-amber-500/10 text-amber-400' },
 }
 
 interface UsageOverview {

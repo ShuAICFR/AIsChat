@@ -494,11 +494,11 @@ async def _tool_call_loop(
         finish_reason = response.get("finish_reason", "stop")
 
         # 累积 token 消耗 + API 调用计数
-        total_usage["api_calls"] = total_usage.get("api_calls", 0) + 1
+        total_usage["api_calls"] += 1
         usage = response.get("usage", {})
         if usage:
             for k in ("prompt_tokens", "completion_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"):
-                total_usage[k] = total_usage.get(k, 0) + usage.get(k, 0)
+                total_usage[k] += usage.get(k, 0)
 
         # ── 提醒：有文字但没有工具调用 ──
         # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，

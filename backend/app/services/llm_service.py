@@ -265,11 +265,10 @@ async def _chat_completion_non_streaming(
         choice = data["choices"][0]
         message = choice["message"]
 
-        usage = data.get("usage", {})
+        usage = dict(data.get("usage", {}))
         # 提取 reasoning_tokens（DeepSeek thinking 模式）— 始终写入，缺失时 = 0
-        completion_details = usage.get("completion_tokens_details") or {}
-        prompt_details = usage.get("prompt_tokens_details") or {}
-        usage = dict(usage)
+        completion_details = usage.pop("completion_tokens_details", None) or {}
+        prompt_details = usage.pop("prompt_tokens_details", None) or {}
         usage["reasoning_tokens"] = completion_details.get("reasoning_tokens", 0)
         usage["cached_tokens"] = prompt_details.get("cached_tokens", 0)
 

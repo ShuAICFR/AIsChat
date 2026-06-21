@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import CreateAgentModal from '../components/CreateAgentModal'
-import { STATE_BADGE_COLORS } from '../constants'
+import { STATE_BADGE_COLORS, AI_TYPE_LABEL } from '../constants'
 
 interface ModelOption {
   value: string
@@ -65,12 +65,6 @@ const stateLabels: Record<string, string> = {
 
 const PRESET_LABELS: Record<string, string> = {
   chat: '聊天档', immersive: '深度沉浸档', digital_life: '数字生命档',
-}
-
-const AI_TYPE_LABEL: Record<string, { text: string; cls: string }> = {
-  resonance: { text: '共振', cls: 'bg-violet-500/10 text-violet-400' },
-  general: { text: '通用', cls: 'bg-primary-500/10 text-primary-400' },
-  semi_general: { text: '半通用', cls: 'bg-amber-500/10 text-amber-400' },
 }
 
 const PARAM_LABELS: Record<string, string> = {
@@ -222,7 +216,7 @@ export default function AgentsPage() {
                     {agent.is_ai_editable && (
                       <span className="text-mint-400">可自修改</span>
                     )}
-                    {agent.ai_type && AI_TYPE_LABEL[agent.ai_type] && (
+                    {AI_TYPE_LABEL[agent.ai_type] && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${AI_TYPE_LABEL[agent.ai_type].cls}`}>
                         {AI_TYPE_LABEL[agent.ai_type].text}
                       </span>

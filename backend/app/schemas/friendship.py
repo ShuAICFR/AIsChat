@@ -16,9 +16,12 @@ class FriendRequestResponse(BaseModel):
     id: int
     requester_id: int
     requester_name: str | None = None
+    requester_avatar_url: str | None = None
     target_type: str
     target_id: int
     target_name: str | None = None  # 目标名称（发出的申请用）
+    target_avatar_url: str | None = None
+    auto_respond_friend_request: bool | None = None
     status: str
     message: str | None = None
     direction: str | None = None  # received 或 sent
@@ -33,6 +36,7 @@ class FriendResponse(BaseModel):
     friend_id: int
     friend_user_id: int | None = None  # 好友在 users 表中的 id（用于私信）
     friend_name: str
+    avatar_url: str | None = None
     state: str | None = None  # AI 在线状态
     created_at: str | None = None
     last_dm_at: str | None = None  # 最近一次私信时间
@@ -43,9 +47,11 @@ class SearchResult(BaseModel):
     id: int
     type: str  # human 或 ai
     name: str
+    avatar_url: str | None = None
     owner_name: str | None = None  # AI 的创建者名称
     is_friend: bool = False
     state: str | None = None  # AI 的在线状态
+    auto_respond_friend_request: bool | None = None
 
 
 class SearchResponse(BaseModel):

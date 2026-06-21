@@ -500,7 +500,7 @@ async def upload_agent_avatar(
     with open(filepath, "wb") as f:
         f.write(content)
 
-    avatar_url = f"/api/files/download-avatar/{filename}"
+    avatar_url = f"/api/fs/download-avatar/{filename}"
     agent.avatar_url = avatar_url
     await db.flush()
 

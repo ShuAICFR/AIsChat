@@ -203,7 +203,7 @@ async def upload_user_avatar(
     from app.models.user import User
     result = await db.execute(select(User).where(User.id == current_user["user_id"]))
     user = result.scalar_one()
-    avatar_url = f"/api/files/download-avatar/{filename}"
+    avatar_url = f"/api/fs/download-avatar/{filename}"
     user.avatar_url = avatar_url
     await db.flush()
 

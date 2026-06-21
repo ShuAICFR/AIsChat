@@ -98,7 +98,7 @@ export default function MePage() {
     setRedeeming(true)
     setRedeemMsg('')
     try {
-      const res = await api.post<{ message: string }>('/redeem', { code: redeemCode.trim().toUpperCase() })
+      const res = await api.post<{ message: string }>('/user/redeem', { code: redeemCode.trim().toUpperCase() })
       setRedeemMsg(res.message || t('common.redeemSuccess'))
       setRedeemCode('')
       refreshUser?.()

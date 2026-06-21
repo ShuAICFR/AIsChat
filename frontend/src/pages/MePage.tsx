@@ -325,6 +325,23 @@ export default function MePage() {
         )}
       </div>
 
+      {/* ====== 管理员入口 ====== */}
+      {user.role === 'admin' && (
+        <div className="bg-surface rounded-2xl border border-border">
+          <Link
+            to="/admin"
+            className="flex items-center gap-3 px-5 py-3 hover:bg-elevated transition-colors"
+          >
+            <Shield size={16} className="text-amber-400 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-textPrimary">管理面板</div>
+              <div className="text-xs text-textMuted">用户 / AI / 群聊 / 兑换码 / 联邦 / 用量分析</div>
+            </div>
+            <ChevronRight size={14} className="text-textMuted shrink-0" />
+          </Link>
+        </div>
+      )}
+
       {/* ====== 设置入口 ====== */}
       <div className="bg-surface rounded-2xl border border-border divide-y divide-border/60">
         {[
@@ -346,29 +363,6 @@ export default function MePage() {
           </Link>
         ))}
       </div>
-
-      {/* ====== 管理员入口 ====== */}
-      {user.role === 'admin' && (
-        <div className="bg-surface rounded-2xl border border-border divide-y divide-border/60">
-          {[
-            { icon: Shield, label: '管理面板', desc: '用户/AI/群聊/兑换码/用量分析', path: '/admin' },
-            { icon: Globe, label: '联邦管理', desc: '联邦对等端 / 注册表', path: '/admin' },
-          ].map(item => (
-            <Link
-              key={item.label}
-              to={item.path}
-              className="flex items-center gap-3 px-5 py-3 hover:bg-elevated transition-colors"
-            >
-              <item.icon size={16} className="text-amber-400 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-textPrimary">{item.label}</div>
-                <div className="text-xs text-textMuted">{item.desc}</div>
-              </div>
-              <ChevronRight size={14} className="text-textMuted shrink-0" />
-            </Link>
-          ))}
-        </div>
-      )}
 
       {/* ====== 退出登录 ====== */}
       <button

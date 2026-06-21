@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3 } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
@@ -9,59 +9,107 @@ import UsageDashboardTab from '../components/UsageDashboardTab'
 
 type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage'
 
-const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-  { key: 'overview', label: '概览', icon: Activity },
-  { key: 'users', label: '用户', icon: Users },
-  { key: 'agents', label: 'AI 管理', icon: Bot },
-  { key: 'groups', label: '群聊审查', icon: MessageCircle },
-  { key: 'codes', label: '兑换码', icon: Ticket },
-  { key: 'opencli', label: 'OpenCLI', icon: Terminal },
-  { key: 'convlog', label: '对话日志', icon: ScrollText },
-  { key: 'backup', label: '备份', icon: Database },
-  { key: 'logs', label: '审计', icon: FileText },
-  { key: 'federation', label: '联邦', icon: Globe },
-  { key: 'usage', label: '用量分析', icon: BarChart3 },
+const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string }[] = [
+  { key: 'overview', label: '概览', icon: Activity, desc: '系统统计总览' },
+  { key: 'users', label: '用户', icon: Users, desc: '用户列表与封禁管理' },
+  { key: 'agents', label: 'AI 管理', icon: Bot, desc: 'AI 列表与自修改开关' },
+  { key: 'groups', label: '群聊审查', icon: MessageCircle, desc: '群聊列表与解散操作' },
+  { key: 'codes', label: '兑换码', icon: Ticket, desc: '生成与管理兑换码' },
+  { key: 'opencli', label: 'OpenCLI', icon: Terminal, desc: '命令行白名单与全局设置' },
+  { key: 'convlog', label: '对话日志', icon: ScrollText, desc: '全局日志设置与查看' },
+  { key: 'backup', label: '备份', icon: Database, desc: '数据库与完整备份管理' },
+  { key: 'logs', label: '审计', icon: FileText, desc: '系统操作日志记录' },
+  { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表' },
+  { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计' },
 ]
 
+const renderContent = (activeTab: Tab) => {
+  switch (activeTab) {
+    case 'overview': return <OverviewTab />
+    case 'users': return <UsersTab />
+    case 'agents': return <AgentsTab />
+    case 'groups': return <GroupsTab />
+    case 'codes': return <CodesTab />
+    case 'opencli': return <OpenCLITab />
+    case 'backup': return <BackupTab />
+    case 'logs': return <LogsTab />
+    case 'federation': return <FederationTab />
+    case 'convlog': return <ConversationLogTab />
+    case 'usage': return <UsageDashboardTab />
+    default: return <OverviewTab />
+  }
+}
+
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') as Tab) || 'overview'
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab)
+  // 移动端：'list' 显示导航列表，'detail' 显示选中内容
+  const [mobileView, setMobileView] = useState<'list' | 'detail'>(
+    searchParams.get('tab') ? 'detail' : 'list'
+  )
   const navigate = useNavigate()
+
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab)
+    setSearchParams({ tab })
+    setMobileView('detail')
+  }
+
+  const backToList = () => {
+    setMobileView('list')
+  }
+
+  const currentTab = tabs.find(t => t.key === activeTab)
 
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
-      <div className="px-4 md:px-6 py-4 border-b border-border bg-surface">
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-surface shrink-0">
         <div className="flex items-center gap-2 mb-1">
-          {/* 移动端：返回我的 */}
-          <button
-            onClick={() => navigate('/me')}
-            className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="返回我的"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <h1 className="text-xl font-bold text-textPrimary tracking-tight">管理员面板</h1>
+          {/* 返回按钮：移动端列表视图→我的；桌面端→我的；移动端详情→列表 */}
+          {mobileView === 'detail' ? (
+            <button
+              onClick={backToList}
+              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="返回列表"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/me')}
+              className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+              title="返回我的"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
+          <h1 className="text-xl font-bold text-textPrimary tracking-tight">
+            {mobileView === 'detail' && currentTab ? currentTab.label : '管理员面板'}
+          </h1>
         </div>
-        <div className="flex items-center gap-1.5 flex-wrap text-sm text-textSecondary mt-0.5">
-          <span>系统管理与监控 ·</span>
-          <a
-            href={MANUAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
-          >
-            <BookOpen size={13} /> 使用手册
-          </a>
-        </div>
+        {mobileView === 'list' && (
+          <div className="flex items-center gap-1.5 flex-wrap text-sm text-textSecondary mt-0.5">
+            <span>系统管理与监控 ·</span>
+            <a
+              href={MANUAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
+            >
+              <BookOpen size={13} /> 使用手册
+            </a>
+          </div>
+        )}
       </div>
 
-      {/* Tab 导航 */}
-      <div className="flex gap-0 bg-surface border-b border-border px-4 md:px-6 overflow-x-auto">
+      {/* 桌面端 Tab 导航 */}
+      <div className="hidden md:flex gap-0 bg-surface border-b border-border px-4 md:px-6 overflow-x-auto shrink-0">
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => switchTab(tab.key)}
             className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.key
                 ? 'border-primary-400 text-primary-600 dark:text-primary-300'
@@ -74,19 +122,33 @@ export default function AdminPage() {
         ))}
       </div>
 
-      {/* 内容区 */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-[var(--safe-bottom)] md:pb-6 bg-canvas">
-        {activeTab === 'overview' && <OverviewTab />}
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'agents' && <AgentsTab />}
-        {activeTab === 'groups' && <GroupsTab />}
-        {activeTab === 'codes' && <CodesTab />}
-        {activeTab === 'opencli' && <OpenCLITab />}
-        {activeTab === 'backup' && <BackupTab />}
-        {activeTab === 'logs' && <LogsTab />}
-        {activeTab === 'federation' && <FederationTab />}
-        {activeTab === 'convlog' && <ConversationLogTab />}
-        {activeTab === 'usage' && <UsageDashboardTab />}
+      {/* 移动端：导航列表视图 */}
+      {mobileView === 'list' && (
+        <div className="md:hidden flex-1 overflow-y-auto p-4 pb-[var(--safe-bottom)] bg-canvas space-y-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => switchTab(tab.key)}
+              className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl hover:bg-elevated active:bg-border/50 transition-colors text-left"
+            >
+              <div className="w-9 h-9 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
+                <tab.icon size={18} className="text-primary-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-textPrimary">{tab.label}</div>
+                <div className="text-xs text-textMuted mt-0.5">{tab.desc}</div>
+              </div>
+              <ChevronRight size={16} className="text-textMuted shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 内容区（桌面端始终显示；移动端在详情视图显示） */}
+      <div className={`flex-1 overflow-y-auto p-4 md:p-6 pb-[var(--safe-bottom)] md:pb-6 bg-canvas ${
+        mobileView === 'list' ? 'hidden md:block' : ''
+      }`}>
+        {renderContent(activeTab)}
       </div>
     </div>
   )

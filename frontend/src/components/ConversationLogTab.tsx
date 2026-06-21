@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import { FileText, Settings, Bot, Eye, ChevronDown, ChevronUp, Loader2, Save, Sliders } from 'lucide-react'
+import { FileText, Settings, Bot, Eye, ChevronDown, ChevronUp, Loader2, Save, Sliders, X } from 'lucide-react'
 
 interface GlobalConfig {
   max_conversation_logs: number

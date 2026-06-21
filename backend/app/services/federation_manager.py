@@ -77,6 +77,7 @@ class FederationManager:
         self._connecting: set[str] = set()               # 防重入：正在连接中的 public_id
         self._recent_rotation_ids: dict[str, set[str]] = defaultdict(set)  # 防重放：peer → {rotation_id}
         self._connecting_new_url: set[str] = set()       # 防重入：正在测试新 URL 的 public_id
+        self._last_errors: dict[str, str] = {}           # public_id → 最后一次失败原因（公开）
         self._heartbeat_task: asyncio.Task | None = None
         self._reconnect_task: asyncio.Task | None = None
         self._running = False
@@ -106,6 +107,7 @@ class FederationManager:
             secret = await get_decrypted_secret(peer_record)
         except Exception as e:
             logger.error(f"🌐 解密对等端 {public_id} 共享密钥失败: {e}")
+            self._last_errors[public_id] = f"密钥解密失败：共享密钥可能不匹配或已损坏"
             self._connecting.discard(public_id)
             return False
 
@@ -147,12 +149,15 @@ class FederationManager:
                 raw = await asyncio.wait_for(ws.recv(), timeout=15)
                 ack = json.loads(raw)
             except (asyncio.TimeoutError, json.JSONDecodeError) as e:
+                msg = "握手超时（对方未在 15s 内响应）" if isinstance(e, asyncio.TimeoutError) else "握手响应格式无效（非 JSON）"
                 logger.warning(f"🌐 握手超时/无效: {public_id} — {e}")
+                self._last_errors[public_id] = msg
                 await self._close_peer_connection(public_id)
                 return False
 
             if ack.get("type") != "handshake_ack":
                 logger.warning(f"🌐 握手阶段收到非预期消息: {ack.get('type')} from {public_id}")
+                self._last_errors[public_id] = f"握手阶段收到非预期响应类型: {ack.get('type')}（预期 handshake_ack）"
                 await self._close_peer_connection(public_id)
                 return False
 
@@ -160,6 +165,7 @@ class FederationManager:
             expected_response = hmac_response(secret, my_challenge)
             if ack.get("response") != expected_response:
                 logger.warning(f"🌐 HMAC 验证失败: {public_id}（共享密钥不匹配）")
+                self._last_errors[public_id] = "HMAC 验证失败：共享密钥不匹配（请确认双方共享密钥一致）"
                 await self._close_peer_connection(public_id)
                 return False
 
@@ -176,12 +182,15 @@ class FederationManager:
                 raw = await asyncio.wait_for(ws.recv(), timeout=10)
                 ok = json.loads(raw)
             except (asyncio.TimeoutError, json.JSONDecodeError) as e:
+                msg = "握手确认超时（对方未在 10s 内确认）" if isinstance(e, asyncio.TimeoutError) else "握手确认响应格式无效"
                 logger.warning(f"🌐 握手完成超时: {public_id} — {e}")
+                self._last_errors[public_id] = msg
                 await self._close_peer_connection(public_id)
                 return False
 
             if ok.get("type") != "handshake_ok":
                 logger.warning(f"🌐 握手未获确认: {public_id}")
+                self._last_errors[public_id] = f"握手未获对方确认（收到 {ok.get('type')} 而非 handshake_ok）"
                 await self._close_peer_connection(public_id)
                 return False
 
@@ -207,7 +216,29 @@ class FederationManager:
             return True
 
         except Exception as e:
-            logger.warning(f"🌐 连接失败 {public_id}: {e}")
+            # 分类异常类型提供有意义的错误信息
+            error_type = type(e).__name__
+            error_msg = str(e) or error_type
+            if "TLS" in error_type or "ssl" in error_msg.lower() or "SSL" in error_msg:
+                detail = f"TLS/SSL 错误：{error_msg}"
+            elif error_type == "InvalidURI" or "invalid" in error_msg.lower():
+                detail = f"URL 格式无效：{error_msg}"
+            elif "ConnectionRefusedError" in error_type or "refused" in error_msg.lower():
+                detail = f"连接被拒绝（目标未运行或端口错误）：{error_msg}"
+            elif "gaierror" in error_type.lower() or "getaddrinfo" in error_msg.lower() or "nodename" in error_msg.lower():
+                detail = f"DNS 解析失败（域名/主机名不存在）：{error_msg}"
+            elif error_type == "TimeoutError" or "timeout" in error_msg.lower():
+                detail = f"连接超时：{error_msg}"
+            elif "403" in error_msg:
+                detail = f"握手被拒绝 (403)：（公开 ID 或共享密钥不匹配）：{error_msg}"
+            elif "404" in error_msg:
+                detail = f"联邦端点不存在 (404)：（路径错误或服务未启动）：{error_msg}"
+            elif "400" in error_msg:
+                detail = f"握手请求被拒绝 (400)：（公开 ID 或共享密钥不匹配）：{error_msg}"
+            else:
+                detail = f"{error_type}：{error_msg}"
+            logger.warning(f"🌐 连接失败 {public_id}: {detail}")
+            self._last_errors[public_id] = detail
             await self._close_peer_connection(public_id)
             try:
                 async with async_session() as db:
@@ -217,6 +248,10 @@ class FederationManager:
             return False
         finally:
             self._connecting.discard(public_id)
+
+    def get_last_error(self, public_id: str) -> str | None:
+        """获取指定对等端最后一次连接失败的原因"""
+        return self._last_errors.get(public_id)
 
     async def disconnect_peer(self, public_id: str) -> None:
         """断开与指定对等端的连接"""

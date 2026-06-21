@@ -1327,7 +1327,8 @@ async def connect_federation_peer(
     from app.services.federation_manager import federation_manager
     success = await federation_manager.connect_to_peer(peer)
     if not success:
-        raise HTTPException(status_code=500, detail="连接失败")
+        error_msg = federation_manager.get_last_error(peer.peer_public_id) or "连接失败"
+        raise HTTPException(status_code=500, detail=error_msg)
     return {"message": f"已连接到 {peer.peer_public_id}"}
 
 

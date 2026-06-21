@@ -103,26 +103,44 @@ export default function FederationTab() {
 
   const handleAddPeer = async () => {
     if (!newPeer.peer_public_id || !newPeer.remote_url || !newPeer.shared_secret) return
-    await api.post('/admin/federation/peers', newPeer)
-    setNewPeer({ display_name: '', peer_public_id: '', remote_url: '', shared_secret: '' })
-    setShowAddPeer(false)
-    await loadData()
+    try {
+      await api.post('/admin/federation/peers', newPeer)
+      setNewPeer({ display_name: '', peer_public_id: '', remote_url: '', shared_secret: '' })
+      setShowAddPeer(false)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || t('admin.addPeerFailed'))
+    }
   }
 
   const handleDeletePeer = async (id: number) => {
     if (!confirm(t('admin.confirmRemovePeer'))) return
-    await api.delete(`/admin/federation/peers/${id}`)
-    await loadData()
+    try {
+      await api.delete(`/admin/federation/peers/${id}`)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || t('admin.deletePeerFailed'))
+    }
   }
 
   const handleConnect = async (id: number) => {
-    await api.post(`/admin/federation/peers/${id}/connect`)
-    await loadData()
+    setError('')
+    try {
+      await api.post(`/admin/federation/peers/${id}/connect`)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || t('admin.connectFailed'))
+      await loadData()  // 仍然刷新，后端可能更新了状态
+    }
   }
 
   const handleDisconnect = async (id: number) => {
-    await api.post(`/admin/federation/peers/${id}/disconnect`)
-    await loadData()
+    try {
+      await api.post(`/admin/federation/peers/${id}/disconnect`)
+      await loadData()
+    } catch (e: any) {
+      setError(e?.message || t('admin.disconnectFailed'))
+    }
   }
 
   const handleEditPeer = (peer: Peer) => {
@@ -329,12 +347,18 @@ export default function FederationTab() {
   }
 
   if (loading) return <div className="text-textMuted text-sm p-4">{t('common.loading')}</div>
-  if (error) return <div className="text-rose-400 text-sm p-4">{error}</div>
 
   const isRegistering = registerState === 'loading'
 
   return (
     <div className="space-y-6">
+      {/* 操作错误横幅（可关闭，不破坏整个页面） */}
+      {error && (
+        <div className="flex items-start gap-2 bg-rose-400/5 border border-rose-400/20 rounded-lg px-4 py-2.5">
+          <span className="text-rose-400 text-sm flex-1 whitespace-pre-wrap">{error}</span>
+          <button onClick={() => setError('')} className="text-rose-400/60 hover:text-rose-400 shrink-0 text-sm">✕</button>
+        </div>
+      )}
       {/* 风险告知弹窗 */}
       {registerState === 'confirm' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setRegisterState('idle'); setDialogToken('') }}>

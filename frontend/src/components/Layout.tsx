@@ -35,7 +35,7 @@ export default function Layout() {
       </div>
 
       {/* ── 主内容区 ── */}
-      <main className="flex-1 min-w-0 overflow-hidden bg-canvas pb-14 md:pb-0">
+      <main className="flex-1 min-w-0 overflow-y-auto bg-canvas pb-14 md:pb-0">
         <Outlet context={{ openDrawer: () => setDrawerOpen(true), closeDrawer: () => setDrawerOpen(false) }} />
       </main>
 

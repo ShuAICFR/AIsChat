@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../api/client'
 import {
-  User, Settings, LogOut, Shield, Globe, Tag, Users,
+  User, Settings, LogOut, Shield, Globe, Tag,
   CreditCard, Gift, BarChart3, Bot, ChevronRight, Edit3,
   Loader2, Check, X, ArrowRight, Activity,
   FileText, HardDrive
@@ -134,7 +134,7 @@ export default function MePage() {
               )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-textMuted">
-              <span className="flex items-center gap-1"><Users size={12} /> 好友 0</span>
+              <span className="flex items-center gap-1"><Bot size={12} /> AI {agents.length}</span>
               <span>加入 {daysSince} 天</span>
             </div>
             <button
@@ -149,16 +149,20 @@ export default function MePage() {
         {/* 额度概览 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
           {[
-            { label: 'AI 创建', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400' },
-            { label: '通用额度', value: user.api_credit ?? 0, icon: CreditCard, color: 'text-mint-400' },
-            { label: '包断额度', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400' },
-            { label: '文件配额', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400' },
+            { label: 'AI 创建', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
+            { label: '通用额度', value: user.api_credit ?? 0, icon: CreditCard, color: 'text-mint-400', action: () => document.getElementById('redeem-section')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: '包断额度', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => document.getElementById('redeem-section')?.scrollIntoView({ behavior: 'smooth' }) },
+            { label: '文件配额', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => document.getElementById('redeem-section')?.scrollIntoView({ behavior: 'smooth' }) },
           ].map(item => (
-            <div key={item.label} className="bg-canvas rounded-xl p-3 text-center">
+            <button
+              key={item.label}
+              onClick={item.action}
+              className="bg-canvas rounded-xl p-3 text-center hover:bg-elevated transition-colors cursor-pointer w-full"
+            >
               <item.icon size={16} className={`${item.color} mx-auto mb-1`} />
               <div className="text-sm font-semibold text-textPrimary">{item.value}</div>
               <div className="text-[10px] text-textMuted">{item.label}</div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -229,7 +233,7 @@ export default function MePage() {
       </div>
 
       {/* ====== 兑换码 ====== */}
-      <div className="bg-surface rounded-2xl border border-border p-5">
+      <div id="redeem-section" className="bg-surface rounded-2xl border border-border p-5">
         <h3 className="text-sm font-semibold text-textPrimary mb-3 flex items-center gap-2">
           <Gift size={16} className="text-primary-400" /> 兑换码
         </h3>

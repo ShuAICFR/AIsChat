@@ -93,19 +93,21 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
       {/* ── 右侧主区域 ── */}
       {!hasActiveConversation ? (
         <div
-          className="hidden md:flex flex-1 items-center justify-center bg-canvas"
+          className="flex flex-1 items-center justify-center bg-canvas relative"
           onClick={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
         >
-          <div className="text-center">
+          <div className="text-center px-4">
             <MessageBubblePlaceholder />
-            <p className="mt-4 text-lg text-textSecondary font-medium">{t('chat.selectConversation')}</p>
-            {groups.length === 0 && (
+            <p className="mt-4 text-base md:text-lg text-textSecondary font-medium">{t('chat.selectConversation')}</p>
+            {groups.length === 0 ? (
               <button
-                onClick={() => setShowCreateGroup(true)}
+                onClick={(e) => { e.stopPropagation(); setShowCreateGroup(true) }}
                 className="mt-5 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
               >
                 {t('chat.createFirstGroup')}
               </button>
+            ) : (
+              <p className="mt-2 text-xs text-textMuted">{t('chat.selectFromListHint')}</p>
             )}
           </div>
         </div>

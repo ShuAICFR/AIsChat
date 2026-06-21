@@ -14,9 +14,10 @@ async def search_entities(
     current_user_id: int,
     limit: int = 20,
 ) -> list[dict]:
-    """搜索用户和 AI（无需好友关系即可发起 DM）"""
+    """搜索用户和 AI（无需好友关系即可发起 DM），附带 is_friend 标记"""
     from app.models.user import User
     from app.models.agent import Agent
+    from app.models.friendship import Friendship
 
     results = []
     like_pattern = f"%{query}%"
@@ -31,13 +32,24 @@ async def search_entities(
     for user in user_result.scalars().all():
         if user.id == current_user_id:
             continue
+        # 检查是否已是好友
+        is_friend = False
+        friend_check = await db.execute(
+            select(Friendship).where(
+                Friendship.user_id == current_user_id,
+                Friendship.friend_type == "human",
+                Friendship.friend_id == user.id,
+            )
+        )
+        is_friend = friend_check.scalar_one_or_none() is not None
         results.append({
             "id": user.id,
             "type": "human",
             "name": user.username,
             "owner_name": None,
             "state": None,
-            "user_id": user.id,  # 人类的 user_id 就是自己的 id
+            "user_id": user.id,
+            "is_friend": is_friend,
         })
 
     # 搜索 AI（仅返回 discoverable 的 AI）
@@ -53,13 +65,24 @@ async def search_entities(
             select(UserModel).where(UserModel.id == agent.owner_id)
         )
         owner = owner_result.scalar_one_or_none()
+        # 检查是否已是好友（以 AI 的 unified user_id 为 friend_id）
+        is_friend = False
+        friend_check = await db.execute(
+            select(Friendship).where(
+                Friendship.user_id == current_user_id,
+                Friendship.friend_type == "ai",
+                Friendship.friend_id == agent.id,
+            )
+        )
+        is_friend = friend_check.scalar_one_or_none() is not None
         results.append({
             "id": agent.id,
             "type": "ai",
             "name": agent.name,
             "owner_name": owner.username if owner else None,
             "state": agent.state,
-            "user_id": agent.user_id,  # AI 的 unified user_id（用于 DM）
+            "user_id": agent.user_id,
+            "is_friend": is_friend,
         })
 
     return results[:limit]

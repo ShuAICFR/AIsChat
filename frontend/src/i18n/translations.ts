@@ -50,6 +50,7 @@ const zh: TranslationDict = {
   'chat.onlineCount': '在线人数',
   'chat.selectConversation': '选择一个对话开始',
   'chat.createFirstGroup': '创建第一个群聊',
+  'chat.selectFromListHint': '或从左侧列表选择已有对话',
   'chat.createNewGroup': '创建新群聊',
   'chat.cancel': '取消',
   'chat.create': '创建',
@@ -160,6 +161,9 @@ const zh: TranslationDict = {
   'search.creator': '创建者:',
   'search.sendDM': '发私信',
   'search.sendDMFailed': '发起私信失败',
+  'search.addFriend': '加好友',
+  'search.addFriendSuccess': '好友申请已发送',
+  'search.addFriendFailed': '发送好友申请失败',
 
   // ======================== 通用 / Common ========================
   'common.loading': '加载中...',
@@ -1287,6 +1291,7 @@ const en: TranslationDict = {
   'chat.onlineCount': 'Online',
   'chat.selectConversation': 'Select a conversation to start',
   'chat.createFirstGroup': 'Create first group',
+  'chat.selectFromListHint': 'Or select from the list on the left',
   'chat.createNewGroup': 'Create New Group',
   'chat.cancel': 'Cancel',
   'chat.create': 'Create',
@@ -1397,6 +1402,9 @@ const en: TranslationDict = {
   'search.creator': 'Creator:',
   'search.sendDM': 'Send DM',
   'search.sendDMFailed': 'Failed to start DM',
+  'search.addFriend': 'Add Friend',
+  'search.addFriendSuccess': 'Friend request sent',
+  'search.addFriendFailed': 'Failed to send friend request',
 
   // ======================== Common ========================
   'common.loading': 'Loading...',

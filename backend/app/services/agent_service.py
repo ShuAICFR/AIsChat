@@ -356,6 +356,23 @@ async def create_agent(
     await db.flush()
     await db.refresh(agent)
 
+    # 自动将创建者添加为 AI 的好友（双向）
+    from app.models.friendship import Friendship
+    existing_check = await db.execute(
+        select(Friendship).where(
+            Friendship.user_id == owner_id,
+            Friendship.friend_type == "ai",
+            Friendship.friend_id == agent.id,
+        )
+    )
+    if not existing_check.scalar_one_or_none():
+        # 创建者 → AI
+        db.add(Friendship(user_id=owner_id, friend_type="ai", friend_id=agent.id))
+        # AI → 创建者
+        db.add(Friendship(user_id=ai_user.id, friend_type="human", friend_id=owner_id))
+        await db.flush()
+        logger.info(f"自动好友关系已建立: 用户#{owner_id} ↔ AI#{agent.id} (user_id={ai_user.id})")
+
     logger.info(f"AI '{name}' (id={agent.id}) 由用户 id={owner_id} 创建，api_credit_cost={api_credit_cost}")
     return agent
 

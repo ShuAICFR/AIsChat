@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, MessageSquare, Bot, User } from 'lucide-react'
+import { Search, X, MessageSquare, UserPlus, Bot, User } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
@@ -12,6 +12,7 @@ interface SearchResult {
   avatar_url: string | null
   owner_name: string | null
   state: string | null
+  is_friend?: boolean
 }
 
 export default function SearchOverlay() {
@@ -65,7 +66,6 @@ export default function SearchOverlay() {
     const key = `${item.type}:${item.id}`
     setSendingDM(key)
     try {
-      // 直接调用 DM API 获取或创建 DM 会话
       const dm = await api.post<{ session_id: string }>(`/dm/${targetId}`)
       if (dm.session_id) {
         navigate(`/chat/dm/${dm.session_id}`)
@@ -74,6 +74,26 @@ export default function SearchOverlay() {
       }
     } catch (err: any) {
       alert(err.message || t('search.sendDMFailed'))
+    } finally {
+      setSendingDM(null)
+    }
+  }
+
+  const handleAddFriend = async (item: SearchResult) => {
+    const key = `${item.type}:${item.id}`
+    setSendingDM(key)
+    try {
+      await api.post('/friends/requests', {
+        target_type: item.type,
+        target_id: item.id,
+      })
+      // 更新本地 is_friend 状态，按钮切换为"发消息"
+      setResults(prev => prev.map(r =>
+        r.type === item.type && r.id === item.id ? { ...r, is_friend: true } : r
+      ))
+      alert(t('search.addFriendSuccess'))
+    } catch (err: any) {
+      alert(err.message || t('search.addFriendFailed'))
     } finally {
       setSendingDM(null)
     }
@@ -144,15 +164,26 @@ export default function SearchOverlay() {
                   )}
                 </div>
 
-                {/* 操作按钮 — 直接发私信 */}
-                <button
-                  onClick={() => handleSendDM(item)}
-                  disabled={sendingDM === `${item.type}:${item.id}`}
-                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 shrink-0 transition-colors disabled:opacity-50"
-                >
-                  <MessageSquare size={12} />
-                  {sendingDM === `${item.type}:${item.id}` ? '...' : t('search.sendDM')}
-                </button>
+                {/* 操作按钮 — 好友则发私信，非好友则加好友 */}
+                {item.is_friend ? (
+                  <button
+                    onClick={() => handleSendDM(item)}
+                    disabled={sendingDM === `${item.type}:${item.id}`}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 shrink-0 transition-colors disabled:opacity-50"
+                  >
+                    <MessageSquare size={12} />
+                    {sendingDM === `${item.type}:${item.id}` ? '...' : t('search.sendDM')}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleAddFriend(item)}
+                    disabled={sendingDM === `${item.type}:${item.id}`}
+                    className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-mint-400/10 text-mint-400 hover:bg-mint-400/20 shrink-0 transition-colors disabled:opacity-50"
+                  >
+                    <UserPlus size={12} />
+                    {sendingDM === `${item.type}:${item.id}` ? '...' : t('search.addFriend')}
+                  </button>
+                )}
               </div>
             ))
           )}

@@ -1223,7 +1223,7 @@ async def get_global_usage(
 ):
     """全站 token 消耗总览"""
     from app.services.conversation_log_service import get_admin_global_token_stats
-    end_date = datetime.now(tz.utc)
+    end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_admin_global_token_stats(db, start_date, end_date)
 
@@ -1236,7 +1236,7 @@ async def get_usage_by_user(
 ):
     """按用户分组的 token 消耗明细"""
     from app.services.conversation_log_service import get_admin_users_token_summary
-    end_date = datetime.now(tz.utc)
+    end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_admin_users_token_summary(db, start_date, end_date)
 
@@ -1250,6 +1250,6 @@ async def get_agent_daily_usage_admin(
 ):
     """获取单个 AI 每日 token 消耗分布"""
     from app.services.conversation_log_service import get_agent_token_daily
-    end_date = datetime.now(tz.utc)
+    end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_agent_token_daily(db, agent_id, start_date, end_date)

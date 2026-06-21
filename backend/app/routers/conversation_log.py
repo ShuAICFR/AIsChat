@@ -224,7 +224,7 @@ async def get_usage_overview(
 ):
     """获取当前用户所有 AI 的 token 消耗汇总（近 N 天）"""
     from app.services.conversation_log_service import get_user_agents_token_summary
-    end_date = datetime.now(tz.utc)
+    end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_user_agents_token_summary(db, current_user["user_id"], start_date, end_date)
 
@@ -244,6 +244,6 @@ async def get_agent_daily_usage(
     agent = agent_result.scalar()
     if not agent or agent.owner_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="无权查看此 AI 的用量数据")
-    end_date = datetime.now(tz.utc)
+    end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_agent_token_daily(db, agent_id, start_date, end_date)

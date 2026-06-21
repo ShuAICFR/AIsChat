@@ -110,10 +110,11 @@ export default function MePage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 2 * 1024 * 1024) { alert('头像不能超过 2MB'); return }
     setAvatarUploading(true)
     try {
-      const res = await api.upload('/files/upload', file)
-      setEditAvatarUrl(`/api/files/download/${res.file_id}`)
+      const res = await api.upload('/user/avatar', file)
+      setEditAvatarUrl(res.avatar_url)
     } catch (err: any) {
       alert(err.message || '上传失败')
     } finally { setAvatarUploading(false) }

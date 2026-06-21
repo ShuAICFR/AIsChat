@@ -114,6 +114,17 @@ async def upload_attachment(
 # 文件下载
 # ============================================================
 
+@router.get("/download-avatar/{filename}")
+async def serve_avatar(filename: str):
+    """直接返回头像文件（无需鉴权，仅限 avatars 目录）"""
+    import os
+    from fastapi.responses import FileResponse
+    filepath = os.path.join("uploads/avatars", filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="头像不存在")
+    return FileResponse(filepath)
+
+
 @router.get("/download/{file_id}")
 async def download_file(
     file_id: int,

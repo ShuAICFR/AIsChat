@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # 文件存储
     data_dir: str = os.getenv("DATA_DIR", "/app/data")
 
+    # 头像
+    avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "2"))
+
     # 防滥用
     rate_limit_per_second: int = 2  # 每个 AI 每秒最多发言次数
 
@@ -108,3 +111,15 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 运行时可覆盖的配置（不持久化，重启后恢复为 env 默认值）
+_runtime_overrides: dict = {}
+
+def get_runtime_setting(key: str, default=None):
+    return _runtime_overrides.get(key, default)
+
+def set_runtime_setting(key: str, value):
+    _runtime_overrides[key] = value
+
+def get_effective_avatar_max_size_mb() -> int:
+    return int(get_runtime_setting("avatar_max_size_mb", settings.avatar_max_size_mb))

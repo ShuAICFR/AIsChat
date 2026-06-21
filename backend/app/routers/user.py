@@ -2,7 +2,7 @@
 用户设置路由
 """
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
 from app.database import get_db
@@ -165,6 +165,49 @@ async def test_api_connection(
         return {"ok": False, "message": "连接超时，请检查网络或 API 地址"}
     except Exception as e:
         return {"ok": False, "message": f"连接失败: {str(e)}"}
+
+
+@router.post("/avatar")
+async def upload_user_avatar(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """上传用户头像（统一存到 uploads/avatars/，不计入存储配额）"""
+    import os
+    import uuid
+    from app.config import settings
+
+    # 验证文件类型
+    allowed_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅支持 JPEG/PNG/GIF/WebP 图片")
+
+    # 大小限制
+    max_bytes = settings.avatar_max_size_mb * 1024 * 1024
+    content = await file.read()
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"头像不能超过 {settings.avatar_max_size_mb}MB")
+
+    # 保存到统一头像目录
+    ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "png"
+    filename = f"user_{current_user['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
+    upload_dir = "uploads/avatars"
+    os.makedirs(upload_dir, exist_ok=True)
+    filepath = os.path.join(upload_dir, filename)
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    # 更新用户 avatar_url
+    from sqlalchemy import select
+    from app.models.user import User
+    result = await db.execute(select(User).where(User.id == current_user["user_id"]))
+    user = result.scalar_one()
+    avatar_url = f"/api/files/download-avatar/{filename}"
+    user.avatar_url = avatar_url
+    await db.flush()
+
+    return {"avatar_url": avatar_url}
 
 
 @router.get("/storage")

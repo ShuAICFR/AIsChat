@@ -473,9 +473,10 @@ async def upload_agent_avatar(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """上传 AI 头像"""
+    """上传 AI 头像（统一存 uploads/avatars/，大小受全局限制）"""
     import os
     import uuid
+    from app.config import settings
 
     agent = await _require_agent_owner(agent_id, current_user, db)
 
@@ -484,18 +485,22 @@ async def upload_agent_avatar(
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅支持 JPEG/PNG/GIF/WebP")
 
-    # 生成唯一文件名
+    # 大小限制
+    max_bytes = settings.avatar_max_size_mb * 1024 * 1024
+    content = await file.read()
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"头像不能超过 {settings.avatar_max_size_mb}MB")
+
+    # 保存到统一头像目录
     ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "png"
-    filename = f"avatar_{agent_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filename = f"agent_{agent_id}_{uuid.uuid4().hex[:8]}.{ext}"
     upload_dir = "uploads/avatars"
     os.makedirs(upload_dir, exist_ok=True)
     filepath = os.path.join(upload_dir, filename)
-
-    content = await file.read()
     with open(filepath, "wb") as f:
         f.write(content)
 
-    avatar_url = f"/{upload_dir}/{filename}"
+    avatar_url = f"/api/files/download-avatar/{filename}"
     agent.avatar_url = avatar_url
     await db.flush()
 

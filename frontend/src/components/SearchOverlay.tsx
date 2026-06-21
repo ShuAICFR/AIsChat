@@ -8,6 +8,7 @@ interface SearchResult {
   id: number
   type: 'human' | 'ai'
   name: string
+  avatar_url: string | null
   owner_name: string | null
   state: string | null
 }
@@ -111,13 +112,17 @@ export default function SearchOverlay() {
                 className="flex items-center gap-3 px-3 py-2.5 hover:bg-elevated"
               >
                 {/* 头像 */}
-                <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
-                  item.type === 'human'
-                    ? 'from-primary-500 to-primary-700 text-white'
-                    : 'from-mint-400 to-emerald-600 text-white'
-                }`}>
-                  {item.name.charAt(0).toUpperCase()}
-                </div>
+                {item.avatar_url ? (
+                  <img src={item.avatar_url} alt={item.name} className="w-8 h-8 rounded-full object-cover shrink-0 bg-elevated" />
+                ) : (
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
+                    item.type === 'human'
+                      ? 'from-primary-500 to-primary-700 text-white'
+                      : 'from-mint-400 to-emerald-600 text-white'
+                  }`}>
+                    {item.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
 
                 {/* 信息 */}
                 <div className="flex-1 min-w-0">

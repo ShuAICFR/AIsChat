@@ -141,7 +141,10 @@ async def reject_friend_request(
     if req is None:
         raise ValueError("申请不存在")
 
-    if req.target_type == "human" and req.target_id != user_id:
+    # 允许：目标方拒绝，或发送方撤回自己的申请
+    is_target = (req.target_type == "human" and req.target_id == user_id)
+    is_requester = (req.requester_id == user_id)
+    if not is_target and not is_requester:
         raise ValueError("无权操作此申请")
 
     if req.status != "pending":
@@ -268,18 +271,21 @@ async def list_friends(
         name = f"未知:{f.friend_id}"
         state = None
         friend_user_id = None
+        avatar_url = None
 
         if f.friend_type == "human":
             u = users_map.get(f.friend_id)
             if u:
                 name = u.username
                 friend_user_id = u.id
+                avatar_url = u.avatar_url
         elif f.friend_type == "ai":
             a = agents_map.get(f.friend_id)
             if a:
                 name = a.name
                 state = a.state
                 friend_user_id = a.user_id
+                avatar_url = a.avatar_url
 
         last_dm_at = None
         if friend_user_id:
@@ -293,6 +299,7 @@ async def list_friends(
             "friend_user_id": friend_user_id,
             "friend_name": name,
             "state": state,
+            "avatar_url": avatar_url,
             "created_at": str(f.created_at) if f.created_at else None,
             "last_dm_at": last_dm_at,
         })
@@ -330,54 +337,65 @@ async def list_friend_requests(
     if not all_requests:
         return []
 
-    # ── 批量查询：所有发起者的用户名 ──
+    # ── 批量查询：所有发起者的用户名+头像 ──
     requester_ids = list({r.requester_id for r in all_requests})
-    users_map: dict[int, str] = {}
+    users_map: dict[int, tuple[str, str | None]] = {}  # user_id → (username, avatar_url)
     if requester_ids:
-        user_results = await db.execute(select(User.id, User.username).where(User.id.in_(requester_ids)))
-        for uid, uname in user_results.all():
-            users_map[uid] = uname
+        user_results = await db.execute(
+            select(User.id, User.username, User.avatar_url).where(User.id.in_(requester_ids))
+        )
+        for uid, uname, uavatar in user_results.all():
+            users_map[uid] = (uname, uavatar)
 
-    # ── 批量查询：发出的申请的目标名称 ──
+    # ── 批量查询：发出的申请的目标名称+头像 ──
     sent_reqs = [r for r in all_requests if r.requester_id == user_id]
     human_target_ids = [r.target_id for r in sent_reqs if r.target_type == "human"]
     ai_target_ids = [r.target_id for r in sent_reqs if r.target_type == "ai"]
 
-    target_human_map: dict[int, str] = {}
+    target_human_map: dict[int, tuple[str, str | None]] = {}
     if human_target_ids:
         human_results = await db.execute(
-            select(User.id, User.username).where(User.id.in_(human_target_ids))
+            select(User.id, User.username, User.avatar_url).where(User.id.in_(human_target_ids))
         )
-        for uid, uname in human_results.all():
-            target_human_map[uid] = uname
+        for uid, uname, uavatar in human_results.all():
+            target_human_map[uid] = (uname, uavatar)
 
-    target_ai_map: dict[int, str] = {}
+    target_ai_map: dict[int, tuple[str, str | None]] = {}
     if ai_target_ids:
         ai_results = await db.execute(
-            select(Agent.id, Agent.name).where(Agent.id.in_(ai_target_ids))
+            select(Agent.id, Agent.name, Agent.avatar_url).where(Agent.id.in_(ai_target_ids))
         )
-        for aid, aname in ai_results.all():
-            target_ai_map[aid] = aname
+        for aid, aname, aavatar in ai_results.all():
+            target_ai_map[aid] = (aname, aavatar)
 
     # ── 组装结果（纯内存操作，无 DB 查询） ──
     results = []
     for req in all_requests:
-        requester_name = users_map.get(req.requester_id, f"用户:{req.requester_id}")
+        ru = users_map.get(req.requester_id)
+        requester_name = ru[0] if ru else f"用户:{req.requester_id}"
+        requester_avatar = ru[1] if ru else None
 
         target_name = None
+        target_avatar = None
         if req.requester_id == user_id:
             if req.target_type == "human":
-                target_name = target_human_map.get(req.target_id)
+                tu = target_human_map.get(req.target_id)
+                if tu:
+                    target_name, target_avatar = tu
             elif req.target_type == "ai":
-                target_name = target_ai_map.get(req.target_id)
+                ta = target_ai_map.get(req.target_id)
+                if ta:
+                    target_name, target_avatar = ta
 
         results.append({
             "id": req.id,
             "requester_id": req.requester_id,
             "requester_name": requester_name,
+            "requester_avatar_url": requester_avatar,
             "target_type": req.target_type,
             "target_id": req.target_id,
             "target_name": target_name,
+            "target_avatar_url": target_avatar,
             "status": req.status,
             "message": req.message,
             "direction": "received" if req.target_id == user_id else "sent",
@@ -418,6 +436,7 @@ async def search_entities(
             "id": user.id,
             "type": "human",
             "name": user.username,
+            "avatar_url": user.avatar_url,
             "owner_name": None,
             "is_friend": is_friend,
             "state": None,
@@ -437,6 +456,7 @@ async def search_entities(
             "id": agent.id,
             "type": "ai",
             "name": agent.name,
+            "avatar_url": agent.avatar_url,
             "owner_name": owner.username if owner else None,
             "is_friend": is_friend,
             "state": agent.state,

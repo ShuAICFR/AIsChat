@@ -10,6 +10,7 @@ interface Friend {
   friend_id: number
   friend_name: string
   state: string | null
+  avatar_url: string | null
   created_at: string | null
   last_dm_at: string | null
   friend_user_id?: number | null
@@ -19,13 +20,28 @@ interface FriendRequest {
   id: number
   requester_id: number
   requester_name: string | null
+  requester_avatar_url: string | null
   target_type: string
   target_id: number
   target_name: string | null
+  target_avatar_url: string | null
   status: string
   direction: string | null
   message: string | null
   created_at: string | null
+}
+
+// 头像组件：优先显示真实头像，否则显示首字母
+function AvatarPic({ url, name, size = 'md' }: { url: string | null | undefined; name: string; size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClass = size === 'sm' ? 'w-7 h-7 text-xs' : size === 'lg' ? 'w-12 h-12 text-xl' : 'w-10 h-10 text-lg'
+  if (url) {
+    return <img src={url} alt={name} className={`${sizeClass} rounded-full object-cover shrink-0 bg-elevated`} />
+  }
+  return (
+    <div className={`${sizeClass} rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center shrink-0`}>
+      {name.charAt(0)}
+    </div>
+  )
 }
 
 type Tab = 'friends' | 'requests'
@@ -300,9 +316,7 @@ export default function FriendsPage() {
                   onClick={() => handleStartDM(f.friend_type, f.friend_id, f.friend_user_id)}
                   className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors text-left"
                 >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-lg shrink-0">
-                    {f.friend_name.charAt(0)}
-                  </div>
+                  <AvatarPic url={f.avatar_url} name={f.friend_name} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-textPrimary truncate">
@@ -330,72 +344,80 @@ export default function FriendsPage() {
           ) : (
             <div className="divide-y divide-border/50">
               {/* 收到的申请 */}
-              {receivedRequests.map((req) => (
-                <div key={`recv-${req.id}`} className="px-4 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-lg shrink-0">
-                      {req.requester_name?.charAt(0) || '?'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-textPrimary truncate">
-                          {req.requester_name || `用户${req.requester_id}`}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400 shrink-0">收到</span>
-                      </div>
-                      <span className="text-xs text-textMuted">
-                        {req.message || '请求添加你为好友'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => handleAccept(req.id)}
-                        className="p-1.5 rounded-lg bg-mint-400/15 text-mint-400 hover:bg-mint-400/25 transition-colors"
-                        title="接受"
-                      >
-                        <Check size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleReject(req.id)}
-                        className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
-                        title="拒绝"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
+              {receivedRequests.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-surface sticky top-0 z-10 border-b border-border/50">
+                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">收到的申请 · {receivedRequests.length}</span>
                   </div>
-                </div>
-              ))}
+                  {receivedRequests.map((req) => (
+                    <div key={`recv-${req.id}`} className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <AvatarPic url={req.requester_avatar_url} name={req.requester_name || '?'} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-textPrimary truncate">
+                              {req.requester_name || `用户${req.requester_id}`}
+                            </span>
+                          </div>
+                          <span className="text-xs text-textMuted">
+                            {req.message || '请求添加你为好友'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleAccept(req.id)}
+                            className="p-1.5 rounded-lg bg-mint-400/15 text-mint-400 hover:bg-mint-400/25 transition-colors"
+                            title="接受"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleReject(req.id)}
+                            className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
+                            title="拒绝"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
               {/* 发出的申请 */}
-              {sentRequests.map((req) => (
-                <div key={`sent-${req.id}`} className="px-4 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-500/20 to-accent-700/20 flex items-center justify-center text-lg shrink-0">
-                      {req.target_name?.charAt(0) || '?'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-textPrimary truncate">
-                          {req.target_name || `用户${req.target_id}`}
-                        </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent-500/10 text-accent-400 shrink-0">待回复</span>
-                      </div>
-                      <span className="text-xs text-textMuted">
-                        {req.message || '你发送了好友申请'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        onClick={() => handleCancelSent(req.id)}
-                        className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
-                        title="撤回申请"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
+              {sentRequests.length > 0 && (
+                <>
+                  <div className="px-4 py-2 bg-surface sticky top-0 z-10 border-b border-border/50">
+                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">发出的申请 · {sentRequests.length}</span>
                   </div>
-                </div>
-              ))}
+                  {sentRequests.map((req) => (
+                    <div key={`sent-${req.id}`} className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <AvatarPic url={req.target_avatar_url} name={req.target_name || '?'} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-textPrimary truncate">
+                              {req.target_name || `用户${req.target_id}`}
+                            </span>
+                          </div>
+                          <span className="text-xs text-textMuted">
+                            {req.message || '你发送了好友申请'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => handleCancelSent(req.id)}
+                            className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
+                            title="撤回申请"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )
         )}
@@ -434,9 +456,7 @@ export default function FriendsPage() {
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-elevated transition-colors text-left"
                   >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-lg shrink-0">
-                      {f.friend_name.charAt(0)}
-                    </div>
+                    <AvatarPic url={f.avatar_url} name={f.friend_name} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-textPrimary truncate">{f.friend_name}</span>
@@ -477,9 +497,7 @@ export default function FriendsPage() {
                           }}
                           className="w-full flex items-center gap-3 px-4 py-3 hover:bg-canvas transition-colors text-left"
                         >
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500/20 to-primary-700/20 flex items-center justify-center text-sm shrink-0">
-                            {f.friend_name.charAt(0)}
-                          </div>
+                          <AvatarPic url={f.avatar_url} name={f.friend_name} size="sm" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-medium text-textPrimary truncate">{f.friend_name}</span>

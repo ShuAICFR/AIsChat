@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Plus, BellOff, Menu, UserPlus, Users, Bot } from 'lucide-react'
 import { getStateDotColor } from '../constants'
+import { formatRelativeTime } from '../utils/time'
+import { useLang } from '../i18n/I18nContext'
 
 interface Group {
   id: number
@@ -12,11 +14,12 @@ interface Group {
   last_message_preview: string | null
   last_message_at: string | null
   dnd_until: string | null
+  member_avatars: string[]  // v1.0.0: 前 4 个成员头像
 }
 
 interface DMSession {
   session_id: string
-  partner: { id: number; name: string; type: string; state: string | null }
+  partner: { id: number; name: string; type: string; state: string | null; avatar_url: string | null }
   last_message_preview: string | null
   last_message_at: string | null
   unread_count: number
@@ -92,11 +95,31 @@ export default function ChatSidebar({
   // DM 会话按最后消息时间排序
   const sortedDMSessions = [...dmSessions].sort(sortByTime)
 
-  const formatTime = (isoStr: string | null) => {
-    if (!isoStr) return ''
-    try {
-      return new Date(isoStr).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    } catch { return '' }
+  const lang = useLang()
+
+  // 群聊头像组：4 个头像的 2×2 网格或默认图标
+  const GroupAvatarGroup = ({ avatars }: { avatars: string[] }) => {
+    if (avatars.length === 0) {
+      return (
+        <div className="w-9 h-9 rounded-lg bg-primary-500/10 flex items-center justify-center shrink-0">
+          <Users size={14} className="text-primary-400/70" />
+        </div>
+      )
+    }
+    return (
+      <div className="w-9 h-9 rounded-lg bg-elevated grid grid-cols-2 grid-rows-2 gap-px overflow-hidden shrink-0">
+        {avatars.slice(0, 4).map((url, i) => (
+          <div key={i} className="bg-canvas flex items-center justify-center">
+            <img src={url} alt="" className="w-full h-full object-cover" />
+          </div>
+        ))}
+        {avatars.length < 4 && Array.from({ length: 4 - avatars.length }).map((_, i) => (
+          <div key={`empty-${i}`} className="bg-canvas flex items-center justify-center">
+            <Users size={8} className="text-textMuted/40" />
+          </div>
+        ))}
+      </div>
+    )
   }
 
   const nothingSelected = !activeGroupId && !activeSessionId
@@ -117,7 +140,7 @@ export default function ChatSidebar({
           >
             <Menu size={18} />
           </button>
-          <span>聊天</span>
+          <span>{t('chatlist.chat')}</span>
         </div>
         <div className="relative">
           <button
@@ -136,14 +159,14 @@ export default function ChatSidebar({
                   className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-textSecondary hover:bg-canvas hover:text-textPrimary transition-colors"
                 >
                   <Users size={15} />
-                  创建群聊
+                  {t('chatlist.createGroup')}
                 </button>
                 <button
                   onClick={() => { setShowPlusMenu(false); navigate('/friends') }}
                   className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-textSecondary hover:bg-canvas hover:text-textPrimary transition-colors"
                 >
                   <UserPlus size={15} />
-                  添加好友
+                  {t('friends.add')}
                 </button>
               </div>
             </>
@@ -154,11 +177,11 @@ export default function ChatSidebar({
       <div className="flex-1 overflow-y-auto py-1">
         {/* ── 群聊 ── */}
         <div className="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
-          群聊
+          {t('chatlist.chat')}
         </div>
         {regularGroups.length === 0 ? (
           <div className="px-3 py-4 text-center text-xs text-textMuted">
-            暂无群聊，点击 + 新建
+            {t('chatlist.createFirstGroup')}
           </div>
         ) : (
           regularGroups.map((g) => (
@@ -177,24 +200,33 @@ export default function ChatSidebar({
                   : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <div className="font-medium truncate"># {g.name}</div>
-                {g.unread_count > 0 && (
-                  <span className={`shrink-0 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
-                    g.has_mention
-                      ? 'bg-rose-500 shadow-sm shadow-rose-500/30'
-                      : 'bg-primary-500/80'
-                  }`}>
-                    {g.unread_count > 99 ? '99+' : g.unread_count}
-                  </span>
-                )}
-              </div>
-              <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
-                {g.dnd_until && <BellOff size={10} className="text-rose-400 shrink-0" />}
-                {g.has_mention && !g.dnd_until && (
-                  <span className="text-rose-400 font-medium shrink-0">[@你]</span>
-                )}
-                <span className="truncate min-w-0 flex-1">{g.last_message_preview || '暂无消息'}</span>
+              <div className="flex items-center gap-2.5">
+                {/* 群聊头像组 */}
+                <GroupAvatarGroup avatars={g.member_avatars || []} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium truncate">{g.name}</div>
+                    {g.unread_count > 0 && (
+                      <span className={`shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
+                        g.has_mention
+                          ? 'bg-rose-500 shadow-sm shadow-rose-500/30'
+                          : 'bg-primary-500/80'
+                      }`}>
+                        {g.unread_count > 99 ? '99+' : g.unread_count}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
+                    {g.dnd_until && <BellOff size={10} className="text-rose-400 shrink-0" />}
+                    {g.has_mention && !g.dnd_until && (
+                      <span className="text-rose-400 font-medium shrink-0">[@你]</span>
+                    )}
+                    <span className="truncate min-w-0 flex-1">{g.last_message_preview || t('chatlist.noMessages')}</span>
+                    {g.last_message_at && (
+                      <span className="shrink-0">{formatRelativeTime(g.last_message_at, lang)}</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </button>
           ))
@@ -204,7 +236,7 @@ export default function ChatSidebar({
         {sortedDMSessions.length > 0 && (
           <>
             <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-textMuted">
-              私信
+              {t('chatlist.dm')}
             </div>
             {sortedDMSessions.map((s) => (
               <button
@@ -222,25 +254,37 @@ export default function ChatSidebar({
                     : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium truncate flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(s.partner.state)}`} />
-                    <span className="truncate">{s.partner.name}</span>
+                <div className="flex items-center gap-2.5">
+                  {/* 对方头像 */}
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-mint-400 to-emerald-600 flex items-center justify-center shrink-0 relative">
+                    {s.partner.avatar_url ? (
+                      <img src={s.partner.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                    ) : (
+                      <span className="text-xs font-bold text-white">{s.partner.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                    )}
+                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface ${getStateDotColor(s.partner.state)}`} />
                   </div>
-                  {s.unread_count > 0 && (
-                    <span className="shrink-0 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-primary-500/80">
-                      {s.unread_count > 99 ? '99+' : s.unread_count}
-                    </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
-                  {s.partner.type === 'ai' && <Bot size={10} className="shrink-0 text-textMuted" />}
-                  <span className="truncate min-w-0 flex-1">
-                    {s.last_message_preview || '暂无消息'}
-                  </span>
-                  {s.last_message_at && (
-                    <span className="shrink-0">{formatTime(s.last_message_at)}</span>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium truncate flex items-center gap-1.5">
+                        {s.partner.type === 'ai' && <Bot size={11} className="shrink-0 text-mint-400" />}
+                        <span className="truncate">{s.partner.name}</span>
+                      </div>
+                      {s.unread_count > 0 && (
+                        <span className="shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-primary-500/80">
+                          {s.unread_count > 99 ? '99+' : s.unread_count}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
+                      <span className="truncate min-w-0 flex-1">
+                        {s.last_message_preview || t('chatlist.noMessages')}
+                      </span>
+                      {s.last_message_at && (
+                        <span className="shrink-0">{formatRelativeTime(s.last_message_at, lang)}</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </button>
             ))}

@@ -8,6 +8,7 @@ import {
   Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot,
   ScrollText, Loader2,
 } from 'lucide-react'
+import AvatarCropModal from '../components/AvatarCropModal'
 
 interface Agent {
   id: number
@@ -112,6 +113,7 @@ export default function AgentDetailPage() {
 
   // Avatar
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [cropFile, setCropFile] = useState<File | null>(null)
 
   // Storage
   const [storage, setStorage] = useState<StorageInfo | null>(null)
@@ -350,13 +352,19 @@ export default function AgentDetailPage() {
   }
 
   // Avatar upload
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setCropFile(file)
+    e.target.value = ''
+  }
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setCropFile(null)
     setUploadingAvatar(true)
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', blob, 'avatar.jpg')
       const token = localStorage.getItem('access_token')
       const res = await fetch(`/api/agents/${agentId}/avatar`, {
         method: 'POST',
@@ -643,7 +651,7 @@ export default function AgentDetailPage() {
                 <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors cursor-pointer">
                   <Image size={14} />
                   {uploadingAvatar ? '上传中...' : '更换头像'}
-                  <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
+                  <input type="file" accept="image/*" onChange={handleAvatarSelect} className="hidden" />
                 </label>
 
                 {/* Token */}
@@ -992,6 +1000,15 @@ export default function AgentDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 头像裁剪弹窗 */}
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   )

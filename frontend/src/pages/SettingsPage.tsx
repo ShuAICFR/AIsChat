@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, Menu } from 'lucide-react'
-import { useNavigate, useBlocker, useOutletContext } from 'react-router-dom'
+import { useNavigate, useBlocker, useOutletContext, useLocation } from 'react-router-dom'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -139,6 +139,19 @@ export default function SettingsPage() {
       }).catch(() => {})
     }
   }, [user])
+
+  // Hash 导航：从 /settings#api 自动滚动到对应区块
+  const location = useLocation()
+  useEffect(() => {
+    const hash = location.hash?.replace('#', '')
+    if (hash) {
+      // 延迟等 DOM 渲染完成
+      const timer = setTimeout(() => {
+        document.getElementById(`settings-${hash}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 200)
+      return () => clearTimeout(timer)
+    }
+  }, [location.hash])
 
   const handleTestConnection = async () => {
     setTesting(true)
@@ -308,7 +321,7 @@ export default function SettingsPage() {
         </div>
 
         {/* API 提供商配置 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
+        <div id="settings-api" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Key size={18} className="text-primary-400 shrink-0" />
             <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">API 提供商配置</h2>
@@ -472,7 +485,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 语言设置 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
+        <div id="settings-language" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4">
             <Globe size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">语言</h2>
@@ -552,7 +565,7 @@ export default function SettingsPage() {
         </div>
 
         {/* 外观主题 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
+        <div id="settings-appearance" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4">
             <Palette size={18} className="text-primary-400" />
             <h2 className="font-semibold text-textPrimary">外观</h2>

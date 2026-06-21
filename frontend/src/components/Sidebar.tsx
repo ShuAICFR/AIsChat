@@ -4,12 +4,13 @@ import { useAuth } from '../context/AuthContext'
 import { MessageCircle, Bot, User, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink, Users } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import SearchOverlay from './SearchOverlay'
+import { useT } from '../i18n/I18nContext'
 
-const mainNavItems = [
-  { to: '/chat', label: '聊天', icon: MessageCircle },
-  { to: '/friends', label: '好友', icon: Users },
-  { to: '/agents', label: '我的 AI', icon: Bot },
-  { to: '/me', label: '我的', icon: User },
+const navKeys = [
+  { to: '/chat', i18nKey: 'nav.chat', icon: MessageCircle },
+  { to: '/friends', i18nKey: 'nav.friends', icon: Users },
+  { to: '/agents', i18nKey: 'nav.ai', icon: Bot },
+  { to: '/me', i18nKey: 'nav.me', icon: User },
 ]
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -23,6 +24,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [collapsed, setCollapsed] = useState(false)
+  const t = useT()
 
   const handleLogout = () => {
     logout()
@@ -56,7 +58,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           <button
             onClick={() => setCollapsed(!collapsed)}
             className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
-            title={collapsed ? '展开' : '折叠'}
+            title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
           >
             {collapsed ? <Menu size={16} /> : <ChevronLeft size={16} />}
           </button>
@@ -77,9 +79,9 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             <p className="text-sm font-medium text-textPrimary truncate">{user.username}</p>
             <p className="text-xs text-textMuted">
               {user.role === 'admin' ? (
-                <span className="text-accent-400">管理员</span>
+                <span className="text-accent-400">{t('sidebar.adminPanel')}</span>
               ) : (
-                <span>{`额度 ${user.ai_quota} · 余额 ${user.api_credit ?? 0}`}</span>
+                <span>{t('sidebar.quota') + ' ' + user.ai_quota + ' · ' + t('sidebar.balance') + ' ' + (user.api_credit ?? 0)}</span>
               )}
             </p>
           </div>
@@ -89,23 +91,23 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       {/* 主导航 */}
       {!collapsed && (
         <nav className="flex-1 py-3 space-y-0.5">
-          {mainNavItems.map((item) => (
+          {navKeys.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               onClick={() => { if (mobile) onClose?.() }}
               className={navLinkClass}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? t(item.i18nKey) : undefined}
             >
               <item.icon size={18} />
-              <span>{item.label}</span>
+              <span>{t(item.i18nKey)}</span>
             </NavLink>
           ))}
 
           {user?.role === 'admin' && (
             <NavLink to="/admin" onClick={() => { if (mobile) onClose?.() }} className={navLinkClass}>
               <Shield size={18} />
-              <span>管理</span>
+              <span>{t('nav.admin')}</span>
             </NavLink>
           )}
 
@@ -114,11 +116,11 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             target="_blank"
             rel="noopener noreferrer"
             className={navLinkClass({ isActive: false })}
-            title={collapsed ? '使用手册（外部链接）' : undefined}
+            title={collapsed ? t('nav.manual') : undefined}
           >
             <BookOpen size={18} />
             <span className="flex items-center gap-1">
-              手册
+              {t('nav.manual')}
               <ExternalLink size={10} className="text-textMuted" />
             </span>
           </a>
@@ -129,10 +131,10 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
       {collapsed && (
         <nav className="flex-1 py-3 space-y-0.5 flex flex-col items-center">
           {[
-            { to: '/chat', label: '聊天', icon: MessageCircle },
-            { to: '/friends', label: '好友', icon: Users },
-            { to: '/agents', label: 'AI', icon: Bot },
-            { to: '/me', label: '我的', icon: User },
+            { to: '/chat', i18nKey: 'nav.chat', icon: MessageCircle },
+            { to: '/friends', i18nKey: 'nav.friends', icon: Users },
+            { to: '/agents', i18nKey: 'nav.ai', icon: Bot },
+            { to: '/me', i18nKey: 'nav.me', icon: User },
           ].map((item) => (
             <NavLink
               key={item.to}
@@ -145,7 +147,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }
-              title={item.label}
+              title={t(item.i18nKey)}
             >
               <item.icon size={18} />
             </NavLink>
@@ -161,7 +163,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }
-              title="管理面板"
+              title={t('sidebar.adminPanel')}
             >
               <Shield size={18} />
             </NavLink>
@@ -171,7 +173,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
-            title="使用手册（外部链接）"
+            title={t('sidebar.usageManual')}
           >
             <BookOpen size={18} />
           </a>
@@ -185,10 +187,10 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
           className={`flex items-center rounded-xl text-textSecondary hover:text-rose-400 hover:bg-rose-500/10 transition-all duration-200 text-sm ${
             collapsed ? 'justify-center w-10 h-10' : 'gap-3 w-full px-3 py-2.5'
           }`}
-          title={collapsed ? '退出登录' : undefined}
+          title={collapsed ? t('sidebar.logout') : undefined}
         >
           <LogOut size={18} />
-          {!collapsed && <span>退出</span>}
+          {!collapsed && <span>{t('sidebar.logout')}</span>}
         </button>
       </div>
     </aside>

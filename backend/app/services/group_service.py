@@ -151,6 +151,28 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
                 sender = u.username if u else "用户"
             last_message_preview = f"{sender}: {preview}"
 
+        # 获取前 4 个成员头像（用于头像组展示）
+        member_avatars: list[str] = []
+        try:
+            avatar_result = await db.execute(
+                select(GroupMember).where(
+                    GroupMember.group_id == group.id,
+                ).limit(4)
+            )
+            avatar_members = avatar_result.scalars().all()
+            for am in avatar_members:
+                avatar_url = None
+                if am.member_type == "ai":
+                    a = await db.get(AgentModel, am.member_id)
+                    avatar_url = getattr(a, 'avatar_url', None) if a else None
+                else:
+                    u = await db.get(User, am.member_id)
+                    avatar_url = getattr(u, 'avatar_url', None) if u else None
+                if avatar_url:
+                    member_avatars.append(avatar_url)
+        except Exception:
+            pass
+
         groups.append({
             "id": group.id,
             "name": group.name,
@@ -167,6 +189,7 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
             "last_message_preview": last_message_preview,
             "last_message_at": last_message_at,
             "dnd_until": dnd_until,
+            "member_avatars": member_avatars,
             "created_at": str(group.created_at) if group.created_at else None,
         })
     return groups

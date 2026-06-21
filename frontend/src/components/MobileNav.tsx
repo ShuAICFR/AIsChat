@@ -1,11 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { MessageCircle, Bot, User, Users } from 'lucide-react'
+import { useT } from '../i18n/I18nContext'
 
 const tabs = [
-  { path: '/chat', label: '聊天', icon: MessageCircle },
-  { path: '/friends', label: '好友', icon: Users },
-  { path: '/agents', label: 'AI', icon: Bot },
-  { path: '/me', label: '我的', icon: User },
+  { path: '/chat', i18nKey: 'nav.chat', icon: MessageCircle },
+  { path: '/friends', i18nKey: 'nav.friends', icon: Users },
+  { path: '/agents', i18nKey: 'nav.ai', icon: Bot },
+  { path: '/me', i18nKey: 'nav.me', icon: User },
 ]
 
 interface MobileNavProps {
@@ -15,6 +16,7 @@ interface MobileNavProps {
 export default function MobileNav({ closeDrawer }: MobileNavProps) {
   const navigate = useNavigate()
   const location = useLocation()
+  const t = useT()
 
   const isActive = (path: string) => {
     if (path === '/chat') return location.pathname.startsWith('/chat') || location.pathname === '/'
@@ -51,7 +53,7 @@ export default function MobileNav({ closeDrawer }: MobileNavProps) {
                   <div className="absolute -inset-1.5 rounded-full ai-pulse-active opacity-50" />
                 )}
               </div>
-              <span className="text-[10px] font-medium">{tab.label}</span>
+              <span className="text-[10px] font-medium">{t(tab.i18nKey)}</span>
             </button>
           )
         })}

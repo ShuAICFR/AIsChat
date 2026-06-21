@@ -127,8 +127,8 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
             >
               <UserPlus size={16} />
             </button>
-            <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-mint-400" /> 在线人数: {currentGroup?.online_count ?? 0}
+            <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${(currentGroup?.online_count ?? 0) === 0 ? 'text-slate-400' : 'text-mint-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${(currentGroup?.online_count ?? 0) === 0 ? 'bg-slate-400' : 'bg-mint-400'}`} /> 在线人数: {currentGroup?.online_count ?? 0}
             </span>
             <button
               onClick={async () => {

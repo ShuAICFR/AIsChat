@@ -9,6 +9,7 @@ import {
   Loader2, Check, X, ArrowRight, Activity,
   FileText, HardDrive, Camera
 } from 'lucide-react'
+import AvatarCropModal from '../components/AvatarCropModal'
 
 interface AgentBrief {
   id: number
@@ -54,6 +55,7 @@ export default function MePage() {
   const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
+  const [cropFile, setCropFile] = useState<File | null>(null)
 
   useEffect(() => {
     // 加载我的 AI 列表
@@ -109,13 +111,20 @@ export default function MePage() {
     setEditAvatarUrl(user?.avatar_url || '')
     setShowEditProfile(true)
   }
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) { alert('头像不能超过 2MB'); return }
+    setCropFile(file)
+    // 重置 input 以便再次选择同一文件
+    e.target.value = ''
+  }
+
+  const handleCropConfirm = async (blob: Blob) => {
+    setCropFile(null)
     setAvatarUploading(true)
     try {
-      const res = await api.upload('/user/avatar', file)
+      const res = await api.upload('/user/avatar', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }))
       setEditAvatarUrl(res.avatar_url)
     } catch (err: any) {
       alert(err.message || '上传失败')
@@ -354,9 +363,9 @@ export default function MePage() {
       {/* ====== 设置入口 ====== */}
       <div className="bg-surface rounded-2xl border border-border divide-y divide-border/60">
         {[
-          { icon: Settings, label: 'API 配置', desc: 'Base URL / API Key / 测试连接', path: '/settings' },
-          { icon: Settings, label: '外观与通知', desc: '主题 / 通知开关 / 聊天样式', path: '/settings' },
-          { icon: Globe, label: '语言与时区', desc: '中文/English · 时区设置', path: '/settings' },
+          { icon: Settings, label: 'API 配置', desc: 'Base URL / API Key / 测试连接', path: '/settings#api' },
+          { icon: Settings, label: '外观与通知', desc: '主题 / 通知开关 / 聊天样式', path: '/settings#appearance' },
+          { icon: Globe, label: '语言与时区', desc: '中文/English · 时区设置', path: '/settings#language' },
         ].map(item => (
           <Link
             key={item.label}
@@ -407,7 +416,7 @@ export default function MePage() {
                 <label className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 cursor-pointer transition-colors">
                   <Camera size={12} />
                   {avatarUploading ? '上传中...' : '更换头像'}
-                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={avatarUploading} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} disabled={avatarUploading} />
                 </label>
               </div>
               <div>
@@ -451,6 +460,15 @@ export default function MePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 头像裁剪弹窗 */}
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   )

@@ -5,15 +5,8 @@ import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
 import { FileIcon, Download, Globe } from 'lucide-react'
-
-function formatTime(utcStr: string, timezone: string): string {
-  try {
-    const isoStr = utcStr.replace(' ', 'T') + 'Z'
-    return new Date(isoStr).toLocaleTimeString('zh-CN', {
-      hour: '2-digit', minute: '2-digit', timeZone: timezone,
-    })
-  } catch { return utcStr }
-}
+import { formatMessageTime } from '../utils/time'
+import { useLang } from '../i18n/I18nContext'
 
 interface MessageBubbleProps {
   senderName: string
@@ -49,7 +42,7 @@ export default function MessageBubble({
   senderType, senderId, thinking, sourcePublicId, attachments, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
-  const tz = user?.timezone || 'Asia/Shanghai'
+  const lang = useLang()
 
   const stateColor = getStateDotColor(state)
 
@@ -106,7 +99,7 @@ export default function MessageBubble({
               <Globe size={10} className="inline" /> {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}
             </span>
           )}
-          <span className="text-[10px] text-textMuted">{formatTime(createdAt, tz)}</span>
+          <span className="text-[10px] text-textMuted">{formatMessageTime(createdAt, lang)}</span>
           {thinking && (
             <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>
           )}

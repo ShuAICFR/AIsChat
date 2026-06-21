@@ -45,7 +45,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         {/* 移动端：打开会话列表 */}
         <button
-          onClick={() => onMobileBack ? onMobileBack() : navigate('/chat')}
+          onClick={() => navigate('/chat')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
           title="会话列表"
         >

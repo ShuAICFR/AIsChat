@@ -440,6 +440,7 @@ async def _maybe_trigger_ai_reply(
             credit_source=credit_source,
             pool_key_id=pool_key_id,
             trigger="user",
+            is_federated=group.is_federated if group else False,
         )
     finally:
         await manager.broadcast_to_group(
@@ -479,6 +480,7 @@ async def _tool_call_loop(
     credit_source: str = "user_key",
     pool_key_id: int | None = None,
     trigger: str = "user",
+    is_federated: bool = False,
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
@@ -504,6 +506,7 @@ async def _tool_call_loop(
         "conversation_type": conversation_type,
         "session_id": session_id,
         "trigger_user_id": trigger_user_id,
+        "is_federated": is_federated,
     }
 
     # 追踪 AI 在做什么（用于中断恢复）

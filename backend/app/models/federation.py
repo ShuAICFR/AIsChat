@@ -57,6 +57,7 @@ class FederationGroupShare(Base):
     peer_id = Column(Integer, ForeignKey("federation_peers.id", ondelete="CASCADE"), nullable=False)
     is_enabled = Column(Boolean, default=True)
     remote_group_id = Column(Integer, nullable=True)  # 远端群 ID（握手后填充）
+    conversation_uuid = Column(String(64), nullable=False, index=True)  # 联邦对话 UUID（conv_ + ULID），两端共用
     share_direction = Column(String(20), default="bidirectional")  # outgoing|incoming|bidirectional
     created_at = Column(DateTime, server_default=func.now())
 
@@ -66,4 +67,27 @@ class FederationGroupShare(Base):
             name="ck_share_direction",
         ),
         UniqueConstraint("group_id", "peer_id", name="uq_group_peer"),
+        UniqueConstraint("peer_id", "conversation_uuid", name="uq_peer_conv_uuid"),
+    )
+
+
+class FederationDMShare(Base):
+    """联邦私信共享（哪个本地 DM 与哪个对等端共享）"""
+    __tablename__ = "federation_dm_shares"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(64), ForeignKey("dm_sessions.session_id", ondelete="CASCADE"), nullable=False)
+    peer_id = Column(Integer, ForeignKey("federation_peers.id", ondelete="CASCADE"), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    conversation_uuid = Column(String(64), nullable=False, index=True)  # 联邦对话 UUID
+    share_direction = Column(String(20), default="bidirectional")  # outgoing|incoming|bidirectional
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "share_direction IN ('outgoing', 'incoming', 'bidirectional')",
+            name="ck_dm_share_direction",
+        ),
+        UniqueConstraint("session_id", "peer_id", name="uq_dm_peer"),
+        UniqueConstraint("peer_id", "conversation_uuid", name="uq_dm_conv_uuid"),
     )

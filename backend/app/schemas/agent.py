@@ -29,6 +29,7 @@ class AgentCreateRequest(BaseModel):
     api_credit_cost: int = Field(default=0, ge=0, le=100000)
     allow_friend_requests: bool = Field(default=True, description="是否允许接收好友申请")
     auto_respond_friend_request: bool = Field(default=False, description="收到好友申请时是否自动触发 API 响应")
+    discoverable: bool = Field(default=True, description="是否允许他人发现与查找此AI")
 
 
 class AgentGenerateRequest(BaseModel):
@@ -108,6 +109,7 @@ class AgentResponse(BaseModel):
     ai_type: str = "resonance"
     allow_friend_requests: bool = True
     auto_respond_friend_request: bool = False
+    discoverable: bool = True
     created_at: str | None
 
 

@@ -98,6 +98,9 @@ const zh: TranslationDict = {
   'chat.viewProfile': '查看 {name} 资料',
   'chat.fromInstance': '来自实例: {publicId}',
   'chat.reconnectingShort': '重连中...',
+  'chat.federated': '联邦',
+  'chat.federatedGroup': '此对话已开启联邦共享，消息会同步到其他实例',
+  'chat.aiNotDiscoverable': '此 AI 未开放查找',
 
   // ======================== 私信 / DM ========================
   'dm.online': '在线',
@@ -491,6 +494,8 @@ const zh: TranslationDict = {
   'agents.paramIsAiEditable': '可自修改',
   'agents.paramHideAiIdentity': '隐藏 AI 身份',
   'agents.paramDelayReplyEnabled': '延迟回复',
+  'agents.discoverable': '允许他人查找此 AI',
+  'agents.discoverableDesc': '关闭后其他用户无法通过搜索找到此 AI，也无法通过点击头像添加好友',
 
   // ======================== AI 详情页 / AgentDetail ========================
   'agentDetail.tabInfo': '基本信息',
@@ -1301,6 +1306,9 @@ const en: TranslationDict = {
   'chat.viewProfile': "View {name}'s profile",
   'chat.fromInstance': 'From instance: {publicId}',
   'chat.reconnectingShort': 'Reconnecting...',
+  'chat.federated': 'Federated',
+  'chat.federatedGroup': 'This conversation has federation sharing enabled; messages will be synced to other instances.',
+  'chat.aiNotDiscoverable': 'This AI is not discoverable',
 
   // ======================== DM ========================
   'dm.online': 'Online',
@@ -1694,6 +1702,8 @@ const en: TranslationDict = {
   'agents.paramIsAiEditable': 'Self-Editable Personality',
   'agents.paramHideAiIdentity': 'Hide AI Identity',
   'agents.paramDelayReplyEnabled': 'Delay Reply',
+  'agents.discoverable': 'Allow others to discover this AI',
+  'agents.discoverableDesc': 'When disabled, this AI will not appear in search results and cannot receive friend requests via profile click',
 
   // ======================== AgentDetail ========================
   'agentDetail.tabInfo': 'Basic Info',

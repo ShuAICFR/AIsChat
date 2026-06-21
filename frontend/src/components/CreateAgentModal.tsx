@@ -217,6 +217,7 @@ export default function CreateAgentModal({
   const [isAiEditable, setIsAiEditable] = useState(true)
   const [allowFriendRequests, setAllowFriendRequests] = useState(true)
   const [autoRespondFriendRequest, setAutoRespondFriendRequest] = useState(false)
+  const [discoverable, setDiscoverable] = useState(true)
   const [chatModel, setChatModel] = useState('')
   const [workModel, setWorkModel] = useState('')
   const [apiCreditCost, setApiCreditCost] = useState(0)
@@ -347,6 +348,7 @@ export default function CreateAgentModal({
         is_ai_editable: isAiEditable,
         allow_friend_requests: allowFriendRequests,
         auto_respond_friend_request: autoRespondFriendRequest,
+        discoverable,
         api_credit_cost: apiCreditCost,
         ai_type: aiType,
       })
@@ -885,6 +887,7 @@ function DetailSettingsModal({
 
           {/* ── 好友与社交 ── */}
           <Section title={t('modal.detailSettingsFriendsSocial')} desc={t('modal.detailSettingsFriendsSocialDesc')}>
+            <ToggleField label={t('agents.discoverable')} value={discoverable} setValue={setDiscoverable} desc={t('agents.discoverableDesc')} />
             <ToggleField label={t('modal.detailSettingsAllowFriendRequests')} value={allowFriendRequests} setValue={setAllowFriendRequests} desc={t('modal.detailSettingsAllowFriendRequestsDesc')} />
             {allowFriendRequests && (
               <ToggleField label={t('modal.detailSettingsAutoRespondFriendRequest')} value={autoRespondFriendRequest} setValue={setAutoRespondFriendRequest} desc={t('modal.detailSettingsAutoRespondFriendRequestDesc')} />

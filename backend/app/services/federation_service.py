@@ -20,7 +20,7 @@ from sqlalchemy import select, delete
 
 from app.utils.crypto import encrypt_api_key, decrypt_api_key
 from app.config import settings
-from app.models.federation import InstanceConfig, FederationPeer, FederationGroupShare
+from app.models.federation import InstanceConfig, FederationPeer, FederationGroupShare, FederationDMShare
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -563,10 +563,12 @@ async def share_group(
     if existing.scalar_one_or_none():
         return {"error": True, "message": "该群已与此对等端共享"}
 
+    conversation_uuid = f"conv_{generate_ulid()}"
     share = FederationGroupShare(
         group_id=group_id,
         peer_id=peer_id,
         share_direction=share_direction,
+        conversation_uuid=conversation_uuid,
     )
     db.add(share)
 
@@ -579,8 +581,38 @@ async def share_group(
     await db.commit()
     await db.refresh(share)
 
-    logger.info(f"🌐 群 {group_id} 已共享给 peer #{peer_id} (direction={share_direction})")
-    return {"success": True, "share": _share_to_dict(share)}
+    logger.info(f"🌐 群 {group_id} 已共享给 peer #{peer_id} (direction={share_direction}, uuid={conversation_uuid})")
+    return {"success": True, "share": _share_to_dict(share), "conversation_uuid": conversation_uuid}
+
+
+async def share_dm_with_peer(
+    db: AsyncSession,
+    session_id: str,
+    peer_id: int,
+    share_direction: str = "bidirectional",
+) -> dict:
+    """将私信共享给对等端"""
+    existing = await db.execute(
+        select(FederationDMShare).where(
+            FederationDMShare.session_id == session_id,
+            FederationDMShare.peer_id == peer_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"error": True, "message": "该私信已与此对等端共享"}
+
+    conversation_uuid = f"conv_{generate_ulid()}"
+    share = FederationDMShare(
+        session_id=session_id,
+        peer_id=peer_id,
+        share_direction=share_direction,
+        conversation_uuid=conversation_uuid,
+    )
+    db.add(share)
+    await db.commit()
+    await db.refresh(share)
+    logger.info(f"DM {session_id} shared with peer #{peer_id} (uuid={conversation_uuid})")
+    return {"success": True, "share": {"id": share.id, "session_id": share.session_id, "peer_id": share.peer_id, "conversation_uuid": share.conversation_uuid, "share_direction": share.share_direction, "is_enabled": share.is_enabled, "created_at": str(share.created_at)}}
 
 
 async def unshare_group(
@@ -616,6 +648,22 @@ async def unshare_group(
     await db.commit()
 
     logger.info(f"🌐 群 {group_id} 取消共享 peer #{peer_id}")
+    return {"success": True, "message": "已取消联邦共享"}
+
+
+async def unshare_dm(db: AsyncSession, session_id: str, peer_id: int) -> dict:
+    """取消私信联邦共享"""
+    result = await db.execute(
+        select(FederationDMShare).where(
+            FederationDMShare.session_id == session_id,
+            FederationDMShare.peer_id == peer_id,
+        )
+    )
+    share = result.scalar_one_or_none()
+    if share is None:
+        return {"error": True, "message": "共享记录不存在"}
+    await db.delete(share)
+    await db.commit()
     return {"success": True, "message": "已取消联邦共享"}
 
 
@@ -667,6 +715,64 @@ async def handle_remote_message(
     await db.flush()
     logger.info(f"🌐 持久化远程消息: group={group_id} from={source_public_id} id={message.id}")
     return message
+
+
+async def persist_remote_dm_message(
+    db: AsyncSession, session_id: str, msg_dict: dict, source_public_id: str,
+):
+    """持久化来自远程实例的 DM 消息"""
+    from app.models.dm import DMMessage
+    from datetime import datetime as dt
+
+    dm_msg = DMMessage(
+        session_id=session_id,
+        sender_id=0,
+        content=msg_dict.get("content", ""),
+        reply_to=msg_dict.get("reply_to"),
+        source_public_id=source_public_id,
+    )
+    remote_time = msg_dict.get("created_at")
+    if remote_time:
+        try:
+            dm_msg.created_at = dt.fromisoformat(remote_time.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+    db.add(dm_msg)
+    await db.flush()
+    return dm_msg
+
+
+async def lookup_local_conversation_by_uuid(
+    db: AsyncSession, peer_public_id: str, conversation_uuid: str
+) -> dict | None:
+    """根据联邦对话 UUID 查找本地对话 ID。返回 {type: 'group'|'dm', local_id: int|str} 或 None"""
+    # 先查群聊
+    result = await db.execute(
+        select(FederationGroupShare.group_id).join(
+            FederationPeer, FederationGroupShare.peer_id == FederationPeer.id
+        ).where(
+            FederationPeer.peer_public_id == peer_public_id,
+            FederationGroupShare.conversation_uuid == conversation_uuid,
+            FederationGroupShare.is_enabled == True,
+        )
+    )
+    gid = result.scalar_one_or_none()
+    if gid is not None:
+        return {"type": "group", "local_id": gid}
+    # 再查私信
+    result = await db.execute(
+        select(FederationDMShare.session_id).join(
+            FederationPeer, FederationDMShare.peer_id == FederationPeer.id
+        ).where(
+            FederationPeer.peer_public_id == peer_public_id,
+            FederationDMShare.conversation_uuid == conversation_uuid,
+            FederationDMShare.is_enabled == True,
+        )
+    )
+    sid = result.scalar_one_or_none()
+    if sid is not None:
+        return {"type": "dm", "local_id": sid}
+    return None
 
 
 # ── HMAC 挑战-应答 ──
@@ -749,6 +855,26 @@ async def rollback_peer_url(db: AsyncSession, peer_id: int) -> bool:
     return True
 
 
+# ── DM 共享查询 ──
+
+async def get_dm_shares_for_session(db: AsyncSession, session_id: str) -> list[dict]:
+    result = await db.execute(
+        select(FederationDMShare, FederationPeer.peer_public_id, FederationPeer.display_name)
+        .join(FederationPeer, FederationDMShare.peer_id == FederationPeer.id)
+        .where(FederationDMShare.session_id == session_id)
+        .order_by(FederationDMShare.created_at.asc())
+    )
+    rows = result.all()
+    shares = []
+    for share, peer_public_id, peer_display_name in rows:
+        d = {"id": share.id, "session_id": share.session_id, "peer_id": share.peer_id,
+             "conversation_uuid": share.conversation_uuid, "share_direction": share.share_direction,
+             "is_enabled": share.is_enabled, "created_at": str(share.created_at),
+             "peer_public_id": peer_public_id, "peer_display_name": peer_display_name}
+        shares.append(d)
+    return shares
+
+
 # ── dict 转换 ──
 
 def _instance_config_to_dict(config) -> dict:
@@ -787,6 +913,7 @@ def _share_to_dict(share) -> dict:
         "peer_id": share.peer_id,
         "is_enabled": share.is_enabled,
         "remote_group_id": share.remote_group_id,
+        "conversation_uuid": share.conversation_uuid if hasattr(share, 'conversation_uuid') else None,
         "share_direction": share.share_direction,
         "created_at": str(share.created_at) if share.created_at else None,
     }

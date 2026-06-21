@@ -1033,6 +1033,7 @@ from app.schemas.federation import (
     PeerCreate,
     PeerUpdate,
     GroupShareCreate,
+    DMShareCreate,
 )
 from app.services import federation_service as fed_svc
 
@@ -1285,6 +1286,48 @@ async def delete_group_federation_share(
 ):
     """取消群聊联邦共享"""
     result = await fed_svc.unshare_group(db, group_id, peer_id)
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+# -- 私信联邦共享 --
+
+@router.get("/federation/dm/{session_id}/shares")
+async def list_dm_federation_shares(
+    session_id: str,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """查看私信的联邦共享状态"""
+    return await fed_svc.get_dm_shares_for_session(db, session_id)
+
+
+@router.post("/federation/dm/{session_id}/shares")
+async def add_dm_federation_share(
+    session_id: str,
+    body: DMShareCreate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """设置私信联邦共享"""
+    result = await fed_svc.share_dm_with_peer(
+        db, session_id, body.peer_id, body.share_direction,
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.delete("/federation/dm/{session_id}/shares/{peer_id}")
+async def delete_dm_federation_share(
+    session_id: str,
+    peer_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """取消私信联邦共享"""
+    result = await fed_svc.unshare_dm(db, session_id, peer_id)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["message"])
     return result

@@ -71,6 +71,28 @@ class GroupShareResponse(BaseModel):
     peer_display_name: str | None = None
     is_enabled: bool
     remote_group_id: int | None = None
+    conversation_uuid: str | None = None
+    share_direction: str
+    created_at: str | None = None
+
+
+# -- DM 联邦共享 --
+
+class DMShareCreate(BaseModel):
+    """设置私信联邦共享"""
+    peer_id: int
+    share_direction: str = Field(default="bidirectional", description="outgoing | incoming | bidirectional")
+
+
+class DMShareResponse(BaseModel):
+    """私信联邦共享信息"""
+    id: int
+    session_id: str
+    peer_id: int
+    peer_public_id: str | None = None
+    peer_display_name: str | None = None
+    is_enabled: bool
+    conversation_uuid: str | None = None
     share_direction: str
     created_at: str | None = None
 

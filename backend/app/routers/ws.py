@@ -272,6 +272,12 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         except asyncio.QueueFull:
                             logger.warning("AI 回复队列已满，丢弃 DM 事件")
 
+                    # Federation: forward DM to connected peers
+                    from app.services.federation_manager import federation_manager as fed_mgr
+                    asyncio.create_task(
+                        fed_mgr.forward_dm_message(session_id, msg)
+                    )
+
                 else:
                     # ── 群聊消息（原有逻辑） ──
                     if not group_id or not content:

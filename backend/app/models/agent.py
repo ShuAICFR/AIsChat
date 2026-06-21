@@ -92,6 +92,7 @@ class Agent(Base):
     # 好友与社交控制（v1.0.0）
     allow_friend_requests = Column(Boolean, default=True, comment="是否允许接收好友申请")
     auto_respond_friend_request = Column(Boolean, default=False, comment="收到好友申请时是否自动触发 API 响应")
+    discoverable = Column(Boolean, default=True, comment="是否允许他人发现与查找此 AI")
 
     # AI 类型 (v0.4.0): general(通用) | semi_general(半通用) | resonance(共振, 默认)
     ai_type = Column(String(20), default="resonance")

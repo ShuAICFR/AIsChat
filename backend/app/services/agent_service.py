@@ -277,6 +277,7 @@ async def create_agent(
     reminder_grace: str = "every_time",
     allow_friend_requests: bool = True,
     auto_respond_friend_request: bool = False,
+    discoverable: bool = True,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -349,6 +350,7 @@ async def create_agent(
         reminder_grace=reminder_grace,
         allow_friend_requests=allow_friend_requests,
         auto_respond_friend_request=auto_respond_friend_request,
+        discoverable=discoverable,
     )
     db.add(agent)
     await db.flush()
@@ -658,6 +660,10 @@ async def update_agent_config(
     # max_alarms 最大闹钟数
     if "max_alarms" in updates and updates["max_alarms"] is not None:
         agent.max_alarms = updates["max_alarms"]
+
+    # discoverable 可发现性控制
+    if "discoverable" in updates:
+        agent.discoverable = updates["discoverable"]
 
     # config_profile（手动编辑参数时自动回退到 custom）
     if "config_profile" in updates and updates["config_profile"] is not None:
@@ -1265,6 +1271,7 @@ def agent_to_dict(agent: Agent) -> dict:
         "ai_type": agent.ai_type or "resonance",
         "allow_friend_requests": agent.allow_friend_requests if agent.allow_friend_requests is not None else True,
         "auto_respond_friend_request": agent.auto_respond_friend_request if agent.auto_respond_friend_request is not None else False,
+        "discoverable": agent.discoverable if agent.discoverable is not None else True,
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,
         "api_base_url": agent.api_base_url,

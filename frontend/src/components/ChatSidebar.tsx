@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff, Menu, UserPlus, Users, Bot } from 'lucide-react'
+import { Plus, BellOff, Menu, UserPlus, Users, Bot, Globe } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 import { formatRelativeTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
@@ -15,6 +15,7 @@ interface Group {
   last_message_at: string | null
   dnd_until: string | null
   member_avatars: string[]  // v1.0.0: 前 4 个成员头像
+  is_federated?: boolean
 }
 
 interface DMSession {
@@ -23,6 +24,7 @@ interface DMSession {
   last_message_preview: string | null
   last_message_at: string | null
   unread_count: number
+  is_federated?: boolean
 }
 
 interface ChatSidebarProps {
@@ -206,7 +208,10 @@ export default function ChatSidebar({
                 <GroupAvatarGroup avatars={g.member_avatars || []} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="font-medium truncate">{g.name}</div>
+                    <div className="font-medium truncate flex items-center gap-1">
+                      {g.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
+                      <span className="truncate">{g.name}</span>
+                    </div>
                     {g.unread_count > 0 && (
                       <span className={`shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white ${
                         g.has_mention
@@ -269,6 +274,7 @@ export default function ChatSidebar({
                     <div className="flex items-center justify-between">
                       <div className="font-medium truncate flex items-center gap-1.5">
                         {s.partner.type === 'ai' && <Bot size={11} className="shrink-0 text-mint-400" />}
+                        {s.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
                         <span className="truncate">{s.partner.name}</span>
                       </div>
                       {s.unread_count > 0 && (

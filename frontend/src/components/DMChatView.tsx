@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
-import { ArrowLeft, Bell, BellOff, Settings, Bot, User } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings, Bot, User, Globe } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
 
@@ -14,7 +14,7 @@ interface DMChatViewProps {
 
 export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps) {
   const t = useT()
-  const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null } | null>(null)
+  const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null; is_federated?: boolean } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const navigate = useNavigate()
@@ -73,6 +73,15 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
             {(!partner?.state || partner?.state === 'offline') && ` · ${t('dm.offline')}`}
           </span>
         </div>
+
+        {/* 联邦标签 */}
+        {partner?.is_federated && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full shrink-0"
+                title={t('chat.federatedGroup')}>
+            <Globe size={11} />
+            {t('chat.federated')}
+          </span>
+        )}
 
         {/* 在线状态指示 */}
         <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">

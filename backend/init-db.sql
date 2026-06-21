@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS dm_messages (
     reply_to INT,
     attachments TEXT,
     read_at TIMESTAMP,
+    source_public_id VARCHAR(50),  -- 联邦来源：NULL=本地，非空=远程实例 public_id
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -511,10 +512,26 @@ CREATE TABLE IF NOT EXISTS federation_group_shares (
     peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
     is_enabled BOOLEAN DEFAULT TRUE,
     remote_group_id INT,
+    conversation_uuid VARCHAR(64) NOT NULL,  -- 联邦对话 UUID（conv_ + ULID），两端共用
     share_direction VARCHAR(20) DEFAULT 'bidirectional'
         CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
     created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(group_id, peer_id)
+    UNIQUE(group_id, peer_id),
+    UNIQUE(peer_id, conversation_uuid)
+);
+
+-- 联邦私信共享（哪个本地 DM 与哪个对等端共享）
+CREATE TABLE IF NOT EXISTS federation_dm_shares (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64) NOT NULL REFERENCES dm_sessions(session_id) ON DELETE CASCADE,
+    peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+    is_enabled BOOLEAN DEFAULT TRUE,
+    conversation_uuid VARCHAR(64) NOT NULL,  -- 联邦对话 UUID
+    share_direction VARCHAR(20) DEFAULT 'bidirectional'
+        CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(session_id, peer_id),
+    UNIQUE(peer_id, conversation_uuid)
 );
 
 -- ============================================================
@@ -536,6 +553,16 @@ DO $$ BEGIN
         WHERE table_name = 'users' AND column_name = 'setup_completed'
     ) THEN
         ALTER TABLE users ADD COLUMN setup_completed BOOLEAN NOT NULL DEFAULT TRUE;
+    END IF;
+END $$;
+
+-- agents.discoverable（幂等：已存在则跳过）
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agents' AND column_name = 'discoverable'
+    ) THEN
+        ALTER TABLE agents ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT TRUE;
     END IF;
 END $$;
 

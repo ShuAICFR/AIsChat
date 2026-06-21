@@ -10,6 +10,7 @@ from sqlalchemy import select, and_, or_, update, func
 from app.models.dm import DMSession, DMMessage
 from app.models.user import User
 from app.models.agent import Agent
+from app.models.federation import FederationDMShare
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,15 @@ async def list_dm_sessions(
             if msg:
                 last_msg = msg.content[:100] if msg.content else ""
 
+        # Check if federated
+        fed_check = await db.execute(
+            select(FederationDMShare).where(
+                FederationDMShare.session_id == s.session_id,
+                FederationDMShare.is_enabled == True,
+            )
+        )
+        is_federated = fed_check.first() is not None
+
         dm_list.append({
             "session_id": s.session_id,
             "partner": partner,
@@ -115,6 +125,7 @@ async def list_dm_sessions(
             "last_message_at": str(s.last_message_at) if s.last_message_at else None,
             "unread_count": unread_count,
             "my_dnd_until": str(my_dnd_until) if my_dnd_until else None,
+            "is_federated": is_federated,
         })
 
     return dm_list
@@ -157,11 +168,21 @@ async def get_dm_session(
 
     my_dnd_until = session.user1_dnd_until if session.user1_id == user_id else session.user2_dnd_until
 
+    # Check if federated
+    fed_check = await db.execute(
+        select(FederationDMShare).where(
+            FederationDMShare.session_id == session_id,
+            FederationDMShare.is_enabled == True,
+        )
+    )
+    is_federated = fed_check.first() is not None
+
     return {
         "session_id": session.session_id,
         "partner": partner,
         "my_dnd_until": str(my_dnd_until) if my_dnd_until else None,
         "messages": messages,
+        "is_federated": is_federated,
     }
 
 

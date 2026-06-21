@@ -19,6 +19,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
+from app.models.federation import FederationGroupShare, FederationDMShare, FederationPeer
 from app.services.federation_service import (
     get_peer_by_public_id,
     get_decrypted_secret,
@@ -28,6 +29,8 @@ from app.services.federation_service import (
     handle_remote_message,
     get_connected_peers_for_group,
     get_instance_info,
+    lookup_local_conversation_by_uuid,
+    persist_remote_dm_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,9 +269,23 @@ class FederationManager:
         if not peer_ids:
             return
 
+        # Look up conversation UUID for this group
+        conversation_uuid = None
+        async with async_session() as db:
+            result = await db.execute(
+                select(FederationGroupShare.conversation_uuid).where(
+                    FederationGroupShare.group_id == group_id,
+                    FederationGroupShare.is_enabled == True,
+                ).limit(1)
+            )
+            row = result.first()
+            conversation_uuid = row[0] if row else None
+
         payload = {
             "type": "forward_message",
+            "conversation_type": "group",
             "group_id": group_id,
+            "conversation_uuid": conversation_uuid,
             "message": message_dict,
             "source_public_id": await self._get_my_public_id(),
         }
@@ -293,6 +310,48 @@ class FederationManager:
                     conn.pending_outbox.put_nowait(payload) if conn else None
                 except (asyncio.QueueFull, AttributeError):
                     pass
+
+    async def forward_dm_message(
+        self,
+        session_id: str,
+        message_dict: dict,
+        exclude_public_id: str | None = None,
+    ) -> None:
+        """Forward a DM message to all connected peers that share this DM."""
+        async with async_session() as db:
+            result = await db.execute(
+                select(FederationDMShare, FederationPeer.peer_public_id).join(
+                    FederationPeer, FederationDMShare.peer_id == FederationPeer.id
+                ).where(
+                    FederationDMShare.session_id == session_id,
+                    FederationDMShare.is_enabled == True,
+                )
+            )
+            rows = result.all()
+            if not rows:
+                return
+
+            for share, peer_pid in rows:
+                if peer_pid == exclude_public_id:
+                    continue
+                conn = self.peers.get(peer_pid)
+                payload = {
+                    "type": "forward_message",
+                    "conversation_type": "dm",
+                    "session_id": session_id,
+                    "conversation_uuid": share.conversation_uuid,
+                    "message": message_dict,
+                    "source_public_id": await self._get_my_public_id(),
+                }
+                if conn and conn.handshake_complete and conn.websocket:
+                    try:
+                        await conn.websocket.send(json.dumps(payload))
+                    except Exception as e:
+                        logger.warning(f"Forward DM to {peer_pid} failed: {e}")
+                        try:
+                            conn.pending_outbox.put_nowait(payload)
+                        except asyncio.QueueFull:
+                            pass
 
     async def send_to_peer(self, public_id: str, payload: dict) -> bool:
         """向指定对等端发送消息"""
@@ -395,6 +454,10 @@ class FederationManager:
                         pass
                 elif msg_type == "forward_message":
                     await self._handle_remote_forward(public_id, data)
+                elif msg_type == "conversation_announce":
+                    await self._handle_conversation_announce(public_id, data)
+                elif msg_type == "conversation_ack":
+                    await self._handle_conversation_ack(public_id, data)
                 elif msg_type == "error":
                     logger.warning(f"🌐 {public_id} 报错: {data.get('code')} — {data.get('message')}")
                 elif msg_type == "url_rotate_propose":
@@ -412,51 +475,168 @@ class FederationManager:
 
     async def _handle_remote_forward(self, from_public_id: str, data: dict) -> None:
         """处理远程转发来的消息"""
-        group_id = data.get("group_id")
+        conversation_uuid = data.get("conversation_uuid")
+        conversation_type = data.get("conversation_type", "group")
         msg = data.get("message", {})
         source_public_id = data.get("source_public_id", from_public_id)
 
-        if not group_id or not msg:
+        if not msg:
             return
 
-        # 持久化并广播到本地
-        try:
+        group_id = None
+        session_id = None
+
+        # Resolve conversation UUID
+        if conversation_uuid:
             async with async_session() as db:
-                message = await handle_remote_message(
-                    db, group_id, msg, source_public_id
-                )
-                await db.commit()
+                mapping = await lookup_local_conversation_by_uuid(db, from_public_id, conversation_uuid)
+                if mapping is None:
+                    logger.warning(f"Unknown conversation_uuid {conversation_uuid} from {from_public_id}")
+                    # Send error back
+                    conn = self.peers.get(from_public_id)
+                    if conn and conn.handshake_complete and conn.websocket:
+                        try:
+                            await conn.websocket.send(json.dumps({
+                                "type": "error",
+                                "code": "UNKNOWN_CONVERSATION",
+                                "conversation_uuid": conversation_uuid,
+                            }))
+                        except Exception:
+                            pass
+                    return
+                if mapping["type"] == "group":
+                    group_id = mapping["local_id"]
+                    conversation_type = "group"
+                else:
+                    session_id = mapping["local_id"]
+                    conversation_type = "dm"
+        else:
+            # Backwards compat: use raw group_id
+            group_id = data.get("group_id")
+            if not group_id:
+                session_id = data.get("session_id")
+                conversation_type = "dm" if session_id else "group"
 
-                # 构造消息 dict 用于广播
-                from app.services.group_service import message_to_dict
-                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"))
+        try:
+            if conversation_type == "group" and group_id:
+                async with async_session() as db:
+                    message = await handle_remote_message(
+                        db, int(group_id), msg, source_public_id
+                    )
+                    await db.commit()
 
-                # 广播到本地 WebSocket 客户端
-                from app.routers.ws import manager
-                await manager.broadcast_to_group(
-                    group_id,
-                    {"type": "message", "conversation_type": "group", "data": msg_data},
-                )
+                    from app.services.group_service import message_to_dict
+                    msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"))
 
-                # 如果是人类发送者，推入 AI 回复队列
-                if msg.get("sender_type") == "human":
-                    from app.services.ai_response_worker import message_queue
-                    try:
-                        message_queue.put_nowait({
-                            "conversation_type": "group",
-                            "group_id": group_id,
-                            "message_id": message.id,
-                            "content": msg.get("content", ""),
-                            "sender_type": "human",
-                            "sender_id": 0,  # 远程发送者
-                            "chain_depth": 0,
-                            "source_public_id": source_public_id,
-                        })
-                    except asyncio.QueueFull:
-                        pass
+                    from app.routers.ws import manager
+                    await manager.broadcast_to_group(
+                        int(group_id),
+                        {"type": "message", "conversation_type": "group", "data": msg_data},
+                    )
 
+                    if msg.get("sender_type") == "human":
+                        from app.services.ai_response_worker import message_queue
+                        try:
+                            message_queue.put_nowait({
+                                "conversation_type": "group",
+                                "group_id": int(group_id),
+                                "message_id": message.id,
+                                "content": msg.get("content", ""),
+                                "sender_type": "human",
+                                "sender_id": 0,
+                                "chain_depth": 0,
+                                "source_public_id": source_public_id,
+                            })
+                        except asyncio.QueueFull:
+                            pass
+            elif conversation_type == "dm" and session_id:
+                async with async_session() as db:
+                    dm_msg = await persist_remote_dm_message(db, str(session_id), msg, source_public_id)
+                    await db.commit()
+                    from app.routers.ws import manager
+                    dm_data = {
+                        "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
+                        "session_id": str(session_id),
+                        "sender_id": 0,
+                        "sender_name": msg.get("sender_name", "Remote User"),
+                        "sender_type": msg.get("sender_type", "human"),
+                        "content": msg.get("content", ""),
+                        "reply_to": msg.get("reply_to"),
+                        "source_public_id": source_public_id,
+                        "created_at": str(dm_msg.created_at) if hasattr(dm_msg, 'created_at') else None,
+                        "read_at": None,
+                    }
+                    await manager.broadcast_to_dm(
+                        str(session_id),
+                        {"type": "message", "conversation_type": "dm", "data": dm_data},
+                    )
         except Exception as e:
-            logger.error(f"🌐 处理远程消息失败: {e}", exc_info=True)
+            logger.error(f"Handle remote forward error: {e}")
+
+    async def _handle_conversation_announce(self, from_public_id: str, data: dict) -> None:
+        """Handle incoming conversation UUID announcement"""
+        conversation_uuid = data.get("conversation_uuid")
+        conversation_type = data.get("conversation_type", "group")
+        remote_local_id = data.get("local_id")
+        share_direction = data.get("share_direction", "bidirectional")
+
+        if not conversation_uuid:
+            return
+
+        # Mirror the direction
+        mirror_direction = share_direction
+        if share_direction == "outgoing":
+            mirror_direction = "incoming"
+        elif share_direction == "incoming":
+            mirror_direction = "outgoing"
+
+        async with async_session() as db:
+            peer = await get_peer_by_public_id(db, from_public_id)
+            if not peer:
+                logger.warning(f"Announce from unknown peer {from_public_id}")
+                return
+
+            if conversation_type == "group":
+                # If we already have a share with this peer, update remote_group_id
+                result = await db.execute(
+                    select(FederationGroupShare).where(
+                        FederationGroupShare.conversation_uuid == conversation_uuid,
+                        FederationGroupShare.peer_id == peer.id,
+                    )
+                )
+                share = result.scalar_one_or_none()
+                if share:
+                    share.remote_group_id = remote_local_id
+                    await db.commit()
+            # Send ack
+            conn = self.peers.get(from_public_id)
+            if conn and conn.handshake_complete and conn.websocket:
+                try:
+                    await conn.websocket.send(json.dumps({
+                        "type": "conversation_ack",
+                        "conversation_uuid": conversation_uuid,
+                        "accepted": True,
+                    }))
+                except Exception:
+                    pass
+
+    async def _handle_conversation_ack(self, from_public_id: str, data: dict) -> None:
+        """Handle conversation ack, update remote_group_id"""
+        conversation_uuid = data.get("conversation_uuid")
+        remote_local_id = data.get("local_id")
+        if not conversation_uuid:
+            return
+        if remote_local_id:
+            async with async_session() as db:
+                result = await db.execute(
+                    select(FederationGroupShare).where(
+                        FederationGroupShare.conversation_uuid == conversation_uuid,
+                    )
+                )
+                share = result.scalar_one_or_none()
+                if share:
+                    share.remote_group_id = remote_local_id
+                    await db.commit()
 
     # ── URL 动态轮换 ──
 

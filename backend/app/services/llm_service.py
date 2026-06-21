@@ -465,6 +465,7 @@ async def _build_tools_segment(db, agent, is_dm: bool = False) -> str:
 async def _build_current_context(
     db: AsyncSession, agent, group_id: int,
     group_name: str, is_dm: bool,
+    is_federated: bool = False,
 ) -> str:
     """current_context 段：当前会话上下文（每次不同，不缓存）"""
     now = datetime.utcnow()
@@ -492,6 +493,12 @@ async def _build_current_context(
         f"- **重要**：回复时请使用 send_message(group_id={group_id}, content=\"...\")，"
         f"不要用其他 group_id\n"
     )
+    # Federation context
+    if is_federated:
+        context += (
+            "- **联邦共享**：此群聊已启用联邦共享，你的消息将自动同步到其他 AIsChat 实例，"
+            "其他实例的用户可能会看到并回应你的消息。\n"
+        )
     return context
 
 
@@ -632,7 +639,7 @@ async def build_messages(
         "personality": _build_personality(agent, language, system_prompt_override),
         "protocol": protocol,
         "tools": await _build_tools_segment(db, agent, is_dm),
-        "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
+        "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm, is_federated=group_obj.is_federated if group_obj else False),
         "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key, trigger_user_id),
     }
 

@@ -502,6 +502,68 @@ async def _migrate_federation_tables(db):
     else:
         logger.info("  ⏭ federation_peers.url_rotation_count 已存在，跳过")
 
+    # 8. federation_group_shares.conversation_uuid（v1.0.0 联邦对话 UUID 映射）
+    if not await _column_exists(db, "federation_group_shares", "conversation_uuid"):
+        logger.info("  🌐 添加 federation_group_shares.conversation_uuid 列")
+        await db.execute(text(
+            "ALTER TABLE federation_group_shares ADD COLUMN conversation_uuid VARCHAR(64)"
+        ))
+        # Populate existing rows with generated UUIDs
+        await db.execute(text(
+            "UPDATE federation_group_shares SET conversation_uuid = 'conv_' || gen_random_uuid()::text "
+            "WHERE conversation_uuid IS NULL"
+        ))
+        await db.execute(text(
+            "ALTER TABLE federation_group_shares ALTER COLUMN conversation_uuid SET NOT NULL"
+        ))
+        await db.execute(text(
+            "ALTER TABLE federation_group_shares ADD CONSTRAINT uq_peer_conv_uuid UNIQUE(peer_id, conversation_uuid)"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_group_shares.conversation_uuid 已存在，跳过")
+
+    # 9. federation_dm_shares 表
+    if not await _table_exists(db, "federation_dm_shares"):
+        logger.info("  🌐 创建 federation_dm_shares 表")
+        await db.execute(text("""
+            CREATE TABLE federation_dm_shares (
+                id SERIAL PRIMARY KEY,
+                session_id VARCHAR(64) NOT NULL REFERENCES dm_sessions(session_id) ON DELETE CASCADE,
+                peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+                is_enabled BOOLEAN DEFAULT TRUE,
+                conversation_uuid VARCHAR(64) NOT NULL,
+                share_direction VARCHAR(20) DEFAULT 'bidirectional'
+                    CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
+                created_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(session_id, peer_id),
+                UNIQUE(peer_id, conversation_uuid)
+            )
+        """))
+        created_any = True
+    else:
+        logger.info("  ⏭ federation_dm_shares 表已存在，跳过")
+
+    # 10. dm_messages.source_public_id
+    if not await _column_exists(db, "dm_messages", "source_public_id"):
+        logger.info("  🌐 添加 dm_messages.source_public_id 列")
+        await db.execute(text(
+            "ALTER TABLE dm_messages ADD COLUMN source_public_id VARCHAR(50)"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ dm_messages.source_public_id 已存在，跳过")
+
+    # 11. agents.discoverable
+    if not await _column_exists(db, "agents", "discoverable"):
+        logger.info("  🌐 添加 agents.discoverable 列")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT TRUE"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.discoverable 已存在，跳过")
+
     if created_any:
         await db.flush()
 

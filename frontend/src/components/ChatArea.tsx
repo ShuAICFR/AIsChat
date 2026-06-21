@@ -5,7 +5,7 @@ import ChatView from './ChatView'
 import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User } from 'lucide-react'
+import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User, Globe } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
 
 interface Group {
@@ -25,6 +25,7 @@ interface Group {
   created_at: string | null
   member_count: number
   online_count: number
+  is_federated?: boolean
 }
 
 interface ChatAreaProps {
@@ -122,6 +123,13 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
             <h2 className="font-semibold text-textPrimary text-sm truncate">
               # {currentGroup?.name || t('chat.loading')}
             </h2>
+            {currentGroup?.is_federated && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full shrink-0"
+                    title={t('chat.federatedGroup')}>
+                <Globe size={11} />
+                {t('chat.federated')}
+              </span>
+            )}
             <button
               onClick={() => setShowInvite(true)}
               className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"

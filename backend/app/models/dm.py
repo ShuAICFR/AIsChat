@@ -49,4 +49,7 @@ class DMMessage(Base):
     # 对方阅读时间：发送时为 NULL，用户查看会话后批量标记
     read_at = Column(DateTime)
 
+    # 联邦来源：NULL=本地消息，非空=来自对应 public_id 的远程实例
+    source_public_id = Column(String(50), nullable=True)
+
     created_at = Column(DateTime, server_default=func.now())

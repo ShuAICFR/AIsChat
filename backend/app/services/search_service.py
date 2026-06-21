@@ -40,10 +40,11 @@ async def search_entities(
             "user_id": user.id,  # 人类的 user_id 就是自己的 id
         })
 
-    # 搜索 AI
+    # 搜索 AI（仅返回 discoverable 的 AI）
     agent_result = await db.execute(
         select(Agent).where(
             Agent.name.ilike(like_pattern),
+            Agent.discoverable == True,
         ).limit(limit)
     )
     for agent in agent_result.scalars().all():

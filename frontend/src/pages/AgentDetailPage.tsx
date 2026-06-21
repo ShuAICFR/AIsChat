@@ -436,7 +436,7 @@ export default function AgentDetailPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-4 border-b border-border">
+        <div className="flex gap-1 mb-4 border-b border-border overflow-x-auto">
           {(['info', 'memories', 'storage', 'workspace', 'logs'] as const).map((tab) => (
             <button
               key={tab}

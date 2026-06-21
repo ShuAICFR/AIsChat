@@ -458,7 +458,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {/* 原始设定（只读） */}
           <div className="bg-canvas rounded-xl p-4 border border-border">
             <h3 className="text-sm font-semibold text-textSecondary mb-3 flex items-center gap-1">

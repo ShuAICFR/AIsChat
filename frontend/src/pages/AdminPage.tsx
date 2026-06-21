@@ -872,7 +872,7 @@ function OpenCLITab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2 bg-canvas border border-border rounded-xl p-1 w-full">
+      <div className="flex gap-2 bg-canvas border border-border rounded-xl p-1 w-full overflow-x-auto">
         {subTabs.map((t) => (
           <button
             key={t.key}

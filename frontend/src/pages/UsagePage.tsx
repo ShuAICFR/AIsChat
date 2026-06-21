@@ -156,12 +156,12 @@ export default function UsagePage() {
         ) : (
           <>
             {/* AI 选择器 */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
               <span className="text-xs text-textMuted shrink-0">{t('usage.selectAiLabel')}</span>
               <select
                 value={selectedAgent || ''}
                 onChange={e => setSelectedAgent(e.target.value ? parseInt(e.target.value) : null)}
-                className="px-3 py-1.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                className="px-3 py-1.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50 max-w-[140px] truncate"
               >
                 <option value="">{t('usage.allAi')}</option>
                 {overview.map(a => (
@@ -169,7 +169,7 @@ export default function UsagePage() {
                 ))}
               </select>
               {selectedInfo && (
-                <span className="text-xs text-textMuted ml-auto">
+                <span className="text-xs text-textMuted ml-auto truncate min-w-0 max-w-full">
                   {t('usage.modelLabel')} {selectedInfo.model || t('usage.defaultModel')} · {selectedInfo.total_calls} {t('usage.callsLabel')}
                 </span>
               )}

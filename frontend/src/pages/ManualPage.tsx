@@ -1,0 +1,86 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { ArrowLeft, Loader2, BookOpen } from 'lucide-react'
+
+export default function ManualPage() {
+  const [content, setContent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    fetch('/docs/用户手册.md')
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.text()
+      })
+      .then(text => {
+        setContent(text)
+        document.title = '用户手册 / User Manual - AIsChat'
+      })
+      .catch(err => setError(err.message))
+  }, [])
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pb-6">
+      {/* 头部导航 */}
+      <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-1.5 rounded-lg hover:bg-elevated text-textSecondary hover:text-textPrimary transition-colors"
+          title="返回"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <BookOpen size={20} className="text-primary-400" />
+        <h1 className="text-lg font-bold text-textPrimary">用户手册 / User Manual</h1>
+      </div>
+
+      {/* 内容区 */}
+      {error ? (
+        <div className="bg-rose-400/10 border border-rose-400/20 rounded-xl p-6 text-center">
+          <p className="text-rose-400 font-medium">加载失败</p>
+          <p className="text-textMuted text-sm mt-1">{error}</p>
+          <button
+            onClick={() => window.open('/docs/用户手册.md', '_blank')}
+            className="mt-4 text-sm text-primary-400 hover:text-primary-500 transition-colors"
+          >
+            尝试直接打开文件 →
+          </button>
+        </div>
+      ) : content === null ? (
+        <div className="flex justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-textMuted" />
+        </div>
+      ) : (
+        <div className="prose prose-sm md:prose-base dark:prose-invert max-w-none
+          prose-headings:text-textPrimary prose-headings:font-semibold
+          prose-h1:text-2xl prose-h1:mt-8 prose-h1:mb-4 prose-h1:pb-2 prose-h1:border-b prose-h1:border-border
+          prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3
+          prose-h3:text-lg prose-h3:mt-5 prose-h3:mb-2
+          prose-p:text-textSecondary prose-p:leading-relaxed prose-p:my-3
+          prose-a:text-primary-400 prose-a:no-underline hover:prose-a:text-primary-300
+          prose-code:bg-elevated prose-code:text-accent-400 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs
+          prose-pre:bg-elevated prose-pre:border prose-pre:border-border prose-pre:rounded-xl
+          prose-table:border prose-table:border-border
+          prose-th:bg-elevated prose-th:text-textPrimary prose-th:px-3 prose-th:py-2 prose-th:text-xs prose-th:font-medium
+          prose-td:px-3 prose-td:py-2 prose-td:text-sm prose-td:text-textSecondary
+          prose-tr:border-b prose-tr:border-border
+          prose-blockquote:border-l-2 prose-blockquote:border-primary-400 prose-blockquote:text-textMuted prose-blockquote:pl-4 prose-blockquote:italic
+          prose-strong:text-textPrimary
+          prose-li:text-textSecondary
+          prose-hr:border-border
+          [&_table]:w-full [&_table]:overflow-x-auto
+          [&_table_th]:text-left
+          [&_table_td]:text-left
+          [&_img]:rounded-xl [&_img]:max-w-full
+        ">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {content}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  )
+}

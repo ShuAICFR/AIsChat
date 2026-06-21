@@ -84,7 +84,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         )}
 
         {/* 在线状态指示 */}
-        <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
+        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${partner?.state === 'active' ? 'text-mint-400' : partner?.state === 'dnd' ? 'text-rose-400' : 'text-textMuted'}`}>
           <span className={`w-1.5 h-1.5 rounded-full ${stateColor}`} />
           {partner?.state === 'active' ? t('dm.online') : partner?.state === 'dnd' ? t('dm.shortDnd') : t('dm.offline')}
         </span>

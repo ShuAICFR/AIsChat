@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useT } from '../i18n/I18nContext'
+import { useT, useLang } from '../i18n/I18nContext'
 import { api } from '../api/client'
 import { AI_TYPE_LABEL } from '../constants'
+import { fmtTokenNum } from '../utils/format'
 import {
-  User, Settings, LogOut, Shield, Globe, Tag,
+  User, Settings, LogOut, Shield, Tag,
   CreditCard, Gift, BarChart3, Bot, ChevronRight, Edit3,
   Loader2, Check, X, ArrowRight, Activity,
   FileText, HardDrive, Camera
@@ -36,6 +37,7 @@ interface UsageOverview {
 export default function MePage() {
   const { user, logout, refreshUser } = useAuth()
   const t = useT()
+  const lang = useLang()
   const navigate = useNavigate()
 
   const [agents, setAgents] = useState<AgentBrief[]>([])
@@ -154,6 +156,9 @@ export default function MePage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 md:p-6 space-y-5 pb-24 md:pb-6">
+      {/* ====== 页面标题 ====== */}
+      <h1 className="text-lg font-bold text-textPrimary">{t('me.title')}</h1>
+
       {/* ====== 个人资料卡 ====== */}
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center gap-4">
@@ -264,10 +269,10 @@ export default function MePage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { key: 'me.totalTokens', value: totalTokens >= 10000 ? `${(totalTokens/10000).toFixed(1)}万` : totalTokens.toLocaleString(), icon: Activity, color: 'text-primary-400' },
+              { key: 'me.totalTokens', value: fmtTokenNum(totalTokens, lang), icon: Activity, color: 'text-primary-400' },
               { key: 'me.calls', value: totalCalls, icon: BarChart3, color: 'text-mint-400' },
               { key: 'me.cacheHitRate', value: `${cacheRate}%`, icon: FileText, color: 'text-amber-400' },
-              { key: 'me.thinkingTokens', value: totalReasoning >= 10000 ? `${(totalReasoning/10000).toFixed(1)}万` : totalReasoning.toLocaleString(), icon: Activity, color: 'text-accent-400' },
+              { key: 'me.thinkingTokens', value: fmtTokenNum(totalReasoning, lang), icon: Activity, color: 'text-accent-400' },
             ].map(item => (
               <div key={item.key} className="bg-canvas rounded-xl p-3 text-center">
                 <item.icon size={16} className={`${item.color} mx-auto mb-1`} />
@@ -361,26 +366,16 @@ export default function MePage() {
       )}
 
       {/* ====== 设置入口 ====== */}
-      <div className="bg-surface rounded-2xl border border-border divide-y divide-border/60">
-        {[
-          { key: 'me.apiConfig', descKey: 'me.apiConfigDesc', path: '/settings#api', icon: Settings },
-          { key: 'me.appearance', descKey: 'me.appearanceDesc', path: '/settings#appearance', icon: Settings },
-          { key: 'me.language', descKey: 'me.languageDesc', path: '/settings#language', icon: Globe },
-        ].map(item => (
-          <Link
-            key={item.key}
-            to={item.path}
-            className="flex items-center gap-3 px-5 py-3 hover:bg-elevated transition-colors"
-          >
-            <item.icon size={16} className="text-textMuted shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-textPrimary">{t(item.key)}</div>
-              <div className="text-xs text-textMuted">{t(item.descKey)}</div>
-            </div>
-            <ChevronRight size={14} className="text-textMuted shrink-0" />
-          </Link>
-        ))}
-      </div>
+      <Link
+        to="/settings"
+        className="bg-surface rounded-2xl border border-border p-5 flex items-center gap-3 hover:bg-elevated transition-colors"
+      >
+        <Settings size={18} className="text-textMuted shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-textPrimary">{t('me.settings')}</div>
+        </div>
+        <ChevronRight size={14} className="text-textMuted shrink-0" />
+      </Link>
 
       {/* ====== 退出登录 ====== */}
       <button

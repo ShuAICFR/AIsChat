@@ -57,24 +57,11 @@ interface ConfigHistory {
   created_at: string | null
 }
 
-const stateLabels: Record<string, string> = {
-  active: '在线',
-  dnd: '勿扰',
-  offline: '离线',
-  blocked: '封禁',
-}
-
-const PRESET_LABELS: Record<string, string> = {
-  chat: '聊天档', immersive: '深度沉浸档', digital_life: '数字生命档',
-}
-
-const PARAM_LABELS: Record<string, string> = {
-  temperature: 'Temperature', top_p: 'Top P',
-  presence_penalty: 'Presence', frequency_penalty: 'Frequency',
-  thinking_enabled: '深度推理', max_tool_rounds: '回复轮次上限',
-  alarm_max_tool_rounds: '闹钟轮次上限', force_alarm_on_end: '强制设闹钟',
-  max_alarms: '最大闹钟数', is_ai_editable: '自修改人格',
-  hide_ai_identity: '隐藏AI身份', delay_reply_enabled: '延迟回复',
+const stateLabelKeys: Record<string, string> = {
+  active: 'agents.stateLabelsActive',
+  dnd: 'agents.stateLabelsDnd',
+  offline: 'agents.stateLabelsOffline',
+  blocked: 'agents.stateLabelsBlocked',
 }
 
 export default function AgentsPage() {
@@ -195,7 +182,7 @@ export default function AgentsPage() {
                       </div>
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${STATE_BADGE_COLORS[agent.state] || ''}`}>
-                      {stateLabels[agent.state] || agent.state}
+                      {t(stateLabelKeys[agent.state]) || agent.state}
                     </span>
                   </div>
 
@@ -231,7 +218,7 @@ export default function AgentsPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
                     <button
                       onClick={() => setEditAgent(agent)}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-primary-400 rounded-lg hover:bg-elevated transition-colors"
@@ -894,14 +881,14 @@ function StateModal({ agent, onClose, onUpdated }: {
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('agents.currentState')} {stateLabels[agent.state] || agent.state}</label>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('agents.currentState')} {t(stateLabelKeys[agent.state]) || agent.state}</label>
             <select
               value={targetState}
               onChange={(e) => setTargetState(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             >
-              {Object.entries(stateLabels).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {Object.entries(stateLabelKeys).map(([k, v]) => (
+                <option key={k} value={k}>{t(v)}</option>
               ))}
             </select>
           </div>

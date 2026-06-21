@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { useT } from '../i18n/I18nContext'
+import { useT, useLang } from '../i18n/I18nContext'
 import { useIsDark } from '../hooks/useIsDark'
 import { fmtTokenNum } from '../utils/format'
 import {
@@ -34,6 +34,7 @@ interface AgentSummary {
 
 export default function UsagePage() {
   const t = useT()
+  const lang = useLang()
   const [searchParams] = useSearchParams()
   const [days, setDays] = useState(30)
   const [overview, setOverview] = useState<AgentSummary[]>([])
@@ -128,10 +129,10 @@ export default function UsagePage() {
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { key: 'usage.totalTokens', value: fmtTokenNum(totalTokens), icon: BarChart3 },
+          { key: 'usage.totalTokens', value: fmtTokenNum(totalTokens, lang), icon: BarChart3 },
           { key: 'usage.calls', value: totalCalls, icon: Activity },
           { key: 'usage.cacheHitRate', value: `${cacheRate}%`, icon: FileText },
-          { key: 'usage.thinkingTokens', value: fmtTokenNum(totalReasoning), icon: Cpu },
+          { key: 'usage.thinkingTokens', value: fmtTokenNum(totalReasoning, lang), icon: Cpu },
         ].map(item => {
           const Icon = item.icon;
           return (
@@ -198,7 +199,7 @@ export default function UsagePage() {
                         fontSize: '12px',
                         color: isDark ? '#F9FAFB' : '#111827',
                       }}
-                      formatter={(value: number, name: string) => [fmtTokenNum(value),
+                      formatter={(value: number, name: string) => [fmtTokenNum(value, lang),
                         name === 'prompt_tokens' ? 'Prompt' :
                         name === 'completion_tokens' ? 'Completion' :
                         name === 'reasoning_tokens' ? t('usage.thinkingLegend') : t('usage.cacheLegend')
@@ -251,10 +252,10 @@ export default function UsagePage() {
                   >
                     <td className="py-2.5 px-4 text-textPrimary font-medium">{a.agent_name}</td>
                     <td className="py-2.5 px-4 text-textMuted hidden md:table-cell">{a.model || '-'}</td>
-                    <td className="py-2.5 px-4 text-right text-textPrimary font-mono">{fmtTokenNum(a.total_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.prompt_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.completion_tokens)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.reasoning_tokens)}</td>
+                    <td className="py-2.5 px-4 text-right text-textPrimary font-mono">{fmtTokenNum(a.total_tokens, lang)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.prompt_tokens, lang)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.completion_tokens, lang)}</td>
+                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.reasoning_tokens, lang)}</td>
                     <td className="py-2.5 px-4 text-right text-textMuted">{a.total_calls}</td>
                   </tr>
                 ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
@@ -102,14 +102,12 @@ export default function AdminPage() {
         {mobileView === 'list' && (
           <div className="flex items-center gap-1.5 flex-wrap text-sm text-textSecondary mt-0.5">
             <span>{t('admin.subtitle')}</span>
-            <a
-              href={MANUAL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to={MANUAL_URL}
               className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
             >
               <BookOpen size={13} /> {t('nav.manual')}
-            </a>
+            </Link>
           </div>
         )}
       </div>
@@ -642,7 +640,7 @@ function BackupTab() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '下载失败')
+        throw new Error(err.detail || t('admin.downloadFailed'))
       }
       const blob = await res.blob()
       downloadFile(blob, `aischat_full_${new Date().toISOString().slice(0, 10)}.tar.gz`)

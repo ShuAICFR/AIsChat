@@ -12,6 +12,7 @@ import UsagePage from './pages/UsagePage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import SetupPage from './pages/SetupPage'
+import ManualPage from './pages/ManualPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -62,6 +63,7 @@ export const router = createBrowserRouter([
       { path: 'me/usage', element: <UsagePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'setup', element: <SetupPage /> },
+      { path: 'manual', element: <ManualPage /> },
       {
         path: 'admin',
         element: <AdminGuard><AdminPage /></AdminGuard>,

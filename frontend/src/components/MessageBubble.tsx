@@ -1,6 +1,7 @@
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
@@ -109,13 +110,18 @@ export default function MessageBubble({
             <span className="text-[10px] text-mint-400 animate-pulse font-medium">{t('chat.typing')}</span>
           )}
         </div>
-        <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}`}>
+        <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}
+          [&_.katex-display]:overflow-x-auto [&_.katex-display]:-mx-1 [&_.katex-display]:px-1
+          [&_pre]:overflow-x-auto [&_pre]:-mx-1 [&_pre]:px-1
+          [&_table]:overflow-x-auto [&_table]:block
+          [&_img]:max-w-full [&_img]:rounded-lg
+          [&_a]:break-all
+          [&_code]:break-all [&_pre>code]:break-normal
+        `}>
           {isTyping ? (
             <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />
-          ) : isMine ? (
-            <span className="whitespace-pre-wrap">{content}</span>
           ) : (
-            <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+            <Markdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]} rehypePlugins={[rehypeKatex]}>
               {content}
             </Markdown>
           )}

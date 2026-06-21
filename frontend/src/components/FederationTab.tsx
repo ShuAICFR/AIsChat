@@ -2,6 +2,7 @@ import { useState, useEffect, Fragment } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { Globe, Link, Plus, Trash2, RefreshCw, Power, Shield } from 'lucide-react'
+import ExternalLinkSafe from './ExternalLinkSafe'
 
 interface InstanceInfo {
   instance_id: string
@@ -366,7 +367,7 @@ export default function FederationTab() {
                       placeholder={t('admin.pasteNewToken')}
                     />
                     <p className="text-[10px] text-textMuted mt-1">
-                      {t('admin.tokenHintOrGet')} <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">github.com/settings/tokens →</a>
+                      {t('admin.tokenHintOrGet')} <ExternalLinkSafe href="https://github.com/settings/tokens/new" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">github.com/settings/tokens</ExternalLinkSafe>
                     </p>
                   </div>
                 </details>
@@ -374,9 +375,9 @@ export default function FederationTab() {
                 <>
                   <label className="text-xs text-textMuted">
                     {t('admin.githubToken')}{' '}
-                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
+                    <ExternalLinkSafe href="https://github.com/settings/tokens/new" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                       {t('common.back')} →
-                    </a>
+                    </ExternalLinkSafe>
                   </label>
                   <p className="text-[10px] text-textMuted mb-1.5" dangerouslySetInnerHTML={{ __html: t('admin.tokenHelpText') }} />
                   <input
@@ -490,9 +491,9 @@ export default function FederationTab() {
             <div>
               <label className="text-xs text-textMuted">
                 {t('admin.githubTokenLabel')}{' '}
-                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
+                <ExternalLinkSafe href="https://github.com/settings/tokens/new" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                   {t('common.back')} →
-                </a>
+                </ExternalLinkSafe>
               </label>
               <p className="text-[10px] text-textMuted mb-1" dangerouslySetInnerHTML={{ __html: t('admin.tokenHelpText') }} />
               <div className="flex gap-2 mt-1">

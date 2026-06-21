@@ -203,6 +203,12 @@ const zh: TranslationDict = {
   'common.redeemSuccess': '兑换成功',
   'common.redeemFailed': '兑换失败',
 
+  // ======================== 外部链接安全弹窗 ========================
+  'externalLink.title': '即将离开本站',
+  'externalLink.hint': '你即将前往以下外部网页：',
+  'externalLink.warning': '我们无法保证外部网站的安全性，请谨慎操作。',
+  'externalLink.confirm': '确认前往',
+
   // ======================== 登录 / Auth ========================
   'auth.login': '登录',
   'auth.register': '注册',
@@ -1410,6 +1416,12 @@ const en: TranslationDict = {
   'common.menu': 'Menu',
   'common.redeemSuccess': 'Redeem successful',
   'common.redeemFailed': 'Redeem failed',
+
+  // ======================== External Link Safety ========================
+  'externalLink.title': 'Leaving this site',
+  'externalLink.hint': 'You are about to visit the following external website:',
+  'externalLink.warning': 'We cannot guarantee the security of external websites. Please proceed with caution.',
+  'externalLink.confirm': 'Proceed',
 
   // ======================== Auth ========================
   'auth.login': 'Login',

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { MessageCircle, Bot, User, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink, Users } from 'lucide-react'
+import { MessageCircle, Bot, User, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, Users } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import SearchOverlay from './SearchOverlay'
 import { useT } from '../i18n/I18nContext'
@@ -111,19 +111,15 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             </NavLink>
           )}
 
-          <a
-            href={MANUAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={navLinkClass({ isActive: false })}
+          <NavLink
+            to={MANUAL_URL}
+            onClick={() => { if (mobile) onClose?.() }}
+            className={navLinkClass}
             title={collapsed ? t('nav.manual') : undefined}
           >
             <BookOpen size={18} />
-            <span className="flex items-center gap-1">
-              {t('nav.manual')}
-              <ExternalLink size={10} className="text-textMuted" />
-            </span>
-          </a>
+            <span>{t('nav.manual')}</span>
+          </NavLink>
         </nav>
       )}
 
@@ -168,15 +164,20 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               <Shield size={18} />
             </NavLink>
           )}
-          <a
-            href={MANUAL_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 text-textSecondary hover:text-textPrimary hover:bg-elevated"
+          <NavLink
+            to={MANUAL_URL}
+            onClick={() => { if (mobile) onClose?.() }}
+            className={({ isActive }) =>
+              `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
+                isActive
+                  ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
+                  : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
+              }`
+            }
             title={t('sidebar.usageManual')}
           >
             <BookOpen size={18} />
-          </a>
+          </NavLink>
         </nav>
       )}
 

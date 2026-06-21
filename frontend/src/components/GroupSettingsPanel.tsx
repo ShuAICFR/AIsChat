@@ -21,7 +21,8 @@ interface GroupShare {
   share_direction: string
 }
 
-function FederationShareSection({ groupId, t }: { groupId: number; t: (key: string) => string }) {
+function FederationShareSection({ groupId }: { groupId: number }) {
+  const t = useT()
   const [enabled, setEnabled] = useState(false)
   const [peers, setPeers] = useState<ConnectedPeer[]>([])
   const [shares, setShares] = useState<GroupShare[]>([])
@@ -584,7 +585,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               )}
 
               {/* 联邦共享（仅管理员可见） */}
-              {isAdmin && <FederationShareSection groupId={group!.id} t={t} />}
+              {isAdmin && <FederationShareSection groupId={group!.id} />}
 
               <hr className="border-border" />
 

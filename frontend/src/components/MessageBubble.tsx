@@ -74,8 +74,8 @@ export default function MessageBubble({
           }}
           className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${
             isMine
-              ? 'from-primary-500 to-primary-700 shadow-primary-500/25'
-              : 'from-mint-400 to-emerald-600 shadow-mint-400/20'
+              ? senderAvatarUrl ? 'from-primary-500/30 to-primary-700/30 shadow-primary-500/25' : 'from-primary-500 to-primary-700 shadow-primary-500/25'
+              : senderAvatarUrl ? 'from-mint-400/30 to-emerald-600/30 shadow-mint-400/20' : 'from-mint-400 to-emerald-600 shadow-mint-400/20'
           }`}
           title={thinking ? `${senderName} 思考中...` : `查看 ${senderName} 资料`}
         >

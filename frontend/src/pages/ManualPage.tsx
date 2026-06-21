@@ -16,12 +16,13 @@ function CodeRenderer({ className, children, inline, ...props }: any) {
 
   // 默认 code 渲染
   if (inline) {
-    return <code className={className} {...props}>{children}</code>
+    return <code className={className}>{children}</code>
   }
+  // 用 block <code> 替代 <pre>，避免 react-markdown 误嵌套在 <p> 中产生 HTML 规范错误
   return (
-    <pre className={className}>
-      <code {...props}>{children}</code>
-    </pre>
+    <code className={`block overflow-x-auto whitespace-pre-wrap rounded-xl bg-elevated border border-border p-4 text-xs ${className || ''}`}>
+      {children}
+    </code>
   )
 }
 

@@ -440,6 +440,7 @@ class CreatePoolKeyRequest(BaseModel):
     api_base_url: str | None = None
     api_key: str = Field(..., min_length=1)
     priority: int = Field(default=0, ge=0)
+    concurrent_limit: int | None = Field(default=None, ge=1, description="并发上限，NULL=按模型默认")
 
 
 class UpdatePoolKeyRequest(BaseModel):
@@ -447,6 +448,7 @@ class UpdatePoolKeyRequest(BaseModel):
     api_base_url: str | None = None
     is_active: bool | None = None
     priority: int | None = None
+    concurrent_limit: int | None = Field(default=None, ge=1, description="NULL=不修改，0=清除限制恢复默认")
 
 
 @router.get("/api-key-pool")
@@ -468,6 +470,7 @@ async def list_pool_keys(
             "api_key_preview": _mask_api_key(k.api_key_encrypted),
             "is_active": k.is_active,
             "priority": k.priority,
+            "concurrent_limit": k.concurrent_limit,
             "created_at": str(k.created_at) if k.created_at else None,
             "updated_at": str(k.updated_at) if k.updated_at else None,
         }
@@ -492,6 +495,7 @@ async def create_pool_key(
         api_base_url=req.api_base_url,
         api_key_encrypted=encrypted,
         priority=req.priority,
+        concurrent_limit=req.concurrent_limit,
     )
     db.add(key_entry)
 
@@ -508,6 +512,7 @@ async def create_pool_key(
         "api_key_preview": _mask_api_key(encrypted),
         "is_active": key_entry.is_active,
         "priority": key_entry.priority,
+        "concurrent_limit": key_entry.concurrent_limit,
     }
 
 
@@ -535,6 +540,8 @@ async def update_pool_key(
         from app.services.quota_service import find_best_pool_key
     if req.priority is not None:
         key_entry.priority = req.priority
+    if req.concurrent_limit is not None:
+        key_entry.concurrent_limit = req.concurrent_limit if req.concurrent_limit > 0 else None
 
     await _log_admin_action(
         db, admin["user_id"], "update_pool_key", "api_key_pool", key_id,
@@ -584,6 +591,126 @@ def _mask_api_key(encrypted: str) -> str:
     if len(encrypted) <= 4:
         return "****"
     return "****" + encrypted[-4:]
+
+
+# ---------- API Key 池统计 ----------
+
+@router.get("/api-key-pool/stats/summary")
+async def get_pool_key_stats_summary(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取所有池 Key 的汇总统计（含当前并发）"""
+    from app.models.api_key_pool import ApiKeyPool
+    from app.models.api_usage_log import ApiUsageLog
+    from app.services.api_key_concurrency import concurrency_mgr
+    from sqlalchemy import func as sqlfunc
+
+    result = await db.execute(select(ApiKeyPool).order_by(ApiKeyPool.priority.desc()))
+    keys = result.scalars().all()
+
+    concurrency_stats = concurrency_mgr.get_stats()
+    summary = []
+    for k in keys:
+        usage_result = await db.execute(
+            select(
+                sqlfunc.count(ApiUsageLog.id).label("total_requests"),
+                sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.tokens_used), 0).label("total_tokens"),
+                sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.credit_spent), 0).label("total_credit"),
+            ).where(ApiUsageLog.pool_key_id == k.id)
+        )
+        row = usage_result.one()
+        summary.append({
+            "id": k.id,
+            "name": k.name,
+            "is_active": k.is_active,
+            "priority": k.priority,
+            "concurrent_limit": k.concurrent_limit,
+            "current_concurrency": concurrency_stats["concurrency"].get(k.id, 0),
+            "total_requests": row.total_requests,
+            "total_tokens": int(row.total_tokens),
+            "total_credit": float(row.total_credit),
+        })
+    return summary
+
+
+@router.get("/api-key-pool/{key_id}/stats")
+async def get_pool_key_stats(
+    key_id: int,
+    days: int = 30,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单个池 Key 的详细使用统计"""
+    from app.models.api_key_pool import ApiKeyPool
+    from app.models.api_usage_log import ApiUsageLog
+    from sqlalchemy import func as sqlfunc
+    from datetime import datetime, timezone, timedelta
+
+    result = await db.execute(select(ApiKeyPool).where(ApiKeyPool.id == key_id))
+    key_entry = result.scalar_one_or_none()
+    if key_entry is None:
+        raise HTTPException(status_code=404, detail="池 Key 不存在")
+
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+
+    overview_result = await db.execute(
+        select(
+            sqlfunc.count(ApiUsageLog.id).label("total_requests"),
+            sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.tokens_used), 0).label("total_tokens"),
+            sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.credit_spent), 0).label("total_credit"),
+            sqlfunc.count(sqlfunc.distinct(ApiUsageLog.user_id)).label("active_users"),
+        ).where(
+            ApiUsageLog.pool_key_id == key_id,
+            ApiUsageLog.created_at >= since,
+        )
+    )
+    overview = overview_result.one()
+
+    daily_result = await db.execute(
+        select(
+            sqlfunc.date(ApiUsageLog.created_at).label("day"),
+            sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.tokens_used), 0).label("tokens"),
+            sqlfunc.count(ApiUsageLog.id).label("requests"),
+        ).where(
+            ApiUsageLog.pool_key_id == key_id,
+            ApiUsageLog.created_at >= since,
+        ).group_by(sqlfunc.date(ApiUsageLog.created_at)).order_by("day")
+    )
+    daily = [
+        {"day": str(row.day), "tokens": int(row.tokens), "requests": row.requests}
+        for row in daily_result.all()
+    ]
+
+    model_result = await db.execute(
+        select(
+            ApiUsageLog.model,
+            sqlfunc.count(ApiUsageLog.id).label("count"),
+            sqlfunc.coalesce(sqlfunc.sum(ApiUsageLog.tokens_used), 0).label("tokens"),
+        ).where(
+            ApiUsageLog.pool_key_id == key_id,
+            ApiUsageLog.created_at >= since,
+            ApiUsageLog.model.isnot(None),
+        ).group_by(ApiUsageLog.model)
+    )
+    model_dist = [
+        {"model": row.model or "unknown", "count": row.count, "tokens": int(row.tokens)}
+        for row in model_result.all()
+    ]
+
+    return {
+        "key_id": key_id,
+        "key_name": key_entry.name,
+        "overview": {
+            "total_requests": overview.total_requests,
+            "total_tokens": int(overview.total_tokens),
+            "total_credit": float(overview.total_credit),
+            "active_users": overview.active_users,
+            "days": days,
+        },
+        "daily": daily,
+        "model_distribution": model_dist,
+    }
 
 
 # ---------- 系统日志 ----------
@@ -775,11 +902,12 @@ async def update_system_settings(
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新全局系统设置"""
+    """更新全局系统设置（含平台赠送额度，修改会影响所有用户）"""
     try:
         result = await update_settings(
             db,
             default_language=req.default_language,
+            default_platform_credit=req.default_platform_credit,
             updated_by=admin["user_id"],
         )
         await _log_admin_action(

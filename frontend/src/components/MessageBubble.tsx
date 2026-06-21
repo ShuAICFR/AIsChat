@@ -8,6 +8,26 @@ import { getStateDotColor } from '../constants'
 import { FileIcon, Download, Globe } from 'lucide-react'
 import { formatMessageTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
+import MermaidBlock from './MermaidBlock'
+
+/** 聊天消息中的 code 渲染：mermaid → MermaidBlock(compact)，其余默认 */
+function ChatCodeRenderer({ className, children, inline, ...props }: any) {
+  const match = /language-(\w+)/.exec(className || '')
+  const code = String(children).replace(/\n$/, '')
+
+  if (!inline && match && match[1] === 'mermaid') {
+    return <MermaidBlock code={code} compact />
+  }
+
+  if (inline) {
+    return <code className={className} {...props}>{children}</code>
+  }
+  return (
+    <pre className={className}>
+      <code {...props}>{children}</code>
+    </pre>
+  )
+}
 
 interface MessageBubbleProps {
   senderName: string
@@ -121,7 +141,11 @@ export default function MessageBubble({
           {isTyping ? (
             <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />
           ) : (
-            <Markdown remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]} rehypePlugins={[rehypeKatex]}>
+            <Markdown
+              remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+              rehypePlugins={[rehypeKatex]}
+              components={{ code: ChatCodeRenderer }}
+            >
               {content}
             </Markdown>
           )}

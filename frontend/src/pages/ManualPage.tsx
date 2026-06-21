@@ -3,6 +3,27 @@ import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Loader2, BookOpen } from 'lucide-react'
+import MermaidBlock from '../components/MermaidBlock'
+
+/** 自定义 code 渲染：mermaid 代码块用 MermaidBlock，其余默认 */
+function CodeRenderer({ className, children, inline, ...props }: any) {
+  const match = /language-(\w+)/.exec(className || '')
+  const code = String(children).replace(/\n$/, '')
+
+  if (!inline && match && match[1] === 'mermaid') {
+    return <MermaidBlock code={code} compact={false} />
+  }
+
+  // 默认 code 渲染
+  if (inline) {
+    return <code className={className} {...props}>{children}</code>
+  }
+  return (
+    <pre className={className}>
+      <code {...props}>{children}</code>
+    </pre>
+  )
+}
 
 export default function ManualPage() {
   const [content, setContent] = useState<string | null>(null)
@@ -76,7 +97,10 @@ export default function ManualPage() {
           [&_table_td]:text-left
           [&_img]:rounded-xl [&_img]:max-w-full
         ">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{ code: CodeRenderer }}
+          >
             {content}
           </ReactMarkdown>
         </div>

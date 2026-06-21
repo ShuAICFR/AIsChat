@@ -52,7 +52,8 @@ async def run_migrations():
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _migrate_system_settings(db)          # v1.0.0 全局系统设置 + 新用户初始化向导
-            await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志
+            await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志；v1.1.0 +concurrent_limit
+            await _migrate_platform_credit(db)           # v1.1.0 平台赠送额度
             await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
@@ -1260,8 +1261,38 @@ async def _migrate_api_key_pool_tables(db):
     else:
         logger.info("  ⏭ api_usage_log 已存在，跳过")
 
+    # v1.1.0: api_key_pool.concurrent_limit
+    if not await _column_exists(db, "api_key_pool", "concurrent_limit"):
+        await db.execute(text(
+            "ALTER TABLE api_key_pool ADD COLUMN concurrent_limit INTEGER"
+        ))
+        logger.info("  ✅ api_key_pool.concurrent_limit 列添加完成")
+    else:
+        logger.info("  ⏭ api_key_pool.concurrent_limit 列已存在，跳过")
+
     if created_any:
         await db.flush()
+
+
+async def _migrate_platform_credit(db):
+    """v1.1.0: 平台赠送额度 + system_settings 扩展"""
+    logger.info("  🎁 迁移平台赠送额度系统...")
+
+    if not await _column_exists(db, "system_settings", "default_platform_credit"):
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN default_platform_credit INTEGER NOT NULL DEFAULT 0"
+        ))
+        logger.info("  ✅ system_settings.default_platform_credit 列添加完成")
+    else:
+        logger.info("  ⏭ system_settings.default_platform_credit 列已存在，跳过")
+
+    if not await _column_exists(db, "users", "platform_gifted_credit"):
+        await db.execute(text(
+            "ALTER TABLE users ADD COLUMN platform_gifted_credit INTEGER NOT NULL DEFAULT 0"
+        ))
+        logger.info("  ✅ users.platform_gifted_credit 列添加完成")
+    else:
+        logger.info("  ⏭ users.platform_gifted_credit 列已存在，跳过")
 
 
 async def _migrate_redemption_code_details(db):

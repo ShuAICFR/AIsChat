@@ -263,6 +263,7 @@ CREATE TABLE IF NOT EXISTS api_key_pool (
     api_key_encrypted TEXT NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     priority INTEGER DEFAULT 0,
+    concurrent_limit INTEGER,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -540,6 +541,7 @@ CREATE TABLE IF NOT EXISTS federation_dm_shares (
 CREATE TABLE IF NOT EXISTS system_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
     default_language VARCHAR(10) NOT NULL DEFAULT 'en',
+    default_platform_credit INTEGER NOT NULL DEFAULT 0,
     updated_by INTEGER REFERENCES users(id),
     updated_at TIMESTAMP DEFAULT NOW()
 );

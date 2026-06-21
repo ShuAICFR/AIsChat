@@ -197,7 +197,7 @@ export default function MePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
           {[
             { key: 'me.aiQuotaCard', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
-            { key: 'me.apiCreditCard', value: `${(user.api_credit ?? 0)} (≈${((user.api_credit ?? 0) * 10000).toLocaleString()} tokens)`, icon: CreditCard, color: 'text-mint-400', action: () => navigate('/me/usage'), poolName: user.assigned_pool_key_name },
+            { key: 'me.apiCreditCard', value: ((user as any).total_effective ?? (user as any).api_credit ?? 0).toLocaleString() + ((user as any).api_credit < 0 ? ' ⚠' : ''), subColor: (user as any).api_credit < 0 ? 'text-rose-400' : undefined, icon: CreditCard, color: (user as any).api_credit < 0 ? 'text-rose-400' : 'text-mint-400', action: () => navigate('/me/usage'), poolName: (user as any).assigned_pool_key_name },
             { key: 'me.bundleCreditCard', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => navigate('/agents') },
             { key: 'me.fileQuotaCard', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => navigate('/agents') },
           ].map(item => (

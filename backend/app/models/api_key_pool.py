@@ -16,6 +16,7 @@ class ApiKeyPool(Base):
     api_key_encrypted = Column(Text, nullable=False, comment="Fernet 加密的 API Key")
     is_active = Column(Boolean, default=True, comment="管理员可禁用")
     priority = Column(Integer, default=0, comment="越高越优先分配")
+    concurrent_limit = Column(Integer, nullable=True, comment="并发上限，NULL=按模型默认(pro=500,flash=2500)")
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 

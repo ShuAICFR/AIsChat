@@ -211,12 +211,12 @@ async def _process_group_event(db, event: dict):
         )
 
 
-async def _get_api_config(db, agent) -> tuple[str | None, str, str, int | None]:
+async def _get_api_config(db, agent, exclude_pool_key_id: int | None = None) -> tuple[str | None, str, str, int | None]:
     """
-    获取 API Key 和 Base URL（四层优先链）。
+    获取 API Key 和 Base URL（四层优先链 + 平台赠送额度）。
 
     Tier 1: Agent 自有 Key（已有，不变）
-    Tier 2: 用户有 api_credit + 已绑定的池 Key 有效 → 用池 Key
+    Tier 2: 用户有可用额度（平台赠送 + api_credit）→ 使用 API Key 池
     Tier 3: 用户有 api_credit + 无绑定 → 自动选最优池 Key 并绑定
     Tier 4: 用户自有 Key（已有，不变）
 
@@ -246,10 +246,13 @@ async def _get_api_config(db, agent) -> tuple[str | None, str, str, int | None]:
     if user is None:
         return api_key, api_base, credit_source, pool_key_id
 
-    # Tier 2 & 3: 用户有 api_credit → 使用 API Key 池
-    if (user.api_credit or 0) > 0:
+    # 有效可用额度 = 平台赠送（截断>=0） + api_credit
+    effective_credit = max(0, (user.platform_gifted_credit or 0)) + (user.api_credit or 0)
+
+    # Tier 2 & 3: 用户有可用额度 → 使用 API Key 池
+    if effective_credit > 0:
         from app.services.quota_service import find_best_pool_key
-        pool_key = await find_best_pool_key(db, user.id)
+        pool_key = await find_best_pool_key(db, user.id, exclude_pool_key_id=exclude_pool_key_id)
         if pool_key:
             try:
                 api_key = decrypt_api_key(pool_key.api_key_encrypted)
@@ -518,22 +521,109 @@ async def _tool_call_loop(
 
     loop_idx = 0
     while loop_idx < max_loops + _reminder_extra:
-        try:
-            response = await chat_completion(
-                messages=messages,
-                model=model,
-                api_base_url=api_base_url,
-                api_key=api_key,
-                tools=tools if tools else None,
-                temperature=effective_cfg["temperature"] or 0.8,
-                top_p=effective_cfg["top_p"] or 0.9,
-                presence_penalty=effective_cfg["presence_penalty"] or 0.5,
-                frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
-                thinking_enabled=effective_cfg["thinking_enabled"],
-                stream=True,  # v1.0.0: 流式调用
-            )
-        except Exception as e:
-            logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
+        # ── v1.1.0: 带分类重试的 LLM 调用 ──
+        from app.services.llm_service import RateLimitError, ServerError, KeyFatalError
+        from app.services.api_key_concurrency import concurrency_mgr
+
+        MAX_KEY_SWITCHES = 3
+        MAX_SERVER_RETRIES = 2
+        last_limited_key_id = pool_key_id  # 初始值，429 后更新
+        current_api_key = api_key
+        current_api_base = api_base_url
+        current_credit_source = credit_source
+        current_pool_key_id = pool_key_id
+
+        response = None
+        for key_attempt in range(MAX_KEY_SWITCHES):
+            # 切换 Key 时重新获取配置
+            if key_attempt > 0 and last_limited_key_id:
+                exclude_id = last_limited_key_id
+                current_api_key, current_api_base, current_credit_source, current_pool_key_id = \
+                    await _get_api_config(db, agent, exclude_pool_key_id=exclude_id)
+
+            # 获取并发槽位
+            acquired = False
+            if current_pool_key_id:
+                # 获取 Key 的 concurrent_limit 用于并发判断
+                from app.models.api_key_pool import ApiKeyPool as ApiKeyPoolModel
+                key_result = await db.execute(
+                    select(ApiKeyPoolModel).where(ApiKeyPoolModel.id == current_pool_key_id)
+                )
+                key_row = key_result.scalar_one_or_none()
+                db_limit = getattr(key_row, 'concurrent_limit', None) if key_row else None
+                if not await concurrency_mgr.acquire(current_pool_key_id, model, db_limit):
+                    continue  # Key 已满，换下一个
+                acquired = True
+
+            try:
+                # 内层：同 Key 重试（500/503）
+                for server_retry in range(MAX_SERVER_RETRIES + 1):
+                    try:
+                        response = await chat_completion(
+                            messages=messages,
+                            model=model,
+                            api_base_url=current_api_base,
+                            api_key=current_api_key,
+                            tools=tools if tools else None,
+                            temperature=effective_cfg["temperature"] or 0.8,
+                            top_p=effective_cfg["top_p"] or 0.9,
+                            presence_penalty=effective_cfg["presence_penalty"] or 0.5,
+                            frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
+                            thinking_enabled=effective_cfg["thinking_enabled"],
+                            stream=True,
+                        )
+                        # 更新池 Key ID（可能已切换）
+                        pool_key_id = current_pool_key_id
+                        credit_source = current_credit_source
+                        api_key = current_api_key
+                        api_base_url = current_api_base
+                        break  # 成功
+                    except ServerError as e:
+                        if server_retry < MAX_SERVER_RETRIES:
+                            delay = 2 if e.status_code == 500 else 3
+                            logger.warning(
+                                f"AI {agent.name}({agent.id}) 服务器 {e.status_code}，"
+                                f"{delay}s 后同 Key 重试 ({server_retry + 1}/{MAX_SERVER_RETRIES})"
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+                        else:
+                            raise  # 同 Key 重试耗尽，抛出给外层
+
+                break  # 成功，退出 Key 切换循环
+
+            except RateLimitError as e:
+                if current_pool_key_id:
+                    await concurrency_mgr.mark_rate_limited(current_pool_key_id)
+                last_limited_key_id = current_pool_key_id
+                logger.warning(
+                    f"AI {agent.name}({agent.id}) Key #{current_pool_key_id} 429，"
+                    f"冷却 60s，换 Key ({key_attempt + 1}/{MAX_KEY_SWITCHES})"
+                )
+                continue
+
+            except KeyFatalError as e:
+                await _log_key_fatal(db, current_pool_key_id, e.status_code, e.message)
+                last_limited_key_id = current_pool_key_id
+                logger.error(
+                    f"AI {agent.name}({agent.id}) Key #{current_pool_key_id} "
+                    f"{e.status_code} 不可用，跳过换下一个 ({key_attempt + 1}/{MAX_KEY_SWITCHES})"
+                )
+                continue
+
+            except ServerError as e:
+                logger.error(
+                    f"AI {agent.name}({agent.id}) Key #{current_pool_key_id} "
+                    f"{e.status_code} 重试耗尽，最终失败"
+                )
+
+            finally:
+                if acquired and current_pool_key_id:
+                    await concurrency_mgr.release(current_pool_key_id)
+
+        # ── 全部重试失败 ──
+        if response is None:
+            logger.error(f"AI {agent.name}({agent.id}) LLM 调用全部重试失败")
             await _save_conversation_log_safe(
                 db, agent, messages, conversation_type,
                 group_id, session_id, has_output=False, model=model,
@@ -933,6 +1023,27 @@ def _check_rate_limit(agent_id: int) -> bool:
 
     _rate_limit_tracker[agent_id] = now
     return True
+
+
+async def _log_key_fatal(db, pool_key_id: int | None, status_code: int, message: str):
+    """记录 402/401 致命错误到系统日志，通知管理员"""
+    if pool_key_id is None:
+        return
+    try:
+        from app.models.api_key_pool import ApiKeyPool as ApiKeyPoolModel
+        key_result = await db.execute(
+            select(ApiKeyPoolModel).where(ApiKeyPoolModel.id == pool_key_id)
+        )
+        key_row = key_result.scalar_one_or_none()
+        key_name = key_row.name if key_row else f"#{pool_key_id}"
+        error_type = "余额不足" if status_code == 402 else "API Key 无效"
+        logger.warning(
+            f"  ⚠️ 系统通知：API Key 池「{key_name}」({pool_key_id}) 发生致命错误："
+            f"{error_type} ({status_code})，请管理员检查。详情: {message[:200]}"
+        )
+        # TODO: 后续可扩展为发送站内通知/邮件给管理员
+    except Exception as e:
+        logger.error(f"记录 Key 致命错误失败: {e}")
 
 
 # ============================================================

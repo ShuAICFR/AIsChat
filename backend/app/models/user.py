@@ -36,6 +36,9 @@ class User(Base):
     # API 调用额度（用于 LLM API 调用计费，1 credit = 10,000 token）
     api_credit = Column(Integer, default=0)
 
+    # 平台赠送额度（独立于兑换码额度，管理员全局调控）
+    platform_gifted_credit = Column(Integer, default=0, comment="平台赠送额度（独立于兑换码额度）")
+
     # AI 包断额度（创建 AI 时一次性支付 api_credit_cost，该 AI 后续调用全免）
     agent_bundle_credit = Column(Integer, default=0)
 

@@ -29,6 +29,7 @@ async def get_settings(db: AsyncSession) -> dict:
     return {
         "id": row.id,
         "default_language": row.default_language,
+        "default_platform_credit": row.default_platform_credit or 0,
         "updated_by": row.updated_by,
         "updated_at": str(row.updated_at) if row.updated_at else None,
     }
@@ -37,17 +38,56 @@ async def get_settings(db: AsyncSession) -> dict:
 async def update_settings(
     db: AsyncSession,
     default_language: str | None = None,
+    default_platform_credit: int | None = None,
     updated_by: int | None = None,
 ) -> dict:
-    """更新系统设置（仅更新传入的非空字段）"""
+    """
+    更新系统设置（仅更新传入的非空字段）。
+
+    若设置 default_platform_credit > 0，需验证池中至少有一个 active Key。
+    修改 default_platform_credit 会批量更新所有用户的 platform_gifted_credit。
+    """
     row = await _get_or_create(db)
+
     if default_language is not None:
         if default_language not in ("zh", "en"):
             raise ValueError("不支持的语言，仅支持 zh / en")
         row.default_language = default_language
+
+    if default_platform_credit is not None:
+        # 验证：若 > 0，池中必须有 active Key
+        if default_platform_credit > 0:
+            from app.models.api_key_pool import ApiKeyPool
+            key_result = await db.execute(
+                select(ApiKeyPool).where(ApiKeyPool.is_active == True).limit(1)
+            )
+            if key_result.scalar_one_or_none() is None:
+                raise ValueError("API Key 池中没有可用的 Key，无法启用平台赠送额度")
+
+        # 计算 delta → 批量更新所有用户
+        old_value = row.default_platform_credit or 0
+        delta = default_platform_credit - old_value
+        row.default_platform_credit = default_platform_credit
+
+        if delta != 0:
+            from app.models.user import User as UserModel
+            from sqlalchemy import text
+            await db.execute(
+                text(
+                    "UPDATE users SET platform_gifted_credit = platform_gifted_credit + :delta"
+                ),
+                {"delta": delta},
+            )
+            logger.info(
+                f"  平台赠送额度变更: {old_value} → {default_platform_credit} "
+                f"(delta={delta:+d})，已批量更新所有用户"
+            )
+
     if updated_by is not None:
         row.updated_by = updated_by
+
     await db.flush()
     await db.refresh(row)
-    logger.info(f"系统设置已更新: default_language={row.default_language}")
+    logger.info(f"系统设置已更新: default_language={row.default_language}, "
+                f"default_platform_credit={row.default_platform_credit}")
     return await get_settings(db)

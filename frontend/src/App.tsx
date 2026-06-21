@@ -56,6 +56,7 @@ export const router = createBrowserRouter([
       { path: 'chat/gm/:groupId', element: <ChatPage /> },
       { path: 'dm', element: <Navigate to="/chat" replace /> },
       { path: 'dm/:sessionId', element: <DMPage /> },
+      { path: 'chat/dm/:sessionId', element: <ChatPage /> },
       { path: 'friends', element: <FriendsPage /> },
       { path: 'agents', element: <AgentsPage /> },
       { path: 'agents/:id', element: <AgentDetailPage /> },

@@ -10,6 +10,7 @@ class SystemSettings(Base):
 
     id = Column(Integer, primary_key=True, default=1)
     default_language = Column(String(10), default="en")
+    default_platform_credit = Column(Integer, default=0, comment="全局默认平台赠送额度（0=禁用）")
 
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

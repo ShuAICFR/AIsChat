@@ -784,6 +784,8 @@ const zh: TranslationDict = {
   'admin.keyApiUrlPlaceholder': '留空继承全局设置',
   'admin.keyApiKey': 'API Key *',
   'admin.keyPriorityLabel': '优先级（越高越优先分配）',
+  'admin.keyConcurrentLimit': '并发上限',
+  'admin.keyConcurrentLimitPlaceholder': '空=按模型默认',
   'admin.adding': '添加中...',
   'admin.add': '添加',
 
@@ -1998,6 +2000,8 @@ const en: TranslationDict = {
   'admin.keyApiUrlPlaceholder': 'Leave empty to inherit global setting',
   'admin.keyApiKey': 'API Key *',
   'admin.keyPriorityLabel': 'Priority (higher = allocated first)',
+  'admin.keyConcurrentLimit': 'Concurrency Limit',
+  'admin.keyConcurrentLimitPlaceholder': 'Empty=model default',
   'admin.adding': 'Adding...',
   'admin.add': 'Add',
 

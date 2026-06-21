@@ -24,19 +24,20 @@ logger = logging.getLogger(__name__)
 # 池 Key 选择
 # ══════════════════════════════════════════════════════════════
 
-async def find_best_pool_key(db: AsyncSession, user_id: int):
+async def find_best_pool_key(db: AsyncSession, user_id: int, exclude_pool_key_id: int | None = None):
     """
-    为用户选择最优可用池 Key。
+    为用户选择最优可用池 Key（考虑并发负载）。
 
     策略：
     1. 查用户已有绑定（user_api_assignments）→ 缓存命中
-    2. 绑定的 Key 仍 active → 直接返回
-    3. 绑定失效 → 按 priority DESC 选最优 active Key → 自动重新绑定
+    2. 绑定的 Key 仍 active 且未排除 → 直接返回
+    3. 绑定失效或被排除 → 按并发负载 + priority 选最优 active Key → 自动重新绑定
     4. 无可用 Key → 返回 None
 
     返回: ApiKeyPool | None
     """
     from app.models.api_key_pool import ApiKeyPool, UserApiAssignment
+    from app.services.api_key_concurrency import concurrency_mgr
 
     # Step 1: 查缓存绑定
     assign_result = await db.execute(
@@ -44,7 +45,7 @@ async def find_best_pool_key(db: AsyncSession, user_id: int):
     )
     assignment = assign_result.scalar_one_or_none()
 
-    if assignment:
+    if assignment and assignment.pool_key_id != exclude_pool_key_id:
         # Step 2: 验证绑定 Key 仍有效
         key_result = await db.execute(
             select(ApiKeyPool).where(
@@ -64,18 +65,29 @@ async def find_best_pool_key(db: AsyncSession, user_id: int):
             await db.delete(assignment)
             await db.flush()
 
-    # Step 3: 选择最优 active Key
-    key_result = await db.execute(
-        select(ApiKeyPool)
-        .where(ApiKeyPool.is_active == True)
-        .order_by(desc(ApiKeyPool.priority))
-    )
-    best_key = key_result.scalars().first()
+    # Step 3: 查询所有 active Key（排除指定 Key）
+    query = select(ApiKeyPool).where(ApiKeyPool.is_active == True)
+    if exclude_pool_key_id is not None:
+        query = query.where(ApiKeyPool.id != exclude_pool_key_id)
+    query = query.order_by(desc(ApiKeyPool.priority))
+    key_result = await db.execute(query)
+    all_keys = key_result.scalars().all()
 
-    if best_key:
-        # Step 4: 创建新绑定
-        await auto_assign_pool_key(db, user_id, best_key.id)
+    if not all_keys:
+        return None
 
+    # Step 4: 用并发管理器选负载最低的 Key
+    best_key_id = await concurrency_mgr.get_least_loaded(all_keys)
+    if best_key_id:
+        # 找到对应 ORM 对象
+        best_key = next((k for k in all_keys if k.id == best_key_id), None)
+        if best_key:
+            await auto_assign_pool_key(db, user_id, best_key.id)
+            return best_key
+
+    # 所有 Key 都冷却/满 → fallback 到 priority 最高的
+    best_key = all_keys[0]
+    await auto_assign_pool_key(db, user_id, best_key.id)
     return best_key
 
 
@@ -117,11 +129,12 @@ async def deduct_credit(
     model: str | None = None,
 ) -> float:
     """
-    按 token 数扣除额度。
+    按 token 数扣除额度（平台赠送优先 → api_credit）。
 
     规则：
-    - source='pool_key': 扣除 users.api_credit
+    - source='pool_key': 先扣 platform_gifted_credit（>0 部分），再扣 api_credit
     - source='user_key': 仅记录，不扣除（用户用自己的 Key）
+    - api_credit 允许超支变负数（前端标红）
 
     返回实际扣除的 credit 数（pool_key 模式下），或 0（user_key 模式下）。
     """
@@ -135,34 +148,48 @@ async def deduct_credit(
     credit_to_spend = max(0.01, round(tokens_used / tokens_per_credit, 2))
 
     if source == "pool_key":
-        # 扣除用户 api_credit（使用 SELECT ... FOR UPDATE 防竞争）
         from app.models.user import User
         user_result = await db.execute(
             select(User).where(User.id == user_id)
-            # SQLAlchemy async 不直接支持 with_for_update，依赖 PostgreSQL 行锁
         )
         user = user_result.scalar_one_or_none()
         if user is None:
             logger.warning(f"  扣除额度失败：用户 {user_id} 不存在")
             return 0.0
 
-        # 实际扣除
-        actual_deduct = min(credit_to_spend, float(user.api_credit or 0))
-        user.api_credit = max(0, (user.api_credit or 0) - actual_deduct)
+        remaining = credit_to_spend
+        platform_deducted = 0.0
+        api_deducted = 0.0
+
+        # Step 1: 先扣平台赠送额度（仅 > 0 部分）
+        platform_available = max(0, float(user.platform_gifted_credit or 0))
+        if platform_available > 0:
+            platform_deducted = min(remaining, platform_available)
+            user.platform_gifted_credit = float(user.platform_gifted_credit or 0) - platform_deducted
+            remaining -= platform_deducted
+
+        # Step 2: 再扣 api_credit（允许超支变负数）
+        if remaining > 0:
+            api_deducted = remaining
+            user.api_credit = float(user.api_credit or 0) - api_deducted
+
         await db.flush()
 
         # 记录日志
+        total_deducted = platform_deducted + api_deducted
         await record_api_usage(
             db, user_id=user_id, agent_id=agent_id,
             pool_key_id=pool_key_id, source=source,
-            tokens_used=tokens_used, credit_spent=actual_deduct, model=model,
+            tokens_used=tokens_used, credit_spent=total_deducted, model=model,
         )
 
+        effective_remaining = max(0, float(user.platform_gifted_credit or 0)) + float(user.api_credit or 0)
         logger.info(
-            f"  💰 扣除用户 {user_id} 额度 {actual_deduct:.2f} credit "
-            f"(本次 {tokens_used} tokens, 剩余 {user.api_credit:.2f})"
+            f"  💰 扣除用户 {user_id} 额度 {total_deducted:.2f} credit "
+            f"(平台赠送 -{platform_deducted:.2f}, api_credit -{api_deducted:.2f}, "
+            f"本次 {tokens_used} tokens, 有效剩余 {effective_remaining:.2f})"
         )
-        return actual_deduct
+        return total_deducted
     else:
         # 用户自有 Key：仅记录，不扣除
         await record_api_usage(
@@ -211,8 +238,11 @@ async def get_user_credit_status(db: AsyncSession, user_id: int) -> dict:
     获取用户的额度状态摘要。
 
     返回:
-        api_credit: 剩余额度
-        estimated_tokens: 估算剩余 Token 数（api_credit × 10000）
+        api_credit: 兑换码额度
+        platform_gifted_credit: 平台赠送额度（原始值）
+        platform_gifted_credit_effective: 平台赠送额度有效值（≥0 截断）
+        total_effective: 有效总额度
+        estimated_tokens: 估算剩余 Token 数（total_effective × 10000）
         monthly_consumed: 近 30 天已消费 credit
         assigned_key_name: 绑定的池 Key 名（或 None）
     """
@@ -222,7 +252,11 @@ async def get_user_credit_status(db: AsyncSession, user_id: int) -> dict:
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
     if user is None:
-        return {"api_credit": 0, "estimated_tokens": 0, "monthly_consumed": 0, "assigned_key_name": None}
+        return {
+            "api_credit": 0, "platform_gifted_credit": 0,
+            "platform_gifted_credit_effective": 0, "total_effective": 0,
+            "estimated_tokens": 0, "monthly_consumed": 0, "assigned_key_name": None,
+        }
 
     # 绑定 Key 名
     assigned_key_name = None
@@ -252,9 +286,17 @@ async def get_user_credit_status(db: AsyncSession, user_id: int) -> dict:
     from app.config import settings
     tokens_per_credit = getattr(settings, 'credit_per_10k_tokens', 10000)
 
+    platform_raw = float(user.platform_gifted_credit or 0)
+    platform_effective = max(0, platform_raw)
+    api_credit = float(user.api_credit or 0)
+    total_effective = platform_effective + api_credit
+
     return {
-        "api_credit": float(user.api_credit or 0),
-        "estimated_tokens": int(user.api_credit or 0) * tokens_per_credit,
+        "api_credit": api_credit,
+        "platform_gifted_credit": platform_raw,
+        "platform_gifted_credit_effective": platform_effective,
+        "total_effective": total_effective,
+        "estimated_tokens": int(total_effective) * tokens_per_credit,
         "monthly_consumed": monthly_consumed,
         "assigned_key_name": assigned_key_name,
     }

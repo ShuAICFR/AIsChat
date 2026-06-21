@@ -152,6 +152,7 @@ function AddPoolKeyModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   const [apiBaseUrl, setApiBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [priority, setPriority] = useState(0)
+  const [concurrentLimit, setConcurrentLimit] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -165,6 +166,7 @@ function AddPoolKeyModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         api_base_url: apiBaseUrl.trim() || null,
         api_key: apiKey.trim(),
         priority,
+        concurrent_limit: concurrentLimit,
       })
       onSaved()
     } catch (err: any) {
@@ -219,6 +221,14 @@ function AddPoolKeyModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
               type="number" value={priority} onChange={(e) => setPriority(parseInt(e.target.value) || 0)}
               min={0} max={100}
               className="w-24 px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1 text-textSecondary">{t('admin.keyConcurrentLimit')}</label>
+            <input
+              type="number" value={concurrentLimit ?? ''} onChange={(e) => setConcurrentLimit(e.target.value ? parseInt(e.target.value) : null)}
+              min={1} placeholder={t('admin.keyConcurrentLimitPlaceholder')}
+              className="w-28 px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             />
           </div>
         </div>

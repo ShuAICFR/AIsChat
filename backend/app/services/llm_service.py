@@ -15,6 +15,33 @@ from app.services.memory_service import recall_relevant_memories, format_memorie
 
 logger = logging.getLogger(__name__)
 
+
+# ══════════════════════════════════════════════════════════════
+# API 错误异常类（供上层分类重试）
+# ══════════════════════════════════════════════════════════════
+
+class RateLimitError(Exception):
+    """429 速率限制 — 需换 Key 重试"""
+    def __init__(self, message: str, pool_key_id: int | None = None):
+        self.message = message
+        self.pool_key_id = pool_key_id
+
+
+class ServerError(Exception):
+    """500/503 服务端临时故障 — 同 Key 等待重试"""
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+
+
+class KeyFatalError(Exception):
+    """402/401 Key 不可用 — 通知管理员，跳过此 Key 换下一个"""
+    def __init__(self, status_code: int, message: str, pool_key_id: int | None = None):
+        self.status_code = status_code
+        self.message = message
+        self.pool_key_id = pool_key_id
+
+
 # ============================================================
 # 分段系统提示词（6 段设计，最大化 DeepSeek prompt cache 命中）
 # 固定段（所有 AI 共享，模块级常量）：
@@ -215,7 +242,8 @@ async def _chat_completion_non_streaming(
         if response.status_code != 200:
             error_text = response.text[:500]
             logger.error(f"LLM API 错误 ({response.status_code}): {error_text}")
-            raise Exception(f"LLM API 错误 ({response.status_code}): {error_text}")
+            _raise_classified_error(response.status_code, error_text)
+            return {}  # unreachable, 但保持类型安全
 
         data = response.json()
         choice = data["choices"][0]
@@ -306,7 +334,7 @@ async def _chat_completion_streaming(
             if response.status_code != 200:
                 error_text = (await response.aread()).decode()[:500]
                 logger.error(f"LLM API 错误 ({response.status_code}): {error_text}")
-                raise Exception(f"LLM API 错误 ({response.status_code}): {error_text}")
+                _raise_classified_error(response.status_code, error_text)
 
             async for line in response.aiter_lines():
                 line = line.strip()
@@ -395,6 +423,24 @@ async def _chat_completion_streaming(
     if full_reasoning:
         result["reasoning_content"] = full_reasoning
     return result
+
+
+def _raise_classified_error(status_code: int, error_text: str, pool_key_id: int | None = None):
+    """
+    按状态码分类抛出对应的异常：
+    - 429 → RateLimitError（换 Key 重试）
+    - 500/503 → ServerError（同 Key 等待重试）
+    - 402/401 → KeyFatalError（跳过此 Key）
+    - 其他 → 普通 Exception
+    """
+    if status_code == 429:
+        raise RateLimitError(error_text, pool_key_id=pool_key_id)
+    elif status_code in (500, 503):
+        raise ServerError(status_code, error_text)
+    elif status_code in (402, 401):
+        raise KeyFatalError(status_code, error_text, pool_key_id=pool_key_id)
+    else:
+        raise Exception(f"LLM API 错误 ({status_code}): {error_text}")
 
 
 def resolve_model(agent) -> str:

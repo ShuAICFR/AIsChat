@@ -81,7 +81,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               {user.role === 'admin' ? (
                 <span className="text-accent-400">{t('sidebar.adminPanel')}</span>
               ) : (
-                <span>{t('sidebar.quota') + ' ' + user.ai_quota + ' · ' + t('sidebar.balance') + ' ' + (user.api_credit ?? 0)}</span>
+                <span>{t('sidebar.quota') + ' ' + (user.ai_quota ?? 0) + ' · ' + t('sidebar.balance') + ' ' + ((user as any).total_effective ?? (user as any).api_credit ?? 0)}</span>
               )}
             </p>
           </div>

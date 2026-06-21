@@ -38,13 +38,15 @@ async def register_user(
         ai_quota=3,
         setup_completed=False,  # 新用户需完成初始化设置向导
     )
-    # 读取全局默认语言作为新用户初始语言
+    # 读取全局默认设置（语言 + 平台赠送额度）
     try:
         from app.services.system_settings_service import get_settings
         sys = await get_settings(db)
         user.language = sys.get("default_language", "zh")
+        user.platform_gifted_credit = sys.get("default_platform_credit", 0)
     except Exception:
         user.language = "zh"
+        user.platform_gifted_credit = 0
     db.add(user)
     await db.flush()
     await db.refresh(user)

@@ -56,19 +56,21 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const currentGroup = groups.find((g) => g.id === groupId)
 
   const hasActiveConversation = !!(groupId || dmSessionId)
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
-  // 移动端无活跃对话时自动全屏展示侧边栏
+  // 移动端侧边栏全屏状态：初始化时根据当前条件直接计算，避免闪烁
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(() => {
+    return !hasActiveConversation && window.innerWidth < 768
+  })
+
+  // 活跃对话状态变化时，自动切换移动端侧边栏
   useEffect(() => {
-    if (!hasActiveConversation && window.innerWidth < 768) {
-      setMobileSidebarOpen(true)
+    if (window.innerWidth >= 768) return
+    if (hasActiveConversation) {
+      setMobileSidebarOpen(false)  // 进入对话 → 关闭侧边栏
+    } else {
+      setMobileSidebarOpen(true)   // 离开对话 → 全屏展示侧边栏
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 选中对话后自动关闭手机侧边栏
-  useEffect(() => {
-    if (hasActiveConversation) setMobileSidebarOpen(false)
-  }, [groupId, dmSessionId])
+  }, [hasActiveConversation])
 
   return (
     <div className="flex h-full relative">

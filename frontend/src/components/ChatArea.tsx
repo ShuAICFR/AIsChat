@@ -111,7 +111,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
             <button
-              onClick={() => setMobileSidebarOpen(true)}
+              onClick={() => navigate('/chat')}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
               title="会话列表"
             >

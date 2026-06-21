@@ -17,6 +17,7 @@ interface User {
   avatar_url: string | null
   bio: string | null
   created_at: string | null
+  assigned_pool_key_name: string | null  // v0.6.0: 绑定的池 Key 名
 }
 
 interface AuthContextType {
@@ -69,6 +70,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       timezone: 'Asia/Shanghai',
       language: 'zh',
       ui_prefs: {} as Record<string, any>,
+      agent_bundle_credit: 0,
+      file_quota_mb: 100,
+      avatar_url: null,
+      bio: null,
+      created_at: null,
+      assigned_pool_key_name: null,
     })
   }
 
@@ -86,6 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       timezone: 'Asia/Shanghai',
       language: 'zh',
       ui_prefs: {} as Record<string, any>,
+      agent_bundle_credit: 0,
+      file_quota_mb: 100,
+      avatar_url: null,
+      bio: null,
+      created_at: null,
+      assigned_pool_key_name: null,
     })
   }
 

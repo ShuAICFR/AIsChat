@@ -181,7 +181,9 @@ export default function MePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
           {[
             { label: 'AI 创建', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
-            { label: '通用额度', value: user.api_credit ?? 0, icon: CreditCard, color: 'text-mint-400', action: () => navigate('/me/usage') },
+            { label: `通用额度${user.assigned_pool_key_name ? ` · ${user.assigned_pool_key_name}` : ''}`,
+              value: `${(user.api_credit ?? 0)} (≈${((user.api_credit ?? 0) * 10000).toLocaleString()} tokens)`,
+              icon: CreditCard, color: 'text-mint-400', action: () => navigate('/me/usage') },
             { label: '包断额度', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => navigate('/agents') },
             { label: '文件配额', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => navigate('/agents') },
           ].map(item => (

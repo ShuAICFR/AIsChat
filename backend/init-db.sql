@@ -243,7 +243,46 @@ CREATE TABLE IF NOT EXISTS redemption_codes (
     expires_at TIMESTAMP,
     used_by INT NULL REFERENCES users(id),
     used_at TIMESTAMP,
-    created_by INT REFERENCES users(id)
+    created_by INT REFERENCES users(id),
+    note TEXT,
+    max_usage INT,
+    is_api_pool BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- ============================================================
+-- API Key 池 + 用户绑定 + 用量日志
+-- ============================================================
+CREATE TABLE IF NOT EXISTS api_key_pool (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    api_base_url TEXT,
+    api_key_encrypted TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    priority INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS user_api_assignments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    pool_key_id INTEGER NOT NULL REFERENCES api_key_pool(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP DEFAULT NOW(),
+    last_used_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS api_usage_log (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    agent_id INTEGER REFERENCES agents(id),
+    pool_key_id INTEGER REFERENCES api_key_pool(id),
+    source VARCHAR(20) NOT NULL DEFAULT 'user_key',
+    tokens_used INTEGER NOT NULL,
+    credit_spent NUMERIC(6,2) NOT NULL DEFAULT 0,
+    model VARCHAR(50),
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- ============================================================

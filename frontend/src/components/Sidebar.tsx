@@ -79,7 +79,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               {user.role === 'admin' ? (
                 <span className="text-accent-400">管理员</span>
               ) : (
-                `额度 ${user.ai_quota}`
+                <span>{`额度 ${user.ai_quota} · 余额 ${user.api_credit ?? 0}`}</span>
               )}
             </p>
           </div>

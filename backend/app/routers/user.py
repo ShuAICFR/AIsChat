@@ -84,7 +84,7 @@ async def redeem_code(
     if code_obj.used_by is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="兑换码已被使用")
 
-    if code_obj.expires_at and code_obj.expires_at < datetime.now(timezone.utc):
+    if code_obj.expires_at and code_obj.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="兑换码已过期")
 
     # 增加额度（按类型加到不同字段）
@@ -109,7 +109,7 @@ async def redeem_code(
 
     # 标记兑换码已使用
     code_obj.used_by = current_user["user_id"]
-    code_obj.used_at = datetime.now(timezone.utc)
+    code_obj.used_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.flush()
 
@@ -120,6 +120,25 @@ async def redeem_code(
         "agent_bundle_credit": user.agent_bundle_credit,
         "file_quota_mb": user.file_quota_mb,
     }
+
+
+# v0.6.0: 用户额度状态
+@router.get("/credit-status")
+async def credit_status(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取当前用户的额度状态。
+
+    返回:
+        api_credit: 剩余额度
+        estimated_tokens: 估算剩余 Token 数
+        monthly_consumed: 本月已消费 credit
+        assigned_key_name: 绑定的池 Key 名（或 null）
+    """
+    from app.services.quota_service import get_user_credit_status
+    return await get_user_credit_status(db, current_user["user_id"])
 
 
 class TestApiBody(BaseModel):

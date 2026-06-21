@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from pydantic import BaseModel, Field
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.models.agent import Agent
@@ -46,6 +47,9 @@ class GenerateCodeRequest(BaseModel):
     quota_amount: int = Field(..., ge=1, le=100)
     code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit|agent_bundle|file_quota)$")
     expires_in_days: int = Field(..., ge=1, le=365)
+    note: str | None = None              # v0.6.0: 管理员备注（保密）
+    max_usage: int | None = None         # v0.6.0: 单码最大用量
+    is_api_pool: bool = False            # v0.6.0: 是否是 API 池额度
 
 
 class UpdateUserRoleRequest(BaseModel):
@@ -368,21 +372,25 @@ async def generate_code(
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """生成兑换码"""
+    """生成兑换码（v0.6.0: 支持备注/最大用量/API 池标记）"""
     code_str = "RC-" + secrets.token_hex(8).upper()
 
     code = RedemptionCode(
         code=code_str,
         quota_amount=req.quota_amount,
         code_type=req.code_type,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=req.expires_in_days),
+        expires_at=datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=req.expires_in_days),
         created_by=admin["user_id"],
+        note=req.note,
+        max_usage=req.max_usage,
+        is_api_pool=req.is_api_pool,
     )
     db.add(code)
 
     await _log_admin_action(
         db, admin["user_id"], "generate_code", "redemption_code", 0,
-        {"code": code_str, "quota_amount": req.quota_amount, "code_type": req.code_type},
+        {"code": code_str, "quota_amount": req.quota_amount, "code_type": req.code_type,
+         "note": req.note, "is_api_pool": req.is_api_pool},
     )
     await db.flush()
 
@@ -391,6 +399,9 @@ async def generate_code(
         "quota_amount": req.quota_amount,
         "code_type": req.code_type,
         "expires_in_days": req.expires_in_days,
+        "note": req.note,
+        "max_usage": req.max_usage,
+        "is_api_pool": req.is_api_pool,
     }
 
 
@@ -413,9 +424,166 @@ async def list_codes(
             "expires_at": str(c.expires_at) if c.expires_at else None,
             "used_by": c.used_by,
             "used_at": str(c.used_at) if c.used_at else None,
+            "note": c.note,
+            "max_usage": c.max_usage,
+            "is_api_pool": c.is_api_pool if c.is_api_pool else False,
+            "created_at": str(c.created_at) if c.created_at else None,
         }
         for c in codes
     ]
+
+
+# ---------- API Key 池管理 ----------
+
+class CreatePoolKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    api_base_url: str | None = None
+    api_key: str = Field(..., min_length=1)
+    priority: int = Field(default=0, ge=0)
+
+
+class UpdatePoolKeyRequest(BaseModel):
+    name: str | None = None
+    api_base_url: str | None = None
+    is_active: bool | None = None
+    priority: int | None = None
+
+
+@router.get("/api-key-pool")
+async def list_pool_keys(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """列出所有 API Key 池条目（Key 脱敏）"""
+    from app.models.api_key_pool import ApiKeyPool
+
+    result = await db.execute(select(ApiKeyPool).order_by(ApiKeyPool.priority.desc()))
+    keys = result.scalars().all()
+
+    return [
+        {
+            "id": k.id,
+            "name": k.name,
+            "api_base_url": k.api_base_url or settings.deepseek_base_url,
+            "api_key_preview": _mask_api_key(k.api_key_encrypted),
+            "is_active": k.is_active,
+            "priority": k.priority,
+            "created_at": str(k.created_at) if k.created_at else None,
+            "updated_at": str(k.updated_at) if k.updated_at else None,
+        }
+        for k in keys
+    ]
+
+
+@router.post("/api-key-pool")
+async def create_pool_key(
+    req: CreatePoolKeyRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加 API Key 到池中（Key 加密存储）"""
+    from app.models.api_key_pool import ApiKeyPool
+    from app.utils.crypto import encrypt_api_key
+
+    encrypted = encrypt_api_key(req.api_key)
+
+    key_entry = ApiKeyPool(
+        name=req.name,
+        api_base_url=req.api_base_url,
+        api_key_encrypted=encrypted,
+        priority=req.priority,
+    )
+    db.add(key_entry)
+
+    await _log_admin_action(
+        db, admin["user_id"], "create_pool_key", "api_key_pool", 0,
+        {"name": req.name, "priority": req.priority},
+    )
+    await db.flush()
+
+    return {
+        "id": key_entry.id,
+        "name": key_entry.name,
+        "api_base_url": key_entry.api_base_url or settings.deepseek_base_url,
+        "api_key_preview": _mask_api_key(encrypted),
+        "is_active": key_entry.is_active,
+        "priority": key_entry.priority,
+    }
+
+
+@router.put("/api-key-pool/{key_id}")
+async def update_pool_key(
+    key_id: int,
+    req: UpdatePoolKeyRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新池 Key 配置（不能查看明文 Key）"""
+    from app.models.api_key_pool import ApiKeyPool
+
+    result = await db.execute(select(ApiKeyPool).where(ApiKeyPool.id == key_id))
+    key_entry = result.scalar_one_or_none()
+    if key_entry is None:
+        raise HTTPException(status_code=404, detail="池 Key 不存在")
+
+    if req.name is not None:
+        key_entry.name = req.name
+    if req.api_base_url is not None:
+        key_entry.api_base_url = req.api_base_url
+    if req.is_active is not None:
+        key_entry.is_active = req.is_active
+        from app.services.quota_service import find_best_pool_key
+    if req.priority is not None:
+        key_entry.priority = req.priority
+
+    await _log_admin_action(
+        db, admin["user_id"], "update_pool_key", "api_key_pool", key_id,
+        {"changes": req.model_dump(exclude_none=True)},
+    )
+    await db.flush()
+
+    return {"message": "更新成功", "id": key_id}
+
+
+@router.delete("/api-key-pool/{key_id}")
+async def delete_pool_key(
+    key_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除池 Key（同时清除已有用户绑定）"""
+    from app.models.api_key_pool import ApiKeyPool, UserApiAssignment
+
+    result = await db.execute(select(ApiKeyPool).where(ApiKeyPool.id == key_id))
+    key_entry = result.scalar_one_or_none()
+    if key_entry is None:
+        raise HTTPException(status_code=404, detail="池 Key 不存在")
+
+    # 清除绑定此 Key 的用户
+    bindings = await db.execute(
+        select(UserApiAssignment).where(UserApiAssignment.pool_key_id == key_id)
+    )
+    for b in bindings.scalars().all():
+        await db.delete(b)
+
+    await db.delete(key_entry)
+
+    await _log_admin_action(
+        db, admin["user_id"], "delete_pool_key", "api_key_pool", key_id,
+        {"name": key_entry.name},
+    )
+    await db.flush()
+
+    return {"message": f"池 Key「{key_entry.name}」已删除"}
+
+
+def _mask_api_key(encrypted: str) -> str:
+    """脱敏显示：如 encrypted 为空返回空，否则显示 ****...后4位（实际是密文后4位）"""
+    if not encrypted:
+        return ""
+    if len(encrypted) <= 4:
+        return "****"
+    return "****" + encrypted[-4:]
 
 
 # ---------- 系统日志 ----------

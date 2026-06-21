@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
 import SystemMetricsTab from '../components/SystemMetricsTab'
+import ApiKeyPoolTab from '../components/ApiKeyPoolTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool'
 type TabCategory = '核心管理' | '系统配置' | '运维分析'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: TabCategory }[] = [
@@ -24,6 +25,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; ca
   { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表', category: '运维分析' },
   { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计', category: '运维分析' },
   { key: 'metrics', label: '系统监控', icon: Activity, desc: '实时性能指标与延迟趋势', category: '运维分析' },
+  { key: 'apipool', label: 'API 库', icon: Key, desc: 'API Key 池管理', category: '系统配置' },
 ]
 
 const renderContent = (activeTab: Tab) => {
@@ -40,6 +42,7 @@ const renderContent = (activeTab: Tab) => {
     case 'convlog': return <ConversationLogTab />
     case 'usage': return <UsageDashboardTab />
     case 'metrics': return <SystemMetricsTab />
+    case 'apipool': return <ApiKeyPoolTab />
     default: return <OverviewTab />
   }
 }
@@ -419,6 +422,9 @@ function CodesTab() {
   const [quota, setQuota] = useState(3)
   const [days, setDays] = useState(30)
   const [codeType, setCodeType] = useState('ai_quota')
+  const [note, setNote] = useState('')              // v0.6.0
+  const [maxUsage, setMaxUsage] = useState<number | null>(null)  // v0.6.0
+  const [isApiPool, setIsApiPool] = useState(false)  // v0.6.0
   const [generatedCode, setGeneratedCode] = useState('')
   const [generating, setGenerating] = useState(false)
 
@@ -446,6 +452,9 @@ function CodesTab() {
         quota_amount: quota,
         expires_in_days: days,
         code_type: codeType,
+        note: note.trim() || null,
+        max_usage: maxUsage ?? null,
+        is_api_pool: isApiPool,
       })
       setGeneratedCode(data.code)
       loadCodes()
@@ -484,6 +493,11 @@ function CodesTab() {
               min={1} max={365}
               className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
+          <div className="flex items-center gap-1.5 self-end mb-1">
+            <input type="checkbox" id="isApiPool" checked={isApiPool} onChange={(e) => setIsApiPool(e.target.checked)}
+              className="w-4 h-4 rounded border-border bg-canvas text-primary-500" />
+            <label htmlFor="isApiPool" className="text-xs text-textSecondary">API 池额度</label>
+          </div>
           <button
             onClick={handleGenerate}
             disabled={generating || quota < 1 || days < 1}
@@ -491,6 +505,24 @@ function CodesTab() {
           >
             {generating ? '生成中...' : '生成'}
           </button>
+        </div>
+        {/* 详细选项 */}
+        <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-border/40">
+          <div>
+            <label className="block text-xs mb-1 text-textSecondary">备注（管理员可见）</label>
+            <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
+              placeholder="例：给张三的 API 额度"
+              className="w-48 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary placeholder:text-textMuted" />
+          </div>
+          <div>
+            <label className="block text-xs mb-1 text-textSecondary">单码最大用量（空=一次性全额）</label>
+            <input type="number" value={maxUsage ?? ''} onChange={(e) => setMaxUsage(e.target.value ? parseInt(e.target.value) : null)}
+              min={1}
+              className="w-28 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
+          </div>
+          <span className="text-[11px] text-textMuted pb-1.5">
+            1 余额 = 10,000 tokens
+          </span>
         </div>
         {generatedCode && (
           <div className="mt-3 p-3 bg-mint-400/10 border border-mint-400/20 rounded-xl">
@@ -510,17 +542,22 @@ function CodesTab() {
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">兑换码</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">到期时间</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">备注</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">到期</th>
                 <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
               </tr>
             </thead>
             <tbody>
               {codes.map((c: any) => (
                 <tr key={c.code} className="border-b border-border/50">
-                  <td className="py-2 px-3 font-mono text-xs text-textPrimary">{c.code}</td>
+                  <td className="py-2 px-3 font-mono text-xs text-textPrimary">
+                    {c.code}
+                    {c.is_api_pool && <span className="ml-1 px-1 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px]">池</span>}
+                  </td>
                   <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || 'AI创建额度'}</td>
                   <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{(c.code_type === 'file_size' || c.code_type === 'file_quota') ? ' MB' : ''}</td>
-                  <td className="py-2 px-3 text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
+                  <td className="py-2 px-3 text-xs text-textMuted max-w-[120px] truncate" title={c.note || ''}>{c.note || '-'}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
                     {c.used_by ? (
                       <span className="text-xs text-textMuted">已使用 (uid:{c.used_by})</span>

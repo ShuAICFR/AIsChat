@@ -24,6 +24,8 @@ from app.models.opencli import (
 )
 from app.models.conversation_log import ConversationLogConfig, ConversationLog
 from app.models.agent_metrics import AgentMetricsSnapshot
+from app.models.api_key_pool import ApiKeyPool, UserApiAssignment
+from app.models.api_usage_log import ApiUsageLog
 
 __all__ = [
     "User",
@@ -60,4 +62,7 @@ __all__ = [
     "ConversationLogConfig",
     "ConversationLog",
     "AgentMetricsSnapshot",
+    "ApiKeyPool",
+    "UserApiAssignment",
+    "ApiUsageLog",
 ]

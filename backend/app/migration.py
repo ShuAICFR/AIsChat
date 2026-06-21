@@ -50,6 +50,8 @@ async def run_migrations():
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
+            await _migrate_api_key_pool_tables(db)    # v0.6.0 API Key 池 + 用户绑定 + 用量日志
+            await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1092,6 +1094,109 @@ async def _migrate_agent_metrics(db):
         logger.info("  ✅ agent_metrics 表创建完成")
     else:
         logger.info("  ⏭ agent_metrics 已存在，跳过")
+
+
+async def _migrate_api_key_pool_tables(db):
+    """v0.6.0: API Key 池 + 用户绑定 + 用量日志"""
+    logger.info("  🔧 迁移 API Key 池系统...")
+    created_any = False
+
+    if not await _table_exists(db, "api_key_pool"):
+        await db.execute(text("""
+            CREATE TABLE api_key_pool (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                api_base_url TEXT,
+                api_key_encrypted TEXT NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                priority INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        created_any = True
+        logger.info("  ✅ api_key_pool 表创建完成")
+    else:
+        logger.info("  ⏭ api_key_pool 已存在，跳过")
+
+    if not await _table_exists(db, "user_api_assignments"):
+        await db.execute(text("""
+            CREATE TABLE user_api_assignments (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                pool_key_id INTEGER NOT NULL REFERENCES api_key_pool(id) ON DELETE CASCADE,
+                assigned_at TIMESTAMP DEFAULT NOW(),
+                last_used_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id)
+            )
+        """))
+        created_any = True
+        logger.info("  ✅ user_api_assignments 表创建完成")
+    else:
+        logger.info("  ⏭ user_api_assignments 已存在，跳过")
+
+    if not await _table_exists(db, "api_usage_log"):
+        await db.execute(text("""
+            CREATE TABLE api_usage_log (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                agent_id INTEGER REFERENCES agents(id),
+                pool_key_id INTEGER REFERENCES api_key_pool(id),
+                source VARCHAR(20) NOT NULL DEFAULT 'user_key',
+                tokens_used INTEGER NOT NULL,
+                credit_spent NUMERIC(6,2) NOT NULL DEFAULT 0,
+                model VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        created_any = True
+        logger.info("  ✅ api_usage_log 表创建完成")
+    else:
+        logger.info("  ⏭ api_usage_log 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+
+
+async def _migrate_redemption_code_details(db):
+    """v0.6.0: 兑换码增强——备注、最大用量、API 池标记、创建时间"""
+    logger.info("  🏷️ 迁移兑换码详细字段...")
+    created_any = False
+
+    if not await _column_exists(db, "redemption_codes", "note"):
+        await db.execute(text("ALTER TABLE redemption_codes ADD COLUMN note TEXT"))
+        created_any = True
+        logger.info("  ✅ redemption_codes.note 列添加完成")
+    else:
+        logger.info("  ⏭ redemption_codes.note 已存在，跳过")
+
+    if not await _column_exists(db, "redemption_codes", "max_usage"):
+        await db.execute(text("ALTER TABLE redemption_codes ADD COLUMN max_usage INTEGER"))
+        created_any = True
+        logger.info("  ✅ redemption_codes.max_usage 列添加完成")
+    else:
+        logger.info("  ⏭ redemption_codes.max_usage 已存在，跳过")
+
+    if not await _column_exists(db, "redemption_codes", "is_api_pool"):
+        await db.execute(text(
+            "ALTER TABLE redemption_codes ADD COLUMN is_api_pool BOOLEAN DEFAULT FALSE"
+        ))
+        created_any = True
+        logger.info("  ✅ redemption_codes.is_api_pool 列添加完成")
+    else:
+        logger.info("  ⏭ redemption_codes.is_api_pool 已存在，跳过")
+
+    if not await _column_exists(db, "redemption_codes", "created_at"):
+        await db.execute(text(
+            "ALTER TABLE redemption_codes ADD COLUMN created_at TIMESTAMP DEFAULT NOW()"
+        ))
+        created_any = True
+        logger.info("  ✅ redemption_codes.created_at 列添加完成")
+    else:
+        logger.info("  ⏭ redemption_codes.created_at 已存在，跳过")
+
+    if created_any:
+        await db.flush()
 
 
 async def _fix_file_owner_type_check(db):

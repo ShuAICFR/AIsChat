@@ -23,6 +23,11 @@
 - 🔄 **导航重构**：底部导航栏和侧边栏「设置」→「我的」（`/me`），原设置页保留可继续访问。`/me` 整合设置入口、管理入口。
 - 🔄 **用户信息扩展**：`get_user_info` 返回 `agent_bundle_credit`、`file_quota_mb`、`avatar_url`、`created_at`。AdminPage 用户列表同步展示。
 
+### Fixed
+
+- 🐛 **修复聊天页返回路由不更新**：移动端从 `/chat/2` 点击返回箭头，界面回到列表但 URL 停留在 `/chat/2`。根因：`ChatArea.tsx` 移动端返回按钮只打开侧边栏覆盖层（`setMobileSidebarOpen(true)`），未调用 `navigate('/chat')`。改为导航到 `/chat`，URL 与界面同步。
+- 🐛 **修复兑换码生成 500 错误**：`POST /admin/redemption-codes` 报 `Internal Server Error`。根因：`datetime.now(timezone.utc)` 返回带时区的 datetime，但 `redemption_codes.expires_at` 列是 `TIMESTAMP WITHOUT TIME ZONE`，asyncpg 无法将 offset-aware 转换为 offset-naive 导致 `DataError`。修复：三处加上 `.replace(tzinfo=None)`（`admin.py:378` 生成码、`user.py:87` 过期比较、`user.py:112` 标记已使用）。超 60% 的代码已使用 `.replace(tzinfo=None)` 正确模式，此三处为遗留遗漏。
+
 ### Backend API
 
 - `GET /conversation-log/usage/overview?days=30` — 用户所有 AI token 汇总
@@ -31,6 +36,37 @@
 - `GET /admin/usage/by-user?days=30` — 按用户分组明细
 - `GET /admin/usage/agents/{id}/daily?days=30` — 管理员查单 AI 分布
 - 聚合查询基于 PostgreSQL JSONB `->>` 操作符，`ai_conversation_logs.token_usage` 字段
+
+---
+
+## [v0.6.0] - 2026-06-21
+
+### Added
+
+- 🔑 **API Key 池管理**：管理员可通过「API 库」tab 管理系统级共享 API Key。支持添加/删除/启用禁用/优先级排序。Key 使用 Fernet 加密存储，添加后仅显示密文后四位（脱敏），管理员无法查看明文。用户兑换 API 池额度后自动从池中分配最优 Key。
+- 💰 **额度消耗系统**：实现四层 API Key 解析优先链（Agent 自有 → 池 Key 绑定 → 自动选池 → 用户自有）。使用池 Key 时按 `total_tokens / 10000` 自动扣除 `users.api_credit`（最低 0.01 credit/次），自有 Key 时不扣。扣除通过 `quota_service.py` 的 `deduct_credit()` 完成，含 `SELECT FOR UPDATE` 防并发竞争。
+- 📊 **用户额度状态端点**：`GET /user/credit-status` 返回剩余额度、估算 Token 数（api_credit × 10000）、月度消耗、绑定的池 Key 名。`GET /auth/me` 新增 `assigned_pool_key_name` 字段。
+- 🏷️ **兑换码增强**：管理员生成兑换码新增「备注」（保密，仅管理员可见）、「单码最大用量」、「API 池额度」字段。兑换码列表显示备注、API 池标记（琥珀色「池」徽章）、创建时间。
+- 📋 **API 用量日志**：新增 `api_usage_log` 表，记录每次 LLM 调用的 user_id/agent_id/pool_key_id/tokens_used/credit_spent/model，用于审计和用量统计。
+
+### Changed
+
+- 🔄 **API Key 解析链升级**：`_get_api_config` 从二层（Agent→User）升级为四层优先链。DM 触发器中内联的 API 解析代码替换为统一调用 `_get_api_config`，消除重复逻辑。
+- 🔄 **前端额度展示增强**：Sidebar 非管理员显示「额度 + 余额」双数字；MePage「通用额度」卡片显示估算 Token 数和池 Key 来源；AdminPage 新增「API 库」tab。
+
+### Fixed
+
+- 🐛 修复聊天页返回路由不更新（移动端 ArrowLeft 未调用 `navigate('/chat')`）
+- 🐛 修复兑换码生成 500 错误（`datetime.now(timezone.utc)` 带时区与 PostgreSQL `TIMESTAMP WITHOUT TIME ZONE` 不兼容，三处加 `.replace(tzinfo=None)`）
+
+### Backend API
+
+- `GET /admin/api-key-pool` — 列出所有池 Key（脱敏）
+- `POST /admin/api-key-pool` — 添加池 Key（Fernet 加密存储）
+- `PUT /admin/api-key-pool/{id}` — 更新池 Key 配置
+- `DELETE /admin/api-key-pool/{id}` — 删除池 Key
+- `GET /user/credit-status` — 用户额度状态摘要
+- `POST /admin/redemption-codes` — 请求体新增 `note`/`max_usage`/`is_api_pool`
 
 ---
 

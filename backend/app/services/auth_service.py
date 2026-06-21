@@ -90,6 +90,19 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
     if user is None:
         raise ValueError("用户不存在")
 
+    # v0.6.0: 查询绑定的池 Key 名
+    assigned_pool_key_name = None
+    try:
+        from app.models.api_key_pool import UserApiAssignment, ApiKeyPool
+        assign_result = await db.execute(
+            select(ApiKeyPool.name).join(
+                UserApiAssignment, UserApiAssignment.pool_key_id == ApiKeyPool.id
+            ).where(UserApiAssignment.user_id == user_id)
+        )
+        assigned_pool_key_name = assign_result.scalar()
+    except Exception:
+        pass
+
     return {
         "id": user.id,
         "username": user.username,
@@ -109,6 +122,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "language": user.language or "zh",
         "ui_prefs": user.ui_prefs or {},
         "created_at": str(user.created_at) if user.created_at else None,
+        "assigned_pool_key_name": assigned_pool_key_name,
     }
 
 

@@ -211,28 +211,62 @@ async def _process_group_event(db, event: dict):
         )
 
 
-async def _get_api_config(db, agent) -> tuple[str | None, str]:
+async def _get_api_config(db, agent) -> tuple[str | None, str, str, int | None]:
     """
-    获取 API Key 和 Base URL（Agent 级优先，回退到 User 级）。
-    在 _maybe_trigger_ai_reply 和 _process_alarm_event 中复用。
+    获取 API Key 和 Base URL（四层优先链）。
+
+    Tier 1: Agent 自有 Key（已有，不变）
+    Tier 2: 用户有 api_credit + 已绑定的池 Key 有效 → 用池 Key
+    Tier 3: 用户有 api_credit + 无绑定 → 自动选最优池 Key 并绑定
+    Tier 4: 用户自有 Key（已有，不变）
+
+    返回: (api_key, api_base, credit_source, pool_key_id)
+      - credit_source: "agent_key" | "pool_key" | "user_key" | "none"
+      - pool_key_id: 池 Key ID（仅 pool_key 时有值）
     """
     from app.utils.crypto import decrypt_api_key
     from app.models.user import User as UserModel
 
     api_key = None
     api_base = settings.deepseek_base_url
+    credit_source = "none"
+    pool_key_id = None
 
+    # Tier 1: Agent 自有 Key
     if agent.api_key_encrypted:
         api_key = decrypt_api_key(agent.api_key_encrypted)
         api_base = agent.api_base_url or settings.deepseek_base_url
-    else:
-        user_result = await db.execute(select(UserModel).where(UserModel.id == agent.owner_id))
-        user = user_result.scalar_one_or_none()
-        if user and user.api_key_encrypted:
-            api_key = decrypt_api_key(user.api_key_encrypted)
-            api_base = user.api_base_url or settings.deepseek_base_url
+        credit_source = "agent_key"
+        return api_key, api_base, credit_source, pool_key_id
 
-    return api_key, api_base
+    # 查用户
+    user_result = await db.execute(select(UserModel).where(UserModel.id == agent.owner_id))
+    user = user_result.scalar_one_or_none()
+
+    if user is None:
+        return api_key, api_base, credit_source, pool_key_id
+
+    # Tier 2 & 3: 用户有 api_credit → 使用 API Key 池
+    if (user.api_credit or 0) > 0:
+        from app.services.quota_service import find_best_pool_key
+        pool_key = await find_best_pool_key(db, user.id)
+        if pool_key:
+            try:
+                api_key = decrypt_api_key(pool_key.api_key_encrypted)
+                api_base = pool_key.api_base_url or settings.deepseek_base_url
+                credit_source = "pool_key"
+                pool_key_id = pool_key.id
+                return api_key, api_base, credit_source, pool_key_id
+            except Exception as e:
+                logger.warning(f"  ⚠️ 池 Key {pool_key.id} 解密失败: {e}，回退到用户自有 Key")
+
+    # Tier 4: 用户自有 Key
+    if user.api_key_encrypted:
+        api_key = decrypt_api_key(user.api_key_encrypted)
+        api_base = user.api_base_url or settings.deepseek_base_url
+        credit_source = "user_key"
+
+    return api_key, api_base, credit_source, pool_key_id
 
 
 async def _maybe_trigger_ai_reply(
@@ -288,9 +322,10 @@ async def _maybe_trigger_ai_reply(
         logger.info(f"AI {agent.name}({agent_id}) 速率限制，跳过")
         return
 
-    # 5. 获取 API 配置（v0.5.0: 提取为公共辅助函数）
-    api_key, api_base = await _get_api_config(db, agent)
-    logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}")
+    # 5. 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
+    api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
+    logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}, "
+                f"credit_source={credit_source}")
 
     # 5.5. 中断标记：如果 AI 之前在忙，记录中断
     try:
@@ -401,6 +436,8 @@ async def _maybe_trigger_ai_reply(
             conversation_type="group",
             trigger_user_id=trigger_user_id,
             effective_cfg=effective_cfg,
+            credit_source=credit_source,
+            pool_key_id=pool_key_id,
         )
     finally:
         await manager.broadcast_to_group(
@@ -436,6 +473,8 @@ async def _tool_call_loop(
     session_id: str | None = None,
     trigger_user_id: int | None = None,
     effective_cfg: dict | None = None,
+    credit_source: str = "user_key",
+    pool_key_id: int | None = None,
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
@@ -444,6 +483,7 @@ async def _tool_call_loop(
 
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
+    v0.6.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
     """
     if effective_cfg is None:
         effective_cfg = {}
@@ -674,6 +714,22 @@ async def _tool_call_loop(
             await save_current_task(db, agent.id, last_task)
         except Exception:
             pass
+    # v0.6.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
+    if total_usage["api_calls"] > 0 and total_usage["total_tokens"] > 0:
+        try:
+            from app.services.quota_service import deduct_credit
+            await deduct_credit(
+                db,
+                user_id=agent.owner_id,
+                tokens_used=total_usage["total_tokens"],
+                source=credit_source,
+                pool_key_id=pool_key_id,
+                agent_id=agent.id,
+                model=model,
+            )
+        except Exception as e:
+            logger.warning(f"  扣除额度失败（不阻塞主流程）: {e}")
+
     await _save_conversation_log_safe(
         db, agent, messages, conversation_type,
         group_id, session_id,
@@ -712,18 +768,8 @@ async def _trigger_dm_ai_reply(
     from app.services.agent_service import get_effective_config as _get_eff_cfg
     effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
-    # 获取 API 配置（Agent 级优先）
-    user_result = await db.execute(select(User).where(User.id == agent.owner_id))
-    user = user_result.scalar_one_or_none()
-    from app.utils.crypto import decrypt_api_key
-    api_key = None
-    api_base = settings.deepseek_base_url
-    if agent.api_key_encrypted:
-        api_key = decrypt_api_key(agent.api_key_encrypted)
-        api_base = agent.api_base_url or settings.deepseek_base_url
-    elif user and user.api_key_encrypted:
-        api_key = decrypt_api_key(user.api_key_encrypted)
-        api_base = user.api_base_url or settings.deepseek_base_url
+    # 获取 API 配置（v0.6.0: 四层优先链含池 Key）
+    api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 中断标记：如果 AI 之前在忙，记录中断
     try:
@@ -787,6 +833,8 @@ async def _trigger_dm_ai_reply(
             session_id=session_id,
             trigger_user_id=sender_id,
             effective_cfg=effective_cfg,
+            credit_source=credit_source,
+            pool_key_id=pool_key_id,
         )
     finally:
         await manager.broadcast_to_dm(
@@ -974,8 +1022,8 @@ async def _process_alarm_event(db, event: dict):
         )
         await db.flush()
 
-    # 获取 API 配置（v0.5.0: 使用公共辅助函数）
-    api_key, api_base = await _get_api_config(db, agent)
+    # 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
+    api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 构建系统提示词（层级化：内核 + 人格 + 协议）
     profile = getattr(agent, 'config_profile', 'chat') or 'chat'
@@ -1072,6 +1120,8 @@ async def _process_alarm_event(db, event: dict):
             session_id=None,
             trigger_user_id=None,
             effective_cfg=effective_cfg,
+            credit_source=credit_source,
+            pool_key_id=pool_key_id,
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

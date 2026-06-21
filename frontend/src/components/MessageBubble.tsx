@@ -109,7 +109,7 @@ export default function MessageBubble({
             <span className="text-[10px] text-mint-400 animate-pulse font-medium">{t('chat.typing')}</span>
           )}
         </div>
-        <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}`}>
+        <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}`}>
           {isTyping ? (
             <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />
           ) : isMine ? (

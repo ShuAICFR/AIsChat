@@ -1,4 +1,14 @@
 /**
+ * 解析后端时间字符串（后端 DateTime 列无 timezone=True，Pydantic 序列化为 naive UTC）。
+ * 对无时区标记的字符串追加 'Z'，避免 JavaScript 将其误判为本地时间。
+ */
+function parseServerDate(dateStr: string): Date {
+  // 检查末尾是否有时区标记：Z / +HH:MM / -HH:MM
+  const hasTimezone = /[+\-Zz]\d{2}:\d{2}$/.test(dateStr) || /Z$/i.test(dateStr)
+  return new Date(hasTimezone ? dateStr : dateStr + 'Z')
+}
+
+/**
  * 相对时间格式化
  * - 今天 → HH:MM
  * - 昨天 → "昨天" / "Yesterday"
@@ -12,7 +22,7 @@ export function formatRelativeTime(
 ): string {
   if (!dateStr) return ''
 
-  const date = new Date(dateStr)
+  const date = parseServerDate(dateStr)
   if (isNaN(date.getTime())) return ''
 
   const now = new Date()
@@ -59,7 +69,7 @@ export function formatMessageTime(
 ): string {
   if (!dateStr) return ''
 
-  const date = new Date(dateStr)
+  const date = parseServerDate(dateStr)
   if (isNaN(date.getTime())) return ''
 
   const now = new Date()

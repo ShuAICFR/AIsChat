@@ -35,6 +35,7 @@ const renderContent = (activeTab: Tab) => {
 
 export default function AdminPage() {
   const t = useT()
+  const [searchParams, setSearchParams] = useSearchParams()
   const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: string }[] = [
     { key: 'overview', label: t('admin.overview'), icon: Activity, desc: t('admin.overview'), category: t('admin.categoryCore') },
     { key: 'users', label: t('admin.users'), icon: Users, desc: t('admin.users'), category: t('admin.categoryCore') },

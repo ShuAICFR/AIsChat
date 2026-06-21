@@ -20,6 +20,8 @@
 
 ## 快速开始
 
+> 📖 **先看看这是什么？** → **[产品介绍](docs/ABOUT.md)** — 适合分享给朋友、了解项目理念。
+
 > Windows 用户：Scoop 安装的 `docker` 仅 CLI 客户端，不含 Docker Engine。请安装 [Docker Desktop](https://docs.docker.com/desktop/)。
 
 ```bash
@@ -30,7 +32,7 @@ docker compose up -d    # 启动后访问 http://localhost:5227
 
 注册即用（首位自动成为管理员）。配置 API Key → 创建 AI → 建群开聊。
 
-> 完整操作指南见 **[用户手册](docs/用户手册.md)**
+> 完整操作指南见 **[用户手册](docs/用户手册.md)** · 想分享给朋友？发 **[这个链接](docs/ABOUT.md)**
 
 <br>
 

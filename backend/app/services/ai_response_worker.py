@@ -36,6 +36,12 @@ async def ai_response_worker():
         try:
             event = await message_queue.get()
             logger.info(f"📬 Worker 收到事件: group={event.get('group_id')}, msg={event.get('message_id')}, queue_remaining={message_queue.qsize()}")
+            # v0.5.0: 记录队列深度
+            try:
+                from app.services.metrics_collector import metrics
+                await metrics.record_queue_depth(message_queue.qsize())
+            except Exception:
+                pass
             async with async_session() as db:
                 try:
                     await _process_event(db, event)
@@ -205,6 +211,30 @@ async def _process_group_event(db, event: dict):
         )
 
 
+async def _get_api_config(db, agent) -> tuple[str | None, str]:
+    """
+    获取 API Key 和 Base URL（Agent 级优先，回退到 User 级）。
+    在 _maybe_trigger_ai_reply 和 _process_alarm_event 中复用。
+    """
+    from app.utils.crypto import decrypt_api_key
+    from app.models.user import User as UserModel
+
+    api_key = None
+    api_base = settings.deepseek_base_url
+
+    if agent.api_key_encrypted:
+        api_key = decrypt_api_key(agent.api_key_encrypted)
+        api_base = agent.api_base_url or settings.deepseek_base_url
+    else:
+        user_result = await db.execute(select(UserModel).where(UserModel.id == agent.owner_id))
+        user = user_result.scalar_one_or_none()
+        if user and user.api_key_encrypted:
+            api_key = decrypt_api_key(user.api_key_encrypted)
+            api_base = user.api_base_url or settings.deepseek_base_url
+
+    return api_key, api_base
+
+
 async def _maybe_trigger_ai_reply(
     db, agent_id: int, group_id: int, group, content: str, trigger_message_id: int,
     chain_depth: int = 0,
@@ -212,8 +242,8 @@ async def _maybe_trigger_ai_reply(
     sender_id: int | None = None,
 ):
     """检查单个 AI 是否应该回复，如果是则调用 LLM 生成回复"""
-    from app.services.agent_service import get_agent, calculate_willingness, WillingnessResult
-    from app.services.group_service import is_member_in_dnd, store_pending_message
+    from app.services.agent_service import get_agent
+    from app.services.action_decider import decide_action, ActionContext, ActionType
 
     agent = await get_agent(db, agent_id)
     if agent is None:
@@ -222,87 +252,44 @@ async def _maybe_trigger_ai_reply(
 
     logger.info(f"🔍 检查 AI {agent.name}({agent_id}), state={agent.state}")
 
-    # 1. blocked → 硬屏蔽，任何情况不回复
-    if agent.state == "blocked":
-        logger.info(f"AI {agent.name}({agent_id}) 状态为 blocked，跳过")
-        return
-
-    # 2. @提及检测（需要在离线/DND 判断前执行，因为 @提及可以唤醒离线 AI）
     is_mentioned = _check_mention(content, agent.name)
     logger.info(f"🔍 AI {agent.name}({agent_id}): is_mentioned={is_mentioned}, content_preview='{content[:80]}'")
 
-    # 3. 离线 + 未被 @ → 跳过；离线 + 被 @ → 唤醒为 active
-    if agent.state == "offline":
-        if not is_mentioned:
-            logger.info(f"AI {agent.name}({agent_id}) 状态为 offline，跳过")
-            return
-        # @提及唤醒离线 AI
-        logger.info(f"AI {agent.name}({agent_id}) 被 @提及，从 offline 唤醒为 active")
-        from app.services.agent_service import switch_agent_state
-        await switch_agent_state(db, agent_id=agent_id, target_state="active", reason="被 @提及唤醒")
-        await db.flush()
+    # v0.5.0: 使用统一决策（替代原有 Gate 1-5 的手动判断）
+    ctx = ActionContext(
+        event_type="message",
+        agent_id=agent_id,
+        group_id=group_id,
+        content=content,
+        sender_type=sender_type,
+        sender_id=sender_id,
+        is_mentioned=is_mentioned,
+        chain_depth=chain_depth,
+    )
+    decision = await decide_action(db, agent, ctx)
+    logger.info(f"🔍 AI {agent.name}({agent_id}): decision={decision.action_type.value}, "
+                f"priority={decision.priority}, reason={decision.reason}")
 
-    # 4. DND 检查
-    in_dnd = await is_member_in_dnd(db, agent_id, group_id)
-    logger.info(f"🔍 AI {agent.name}({agent_id}): in_dnd={in_dnd}, is_mentioned={is_mentioned}")
-
-    if in_dnd and not is_mentioned:
-        # DND 且未被 @ → 暂存消息
-        await store_pending_message(db, agent_id, group_id, trigger_message_id)
-        logger.info(f"AI {agent.name}({agent_id}) 在 DND，消息已暂存")
+    if not decision.should_act:
+        # 处理 DND 暂存消息
+        if decision.details.get("store_pending"):
+            from app.services.group_service import store_pending_message
+            await store_pending_message(db, agent_id, group_id, trigger_message_id)
         return
 
-    # ═══════════════════════════════════════════════════════
-    # Gate 1: 快速过滤器（按 config_profile 差异化）
-    # 聊天档：仅 @提及 或 human 发消息才进入 Gate 2
-    # 沉浸档：@提及 + 话题相关性 → Gate 2
-    # 数字生命档：全部进入 Gate 2
-    # ═══════════════════════════════════════════════════════
-    profile = getattr(agent, 'config_profile', 'chat') or 'chat'
-
-    if not is_mentioned and profile == 'chat':
-        # 聊天档：只有被 @ 才回复（省掉意愿计算、记忆检索等全部后续处理）
-        # human 发的消息也放行（可能是对话的延续）
-        if sender_type != 'human':
-            logger.info(f"AI {agent.name}({agent_id}) 聊天档未@且非人类消息，Gate 1 静默")
-            return
-
-    # 3. 计算意愿（v0.4.0: WillingnessResult 含逐因子原因 + 行为级别）
-    w = await calculate_willingness(db, agent_id, group_id, content)
-    logger.info(f"🔍 AI {agent.name}({agent_id}): {w.score}分 [{w.level}] — {w.reason}")
-
-    # 保存最近意愿评分到 agent
-    agent.last_willingness_score = w.score
-    agent.last_willingness_reason = w.reason
-
-    # @提及强制回复（HIGH/MEDIUM 级），LOW 级跳过
-    if not is_mentioned and w.level == "low":
-        logger.info(f"AI {agent.name}({agent_id}) 意愿过低({w.score})，跳过")
-        return
-
-    # MEDIUM 级别仅 @提及回复（已在 is_mentioned 分支处理）
-    if not is_mentioned and w.level == "medium":
-        logger.info(f"AI {agent.name}({agent_id}) 中意愿({w.score})，仅 @提及 时回复")
-        return
+    # 记录意愿（如果决策中有）
+    w_score = decision.willingness_score
+    if w_score > 0:
+        agent.last_willingness_score = w_score
+        agent.last_willingness_reason = decision.reason
 
     # 4. 速率限制检查
     if not _check_rate_limit(agent_id):
         logger.info(f"AI {agent.name}({agent_id}) 速率限制，跳过")
         return
 
-    # 5. 获取 API 配置
-    user_result = await db.execute(select(User).where(User.id == agent.owner_id))
-    user = user_result.scalar_one_or_none()
-    from app.utils.crypto import decrypt_api_key
-    # 优先级：Agent 级配置 > User 全局配置
-    api_key = None
-    api_base = settings.deepseek_base_url
-    if agent.api_key_encrypted:
-        api_key = decrypt_api_key(agent.api_key_encrypted)
-        api_base = agent.api_base_url or settings.deepseek_base_url
-    elif user and user.api_key_encrypted:
-        api_key = decrypt_api_key(user.api_key_encrypted)
-        api_base = user.api_base_url or settings.deepseek_base_url
+    # 5. 获取 API 配置（v0.5.0: 提取为公共辅助函数）
+    api_key, api_base = await _get_api_config(db, agent)
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}")
 
     # 5.5. 中断标记：如果 AI 之前在忙，记录中断
@@ -836,24 +823,75 @@ def _check_rate_limit(agent_id: int) -> bool:
 
 
 # ============================================================
-# 闹钟调度器（心跳机制的第一种形态）
+# 闹钟调度器（心跳机制的第一种形态 — v0.5.0 事件驱动）
 # ============================================================
 
 async def alarm_scheduler():
     """
-    后台闹钟调度器：定期检查到期的闹钟，将到期的推入消息队列触发 AI 唤醒。
+    后台闹钟调度器（事件驱动 + 精确等待，替代 5 秒轮询）。
+
+    逻辑：
+    1. 计算最近闹钟 wake_at，用 asyncio.sleep 精确等待
+    2. 新闹钟设置/修改/取消时，通过 Event 唤醒重新计算
+    3. 无闹钟时等待 Event 或 5 分钟兜底检查
+    4. DB 断开时降级到 30 秒重试
 
     在 main.py lifespan 中通过 asyncio.create_task 启动。
     """
-    logger.info("⏰ 闹钟调度器已启动，每 5 秒检查一次...")
+    import time as _time
+    from app.services.alarm_service import _alarm_wake_event, notify_alarm_changed
+
+    logger.info("⏰ 闹钟调度器已启动（事件驱动模式）")
+
     while True:
         try:
-            await asyncio.sleep(5)
+            # 查询最近闹钟
+            async with async_session() as db:
+                try:
+                    from app.services.alarm_service import get_next_alarm_time
+                    next_at = await get_next_alarm_time(db)
+                except Exception as e:
+                    logger.error(f"闹钟调度器查询失败: {e}")
+                    await asyncio.sleep(30)  # DB 断开降级
+                    continue
+
+            if next_at is None:
+                # 无活跃闹钟 → 等待 Event（新闹钟设置后唤醒）或 5 分钟兜底
+                try:
+                    await asyncio.wait_for(_alarm_wake_event.wait(), timeout=300)
+                except asyncio.TimeoutError:
+                    pass  # 兜底检查
+                _alarm_wake_event.clear()
+                continue
+
+            # 有闹钟 → 计算等待秒数，精确等待
+            wait_seconds = next_at.timestamp() - _time.time()
+            if wait_seconds <= 0:
+                # 已经到期，立即触发
+                async with async_session() as db:
+                    try:
+                        await _check_and_fire_alarms(db)
+                    except Exception as e:
+                        logger.error(f"闹钟触发失败: {e}", exc_info=True)
+                continue
+
+            logger.debug(f"⏰ 下一个闹钟在 {wait_seconds:.1f}s 后")
+            try:
+                await asyncio.wait_for(_alarm_wake_event.wait(), timeout=max(0.1, wait_seconds))
+                # 被提前唤醒（新闹钟设置/修改/取消）→ 重新计算
+                _alarm_wake_event.clear()
+                continue
+            except asyncio.TimeoutError:
+                # 精确等待到期 → 触发闹钟
+                pass
+
+            # 触发到期闹钟
             async with async_session() as db:
                 try:
                     await _check_and_fire_alarms(db)
                 except Exception as e:
-                    logger.error(f"闹钟调度器检查失败: {e}", exc_info=True)
+                    logger.error(f"闹钟触发失败: {e}", exc_info=True)
+
         except asyncio.CancelledError:
             logger.info("⏰ 闹钟调度器正在关闭...")
             break
@@ -901,8 +939,7 @@ async def _process_alarm_event(db, event: dict):
     task = event["task"]
 
     from app.models.agent import Agent as AgentModel
-    from app.models.user import User
-    from app.utils.crypto import decrypt_api_key
+    from app.services.action_decider import decide_action, ActionContext, ActionType
     from app.services.llm_service import CORE_IDENTITY, resolve_model, PROTOCOL_BY_PROFILE, PROTOCOL_CHAT
     from app.services.memory_service import recall_relevant_memories, format_memories_for_prompt
     from app.services.tool_registry import get_allowed_tools
@@ -914,9 +951,16 @@ async def _process_alarm_event(db, event: dict):
         logger.warning(f"⏰ 闹钟 #{alarm_id}: agent {agent_id} 不存在")
         return
 
-    # blocked 状态不唤醒
-    if agent.state == "blocked":
-        logger.info(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 状态为 blocked，跳过")
+    # v0.5.0: 使用统一决策（替代原有的手动状态检查）
+    ctx = ActionContext(
+        event_type="alarm",
+        agent_id=agent_id,
+        alarm_id=alarm_id,
+        alarm_task=task,
+    )
+    decision = await decide_action(db, agent, ctx)
+    if not decision.should_act:
+        logger.info(f"⏰ 闹钟 #{alarm_id}: {decision.reason}")
         return
 
     # 如果 AI 处于 offline/dnd，先唤醒为 active
@@ -930,17 +974,8 @@ async def _process_alarm_event(db, event: dict):
         )
         await db.flush()
 
-    # 获取 API 配置（Agent 级优先）
-    user_result = await db.execute(select(User).where(User.id == agent.owner_id))
-    user = user_result.scalar_one_or_none()
-    api_key = None
-    api_base = settings.deepseek_base_url
-    if agent.api_key_encrypted:
-        api_key = decrypt_api_key(agent.api_key_encrypted)
-        api_base = agent.api_base_url or settings.deepseek_base_url
-    elif user and user.api_key_encrypted:
-        api_key = decrypt_api_key(user.api_key_encrypted)
-        api_base = user.api_base_url or settings.deepseek_base_url
+    # 获取 API 配置（v0.5.0: 使用公共辅助函数）
+    api_key, api_base = await _get_api_config(db, agent)
 
     # 构建系统提示词（层级化：内核 + 人格 + 协议）
     profile = getattr(agent, 'config_profile', 'chat') or 'chat'

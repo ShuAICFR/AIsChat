@@ -6,8 +6,9 @@ import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
+import SystemMetricsTab from '../components/SystemMetricsTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics'
 type TabCategory = '核心管理' | '系统配置' | '运维分析'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: TabCategory }[] = [
@@ -22,6 +23,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; ca
   { key: 'logs', label: '审计', icon: FileText, desc: '系统操作日志记录', category: '运维分析' },
   { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表', category: '运维分析' },
   { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计', category: '运维分析' },
+  { key: 'metrics', label: '系统监控', icon: Activity, desc: '实时性能指标与延迟趋势', category: '运维分析' },
 ]
 
 const renderContent = (activeTab: Tab) => {
@@ -37,6 +39,7 @@ const renderContent = (activeTab: Tab) => {
     case 'federation': return <FederationTab />
     case 'convlog': return <ConversationLogTab />
     case 'usage': return <UsageDashboardTab />
+    case 'metrics': return <SystemMetricsTab />
     default: return <OverviewTab />
   }
 }

@@ -22,12 +22,19 @@ class RoughMemory(Base):
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=True)
     # v0.4.0: per-user 记忆隔离（共振 AI 为 NULL，通用/半通用填触发用户 ID）
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # v0.5.0: 延迟归档字段
+    status = Column(String(20), default="active", comment="active | pending_archive | discarded")
+    value_score = Column(Integer, default=5, comment="记忆价值评分: 1=低价值(自动提取), 5=正常, 10=高价值")
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
         CheckConstraint(
             "owner_type IN ('ai', 'group')",
             name="ck_rough_owner_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'pending_archive', 'discarded')",
+            name="ck_rough_status",
         ),
     )
 

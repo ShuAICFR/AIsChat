@@ -47,9 +47,17 @@ async def lifespan(app: FastAPI):
     from app.services.vector_pipeline import vector_pipeline_worker
     vector_worker_task = asyncio.create_task(vector_pipeline_worker())
 
-    # 启动闹钟调度器（心跳机制）
+    # 启动闹钟调度器（心跳机制 — 事件驱动模式）
     from app.services.ai_response_worker import alarm_scheduler
     alarm_scheduler_task = asyncio.create_task(alarm_scheduler())
+
+    # 启动记忆批量写入 worker
+    from app.services.memory_buffer import memory_flush_worker
+    memory_flush_task = asyncio.create_task(memory_flush_worker())
+
+    # 启动系统指标收集 flush worker
+    from app.services.metrics_collector import metrics_flush_worker
+    metrics_flush_task = asyncio.create_task(metrics_flush_worker())
 
     # 启动联邦通信（v0.3.0 跨实例直连）
     from app.database import async_session
@@ -71,12 +79,19 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("👋 系统关闭，正在停止后台 worker...")
+    # 优雅关闭：排空记忆缓冲区
+    try:
+        from app.services.memory_buffer import drain_buffer_on_shutdown
+        await drain_buffer_on_shutdown()
+    except Exception:
+        pass
     # 先断开所有联邦连接
     try:
         await federation_manager.disconnect_all()
     except Exception:
         pass
     for task in [ai_worker_task, vector_worker_task, alarm_scheduler_task,
+                  memory_flush_task, metrics_flush_task,
                   fed_heartbeat_task, fed_reconnect_task]:
         task.cancel()
         try:

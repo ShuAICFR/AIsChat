@@ -956,6 +956,13 @@ async def _handle_send_message(
     except Exception:
         pass
 
+    # v0.5.0: 记录消息吞吐量
+    try:
+        from app.services.metrics_collector import metrics
+        await metrics.record_message(agent_id)
+    except Exception:
+        pass
+
     return {"success": True, "message_id": message.id}
 
 
@@ -981,11 +988,10 @@ async def _handle_store_memory(
     db: AsyncSession, agent_id: int, group_id: int,
     arguments: dict, context: dict,
 ) -> dict:
-    """工具: store_memory"""
-    from app.models.memory import RoughMemory, DetailMemory
+    """工具: store_memory — 写入记忆缓冲区（异步批量落盘，非即时 DB 写入）"""
+    from app.services.memory_buffer import enqueue_memory
     from app.models.agent import Agent
     from sqlalchemy import select as _sel
-    from app.utils.embedding import get_embedding
 
     title = arguments["title"]
     content = arguments["content"]
@@ -997,48 +1003,24 @@ async def _handle_store_memory(
     agent_obj = agent_row.scalar_one_or_none()
     ai_type = agent_obj.ai_type if agent_obj else "resonance"
     trigger_user_id = context.get("trigger_user_id")
-    memory_user_id = None
-    if ai_type in ("general", "semi_general") and trigger_user_id:
-        memory_user_id = trigger_user_id
 
-    # 向量化标题
     api_key = context.get("api_key")
     api_base = context.get("api_base_url", "https://api.deepseek.com")
 
-    embedding_warning = None
-    try:
-        embedding = await get_embedding(title, api_base_url=api_base, api_key=api_key)
-    except Exception as e:
-        logger.warning(f"记忆向量化失败，回退到文本可检（Embedding API 不可用）: {e}")
-        embedding = None
-        embedding_warning = (
-            f"⚠️ 向量化失败（Embedding API 不可用），记忆已存储但仅能通过关键词检索。"
-            f"你可放心，用 recall_memory 带关键词仍可搜到。错误: {e}"
-        )
-
-    rough = RoughMemory(
-        owner_type="ai",
-        owner_id=agent_id,
+    await enqueue_memory(
+        agent_id=agent_id,
         title=title,
-        embedding=embedding,
+        content=content,
         scope=scope,
         group_id=mem_group_id,
-        user_id=memory_user_id,
+        api_base_url=api_base,
+        api_key=api_key,
+        trigger_user_id=trigger_user_id,
+        ai_type=ai_type,
+        source="tool",
+        low_value=False,
     )
-    db.add(rough)
-    await db.flush()
-
-    detail = DetailMemory(
-        rough_id=rough.id,
-        content=content,
-    )
-    db.add(detail)
-    await db.commit()
-
-    result = {"success": True, "rough_id": rough.id, "title": title}
-    if embedding_warning:
-        result["warning"] = embedding_warning
-    return result
+    return {"success": True, "title": title, "queued": True}
 
 
 async def _handle_recall_memory(
@@ -2050,9 +2032,17 @@ async def dispatch_tool_call(
         logger.warning(f"未知工具调用: {tool_name}")
         return build_tool_error(ToolErrorCode.UNKNOWN_TOOL, f"未知工具: {tool_name}")
 
+    import _time
+    from app.services.metrics_collector import metrics
+    t0 = _time.monotonic()
     try:
         result = await handler(db, agent_id, group_id, arguments, context)
+        elapsed = _time.monotonic() - t0
+        is_success = not result.get("error", False)
+        await metrics.record_tool_call(tool_name, elapsed, is_success)
         return result
     except Exception as e:
+        elapsed = _time.monotonic() - t0
+        await metrics.record_tool_call(tool_name, elapsed, False)
         logger.error(f"工具 {tool_name} 执行失败: {e}", exc_info=True)
         return build_tool_error(ToolErrorCode.TOOL_EXEC_FAILED, f"工具执行失败: {str(e)}")

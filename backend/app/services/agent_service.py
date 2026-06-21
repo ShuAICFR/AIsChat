@@ -852,15 +852,20 @@ async def calculate_willingness(
     agent_id: int,
     group_id: int,
     message_content: str,
+    scenario: str = "reply",      # v0.5.0: "reply" | "alarm" | "proactive"
+    is_mentioned: bool = False,
+    idle_seconds: int = 0,
 ) -> WillingnessResult:
     """
-    计算 AI 对某条消息的意愿评分（0-100），返回含逐因子原因的结果。
+    计算 AI 对某条消息/事件的意愿评分（0-100），返回含逐因子原因的结果。
 
-    考虑因素：
-    - @ 提及：+40 分
-    - 群聊活跃度：高活跃 -10，低活跃 +10
-    - 消息长度：过短 -5，实质性内容 +10
-    - 当前状态：offline/blocked → 0，dnd → -30
+    scenario 参数（v0.5.0）：
+    - "reply": 被动回复（默认，保持向后兼容）
+      基础分 50 + @提及 +40/20 + 消息长度 ±10/5 + 活跃度 ±10 + DND -30
+    - "alarm": 闹钟唤醒
+      固定返回高分 (85)，因为闹钟是 AI 自己的意志
+    - "proactive": 主动发言
+      基础分 30 + 空闲时长奖励 + 群活跃度惩罚
 
     level:
     - high (>60): 可主动发言
@@ -881,22 +886,40 @@ async def calculate_willingness(
             {"state": agent.state},
         )
 
+    # v0.5.0: 闹钟场景 — 固定高分
+    if scenario == "alarm":
+        return WillingnessResult(85, "闹钟唤醒（AI 自主意志）", "high", {"scenario": "alarm"})
+
+    # v0.5.0: 主动发言场景
+    if scenario == "proactive":
+        return await _calc_proactive_willingness(db, agent_id, group_id, idle_seconds)
+
+    # ═══ 以下为原有的 reply 场景逻辑 ═══
+
     score = 50  # 基础分
     reason_parts = []
     details = {"base": 50}
 
     # 1. @ 提及检测
-    mentioned_names = extract_mentions(message_content)
-    agent_name_mentioned = agent.name in mentioned_names
-    generic_mention = "@ai" in message_content.lower() or "@all" in message_content.lower()
-    if agent_name_mentioned:
+    if is_mentioned:
+        # 只传了 True 但没有具体内容时给 +40
         score += 40
         reason_parts.append("@提及 +40")
         details["mention"] = 40
-    elif generic_mention:
-        score += 20
-        reason_parts.append("@ai/@all +20")
-        details["mention"] = 20
+    elif message_content:
+        mentioned_names = extract_mentions(message_content)
+        agent_name_mentioned = agent.name in mentioned_names
+        generic_mention = "@ai" in message_content.lower() or "@all" in message_content.lower()
+        if agent_name_mentioned:
+            score += 40
+            reason_parts.append("@提及 +40")
+            details["mention"] = 40
+        elif generic_mention:
+            score += 20
+            reason_parts.append("@ai/@all +20")
+            details["mention"] = 20
+        else:
+            details["mention"] = 0
     else:
         details["mention"] = 0
 
@@ -957,6 +980,65 @@ async def calculate_willingness(
     else:
         level = "low"
 
+    return WillingnessResult(score=score, reason=reason, level=level, details=details)
+
+
+async def _calc_proactive_willingness(
+    db: AsyncSession,
+    agent_id: int,
+    group_id: int | None,
+    idle_seconds: int,
+) -> WillingnessResult:
+    """
+    v0.5.0: 主动发言意愿计算。
+
+    基础分 30 + 空闲时长奖励（每小时+10，上限+40）+ 群活跃度调整。
+    """
+    from app.models.message import Message
+    from sqlalchemy import func, select as _sel_pro
+
+    score = 30
+    reason_parts = ["主动发言基础分 30"]
+    details: dict = {"base": 30, "scenario": "proactive"}
+
+    # 空闲时长奖励：每小时 +10，上限 +40
+    hours_idle = idle_seconds / 3600
+    idle_bonus = min(40, int(hours_idle * 10))
+    if idle_bonus > 0:
+        score += idle_bonus
+        reason_parts.append(f"空闲{hours_idle:.1f}h +{idle_bonus}")
+        details["idle_bonus"] = idle_bonus
+
+    # 群活跃度
+    if group_id:
+        from datetime import datetime, timedelta
+        one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+        count_result = await db.execute(
+            _sel_pro(func.count(Message.id)).where(
+                Message.group_id == group_id,
+                Message.created_at >= one_hour_ago,
+            )
+        )
+        recent_count = count_result.scalar() or 0
+
+        if recent_count > 30:
+            score -= 15
+            reason_parts.append(f"群聊活跃({recent_count}条/h) -15")
+            details["activity"] = -15
+        elif recent_count < 3:
+            score += 15
+            reason_parts.append(f"群聊沉寂({recent_count}条/h) +15")
+            details["activity"] = 15
+        else:
+            details["activity"] = 0
+    else:
+        details["activity"] = 0
+
+    score = max(0, min(100, score))
+    details["final"] = score
+    reason = ", ".join(reason_parts) + f" → {score}"
+
+    level = "high" if score > 60 else "medium" if score >= 30 else "low"
     return WillingnessResult(score=score, reason=reason, level=level, details=details)
 
 

@@ -1253,3 +1253,58 @@ async def get_agent_daily_usage_admin(
     end_date = datetime.now(tz.utc).replace(tzinfo=None)
     start_date = end_date - timedelta(days=days)
     return await get_agent_token_daily(db, agent_id, start_date, end_date)
+
+
+# ══════════════════════════════════════════════════════════════
+# v0.5.0: 系统监控指标
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/admin/metrics")
+async def get_system_metrics(
+    hours: int = Query(24, ge=1, le=168),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取系统性能指标：
+    - live: 当前内存中的实时快照
+    - timeline: 历史趋势（agent_metrics 表）
+    - retention_days: 当前保留天数
+    """
+    from app.models.agent_metrics import AgentMetricsSnapshot
+    from app.services.metrics_collector import metrics
+    from datetime import timedelta as _td
+    from sqlalchemy import select as _sel_m
+
+    # 实时指标
+    live = await metrics.snapshot()
+
+    # 历史趋势
+    cutoff = datetime.now(tz.utc).replace(tzinfo=None) - _td(hours=hours)
+    result = await db.execute(
+        _sel_m(AgentMetricsSnapshot)
+        .where(AgentMetricsSnapshot.created_at >= cutoff)
+        .order_by(AgentMetricsSnapshot.created_at.asc())
+    )
+    history = result.scalars().all()
+
+    timeline = []
+    for snap in history:
+        sd = snap.snapshot_data or {}
+        timeline.append({
+            "at": snap.created_at.isoformat() if snap.created_at else None,
+            "llm_calls": sd.get("llm", {}).get("total_calls", 0),
+            "llm_avg_latency": sd.get("llm", {}).get("latency", {}).get("avg", 0),
+            "llm_error_rate": sd.get("llm", {}).get("error_rate", 0),
+            "messages_per_second": sd.get("messages", {}).get("per_second_last_60s", 0),
+            "queue_depth": sd.get("queue", {}).get("max_depth", 0),
+            "willingness": sd.get("willingness", {}),
+            "errors": sd.get("errors", {}),
+        })
+
+    return {
+        "live": live,
+        "timeline": timeline,
+        "hours": hours,
+        "retention_days": settings.agent_metrics_retention_days,
+    }

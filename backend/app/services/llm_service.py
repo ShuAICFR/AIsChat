@@ -134,17 +134,29 @@ async def chat_completion(
             "usage": {...}
         }
     """
-    if stream:
-        return await _chat_completion_streaming(
-            messages, model, api_base_url, api_key, tools,
-            temperature, top_p, presence_penalty, frequency_penalty,
-            max_tokens, response_format, thinking_enabled, user_id,
-        )
-    return await _chat_completion_non_streaming(
-        messages, model, api_base_url, api_key, tools,
-        temperature, top_p, presence_penalty, frequency_penalty,
-        max_tokens, response_format, thinking_enabled, user_id,
-    )
+    import _time
+    from app.services.metrics_collector import metrics
+    t0 = _time.monotonic()
+    try:
+        if stream:
+            result = await _chat_completion_streaming(
+                messages, model, api_base_url, api_key, tools,
+                temperature, top_p, presence_penalty, frequency_penalty,
+                max_tokens, response_format, thinking_enabled, user_id,
+            )
+        else:
+            result = await _chat_completion_non_streaming(
+                messages, model, api_base_url, api_key, tools,
+                temperature, top_p, presence_penalty, frequency_penalty,
+                max_tokens, response_format, thinking_enabled, user_id,
+            )
+        elapsed = _time.monotonic() - t0
+        await metrics.record_llm_call(elapsed, success=True)
+        return result
+    except Exception:
+        elapsed = _time.monotonic() - t0
+        await metrics.record_llm_call(elapsed, success=False)
+        raise
 
 
 async def _chat_completion_non_streaming(

@@ -48,6 +48,8 @@ async def run_migrations():
             await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
             await _migrate_file_system(db)             # v0.5.0 文件协作系统
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
+            await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
+            await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1045,6 +1047,51 @@ async def _migrate_message_attachments(db):
         logger.info("  ✅ dm_messages.attachments 迁移完成")
     else:
         logger.info("  ⏭ dm_messages.attachments 已存在，跳过")
+
+
+async def _migrate_memory_archive_columns(db):
+    """v0.5.0: 记忆延迟归档 — rough_memories 加 status 和 value_score"""
+    logger.info("  🔧 迁移记忆归档字段...")
+
+    if not await _column_exists(db, "rough_memories", "status"):
+        await db.execute(text(
+            "ALTER TABLE rough_memories ADD COLUMN status VARCHAR(20) DEFAULT 'active'"
+        ))
+        await db.execute(text(
+            "ALTER TABLE rough_memories ADD CONSTRAINT ck_rough_status "
+            "CHECK (status IN ('active', 'pending_archive', 'discarded'))"
+        ))
+        await db.flush()
+        logger.info("  ✅ rough_memories.status 迁移完成")
+    else:
+        logger.info("  ⏭ rough_memories.status 已存在，跳过")
+
+    if not await _column_exists(db, "rough_memories", "value_score"):
+        await db.execute(text(
+            "ALTER TABLE rough_memories ADD COLUMN value_score INTEGER DEFAULT 5"
+        ))
+        await db.flush()
+        logger.info("  ✅ rough_memories.value_score 迁移完成")
+    else:
+        logger.info("  ⏭ rough_memories.value_score 已存在，跳过")
+
+
+async def _migrate_agent_metrics(db):
+    """v0.5.0: 系统指标表"""
+    logger.info("  🔧 迁移系统指标表...")
+
+    if not await _table_exists(db, "agent_metrics"):
+        await db.execute(text("""
+            CREATE TABLE agent_metrics (
+                id SERIAL PRIMARY KEY,
+                snapshot_data JSONB NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.flush()
+        logger.info("  ✅ agent_metrics 表创建完成")
+    else:
+        logger.info("  ⏭ agent_metrics 已存在，跳过")
 
 
 async def _fix_file_owner_type_check(db):

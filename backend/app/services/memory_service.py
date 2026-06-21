@@ -299,7 +299,7 @@ async def auto_extract_key_facts(
     api_key: str | None = None,
 ) -> bool:
     """
-    从消息内容中自动提取关键信息并存储为记忆。
+    从消息内容中自动提取关键信息并加入记忆缓冲区（异步批量落盘）。
 
     触发条件（满足任一）：
     - 明确记忆指令：「记住」「记下」「别忘了」「提醒我」
@@ -308,9 +308,12 @@ async def auto_extract_key_facts(
     - 个人信息：「我是」「我的」「我叫」
     - 任务分配：「你来负责」「交给你」「你的任务是」
 
-    返回: True 如果存储了记忆，False 如果跳过。
+    返回: True 如果入队了记忆，False 如果跳过。
     """
     import re
+    from app.services.memory_buffer import enqueue_memory
+    from app.models.agent import Agent
+    from sqlalchemy import select as _sel2
 
     triggers = [
         (r'(记住|记下|别忘了|提醒我|记住这个)', "显式记忆请求"),
@@ -336,19 +339,36 @@ async def auto_extract_key_facts(
     if len(clean_content) > 60:
         title += "..."
 
+    # 获取 AI 类型
+    ai_type = "resonance"
     try:
-        await auto_store_memory(
-            db, agent_id, group_id,
+        agent_row = await db.execute(_sel2(Agent).where(Agent.id == agent_id))
+        agent_obj = agent_row.scalar_one_or_none()
+        if agent_obj:
+            ai_type = agent_obj.ai_type or "resonance"
+    except Exception:
+        pass
+
+    # 自动提取的偏好/简短信息 → low_value
+    low_value = triggered_category in ("偏好表达",)
+
+    try:
+        await enqueue_memory(
+            agent_id=agent_id,
             title=f"[{triggered_category}] {title}",
             content=clean_content[:500],
             scope="private",
+            group_id=group_id,
             api_base_url=api_base_url,
             api_key=api_key,
+            ai_type=ai_type,
+            source="auto_extract",
+            low_value=low_value,
         )
-        logger.info(f"📝 自动提取记忆成功: [{triggered_category}] {title[:50]}")
+        logger.info(f"📝 自动提取记忆入队: [{triggered_category}] {title[:50]} ({'低价值' if low_value else '普通'})")
         return True
     except Exception as e:
-        logger.warning(f"自动提取记忆失败: {e}")
+        logger.warning(f"自动提取记忆入队失败: {e}")
         return False
 
 

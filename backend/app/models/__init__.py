@@ -23,6 +23,7 @@ from app.models.opencli import (
     OpenCLIDeniedCommand,
 )
 from app.models.conversation_log import ConversationLogConfig, ConversationLog
+from app.models.agent_metrics import AgentMetricsSnapshot
 
 __all__ = [
     "User",
@@ -58,4 +59,5 @@ __all__ = [
     "FederationGroupShare",
     "ConversationLogConfig",
     "ConversationLog",
+    "AgentMetricsSnapshot",
 ]

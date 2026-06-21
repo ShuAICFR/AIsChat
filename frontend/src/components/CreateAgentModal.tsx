@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import { Bot, X, ChevronRight, Settings, ArrowLeft, Ticket, Key, Loader2, RotateCw, MessageSquare, Microscope, Globe, Battery, Scale, Lock, Landmark, Theater, FlaskConical, Leaf, Flame, Shield, User, RefreshCw } from 'lucide-react'
+import { useT } from '../i18n/I18nContext'
 
 // ── 类型 ──
 
@@ -191,6 +192,7 @@ export default function CreateAgentModal({
   onClose: () => void
   onCreated: () => void
 }) {
+  const t = useT()
   // 预设选择
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null)
   const [selectedSub, setSelectedSub] = useState<string | null>(null)
@@ -359,7 +361,7 @@ export default function CreateAgentModal({
       }
       onCreated()
     } catch (err: any) {
-      setError(err.message || '创建失败')
+      setError(err.message || t('modal.createAgentFailed'))
     } finally {
       setLoading(false)
     }
@@ -382,13 +384,13 @@ export default function CreateAgentModal({
           <button onClick={onClose} className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors">
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-base font-semibold text-textPrimary">创建新 AI</h2>
+          <h2 className="text-base font-semibold text-textPrimary">{t('modal.createAgentTitle')}</h2>
           <div className="w-6" />
         </div>
 
         {/* 桌面端头部：标题 + X */}
         <div className="hidden md:flex items-center justify-between mb-5">
-          <h2 className="text-lg font-semibold text-textPrimary">创建新 AI</h2>
+          <h2 className="text-lg font-semibold text-textPrimary">{t('modal.createAgentTitle')}</h2>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
             <X size={20} />
           </button>
@@ -399,25 +401,25 @@ export default function CreateAgentModal({
 
         {/* ── 名称输入 ── */}
         <div className="mb-4">
-          <label className="block text-xs font-medium mb-1.5 text-textSecondary">名称 *</label>
+          <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('chat.groupName')}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-            placeholder="给 AI 起个名字"
+            placeholder={t('modal.createAgentNamePlaceholder')}
           />
         </div>
 
         {/* ── 系统提示词 ── */}
         <div className="mb-5">
-          <label className="block text-xs font-medium mb-1.5 text-textSecondary">系统提示词（性格描述）</label>
+          <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('modal.createAgentSystemPrompt')}</label>
           <textarea
             value={systemPrompt}
             onChange={(e) => setSystemPrompt(e.target.value)}
             rows={3}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
-            placeholder="描述 AI 的性格和行为..."
+            placeholder={t('modal.createAgentSystemPromptPlaceholder')}
           />
         </div>
 
@@ -445,12 +447,12 @@ export default function CreateAgentModal({
                   >
                     <div className="p-5 flex flex-col items-center text-center gap-2">
                       <span className="text-3xl"><PresetIcon name={icon.icon} /></span>
-                      <span className="text-sm font-semibold text-textPrimary">{preset.name}</span>
-                      <p className="text-xs text-textSecondary leading-snug">{preset.description}</p>
+                      <span className="text-sm font-semibold text-textPrimary">{t(`preset.${preset.key}Name` as any)}</span>
+                      <p className="text-xs text-textSecondary leading-snug">{t(`preset.${preset.key}Desc` as any)}</p>
 
                       {hasSub && (
                         <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full mt-1">
-                          <SubIcon name={SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.icon || ''} /> {selectedSubLabel}
+                          <SubIcon name={SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.icon || ''} /> {selectedSub ? t(getSubPresetKey(selectedSub)) : ''}
                         </span>
                       )}
                     </div>
@@ -467,7 +469,7 @@ export default function CreateAgentModal({
             onClick={() => setShowDetailSettings(true)}
             className="w-full text-center text-xs text-textMuted hover:text-textSecondary transition-colors mb-3 py-1"
           >
-            或者，跳过预设，手动配置 →
+            {t('modal.createAgentSkipPreset')}
           </button>
         )}
 
@@ -478,18 +480,18 @@ export default function CreateAgentModal({
             className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium flex items-center justify-center gap-1.5"
           >
             <Settings size={14} />
-            详细设置
+            {t('modal.createAgentDetailSettings')}
           </button>
           <button
             onClick={handleCreate}
             disabled={!name.trim() || loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '创建中...' : '创建 AI'}
+            {loading ? t('modal.createAgentCreating') : t('modal.createAgentCreate')}
           </button>
         </div>
         {!name.trim() && selectedPreset && (
-          <p className="text-xs text-textMuted mt-2 text-center">请确认配置后点击"创建 AI"</p>
+          <p className="text-xs text-textMuted mt-2 text-center">{t('modal.createAgentConfirmHint')}</p>
         )}
 
         {error && <div className="text-sm text-rose-400 mt-3 text-center">{error}</div>}
@@ -542,6 +544,15 @@ export default function CreateAgentModal({
   )
 }
 
+// ── 子选项 ID → 翻译 key 映射 ──
+function getSubPresetKey(subId: string): string {
+  // e.g., "chat_low_power" → "LowPower" → "preset.subLowPower"
+  const parts = subId.split('_')
+  const subParts = parts.slice(1) // remove preset prefix
+  const pascal = subParts.map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('')
+  return `preset.sub${pascal}`
+}
+
 // ── 子选项弹窗（独立 modal，居中显示） ──
 
 function SubOptionModal({
@@ -552,6 +563,7 @@ function SubOptionModal({
   onSelect: (subId: string) => void
   onClose: () => void
 }) {
+  const t = useT()
   const icon = CARD_ICONS[preset.key]
   const subOptions = SUB_OPTIONS[preset.key] || []
   return (
@@ -567,7 +579,7 @@ function SubOptionModal({
           </button>
           <div className="flex items-center gap-2">
             <span className="text-xl"><PresetIcon name={icon.icon} /></span>
-            <h2 className="text-sm font-semibold text-textPrimary">{preset.name}</h2>
+            <h2 className="text-sm font-semibold text-textPrimary">{t(`preset.${preset.key}Name` as any)}</h2>
           </div>
           <div className="w-6" />
         </div>
@@ -576,7 +588,7 @@ function SubOptionModal({
         <div className="hidden md:flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <span className="text-2xl"><PresetIcon name={icon.icon} /></span>
-            <h2 className="text-base font-semibold text-textPrimary">{preset.name}</h2>
+            <h2 className="text-base font-semibold text-textPrimary">{t(`preset.${preset.key}Name` as any)}</h2>
           </div>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
             <X size={18} />
@@ -585,9 +597,9 @@ function SubOptionModal({
 
         {/* 可滚动内容 */}
         <div className="flex-1 overflow-y-auto md:overflow-visible pb-[var(--safe-bottom)] md:pb-0">
-        <p className="text-xs text-textMuted mb-4">{preset.description}</p>
+        <p className="text-xs text-textMuted mb-4">{t(`preset.${preset.key}Desc` as any)}</p>
         <p className="text-xs text-textMuted mb-4 italic text-center bg-canvas/50 rounded-lg py-2">
-          这是预设模板，具体参数可在下一步详细调整。
+          {t('modal.createAgentPresetHint')}
         </p>
         <div className="space-y-3">
           {subOptions.map(sub => (
@@ -603,8 +615,8 @@ function SubOptionModal({
               <div className="flex items-start gap-3">
                 <span className="text-2xl flex-shrink-0"><SubIcon name={sub.icon} /></span>
                 <div>
-                  <span className="text-sm font-semibold text-textPrimary">{sub.label}</span>
-                  <p className="text-xs text-textSecondary mt-1 leading-relaxed">{sub.description}</p>
+                  <span className="text-sm font-semibold text-textPrimary">{t(getSubPresetKey(sub.id))}</span>
+                  <p className="text-xs text-textSecondary mt-1 leading-relaxed">{t(getSubPresetKey(sub.id) + 'Desc' as any)}</p>
                 </div>
               </div>
             </button>
@@ -671,23 +683,29 @@ function DetailSettingsModal({
   thinkingSupported: boolean
   onClose: () => void
 }) {
+  const t = useT()
   // 兑换码状态（弹窗内自管理）
   const [redeemCode, setRedeemCode] = useState('')
   const [redeeming, setRedeeming] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState('')
+  const [redeemOk, setRedeemOk] = useState<boolean | null>(null)
   const [testingApi, setTestingApi] = useState(false)
   const [testApiMsg, setTestApiMsg] = useState('')
+  const [testApiOk, setTestApiOk] = useState<boolean | null>(null)
 
   const handleRedeem = async () => {
     if (!redeemCode.trim()) return
     setRedeeming(true)
     setRedeemMsg('')
+    setRedeemOk(null)
     try {
       const data = await api.post<{ message: string }>('/user/redeem', { code: redeemCode.trim() })
-      setRedeemMsg(data.message || '兑换成功')
+      setRedeemOk(true)
+      setRedeemMsg(data.message || t('modal.redeemSuccess'))
       setRedeemCode('')
     } catch (err: any) {
-      setRedeemMsg(err.message || '兑换失败')
+      setRedeemOk(false)
+      setRedeemMsg(err.message || t('modal.redeemFailed'))
     } finally {
       setRedeeming(false)
     }
@@ -701,9 +719,11 @@ function DetailSettingsModal({
         api_base_url: apiBaseUrl || null,
         api_key: apiKey || null,
       })
-      setTestApiMsg(data.message || (data.ok ? '连接成功' : '连接失败'))
+      setTestApiOk(data.ok)
+      setTestApiMsg(data.message || (data.ok ? t('modal.testSuccess') : t('modal.testFailed')))
     } catch (err: any) {
-      setTestApiMsg(err.message || '测试失败')
+      setTestApiOk(false)
+      setTestApiMsg(err.message || t('error.testFailed'))
     } finally {
       setTestingApi(false)
     }
@@ -720,13 +740,13 @@ function DetailSettingsModal({
           <button onClick={onClose} className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors">
             <ArrowLeft size={20} />
           </button>
-          <h2 className="text-base font-semibold text-textPrimary">详细设置</h2>
+          <h2 className="text-base font-semibold text-textPrimary">{t('modal.detailSettingsTitle')}</h2>
           <div className="w-6" />
         </div>
 
         {/* 桌面端头部 */}
         <div className="hidden md:flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-textPrimary">详细设置</h2>
+          <h2 className="text-base font-semibold text-textPrimary">{t('modal.detailSettingsTitle')}</h2>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
             <X size={18} />
           </button>
@@ -735,9 +755,9 @@ function DetailSettingsModal({
         <div className="space-y-5 flex-1 overflow-y-auto md:max-h-[65vh] pr-1 pb-[var(--safe-bottom)] md:pb-0">
 
           {/* ── 基础信息 ── */}
-          <Section title="基础信息" desc="AI 的名称和性格描述">
+          <Section title={t('modal.detailSettingsBasicInfo')} desc={t('modal.detailSettingsBasicInfoDesc')}>
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">名称 *</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('chat.groupName')}</label>
               <input
                 type="text"
                 value={name}
@@ -746,44 +766,44 @@ function DetailSettingsModal({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">系统提示词（性格描述）</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.createAgentSystemPrompt')}</label>
               <textarea
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 rows={3}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
-                placeholder="描述 AI 的性格和行为..."
+                placeholder={t('modal.createAgentSystemPromptPlaceholder')}
               />
             </div>
           </Section>
 
           {/* ── 模型参数 ── */}
-          <Section title="模型参数" desc="控制 AI 的创造力和表达风格">
-            <SliderField label="Temperature" value={temperature} setValue={setTemperature} min={0} max={2} step={0.1} desc="越高越有创意，越低越保守" />
-            <SliderField label="Top P" value={topP} setValue={setTopP} min={0} max={1} step={0.05} desc="核采样范围，0.95 为常用值" />
-            <SliderField label="Presence Penalty" value={presencePenalty} setValue={setPresencePenalty} min={-2} max={2} step={0.1} desc="正值鼓励新话题，负值允许重复" />
-            <SliderField label="Frequency Penalty" value={frequencyPenalty} setValue={setFrequencyPenalty} min={-2} max={2} step={0.1} desc="正值减少字词重复" />
+          <Section title={t('modal.detailSettingsModelParams')} desc={t('modal.detailSettingsModelParamsDesc')}>
+            <SliderField label="Temperature" value={temperature} setValue={setTemperature} min={0} max={2} step={0.1} desc={t('modal.detailSettingsTemperatureDesc')} />
+            <SliderField label="Top P" value={topP} setValue={setTopP} min={0} max={1} step={0.05} desc={t('modal.detailSettingsTopPDesc')} />
+            <SliderField label="Presence Penalty" value={presencePenalty} setValue={setPresencePenalty} min={-2} max={2} step={0.1} desc={t('modal.detailSettingsPresencePenaltyDesc')} />
+            <SliderField label="Frequency Penalty" value={frequencyPenalty} setValue={setFrequencyPenalty} min={-2} max={2} step={0.1} desc={t('modal.detailSettingsFrequencyPenaltyDesc')} />
             {thinkingSupported && (
-              <ToggleField label="深度推理模式" value={thinkingEnabled} setValue={setThinkingEnabled} desc="开启后回复更慢但思考更深入，适合执行复杂任务的 AI" />
+              <ToggleField label={t('modal.detailSettingsThinkingMode')} value={thinkingEnabled} setValue={setThinkingEnabled} desc={t('modal.detailSettingsThinkingModeDesc')} />
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium mb-1 text-textSecondary">
-                  聊天模型 <span className="text-textMuted">（默认 {defaults.chat_model}）</span>
+                  {t('modal.detailSettingsChatModel')} <span className="text-textMuted">{t('modal.detailSettingsDefaultLabel')} {defaults.chat_model})</span>
                 </label>
                 <select value={chatModel} onChange={(e) => setChatModel(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50">
-                  <option value="">全局默认</option>
+                  <option value="">{t('modal.detailSettingsGlobalDefault')}</option>
                   {modelOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-medium mb-1 text-textSecondary">
-                  工作模型 <span className="text-textMuted">（默认 {defaults.work_model}）</span>
+                  {t('modal.detailSettingsWorkModel')} <span className="text-textMuted">{t('modal.detailSettingsDefaultLabel')} {defaults.work_model})</span>
                 </label>
                 <select value={workModel} onChange={(e) => setWorkModel(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50">
-                  <option value="">全局默认</option>
+                  <option value="">{t('modal.detailSettingsGlobalDefault')}</option>
                   {modelOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
@@ -791,49 +811,49 @@ function DetailSettingsModal({
           </Section>
 
           {/* ── 工具调用 ── */}
-          <Section title="工具调用" desc="控制 AI 每次回复的复杂度和 token 成本">
+          <Section title={t('modal.detailSettingsToolCalls')} desc={t('modal.detailSettingsToolCallsDesc')}>
             <div className="grid grid-cols-2 gap-3">
-              <NumberField label="回复轮次上限" value={maxToolRounds} setValue={setMaxToolRounds} min={1} max={20} desc="群聊/DM 最大 API 调用轮次" />
-              <NumberField label="闹钟轮次上限" value={alarmMaxToolRounds} setValue={setAlarmMaxToolRounds} min={1} max={30} desc="闹钟/心跳独立上限" />
+              <NumberField label={t('modal.detailSettingsMaxToolRounds')} value={maxToolRounds} setValue={setMaxToolRounds} min={1} max={20} desc={t('modal.detailSettingsMaxToolRoundsDesc')} />
+              <NumberField label={t('modal.detailSettingsAlarmRounds')} value={alarmMaxToolRounds} setValue={setAlarmMaxToolRounds} min={1} max={30} desc={t('modal.detailSettingsAlarmRoundsDesc')} />
             </div>
           </Section>
 
           {/* ── 闹钟 / 心跳 ── */}
-          <Section title="闹钟 / 心跳" desc="AI 自主唤醒和周期性任务">
-            <ToggleField label="强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止「睡死」" />
-            <NumberField label="最大活跃闹钟数" value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc="AI 最多同时保有多个未触发的闹钟" />
+          <Section title={t('modal.detailSettingsAlarm')} desc={t('modal.detailSettingsAlarmDesc')}>
+            <ToggleField label={t('modal.detailSettingsForceAlarm')} value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc={t('modal.detailSettingsForceAlarmDesc')} />
+            <NumberField label={t('modal.detailSettingsMaxAlarms')} value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc={t('modal.detailSettingsMaxAlarmsDesc')} />
           </Section>
 
           {/* ── AI 类型 ── */}
-          <Section title="AI 类型" desc="决定 AI 的记忆隔离粒度和群聊权限">
+          <Section title={t('modal.detailSettingsAiType')} desc={t('modal.detailSettingsAiTypeDesc')}>
             <div className="grid grid-cols-3 gap-2">
               {([
-                { value: 'general', label: '通用', icon: 'User', desc: '每人独立记忆和配置，不能加群' },
-                { value: 'semi_general', label: '半通用', icon: 'RefreshCw', desc: '每人独立配置 + 跨用户学习，可以加群' },
-                { value: 'resonance', label: '共振', icon: 'Globe', desc: '统一记忆和配置，所有用户共享（当前模式）' },
-              ] as const).map((t) => (
+                { value: 'general', label: t('modal.detailSettingsAiTypeGeneral'), icon: 'User', desc: t('modal.detailSettingsAiTypeGeneralDesc') },
+                { value: 'semi_general', label: t('modal.detailSettingsAiTypeSemiGeneral'), icon: 'RefreshCw', desc: t('modal.detailSettingsAiTypeSemiGeneralDesc') },
+                { value: 'resonance', label: t('modal.detailSettingsAiTypeResonance'), icon: 'Globe', desc: t('modal.detailSettingsAiTypeResonanceDesc') },
+              ] as const).map((type) => (
                 <button
-                  key={t.value}
+                  key={type.value}
                   type="button"
-                  onClick={() => setAiType(t.value)}
+                  onClick={() => setAiType(type.value)}
                   className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-all ${
-                    aiType === t.value
+                    aiType === type.value
                       ? 'border-primary-400 bg-primary-500/10 text-primary-600 dark:text-primary-300'
                       : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
                   }`}
                 >
-                  <span className="text-lg"><SubIcon name={t.icon} /></span>
-                  <span className="text-xs font-semibold">{t.label}</span>
-                  <span className="text-[9px] leading-tight text-textMuted">{t.desc}</span>
+                  <span className="text-lg"><SubIcon name={type.icon} /></span>
+                  <span className="text-xs font-semibold">{type.label}</span>
+                  <span className="text-[9px] leading-tight text-textMuted">{type.desc}</span>
                 </button>
               ))}
             </div>
           </Section>
 
           {/* ── 行为开关 ── */}
-          <Section title="行为开关" desc="精细控制 AI 的社交行为和自我意识">
+          <Section title={t('modal.detailSettingsBehaviorSwitches')} desc={t('modal.detailSettingsBehaviorSwitchesDesc')}>
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">延迟回复</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsDelayReply')}</label>
               <select
                 value={delayReplyEnabled === null ? 'inherit' : delayReplyEnabled ? 'on' : 'off'}
                 onChange={(e) => {
@@ -842,42 +862,42 @@ function DetailSettingsModal({
                 }}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
-                <option value="inherit">继承全局默认</option>
-                <option value="on">开启</option>
-                <option value="off">关闭</option>
+                <option value="inherit">{t('modal.detailSettingsInheritGlobal')}</option>
+                <option value="on">{t('common.enabled')}</option>
+                <option value="off">{t('common.disabled')}</option>
               </select>
             </div>
-            <ToggleField label="允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
-            <ToggleField label="隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
+            <ToggleField label={t('modal.detailSettingsSelfEdit')} value={isAiEditable} setValue={setIsAiEditable} desc={t('modal.detailSettingsSelfEditDesc')} />
+            <ToggleField label={t('modal.detailSettingsHideAiIdentity')} value={hideAiIdentity} setValue={setHideAiIdentity} desc={t('modal.detailSettingsHideAiIdentityDesc')} />
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">系统提醒额外轮次</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsReminderGrace')}</label>
               <select
                 value={reminderGrace}
                 onChange={(e) => setReminderGrace(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
-                <option value="every_time">每次都不计 · 推荐 — AI 忘调 send_message 时每次都给额外机会</option>
-                <option value="once">仅一次 — 只给一次额外机会</option>
-                <option value="off">关闭 — 提醒计入正常轮次配额</option>
+                <option value="every_time">{t('modal.detailSettingsReminderGraceEvery')}</option>
+                <option value="once">{t('modal.detailSettingsReminderGraceOnce')}</option>
+                <option value="off">{t('modal.detailSettingsReminderGraceOff')}</option>
               </select>
             </div>
           </Section>
 
           {/* ── 好友与社交 ── */}
-          <Section title="好友与社交" desc="控制 AI 如何响应好友申请">
-            <ToggleField label="允许接收好友申请" value={allowFriendRequests} setValue={setAllowFriendRequests} desc="关闭后其他用户无法向该 AI 发送好友申请" />
+          <Section title={t('modal.detailSettingsFriendsSocial')} desc={t('modal.detailSettingsFriendsSocialDesc')}>
+            <ToggleField label={t('modal.detailSettingsAllowFriendRequests')} value={allowFriendRequests} setValue={setAllowFriendRequests} desc={t('modal.detailSettingsAllowFriendRequestsDesc')} />
             {allowFriendRequests && (
-              <ToggleField label="自动回应好友申请" value={autoRespondFriendRequest} setValue={setAutoRespondFriendRequest} desc="开启后 AI 收到好友申请时会自动触发 API 响应（消耗额度），发起者将看到提示" />
+              <ToggleField label={t('modal.detailSettingsAutoRespondFriendRequest')} value={autoRespondFriendRequest} setValue={setAutoRespondFriendRequest} desc={t('modal.detailSettingsAutoRespondFriendRequestDesc')} />
             )}
           </Section>
 
           {/* ── 额度 ── */}
-          <Section title="额度成本" desc="创建和删除 AI 时的 API 额度处理">
-            <NumberField label="API 额度成本" value={apiCreditCost} setValue={setApiCreditCost} min={0} max={100000} desc="创建时消耗，删除时返还（0=不消耗）" />
+          <Section title={t('modal.detailSettingsCreditCost')} desc={t('modal.detailSettingsCreditCostDesc')}>
+            <NumberField label={t('modal.detailSettingsApiCreditCost')} value={apiCreditCost} setValue={setApiCreditCost} min={0} max={100000} desc={t('modal.detailSettingsApiCreditCostDesc')} />
           </Section>
 
           {/* ── API 提供商 ── */}
-          <Section title="API 提供商" desc="为此 AI 设置独立 API，留空则继承全局配置">
+          <Section title={t('modal.detailSettingsApiProvider')} desc={t('modal.detailSettingsApiProviderDesc')}>
             <div>
               <label className="block text-xs font-medium mb-1 text-textSecondary">API Base URL</label>
               <input
@@ -885,7 +905,7 @@ function DetailSettingsModal({
                 value={apiBaseUrl}
                 onChange={(e) => setApiBaseUrl(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="例: https://api.deepseek.com（留空继承全局）"
+                placeholder={t('modal.detailSettingsApiBaseUrlPlaceholder')}
               />
             </div>
             <div>
@@ -895,7 +915,7 @@ function DetailSettingsModal({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="例: sk-xxxxxxxx（留空继承全局）"
+                placeholder={t('modal.detailSettingsApiKeyPlaceholder')}
               />
             </div>
             <button
@@ -904,17 +924,17 @@ function DetailSettingsModal({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-textSecondary hover:bg-elevated disabled:opacity-40 transition-colors"
             >
               {testingApi ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-              测试连接
+              {t('settings.testConnection')}
             </button>
             {testApiMsg && (
-              <p className={`text-xs ${testApiMsg.includes('成功') ? 'text-mint-400' : 'text-rose-400'}`}>
+              <p className={`text-xs ${testApiOk === true ? 'text-mint-400' : 'text-rose-400'}`}>
                 {testApiMsg}
               </p>
             )}
           </Section>
 
           {/* ── 兑换码 ── */}
-          <Section title="兑换码" desc="兑换 API 调用额度，额度不足时无法创建 AI">
+          <Section title={t('modal.detailSettingsRedeemCode')} desc={t('modal.detailSettingsRedeemCodeDesc')}>
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
                 <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
@@ -923,7 +943,7 @@ function DetailSettingsModal({
                   value={redeemCode}
                   onChange={(e) => setRedeemCode(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                  placeholder="输入兑换码（如 RC-xxxxxxxxxxxxxxxx）"
+                  placeholder={t('modal.detailSettingsRedeemPlaceholder')}
                 />
               </div>
               <button
@@ -931,11 +951,11 @@ function DetailSettingsModal({
                 disabled={redeeming || !redeemCode.trim()}
                 className="flex items-center gap-1 px-4 py-2 rounded-lg bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
               >
-                {redeeming ? <Loader2 size={14} className="animate-spin" /> : <span>兑换</span>}
+                {redeeming ? <Loader2 size={14} className="animate-spin" /> : <span>{t('me.redeem')}</span>}
               </button>
             </div>
             {redeemMsg && (
-              <p className={`text-xs ${redeemMsg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>
+              <p className={`text-xs ${redeemOk === false ? 'text-rose-400' : 'text-mint-400'}`}>
                 {redeemMsg}
               </p>
             )}
@@ -947,7 +967,7 @@ function DetailSettingsModal({
           onClick={onClose}
           className="w-full mt-5 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 font-medium transition-all shadow-lg shadow-primary-500/20"
         >
-          保存并关闭
+          {t('modal.detailSettingsSaveAndClose')}
         </button>
       </div>
     </div>

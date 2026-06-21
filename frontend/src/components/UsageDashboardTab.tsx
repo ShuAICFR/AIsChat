@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useIsDark } from '../hooks/useIsDark'
+import { useT } from '../i18n/I18nContext'
 import { fmtTokenNum } from '../utils/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -43,6 +44,7 @@ interface DailyPoint {
 }
 
 export default function UsageDashboardTab() {
+  const t = useT()
   const [days, setDays] = useState(30)
   const [global, setGlobal] = useState<GlobalStats | null>(null)
   const [userRows, setUserRows] = useState<UserAgentRow[]>([])
@@ -145,7 +147,7 @@ export default function UsageDashboardTab() {
                     : 'bg-surface border border-border text-textSecondary hover:bg-elevated'
                 }`}
               >
-                {d} 天
+                {d} {t('admin.daysSuffix')}
               </button>
             ))}
           </div>
@@ -154,10 +156,10 @@ export default function UsageDashboardTab() {
           {global && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: '总 Token', value: fmtTokenNum(global.total_tokens), icon: Activity },
-                { label: '总调用次数', value: global.total_calls, icon: BarChart3 },
-                { label: '活跃 AI', value: global.unique_agents, icon: Activity },
-                { label: '活跃用户', value: global.unique_users, icon: Users },
+                { label: t('admin.totalTokens'), value: fmtTokenNum(global.total_tokens), icon: Activity },
+                { label: t('admin.totalCalls'), value: global.total_calls, icon: BarChart3 },
+                { label: t('admin.activeAgents'), value: global.unique_agents, icon: Activity },
+                { label: t('admin.activeUsers'), value: global.unique_users, icon: Users },
               ].map(item => (
                 <div key={item.label} className="bg-surface rounded-xl border border-border p-4 text-center">
                   <item.icon size={16} className="text-primary-400 mx-auto mb-1" />
@@ -171,7 +173,7 @@ export default function UsageDashboardTab() {
           {/* 全站每日图表 */}
           {dailyData.length > 0 && (
             <div className="bg-surface rounded-2xl border border-border p-5">
-              <h3 className="text-sm font-semibold text-textPrimary mb-4">全站每日 Token 消耗</h3>
+              <h3 className="text-sm font-semibold text-textPrimary mb-4">{t('admin.dailyTokenConsumption')}</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dailyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
@@ -187,7 +189,7 @@ export default function UsageDashboardTab() {
                       }}
                       formatter={(value: number) => [fmtTokenNum(value), '']}
                     />
-                    <Area type="monotone" dataKey="total_tokens" stroke={colors.prompt} fill={colors.prompt} fillOpacity={0.15} name="总 Token" />
+                    <Area type="monotone" dataKey="total_tokens" stroke={colors.prompt} fill={colors.prompt} fillOpacity={0.15} name={t('admin.totalTokens')} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -197,7 +199,7 @@ export default function UsageDashboardTab() {
           {/* 按用户明细 */}
           <div className="bg-surface rounded-2xl border border-border overflow-hidden">
             <div className="px-5 py-3 border-b border-border">
-              <h3 className="text-sm font-semibold text-textPrimary">按用户 · AI 用量明细</h3>
+              <h3 className="text-sm font-semibold text-textPrimary">{t('admin.usageByUser')}</h3>
             </div>
             <div className="divide-y divide-border/60">
               {Array.from(userGroups.entries()).map(([uid, ug]) => (
@@ -209,7 +211,7 @@ export default function UsageDashboardTab() {
                   >
                     {expandedUsers.has(uid) ? <ChevronDown size={14} className="text-textMuted" /> : <ChevronRight size={14} className="text-textMuted" />}
                     <span className="text-sm font-medium text-textPrimary">{ug.username}</span>
-                    <span className="text-xs text-textMuted ml-auto">{ug.agents.length} 个 AI</span>
+                    <span className="text-xs text-textMuted ml-auto">{ug.agents.length} {t('admin.aiCount')}</span>
                     <span className="text-sm font-mono text-textPrimary ml-4">{fmtTokenNum(ug.total)} Token</span>
                   </button>
                   {/* AI 子行 */}
@@ -225,7 +227,7 @@ export default function UsageDashboardTab() {
                         >
                           <span className="text-textPrimary font-medium">{a.agent_name}</span>
                           <span className="text-textMuted hidden md:inline">{a.model || '-'}</span>
-                          <span className="text-textMuted ml-auto">{a.total_calls} 次调用</span>
+                          <span className="text-textMuted ml-auto">{a.total_calls} {t('admin.callsCount')}</span>
                           <span className="text-textPrimary font-mono ml-4">{fmtTokenNum(a.total_tokens)}</span>
                         </button>
                       ))}
@@ -234,7 +236,7 @@ export default function UsageDashboardTab() {
                 </div>
               ))}
               {userGroups.size === 0 && (
-                <div className="text-center py-12 text-textMuted text-sm">暂无数据</div>
+                <div className="text-center py-12 text-textMuted text-sm">{t('admin.noData')}</div>
               )}
             </div>
           </div>
@@ -243,7 +245,7 @@ export default function UsageDashboardTab() {
           {selectedAgentId && (
             <div className="bg-surface rounded-2xl border border-border p-5">
               <h3 className="text-sm font-semibold text-textPrimary mb-4">
-                AI #{selectedAgentId} 每日 Token 分布
+                {t('admin.aiDailyTokens').replace('{id}', String(selectedAgentId))}
               </h3>
               {agentDailyLoading ? (
                 <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={20} /></div>
@@ -266,13 +268,13 @@ export default function UsageDashboardTab() {
                       <Legend />
                       <Bar dataKey="prompt_tokens" stackId="a" fill={colors.prompt} name="Prompt" />
                       <Bar dataKey="completion_tokens" stackId="a" fill={colors.completion} name="Completion" />
-                      <Bar dataKey="reasoning_tokens" stackId="a" fill={colors.reasoning} name="思考" />
-                      <Bar dataKey="cached_tokens" stackId="a" fill={colors.cached} name="缓存" />
+                      <Bar dataKey="reasoning_tokens" stackId="a" fill={colors.reasoning} name={t('admin.thinking')} />
+                      <Bar dataKey="cached_tokens" stackId="a" fill={colors.cached} name={t('admin.cached')} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="text-center py-8 text-textMuted text-sm">该 AI 暂无每日数据</div>
+                <div className="text-center py-8 text-textMuted text-sm">{t('admin.noAiDailyData')}</div>
               )}
             </div>
           )}

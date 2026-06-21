@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n/I18nContext'
 import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
@@ -48,11 +49,11 @@ function AvatarPic({ url, name, size = 'md' }: { url: string | null | undefined;
 type Tab = 'friends' | 'requests'
 type SortMode = 'smart' | 'alpha' | 'recent_chat' | 'added_time'
 
-const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'smart', label: '智能排序' },
-  { value: 'alpha', label: '首字母' },
-  { value: 'recent_chat', label: '最近聊天' },
-  { value: 'added_time', label: '加好友时间' },
+const SORT_OPTIONS: { value: SortMode; key: string }[] = [
+  { value: 'smart', key: 'friends.smartSort' },
+  { value: 'alpha', key: 'friends.sortAlpha' },
+  { value: 'recent_chat', key: 'friends.sortRecent' },
+  { value: 'added_time', key: 'friends.sortAdded' },
 ]
 
 // 状态权重：在线 > 勿扰 > 离线
@@ -107,6 +108,7 @@ function sortFriends(friends: Friend[], mode: SortMode): Friend[] {
 }
 
 export default function FriendsPage() {
+  const t = useT()
   const [friends, setFriends] = useState<Friend[]>([])
   const [requests, setRequests] = useState<FriendRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -153,7 +155,7 @@ export default function FriendsPage() {
   const handleAccept = async (requestId: number) => {
     const req = requests.find(r => r.id === requestId)
     if (req && req.direction === 'received' && req.auto_respond_friend_request) {
-      if (!confirm('该 AI 已开启「自动回应好友申请」，接受后将自动触发其 API 响应（消耗额度）。是否继续？')) {
+      if (!confirm(t('friends.autoRespondConfirm'))) {
         return
       }
     }
@@ -208,7 +210,7 @@ export default function FriendsPage() {
         type="text"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="搜索好友..."
+        placeholder={t('friends.searchPlaceholder')}
         className="w-full pl-9 pr-8 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
         autoFocus={showSearch}
       />
@@ -235,7 +237,7 @@ export default function FriendsPage() {
         </button>
         <h1 className="font-semibold text-textPrimary text-sm flex items-center gap-2">
           <Users size={16} className="text-primary-400 hidden md:inline" />
-          {tab === 'friends' ? '好友列表' : '好友申请'}
+          {tab === 'friends' ? t('friends.tabFriends') : t('friends.tabRequests')}
         </h1>
 
         {/* 排序 + 搜索按钮（仅好友列表 Tab） */}
@@ -249,7 +251,7 @@ export default function FriendsPage() {
                 className="appearance-none pl-2 pr-6 py-1 rounded-lg border border-border bg-canvas text-[11px] text-textSecondary focus:outline-none focus:ring-1 focus:ring-primary-500/50 cursor-pointer"
               >
                 {SORT_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                  <option key={o.value} value={o.value}>{t(o.key)}</option>
                 ))}
               </select>
               <ArrowUpDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-textMuted pointer-events-none" />
@@ -258,7 +260,7 @@ export default function FriendsPage() {
             <button
               onClick={() => setShowSearch(true)}
               className="p-1.5 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
-              title="搜索好友"
+              title={t('friends.searchButton')}
             >
               <Search size={16} />
             </button>
@@ -276,7 +278,7 @@ export default function FriendsPage() {
               : 'text-textMuted hover:text-textSecondary'
           }`}
         >
-          好友列表
+          {t('friends.tabFriends')}
         </button>
         <button
           onClick={() => setTab('requests')}
@@ -286,7 +288,7 @@ export default function FriendsPage() {
               : 'text-textMuted hover:text-textSecondary'
           }`}
         >
-          好友申请
+          {t('friends.tabRequests')}
           {pendingCount > 0 && (
             <span className="absolute top-1 right-4 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-rose-500 rounded-full">
               {pendingCount}
@@ -306,14 +308,14 @@ export default function FriendsPage() {
           friends.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-textMuted">
               <Users size={40} className="mb-3 opacity-30" />
-              <p className="text-sm">暂无好友</p>
-              <p className="text-xs mt-1">在群聊中点击头像即可添加好友</p>
+              <p className="text-sm">{t('friends.noFriends')}</p>
+              <p className="text-xs mt-1">{t('friends.noFriendsHint')}</p>
             </div>
           ) : sortedFriends.length === 0 && searchQuery ? (
             <div className="flex flex-col items-center justify-center py-20 text-textMuted">
               <Search size={40} className="mb-3 opacity-30" />
-              <p className="text-sm">未找到匹配的好友</p>
-              <p className="text-xs mt-1">试试其他关键词</p>
+              <p className="text-sm">{t('friends.noSearchResults')}</p>
+              <p className="text-xs mt-1">{t('friends.tryOtherKeywords')}</p>
             </div>
           ) : (
             <div className="divide-y divide-border/50">
@@ -332,7 +334,7 @@ export default function FriendsPage() {
                       {stateIcon(f.state)}
                     </div>
                     <span className="text-xs text-textMuted">
-                      {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
+                      {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> {t('friends.friendAi')}</> : <><User size={12} className="inline" /> {t('friends.friendHuman')}</>}
                     </span>
                   </div>
                   <MessageSquare size={16} className="text-textMuted shrink-0" />
@@ -345,8 +347,8 @@ export default function FriendsPage() {
           receivedRequests.length === 0 && sentRequests.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-textMuted">
               <UserPlus size={40} className="mb-3 opacity-30" />
-              <p className="text-sm">暂无待处理的好友申请</p>
-              <p className="text-xs mt-1">当有人加你为好友时，会显示在这里</p>
+              <p className="text-sm">{t('friends.noPendingRequests')}</p>
+              <p className="text-xs mt-1">{t('friends.pendingHint')}</p>
             </div>
           ) : (
             <div className="divide-y divide-border/50">
@@ -354,7 +356,7 @@ export default function FriendsPage() {
               {receivedRequests.length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-surface sticky top-0 z-10 border-b border-border/50">
-                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">收到的申请 · {receivedRequests.length}</span>
+                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">{t('friends.receivedRequests')}{receivedRequests.length}</span>
                   </div>
                   {receivedRequests.map((req) => (
                     <div key={`recv-${req.id}`} className="px-4 py-3.5">
@@ -363,15 +365,15 @@ export default function FriendsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-textPrimary truncate">
-                              {req.requester_name || `用户${req.requester_id}`}
+                              {req.requester_name || `${t('friends.userPrefix')}${req.requester_id}`}
                             </span>
                           </div>
                           <span className="text-xs text-textMuted">
-                            {req.message || '请求添加你为好友'}
+                            {req.message || t('friends.defaultRequestMessage')}
                           </span>
                           {req.auto_respond_friend_request && (
                             <span className="inline-block mt-0.5 text-[10px] text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                              接受后将触发 AI 响应（消耗额度）
+                              {t('friends.autoRespondWarning')}
                             </span>
                           )}
                         </div>
@@ -379,14 +381,14 @@ export default function FriendsPage() {
                           <button
                             onClick={() => handleAccept(req.id)}
                             className="p-1.5 rounded-lg bg-mint-400/15 text-mint-400 hover:bg-mint-400/25 transition-colors"
-                            title="接受"
+                            title={t('friends.accept')}
                           >
                             <Check size={16} />
                           </button>
                           <button
                             onClick={() => handleReject(req.id)}
                             className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
-                            title="拒绝"
+                            title={t('friends.reject')}
                           >
                             <X size={16} />
                           </button>
@@ -400,7 +402,7 @@ export default function FriendsPage() {
               {sentRequests.length > 0 && (
                 <>
                   <div className="px-4 py-2 bg-surface sticky top-0 z-10 border-b border-border/50">
-                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">发出的申请 · {sentRequests.length}</span>
+                    <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">{t('friends.sentRequests')}{sentRequests.length}</span>
                   </div>
                   {sentRequests.map((req) => (
                     <div key={`sent-${req.id}`} className="px-4 py-3.5">
@@ -409,18 +411,18 @@ export default function FriendsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium text-textPrimary truncate">
-                              {req.target_name || `用户${req.target_id}`}
+                              {req.target_name || `${t('friends.userPrefix')}${req.target_id}`}
                             </span>
                           </div>
                           <span className="text-xs text-textMuted">
-                            {req.message || '你发送了好友申请'}
+                            {req.message || t('friends.sentRequestMessage')}
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <button
                             onClick={() => handleCancelSent(req.id)}
                             className="p-1.5 rounded-lg bg-rose-400/15 text-rose-400 hover:bg-rose-400/25 transition-colors"
-                            title="撤回申请"
+                            title={t('friends.cancelRequest')}
                           >
                             <X size={16} />
                           </button>
@@ -455,7 +457,7 @@ export default function FriendsPage() {
               {sortedFriends.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-textMuted">
                   <Search size={40} className="mb-3 opacity-30" />
-                  <p className="text-sm">未找到匹配的好友</p>
+                  <p className="text-sm">{t('friends.noSearchResults')}</p>
                 </div>
               ) : (
                 sortedFriends.map((f) => (
@@ -475,7 +477,7 @@ export default function FriendsPage() {
                         {stateIcon(f.state)}
                       </div>
                       <span className="text-xs text-textMuted">
-                        {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
+                        {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> {t('friends.friendAi')}</> : <><User size={12} className="inline" /> {t('friends.friendHuman')}</>}
                       </span>
                     </div>
                   </button>
@@ -497,7 +499,7 @@ export default function FriendsPage() {
                 {searchQuery.trim() && (
                   <div className="max-h-64 overflow-y-auto border-t border-border divide-y divide-border/50">
                     {sortedFriends.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-textMuted">无匹配结果</div>
+                      <div className="py-6 text-center text-xs text-textMuted">{t('friends.searchEmptyDesktop')}</div>
                     ) : (
                       sortedFriends.slice(0, 8).map((f) => (
                         <button
@@ -516,7 +518,7 @@ export default function FriendsPage() {
                               {stateIcon(f.state)}
                             </div>
                             <span className="text-[10px] text-textMuted">
-                              {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
+                              {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> {t('friends.friendAi')}</> : <><User size={12} className="inline" /> {t('friends.friendHuman')}</>}
                             </span>
                           </div>
                         </button>

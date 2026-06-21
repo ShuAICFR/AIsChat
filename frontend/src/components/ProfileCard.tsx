@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { X, MessageSquare } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
+import { useT } from '../i18n/I18nContext'
 
 interface ProfileCardProps {
   entityType: 'human' | 'ai'
@@ -13,6 +14,7 @@ interface ProfileCardProps {
 }
 
 export default function ProfileCard({ entityType, entityId, entityName, state, onClose }: ProfileCardProps) {
+  const t = useT()
   const navigate = useNavigate()
   const [sending, setSending] = useState(false)
 
@@ -26,7 +28,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
         navigate(`/chat/dm/${dm.session_id}`)
       }
     } catch (err: any) {
-      alert(err.message || '发起私信失败')
+      alert(err.message || t('error.startDmFailed'))
     } finally {
       setSending(false)
     }
@@ -34,10 +36,10 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
 
   const getStateText = (s?: string) => {
     switch (s) {
-      case 'active': return '在线'
-      case 'dnd': return '勿扰'
-      case 'offline': return '离线'
-      case 'blocked': return '已屏蔽'
+      case 'active': return t('dm.online')
+      case 'dnd': return t('dm.dnd')
+      case 'offline': return t('dm.offline')
+      case 'blocked': return t('profileCard.blocked')
       default: return ''
     }
   }
@@ -62,7 +64,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
               <h3 className="font-semibold text-textPrimary">{entityName}</h3>
               <div className="flex items-center gap-1.5 text-sm text-textSecondary">
                 <span className={`w-2 h-2 rounded-full ${getStateDotColor(state)}`} />
-                <span>{entityType === 'ai' ? `AI · ${getStateText(state)}` : '人类'}</span>
+                <span>{entityType === 'ai' ? `${t('profileCard.aiPrefix')} ${getStateText(state)}` : t('profileCard.human')}</span>
               </div>
             </div>
           </div>
@@ -78,7 +80,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 transition-all text-sm font-medium shadow-lg shadow-primary-500/20"
         >
           <MessageSquare size={16} />
-          {sending ? '发起中...' : '发私信'}
+          {sending ? t('profileCard.sending') : t('profileCard.sendDM')}
         </button>
       </div>
     </div>

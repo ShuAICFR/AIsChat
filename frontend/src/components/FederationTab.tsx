@@ -1,5 +1,6 @@
 import { useState, useEffect, Fragment } from 'react'
 import { api } from '../api/client'
+import { useT } from '../i18n/I18nContext'
 import { Globe, Link, Plus, Trash2, RefreshCw, Power, Shield } from 'lucide-react'
 
 interface InstanceInfo {
@@ -40,6 +41,7 @@ interface GroupShare {
 }
 
 export default function FederationTab() {
+  const t = useT()
   const [instance, setInstance] = useState<InstanceInfo | null>(null)
   const [peers, setPeers] = useState<Peer[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,7 +88,7 @@ export default function FederationTab() {
       setPeers(peerList)
       setInstanceForm({ display_name: inst.display_name, public_url: inst.public_url, public_id: inst.public_id || '' })
     } catch (e: any) {
-      setError(e?.message || '加载失败')
+      setError(e?.message || t('admin.loadFailed'))
     } finally {
       setLoading(false)
     }
@@ -107,7 +109,7 @@ export default function FederationTab() {
   }
 
   const handleDeletePeer = async (id: number) => {
-    if (!confirm('确定移除此对等端？相关群聊共享也将被删除。')) return
+    if (!confirm(t('admin.confirmRemovePeer'))) return
     await api.delete(`/admin/federation/peers/${id}`)
     await loadData()
   }
@@ -156,7 +158,7 @@ export default function FederationTab() {
 
     // 执行轮换
     if (!rotateUrl.trim()) {
-      setRotateError('URL 不能为空')
+      setRotateError(t('admin.urlRequired'))
       return
     }
 
@@ -167,7 +169,7 @@ export default function FederationTab() {
       setRotatingPeerId(null)
       await loadData()
     } catch (e: any) {
-      setRotateError(e?.message || '轮换失败')
+      setRotateError(e?.message || t('admin.rotateFailed'))
     } finally {
       setRotateLoading(false)
     }
@@ -186,19 +188,19 @@ export default function FederationTab() {
     // 如果弹窗中填了 Token（无论是首次配置还是更换），先保存
     const needSaveToken = !!dialogToken.trim()
     if (needSaveToken) {
-      setRegisterResult('🔑 正在保存 Token...')
+      setRegisterResult(t('admin.savingToken'))
       try {
         await api.put('/admin/federation/instance/github-token', { token: dialogToken.trim() })
         setDialogToken('')
         await loadData() // 刷新 github_token_configured
       } catch (e: any) {
         setRegisterState('error')
-        setRegisterResult(e?.response?.data?.detail || 'Token 保存失败')
+        setRegisterResult(e?.response?.data?.detail || t('admin.tokenSaveFailed'))
         return
       }
     }
 
-    setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
+    setRegisterResult(t('admin.verifyingRegister'))
     setRegisterErrorCode('')
 
     try {
@@ -216,7 +218,7 @@ export default function FederationTab() {
       } else {
         setRegisterState('error')
         setRegisterErrorCode(result.error_code || '')
-        setRegisterResult(result.message || '注册失败')
+        setRegisterResult(result.message || t('admin.registerFailed'))
       }
     } catch (e: any) {
       setRegisterState('error')
@@ -225,7 +227,7 @@ export default function FederationTab() {
         setRegisterErrorCode(detail.error_code || '')
         setRegisterResult(detail.message || JSON.stringify(detail))
       } else {
-        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '注册失败'))
+        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || t('admin.registerFailed')))
       }
     }
   }
@@ -234,13 +236,13 @@ export default function FederationTab() {
     // 快速保存 Token 并重试注册（TOKEN_MISSING / TOKEN_INVALID 错误恢复）
     if (!quickToken.trim()) return
     setRegisterState('loading')
-    setRegisterResult('🔑 正在保存 Token...')
+    setRegisterResult(t('admin.savingToken'))
     try {
       await api.put('/admin/federation/instance/github-token', { token: quickToken.trim() })
       setQuickToken('')
       await loadData()
       // 保存成功后自动重试注册
-      setRegisterResult('🔍 正在验证公网 URL 可达性与身份匹配...')
+      setRegisterResult(t('admin.verifyingRegister'))
       const result = await api.post<{
         success: boolean; message: string; error_code?: string
       }>('/admin/federation/instance/register')
@@ -251,7 +253,7 @@ export default function FederationTab() {
       } else {
         setRegisterState('error')
         setRegisterErrorCode(result.error_code || '')
-        setRegisterResult(result.message || '注册失败')
+        setRegisterResult(result.message || t('admin.registerFailed'))
       }
     } catch (e: any) {
       setRegisterState('error')
@@ -260,7 +262,7 @@ export default function FederationTab() {
         setRegisterErrorCode(detail.error_code || '')
         setRegisterResult(detail.message || JSON.stringify(detail))
       } else {
-        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || '保存/注册失败'))
+        setRegisterResult(typeof detail === 'string' ? detail : (e?.message || t('admin.saveOrRegisterFailed')))
       }
     }
   }
@@ -272,17 +274,17 @@ export default function FederationTab() {
       await api.put('/admin/federation/instance/github-token', { token: manageToken.trim() })
       setManageToken('')
       setShowTokenInput(false)
-      setRegisterResult('✅ GitHub Token 已更新')
+      setRegisterResult(t('admin.tokenUpdated'))
       await loadData()
     } catch (e: any) {
-      setRegisterResult(e?.response?.data?.detail || '保存失败')
+      setRegisterResult(e?.response?.data?.detail || t('admin.saveFailed'))
     } finally {
       setTokenSaving(false)
     }
   }
 
   const handleRegenerateId = async () => {
-    if (!confirm('确认重新生成公网 ID？旧 ID 将作废。如果已注册到 GitHub，需要重新注册。')) return
+    if (!confirm(t('admin.confirmRegenerateId'))) return
     try {
       const result = await api.post<{ success: boolean; public_id: string }>('/admin/federation/instance/regenerate-id')
       if (result.public_id) {
@@ -291,23 +293,23 @@ export default function FederationTab() {
         await loadData()
       }
     } catch (e: any) {
-      alert(e?.response?.data?.detail || '生成失败')
+      alert(e?.response?.data?.detail || t('admin.saveFailed'))
     }
   }
 
   const handleSaveToken = async () => {
     if (!githubToken.trim()) {
-      setRegisterResult('请先填入 GitHub Token')
+      setRegisterResult(t('admin.pleaseEnterToken'))
       return
     }
     setTokenSaving(true)
     try {
       await api.put('/admin/federation/instance/github-token', { token: githubToken.trim() })
       setGithubToken('')
-      setRegisterResult('✅ GitHub Token 已加密保存')
+      setRegisterResult(t('admin.tokenSavedEncrypted'))
       await loadData()
     } catch (e: any) {
-      setRegisterResult(e?.response?.data?.detail || '保存失败')
+      setRegisterResult(e?.response?.data?.detail || t('admin.saveFailed'))
     } finally {
       setTokenSaving(false)
     }
@@ -315,17 +317,17 @@ export default function FederationTab() {
 
   const stateBadge = (state: string) => {
     const map: Record<string, { bg: string; text: string; label: string }> = {
-      connected: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: '已连接' },
-      connecting: { bg: 'bg-amber-500/10', text: 'text-amber-400', label: '连接中' },
-      disconnected: { bg: 'bg-slate-500/10', text: 'text-slate-400', label: '未连接' },
-      failed: { bg: 'bg-rose-500/10', text: 'text-rose-400', label: '失败' },
-      rotating: { bg: 'bg-purple-500/10', text: 'text-purple-400', label: '轮换中' },
+      connected: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', label: t('admin.connected') },
+      connecting: { bg: 'bg-amber-500/10', text: 'text-amber-400', label: t('admin.connecting') },
+      disconnected: { bg: 'bg-slate-500/10', text: 'text-slate-400', label: t('common.disconnected') },
+      failed: { bg: 'bg-rose-500/10', text: 'text-rose-400', label: t('admin.failed') },
+      rotating: { bg: 'bg-purple-500/10', text: 'text-purple-400', label: t('admin.rotating') },
     }
     const s = map[state] || map.disconnected
     return <span className={`text-xs px-2 py-0.5 rounded-full ${s.bg} ${s.text}`}>{s.label}</span>
   }
 
-  if (loading) return <div className="text-textMuted text-sm p-4">加载中...</div>
+  if (loading) return <div className="text-textMuted text-sm p-4">{t('common.loading')}</div>
   if (error) return <div className="text-rose-400 text-sm p-4">{error}</div>
 
   const isRegistering = registerState === 'loading'
@@ -336,7 +338,7 @@ export default function FederationTab() {
       {registerState === 'confirm' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setRegisterState('idle'); setDialogToken('') }}>
           <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-base font-semibold text-textPrimary mb-3">⚠️ 注册公网 ID 须知</h3>
+            <h3 className="text-base font-semibold text-textPrimary mb-3">{t('admin.registerNotice')}</h3>
             <div className="text-sm text-textSecondary space-y-2 mb-5">
               <p>将公网 ID 注册到 GitHub 注册表后：</p>
               <ul className="list-disc pl-5 space-y-1 text-xs">
@@ -353,7 +355,7 @@ export default function FederationTab() {
               {instance?.github_token_configured ? (
                 <details className="text-xs">
                   <summary className="text-textMuted cursor-pointer hover:text-textPrimary transition-colors">
-                    🔑 已配置 Token（点击更换）
+                    {t('admin.tokenConfiguredClickChange')}
                   </summary>
                   <div className="mt-2">
                     <input
@@ -361,24 +363,22 @@ export default function FederationTab() {
                       value={dialogToken}
                       onChange={e => setDialogToken(e.target.value)}
                       className="w-full px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                      placeholder="粘贴新 Token 替换旧 Token"
+                      placeholder={t('admin.pasteNewToken')}
                     />
                     <p className="text-[10px] text-textMuted mt-1">
-                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">github.com/settings/tokens →</a>
+                      {t('admin.tokenHintOrGet')} <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">github.com/settings/tokens →</a>
                     </p>
                   </div>
                 </details>
               ) : (
                 <>
                   <label className="text-xs text-textMuted">
-                    GitHub Token{' '}
+                    {t('admin.githubToken')}{' '}
                     <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
-                      获取 →
+                      {t('common.back')} →
                     </a>
                   </label>
-                  <p className="text-[10px] text-textMuted mb-1.5">
-                    需要 Token 才能写入注册表。点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong>
-                  </p>
+                  <p className="text-[10px] text-textMuted mb-1.5" dangerouslySetInnerHTML={{ __html: t('admin.tokenHelpText') }} />
                   <input
                     type="password"
                     value={dialogToken}
@@ -394,7 +394,7 @@ export default function FederationTab() {
                 onClick={() => { setRegisterState('idle'); setDialogToken('') }}
                 className="px-4 py-1.5 text-xs bg-canvas border border-border text-textSecondary rounded-lg hover:bg-border/20 transition-colors"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleRegister}
@@ -405,7 +405,7 @@ export default function FederationTab() {
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {!instance?.github_token_configured ? '保存 Token 并注册' : '我已知晓，继续注册'}
+                {!instance?.github_token_configured ? t('admin.saveTokenAndRegister') : t('admin.knownAndContinue')}
               </button>
             </div>
           </div>
@@ -415,30 +415,30 @@ export default function FederationTab() {
       <section className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
-            <Shield size={16} /> 实例身份
+            <Shield size={16} /> {t('admin.instanceIdentity')}
           </h2>
           <button
             onClick={() => setEditInstance(!editInstance)}
             className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
           >
-            {editInstance ? '取消' : '编辑'}
+            {editInstance ? t('common.cancel') : t('common.edit')}
           </button>
         </div>
 
         {editInstance ? (
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-textMuted">显示名称</label>
+              <label className="text-xs text-textMuted">{t('admin.displayName')}</label>
               <input
                 value={instanceForm.display_name}
                 onChange={e => setInstanceForm({ ...instanceForm, display_name: e.target.value })}
                 className="w-full mt-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary"
-                placeholder="我的实例"
+                placeholder={t('admin.instanceNamePlaceholder')}
               />
             </div>
             <div>
               <label className="text-xs text-textMuted">
-                公网地址（输入域名或 IP，自动拼接 <code className="text-[10px] bg-canvas px-1 rounded">/federation/ws</code>）
+                {t('admin.publicUrlLabel')}
               </label>
               <div className="flex items-stretch mt-1">
                 <select
@@ -471,7 +471,7 @@ export default function FederationTab() {
               </div>
             </div>
             <div>
-              <label className="text-xs text-textMuted">公网 ID（启动时自动生成 ULID，唯一性 ≈ 1/43亿）</label>
+              <label className="text-xs text-textMuted">{t('admin.publicIdLabel')}</label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   value={instanceForm.public_id}
@@ -481,29 +481,27 @@ export default function FederationTab() {
                 <button
                   onClick={handleRegenerateId}
                   className="shrink-0 px-2 py-1.5 text-[10px] text-textMuted hover:text-amber-400 border border-border rounded-lg hover:bg-amber-500/10 transition-colors"
-                  title="重新生成公网 ID（用于冲突补救）"
+                  title={t('admin.confirmRegenerateId')}
                 >
-                  重新生成
+                  {t('admin.regenerate')}
                 </button>
               </div>
             </div>
             <div>
               <label className="text-xs text-textMuted">
-                GitHub Token{' '}
+                {t('admin.githubTokenLabel')}{' '}
                 <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
-                  获取 →
+                  {t('common.back')} →
                 </a>
               </label>
-              <p className="text-[10px] text-textMuted mb-1">
-                点击链接 → Generate new token (classic) → 勾选 <strong>repo</strong> → 复制粘贴到下方
-              </p>
+              <p className="text-[10px] text-textMuted mb-1" dangerouslySetInnerHTML={{ __html: t('admin.tokenHelpText') }} />
               <div className="flex gap-2 mt-1">
                 <input
                   type="password"
                   value={githubToken}
                   onChange={e => setGithubToken(e.target.value)}
                   className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                  placeholder={instance?.github_token_configured ? '已配置（重新输入会覆盖）' : 'ghp_xxxxxxxxxxxxxxxx'}
+                  placeholder={instance?.github_token_configured ? t('admin.tokenConfiguredPlaceholder') : t('admin.tokenPlaceholder')}
                 />
                 <button
                   onClick={handleSaveToken}
@@ -514,11 +512,11 @@ export default function FederationTab() {
                       : 'bg-amber-600 hover:bg-amber-500 text-white'
                   }`}
                 >
-                  {tokenSaving ? '保存中...' : '保存 Token'}
+                  {tokenSaving ? t('common.saving') : t('admin.saveToken')}
                 </button>
               </div>
               {instance?.github_token_configured && !githubToken && (
-                <p className="text-[10px] text-emerald-400 mt-1">🔑 已配置 Token（加密存储）</p>
+                <p className="text-[10px] text-emerald-400 mt-1">{t('admin.tokenConfigured')}</p>
               )}
             </div>
             <div className="flex gap-2">
@@ -526,7 +524,7 @@ export default function FederationTab() {
                 onClick={handleSaveInstance}
                 className="px-4 py-1.5 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
               >
-                保存实例信息
+                {t('admin.saveInstanceInfo')}
               </button>
               <button
                 onClick={handleRegister}
@@ -539,7 +537,7 @@ export default function FederationTab() {
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                 }`}
               >
-                {registerState === 'loading' ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
+                {registerState === 'loading' ? t('admin.registering') : registerState === 'success' ? t('admin.registered') : t('admin.registerToGithub')}
               </button>
             </div>
             {registerResult && (
@@ -571,7 +569,7 @@ export default function FederationTab() {
                   disabled={registerState === 'loading' || !quickToken.trim()}
                   className="shrink-0 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {registerState === 'loading' ? '保存中...' : '保存并重试'}
+                  {registerState === 'loading' ? t('common.saving') : t('admin.saveAndRetry')}
                 </button>
               </div>
             )}
@@ -580,38 +578,38 @@ export default function FederationTab() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
               <div>
-                <span className="text-textMuted text-xs">子网 ID</span>
+                <span className="text-textMuted text-xs">{t('admin.instanceId')}</span>
                 <p className="text-textPrimary font-mono text-xs mt-0.5 truncate">{instance?.instance_id}</p>
               </div>
               <div>
-                <span className="text-textMuted text-xs">公网 ID（ULID 自动生成）</span>
+                <span className="text-textMuted text-xs">{t('admin.publicId')}</span>
                 <p className="text-textPrimary font-mono text-xs mt-0.5">
-                  {instance?.public_id || <span className="text-textMuted italic">未生成</span>}
+                  {instance?.public_id || <span className="text-textMuted italic">{t('admin.notGenerated')}</span>}
                 </p>
               </div>
               <div>
-                <span className="text-textMuted text-xs">显示名称</span>
+                <span className="text-textMuted text-xs">{t('admin.displayName')}</span>
                 <p className="text-textPrimary text-xs mt-0.5">{instance?.display_name || '-'}</p>
               </div>
               <div>
-                <span className="text-textMuted text-xs">公网 URL</span>
+                <span className="text-textMuted text-xs">{t('admin.publicUrl')}</span>
                 <p className="text-textPrimary text-xs mt-0.5">{instance?.public_url || '-'}</p>
               </div>
               <div>
-                <span className="text-textMuted text-xs">GitHub Token</span>
+                <span className="text-textMuted text-xs">{t('admin.githubToken')}</span>
                 <div className="flex items-center gap-2 mt-0.5">
                   <p className="text-xs">
                     {instance?.github_token_configured ? (
-                      <span className="text-emerald-400">🔑 已配置（加密存储）</span>
+                      <span className="text-emerald-400">{t('admin.tokenConfiguredEncrypted')}</span>
                     ) : (
-                      <span className="text-textMuted italic">未配置</span>
+                      <span className="text-textMuted italic">{t('admin.notConfigured')}</span>
                     )}
                   </p>
                   <button
                     onClick={() => setShowTokenInput(!showTokenInput)}
                     className="text-[10px] text-textMuted hover:text-textPrimary border border-border rounded px-1.5 py-0.5 transition-colors"
                   >
-                    {showTokenInput ? '取消' : instance?.github_token_configured ? '更换' : '配置'}
+                    {showTokenInput ? t('common.cancel') : instance?.github_token_configured ? t('admin.change') : t('admin.configure')}
                   </button>
                 </div>
                 {showTokenInput && (
@@ -621,14 +619,14 @@ export default function FederationTab() {
                       value={manageToken}
                       onChange={e => setManageToken(e.target.value)}
                       className="flex-1 px-2 py-1 text-xs bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                      placeholder={instance?.github_token_configured ? '粘贴新 Token 替换旧 Token' : 'ghp_xxxxxxxxxxxxxxxx'}
+                      placeholder={instance?.github_token_configured ? t('admin.pasteNewToken') : t('admin.tokenPlaceholder')}
                     />
                     <button
                       onClick={handleManageToken}
                       disabled={tokenSaving || !manageToken.trim()}
                       className="shrink-0 px-2 py-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded transition-colors disabled:opacity-50"
                     >
-                      {tokenSaving ? '保存中...' : '保存'}
+                      {tokenSaving ? t('common.saving') : t('common.save')}
                     </button>
                   </div>
                 )}
@@ -645,7 +643,7 @@ export default function FederationTab() {
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   }`}
                 >
-                  {isRegistering ? '注册中...' : registerState === 'success' ? '✓ 已注册' : '注册到 GitHub'}
+                  {isRegistering ? t('admin.registering') : registerState === 'success' ? t('admin.registered') : t('admin.registerToGithub')}
                 </button>
                 {registerResult && (
                   <span className={`text-xs self-center ${
@@ -665,14 +663,14 @@ export default function FederationTab() {
                       value={quickToken}
                       onChange={e => setQuickToken(e.target.value)}
                       className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border rounded-lg text-textPrimary font-mono"
-                      placeholder="ghp_xxxxxxxxxxxxxxxx"
+                      placeholder={t('admin.tokenPlaceholder')}
                     />
                     <button
                       onClick={handleQuickSaveToken}
                       disabled={registerState === 'loading' || !quickToken.trim()}
                       className="shrink-0 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {registerState === 'loading' ? '保存中...' : '保存并重试'}
+                      {registerState === 'loading' ? t('common.saving') : t('admin.saveAndRetry')}
                     </button>
                   </div>
                 )}
@@ -686,13 +684,13 @@ export default function FederationTab() {
       <section className="bg-surface border border-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
-            <Link size={16} /> 对等端 ({peers.length})
+            <Link size={16} /> {t('admin.peers').replace('{count}', String(peers.length))}
           </h2>
           <button
             onClick={() => setShowAddPeer(!showAddPeer)}
             className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
           >
-            <Plus size={14} /> 添加
+            <Plus size={14} /> {t('admin.addPeer')}
           </button>
         </div>
 
@@ -701,26 +699,26 @@ export default function FederationTab() {
           <div className="mb-4 p-4 bg-canvas rounded-lg border border-border space-y-3">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-textMuted">公网 ID</label>
+                <label className="text-xs text-textMuted">{t('admin.peerPublicId')}</label>
                 <input
                   value={newPeer.peer_public_id}
                   onChange={e => setNewPeer({ ...newPeer, peer_public_id: e.target.value })}
                   className="w-full mt-1 px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-textPrimary font-mono"
-                  placeholder="AIsChat-xxxxxxxx"
+                  placeholder={t('admin.peerIdPlaceholder')}
                 />
               </div>
               <div>
-                <label className="text-xs text-textMuted">显示名称</label>
+                <label className="text-xs text-textMuted">{t('admin.peerDisplayName')}</label>
                 <input
                   value={newPeer.display_name}
                   onChange={e => setNewPeer({ ...newPeer, display_name: e.target.value })}
                   className="w-full mt-1 px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-textPrimary"
-                  placeholder="花花的实例"
+                  placeholder={t('admin.peerNamePlaceholder')}
                 />
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-textMuted">
-                  WebSocket 地址（输入域名或 IP，自动拼接 <code className="text-[10px] bg-canvas px-1 rounded">/federation/ws</code>）
+                  {t('admin.peerWsUrl')}
                 </label>
                 <div className="flex items-stretch mt-1">
                   <select
@@ -753,13 +751,13 @@ export default function FederationTab() {
                 </div>
               </div>
               <div className="md:col-span-2">
-                <label className="text-xs text-textMuted">共享密钥</label>
+                <label className="text-xs text-textMuted">{t('admin.sharedSecret')}</label>
                 <input
                   type="password"
                   value={newPeer.shared_secret}
                   onChange={e => setNewPeer({ ...newPeer, shared_secret: e.target.value })}
                   className="w-full mt-1 px-3 py-1.5 text-sm bg-surface border border-border rounded-lg text-textPrimary"
-                  placeholder="至少 8 位字符"
+                  placeholder={t('admin.secretPlaceholder')}
                 />
               </div>
             </div>
@@ -768,13 +766,13 @@ export default function FederationTab() {
                 onClick={handleAddPeer}
                 className="px-4 py-1.5 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
               >
-                添加并连接
+                {t('admin.addAndConnect')}
               </button>
               <button
                 onClick={() => setShowAddPeer(false)}
                 className="px-4 py-1.5 text-xs bg-canvas border border-border text-textSecondary rounded-lg hover:bg-border/20 transition-colors"
               >
-                取消
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -782,7 +780,7 @@ export default function FederationTab() {
 
         {/* 对等端表格 */}
         {peers.length === 0 ? (
-          <p className="text-sm text-textMuted py-4 text-center">暂无对等端，点击"添加"连接其他 AIsChat 实例</p>
+          <p className="text-sm text-textMuted py-4 text-center">{t('admin.noPeers')}</p>
         ) : (
           <div className="space-y-2">
             {peers.map(peer => (
@@ -809,14 +807,14 @@ export default function FederationTab() {
                       <button
                         onClick={() => handleRotateUrl(peer.id)}
                         className="p-1.5 text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 rounded-lg transition-colors"
-                        title="轮换 URL"
+                        title={t('admin.rotateUrl')}
                       >
                         <RefreshCw size={14} />
                       </button>
                       <button
                         onClick={() => handleDisconnect(peer.id)}
                         className="p-1.5 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
-                        title="断开"
+                        title={t('admin.disconnect')}
                       >
                         <Power size={14} />
                       </button>
@@ -826,14 +824,14 @@ export default function FederationTab() {
                       <button
                         onClick={() => handleConnect(peer.id)}
                         className="p-1.5 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition-colors"
-                        title="连接"
+                        title={t('admin.connect')}
                       >
                         <RefreshCw size={14} />
                       </button>
                       <button
                         onClick={() => handleEditPeer(peer)}
                         className="p-1.5 text-textMuted hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
-                        title="编辑"
+                        title={t('common.edit')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
@@ -842,7 +840,7 @@ export default function FederationTab() {
                   <button
                     onClick={() => handleDeletePeer(peer.id)}
                     className="p-1.5 text-textMuted hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                    title="删除"
+                    title={t('common.delete')}
                   >
                     <Trash2 size={14} />
                   </button>
@@ -853,7 +851,7 @@ export default function FederationTab() {
                 <div className="p-3 bg-canvas rounded-lg border border-amber-500/20 space-y-2">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] text-textMuted">显示名称</label>
+                      <label className="text-[10px] text-textMuted">{t('admin.displayName')}</label>
                       <input
                         value={editPeerForm.display_name}
                         onChange={e => setEditPeerForm({ ...editPeerForm, display_name: e.target.value })}
@@ -861,7 +859,7 @@ export default function FederationTab() {
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-textMuted">公网 URL</label>
+                      <label className="text-[10px] text-textMuted">{t('admin.peerUrl')}</label>
                       <div className="flex items-stretch mt-0.5">
                         <select
                           value={(editPeerForm.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
@@ -893,13 +891,13 @@ export default function FederationTab() {
                       </div>
                     </div>
                     <div className="md:col-span-2">
-                      <label className="text-[10px] text-textMuted">共享密钥（留空则不修改）</label>
+                      <label className="text-[10px] text-textMuted">{t('admin.secretNoChange')}</label>
                       <input
                         type="password"
                         value={editPeerForm.shared_secret}
                         onChange={e => setEditPeerForm({ ...editPeerForm, shared_secret: e.target.value })}
                         className="w-full mt-0.5 px-2 py-1 text-xs bg-surface border border-border rounded text-textPrimary"
-                        placeholder="输入新密钥替换旧密钥"
+                        placeholder={t('admin.newSecretPlaceholder')}
                       />
                     </div>
                   </div>
@@ -908,13 +906,13 @@ export default function FederationTab() {
                       onClick={handleSavePeer}
                       className="px-3 py-1 text-xs bg-primary-600 hover:bg-primary-500 text-white rounded transition-colors"
                     >
-                      保存
+                      {t('common.save')}
                     </button>
                     <button
                       onClick={() => setEditingPeerId(null)}
                       className="px-3 py-1 text-xs bg-canvas border border-border text-textSecondary rounded hover:bg-border/20 transition-colors"
                     >
-                      取消
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -924,7 +922,7 @@ export default function FederationTab() {
                 <div className="p-3 bg-canvas rounded-lg border border-purple-500/20 space-y-2">
                   <div className="flex items-center gap-2 text-xs text-purple-400">
                     <RefreshCw size={12} className="animate-spin" />
-                    <span>URL 轮换 — 新 URL 测试成功后旧 URL 才会失效</span>
+                    <span>{t('admin.rotateHint')}</span>
                   </div>
                   <div className="flex gap-2">
                     <select
@@ -952,13 +950,13 @@ export default function FederationTab() {
                       disabled={rotateLoading}
                       className="px-3 py-1 text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded transition-colors"
                     >
-                      {rotateLoading ? '轮换中...' : '发起轮换'}
+                      {rotateLoading ? t('admin.rotating') : t('admin.initiateRotate')}
                     </button>
                     <button
                       onClick={() => { setRotatingPeerId(null); setRotateError('') }}
                       className="px-3 py-1 text-xs bg-canvas border border-border text-textSecondary rounded hover:bg-border/20 transition-colors"
                     >
-                      取消
+                      {t('common.cancel')}
                     </button>
                   </div>
                 </div>
@@ -966,9 +964,9 @@ export default function FederationTab() {
               {/* 轮换次数 */}
               {peer.url_rotation_count > 0 && (
                 <p className="text-[10px] text-textMuted ml-11">
-                  URL 已轮换 <span className="text-purple-400">{peer.url_rotation_count}</span> 次
+                  {t('admin.urlRotated')} <span className="text-purple-400">{peer.url_rotation_count}</span>
                   {peer.url_rotated_at && (
-                    <span> · 最近: {new Date(peer.url_rotated_at).toLocaleString()}</span>
+                    <span> · {t('admin.lastRotated')} {new Date(peer.url_rotated_at).toLocaleString()}</span>
                   )}
                 </p>
               )}
@@ -981,13 +979,13 @@ export default function FederationTab() {
       {/* 联邦群聊 */}
       <section className="bg-surface border border-border rounded-xl p-5">
         <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2 mb-4">
-          <Globe size={16} /> 联邦群聊
+          <Globe size={16} /> {t('admin.federationGroups')}
         </h2>
         <p className="text-sm text-textMuted">
-          在群聊设置面板中，为每个群聊单独设置联邦共享。已启用联邦的群聊中的消息将自动转发到所选的对等端。
+          {t('admin.federationGroupsDesc')}
         </p>
         <p className="text-xs text-textMuted mt-2">
-          💡 提示：请先在"对等端"中添加并连接其他实例，然后在群聊设置中开启联邦共享。
+          {t('admin.federationGroupsHint')}
         </p>
       </section>
     </div>

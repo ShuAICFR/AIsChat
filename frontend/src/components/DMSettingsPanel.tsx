@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { useT } from '../i18n/I18nContext'
 import { X, Bell, BellOff, Download, Clock, ArrowLeft } from 'lucide-react'
 
 interface Partner {
@@ -18,15 +19,16 @@ interface Props {
 }
 
 const DND_DURATIONS = [
-  { label: '15 分钟', minutes: 15 },
-  { label: '30 分钟', minutes: 30 },
-  { label: '1 小时', minutes: 60 },
-  { label: '4 小时', minutes: 240 },
-  { label: '8 小时', minutes: 480 },
-  { label: '永久', minutes: null as unknown as number },
+  { key: 'dmSettings.dnd15min', minutes: 15 },
+  { key: 'dmSettings.dnd30min', minutes: 30 },
+  { key: 'dmSettings.dnd1hour', minutes: 60 },
+  { key: 'dmSettings.dnd4hours', minutes: 240 },
+  { key: 'dmSettings.dnd8hours', minutes: 480 },
+  { key: 'dmSettings.dndForever', minutes: null as unknown as number },
 ]
 
 export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClose, onDndChange }: Props) {
+  const t = useT()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [customMinutes, setCustomMinutes] = useState('')
@@ -45,7 +47,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
       const until = minutes === null ? 'permanent' : new Date(Date.now() + minutes * 60_000).toISOString()
       onDndChange(until)
     } catch (e: any) {
-      setError(e?.detail || '设置失败')
+      setError(e?.detail || t('error.dndSetFailed'))
     } finally {
       setLoading(false)
     }
@@ -54,11 +56,11 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
   const handleCustomDnd = async () => {
     const mins = parseInt(customMinutes, 10)
     if (isNaN(mins) || mins <= 0) {
-      setError('请输入有效的分钟数')
+      setError(t('error.invalidMinutes'))
       return
     }
     if (mins > 10080) {
-      setError('单次免打扰最长 7 天（10080 分钟）')
+      setError(t('error.dndMaxDuration'))
       return
     }
     await handleSetDnd(mins)
@@ -73,7 +75,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
       await api.post(`/dm/${sessionId}/dnd/cancel`)
       onDndChange(null)
     } catch (e: any) {
-      setError(e?.detail || '取消失败')
+      setError(e?.detail || t('error.cancelFailed'))
     } finally {
       setLoading(false)
     }
@@ -90,7 +92,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '导出失败')
+        throw new Error(err.detail || t('error.exportFailed'))
       }
       const blob = await res.blob()
       const ext = exportFormat === 'txt' ? 'txt' : exportFormat === 'html' ? 'html' : 'json'
@@ -123,7 +125,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
             >
               <ArrowLeft size={20} />
             </button>
-            <h2 className="font-semibold text-sm text-textPrimary">私信设置</h2>
+            <h2 className="font-semibold text-sm text-textPrimary">{t('dmSettings.title')}</h2>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-elevated text-textMuted hidden md:block">
             <X size={16} />
@@ -140,36 +142,36 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
           <div>
             <h3 className="text-sm font-medium text-textPrimary flex items-center gap-2 mb-3">
               <Bell size={14} className="text-textMuted" />
-              消息免打扰
+              {t('dmSettings.dnd')}
             </h3>
 
             {myDndUntil ? (
               <div className="space-y-3">
                 <div className="bg-mint-400/10 text-mint-400 rounded-lg px-3 py-2 text-xs flex items-center gap-2">
                   <BellOff size={14} />
-                  免打扰已开启
+                  {t('dmSettings.dndEnabled')}
                 </div>
                 <button
                   onClick={handleCancelDnd}
                   disabled={loading}
                   className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
                 >
-                  取消免打扰
+                  {t('dmSettings.cancelDnd')}
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-xs text-textMuted">选择免打扰时长，期间不会收到私信通知</p>
+                <p className="text-xs text-textMuted">{t('dmSettings.dndHint')}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {DND_DURATIONS.map((d) => (
                     <button
-                      key={d.label}
+                      key={d.key}
                       onClick={() => handleSetDnd(d.minutes)}
                       disabled={loading}
                       className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-elevated hover:bg-primary-500/10 hover:text-primary-400 text-textSecondary border border-border rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                     >
                       <Clock size={12} />
-                      {d.label}
+                      {t(d.key)}
                     </button>
                   ))}
                 </div>
@@ -178,7 +180,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
                     type="number"
                     value={customMinutes}
                     onChange={(e) => setCustomMinutes(e.target.value)}
-                    placeholder="自定义分钟数..."
+                    placeholder={t('groupSettings.dndCustomPlaceholder')}
                     min={1}
                     max={10080}
                     disabled={loading}
@@ -190,7 +192,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
                     disabled={loading || !customMinutes.trim()}
                     className="px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors shrink-0"
                   >
-                    设置
+                    {t('common.set')}
                   </button>
                 </div>
               </div>
@@ -203,17 +205,17 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
           <div>
             <h3 className="text-sm font-medium text-textPrimary flex items-center gap-2 mb-3">
               <Download size={14} className="text-textMuted" />
-              导出聊天记录
+              {t('dmSettings.exportChat')}
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-medium text-textSecondary">导出格式</label>
+                <label className="text-xs font-medium text-textSecondary">{t('groupSettings.exportFormat')}</label>
                 <div className="flex gap-2 mt-1">
                   {[
-                    { key: 'json', label: 'JSON' },
-                    { key: 'txt', label: '文本' },
-                    { key: 'html', label: 'HTML' },
+                    { key: 'json', labelKey: 'JSON' },
+                    { key: 'txt', labelKey: 'TXT' },
+                    { key: 'html', labelKey: 'HTML' },
                   ].map(f => (
                     <button
                       key={f.key}
@@ -224,7 +226,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
                           : 'border-border bg-elevated text-textSecondary hover:bg-canvas'
                       }`}
                     >
-                      {f.label}
+                      {f.labelKey}
                     </button>
                   ))}
                 </div>
@@ -236,7 +238,7 @@ export default function DMSettingsPanel({ sessionId, partner, myDndUntil, onClos
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-lg hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-all"
               >
                 <Download size={16} />
-                {exporting ? '导出中...' : '下载导出文件'}
+                {exporting ? t('common.exporting') : t('dmSettings.downloadExport')}
               </button>
 
               {exportError && <div className="text-xs text-rose-400">{exportError}</div>}

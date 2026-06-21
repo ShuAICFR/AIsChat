@@ -137,7 +137,7 @@ export default function ChatSidebar({
           <button
             onClick={openDrawer}
             className="md:hidden p-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-            title="菜单"
+            title={t('chatlist.menu')}
           >
             <Menu size={18} />
           </button>
@@ -147,7 +147,7 @@ export default function ChatSidebar({
           <button
             onClick={() => setShowPlusMenu(!showPlusMenu)}
             className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
-            title="新建"
+            title={t('chatlist.createNewGroup')}
           >
             <Plus size={16} />
           </button>
@@ -220,7 +220,7 @@ export default function ChatSidebar({
                   <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
                     {g.dnd_until && <BellOff size={10} className="text-rose-400 shrink-0" />}
                     {g.has_mention && !g.dnd_until && (
-                      <span className="text-rose-400 font-medium shrink-0">[@你]</span>
+                      <span className="text-rose-400 font-medium shrink-0">{t('chatlist.atYou')}</span>
                     )}
                     <span className="truncate min-w-0 flex-1">{g.last_message_preview || t('chatlist.noMessages')}</span>
                     {g.last_message_at && (

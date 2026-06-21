@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+import { useT } from '../i18n/I18nContext'
 import { FileText, Settings, Bot, Eye, ChevronDown, ChevronUp, Loader2, Save, Sliders, X } from 'lucide-react'
 
 interface GlobalConfig {
@@ -38,6 +39,7 @@ interface AgentOption {
 }
 
 export default function ConversationLogTab() {
+  const t = useT()
   const [section, setSection] = useState<'config' | 'agents' | 'viewer'>('config')
   const [config, setConfig] = useState<GlobalConfig | null>(null)
   const [configLoading, setConfigLoading] = useState(true)
@@ -151,9 +153,9 @@ export default function ConversationLogTab() {
         {/* Section tabs */}
         <div className="flex gap-2 bg-canvas border border-border rounded-xl p-1 w-full">
         {[
-          { k: 'config', label: '全局设置', icon: Settings },
-          { k: 'agents', label: '按 AI 设置', icon: Sliders },
-          { k: 'viewer', label: '查看日志', icon: Eye },
+          { k: 'config', label: t('admin.convlogGlobal'), icon: Settings },
+          { k: 'agents', label: t('admin.convlogPerAgent'), icon: Sliders },
+          { k: 'viewer', label: t('admin.convlogViewer'), icon: Eye },
         ].map(s => (
           <button
             key={s.k}
@@ -171,14 +173,14 @@ export default function ConversationLogTab() {
       {section === 'config' && (
         <div className="bg-elevated border border-border rounded-xl p-5 max-w-xl">
           <h3 className="text-sm font-semibold text-textPrimary mb-4 flex items-center gap-2">
-            <Settings size={16} className="text-primary-400" /> 全局对话日志配置
+            <Settings size={16} className="text-primary-400" /> {t('admin.convlogConfigTitle')}
           </h3>
           {configLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="animate-spin" size={20} /></div>
           ) : config ? (
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1">系统硬上限（所有 AI 最多保留条数）</label>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('admin.convlogHardLimit')}</label>
                 <input
                   type="number" min={1} max={500}
                   value={config.max_conversation_logs}
@@ -187,7 +189,7 @@ export default function ConversationLogTab() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1">新用户默认保留数（≤ 系统上限）</label>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('admin.convlogDefaultLimit')}</label>
                 <input
                   type="number" min={1} max={config.max_conversation_logs}
                   value={config.default_user_conversation_logs}
@@ -196,7 +198,7 @@ export default function ConversationLogTab() {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-textSecondary">默认允许用户查看 AI 对话日志</label>
+                <label className="text-xs font-medium text-textSecondary">{t('admin.convlogDefaultAccess')}</label>
                 <button
                   onClick={() => setConfig({ ...config, default_user_log_access: !config.default_user_log_access })}
                   className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
@@ -210,8 +212,8 @@ export default function ConversationLogTab() {
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <label className="text-xs font-medium text-textSecondary">新 AI 默认开启延迟回复</label>
-                  <p className="text-[10px] text-textMuted mt-0.5">关闭时新创建的 AI 需手动开启延迟回复 Skill</p>
+                  <label className="text-xs font-medium text-textSecondary">{t('admin.convlogDefaultDelay')}</label>
+                  <p className="text-[10px] text-textMuted mt-0.5">{t('admin.convlogDefaultDelayDesc')}</p>
                 </div>
                 <button
                   onClick={() => setConfig({ ...config, default_delay_reply_enabled: !config.default_delay_reply_enabled })}
@@ -229,7 +231,7 @@ export default function ConversationLogTab() {
                 disabled={configSaving}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
               >
-                <Save size={14} /> {configSaving ? '保存中...' : '保存配置'}
+                <Save size={14} /> {configSaving ? t('common.saving') : t('admin.saveConfig')}
               </button>
             </div>
           ) : null}
@@ -240,17 +242,17 @@ export default function ConversationLogTab() {
       {section === 'agents' && (
         <div className="bg-elevated border border-border rounded-xl p-5 max-w-xl">
           <h3 className="text-sm font-semibold text-textPrimary mb-4 flex items-center gap-2">
-            <Bot size={16} className="text-primary-400" /> 按 AI 单独设置
+            <Bot size={16} className="text-primary-400" /> {t('admin.perAgentSettings')}
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-textSecondary mb-1">选择 AI</label>
+              <label className="block text-xs font-medium text-textSecondary mb-1">{t('admin.selectAi')}</label>
               <select
                 value={selectedAgentId || ''}
                 onChange={e => setSelectedAgentId(e.target.value ? parseInt(e.target.value) : null)}
                 className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
-                <option value="">-- 选择 AI --</option>
+                <option value="">{t('admin.selectAiPlaceholder')}</option>
                 {agents.map(a => (
                   <option key={a.id} value={a.id}>{a.name} (ID: {a.id})</option>
                 ))}
@@ -259,28 +261,30 @@ export default function ConversationLogTab() {
 
             {agentSettings && (
               <>
-                <div className="p-3 rounded-lg bg-canvas text-xs text-textSecondary">
-                  当前生效：保留 <b className="text-textPrimary">{agentSettings.effective_limit}</b> 条 ·
-                  用户访问 <b className={agentSettings.effective_user_access ? 'text-mint-400' : 'text-rose-400'}>
-                    {agentSettings.effective_user_access ? '已开启' : '已关闭'}
-                  </b>
-                </div>
+                <div
+                  className="p-3 rounded-lg bg-canvas text-xs text-textSecondary"
+                  dangerouslySetInnerHTML={{
+                    __html: t('admin.currentEffective')
+                      .replace('{retention}', `<b class="text-textPrimary">${agentSettings.effective_limit}</b>`)
+                      .replace('{access}', `<b class="${agentSettings.effective_user_access ? 'text-mint-400' : 'text-rose-400'}">${agentSettings.effective_user_access ? t('common.enabled') : t('common.disabled')}</b>`)
+                  }}
+                />
                 <div>
                   <label className="block text-xs font-medium text-textSecondary mb-1">
-                    保留上限（留空=系统上限 {agentSettings.system_max}）
+                    {t('admin.retentionLimit').replace('{max}', String(agentSettings.system_max))}
                   </label>
                   <input
                     type="number" min={1} max={agentSettings.system_max}
                     value={agentLimit}
                     onChange={e => setAgentLimit(e.target.value)}
-                    placeholder={`系统上限 ${agentSettings.system_max}`}
+                    placeholder={t('admin.retentionLimit').replace('{max}', String(agentSettings.system_max))}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                   />
                 </div>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-textSecondary">
-                    允许用户查看日志
-                    <span className="text-textMuted ml-1">（{agentSettings.system_default_access ? '全局默认开' : '全局默认关'}）</span>
+                    {t('admin.allowUserViewLogs')}
+                    <span className="text-textMuted ml-1">（{agentSettings.system_default_access ? t('admin.defaultOn') : t('admin.defaultOff')}）</span>
                   </label>
                   <button
                     onClick={() => {
@@ -306,7 +310,7 @@ export default function ConversationLogTab() {
                   disabled={agentSaving}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
                 >
-                  <Save size={14} /> {agentSaving ? '保存中...' : '保存设置'}
+                  <Save size={14} /> {agentSaving ? t('common.saving') : t('admin.saveSettings')}
                 </button>
               </>
             )}
@@ -327,7 +331,7 @@ export default function ConversationLogTab() {
               }}
               className="px-3 py-2 rounded-lg border border-border bg-elevated text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
             >
-              <option value="">-- 选择 AI --</option>
+              <option value="">{t('admin.selectAiPlaceholder')}</option>
               {agents.map(a => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
@@ -337,7 +341,7 @@ export default function ConversationLogTab() {
               disabled={!viewAgentId || logsLoading}
               className="px-4 py-2 rounded-lg bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
             >
-              {logsLoading ? <Loader2 className="animate-spin" size={14} /> : '加载'}
+              {logsLoading ? <Loader2 className="animate-spin" size={14} /> : t('common.load')}
             </button>
           </div>
 
@@ -357,18 +361,18 @@ export default function ConversationLogTab() {
                         <span className={`text-xs px-1.5 py-0.5 rounded ${
                           log.conversation_type === 'group' ? 'bg-blue-400/10 text-blue-400' : 'bg-purple-400/10 text-purple-400'
                         }`}>
-                          {log.conversation_type === 'group' ? '群聊' : log.conversation_type === 'dm' ? '私信' : log.conversation_type}
+                          {log.conversation_type === 'group' ? t('admin.groupChat') : log.conversation_type === 'dm' ? t('admin.directMessage') : log.conversation_type}
                         </span>
-                        {log.has_output && <span className="text-xs text-mint-400">有产出</span>}
-                        {log.thinking_enabled && <span className="text-xs text-accent-400">深度推理</span>}
+                        {log.has_output && <span className="text-xs text-mint-400">{t('admin.hasOutput')}</span>}
+                        {log.thinking_enabled && <span className="text-xs text-accent-400">{t('admin.deepReasoning')}</span>}
                       </div>
                       <span className="text-xs text-textMuted">{formatTime(log.created_at)}</span>
                     </div>
                     <div className="text-xs text-textSecondary">
-                      <span>{log.message_count} 条消息</span>
+                      <span>{log.message_count} {t('admin.messages')}</span>
                       {log.token_usage && (
                         <span className="ml-3">
-                          tokens: {log.token_usage.total_tokens}
+                          {t('admin.tokens')} {log.token_usage.total_tokens}
                         </span>
                       )}
                       {log.model && <span className="ml-3 text-textMuted">{log.model}</span>}
@@ -397,7 +401,7 @@ export default function ConversationLogTab() {
                 onClick={e => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-textPrimary">对话日志 #{selectedLog}</h3>
+                  <h3 className="text-sm font-semibold text-textPrimary">{t('admin.conversationLog').replace('{id}', String(selectedLog))}</h3>
                   <button onClick={() => { setSelectedLog(null); setLogDetail(null) }} className="text-textMuted hover:text-textSecondary"><X size={16} /></button>
                 </div>
                 {detailLoading ? (
@@ -405,9 +409,9 @@ export default function ConversationLogTab() {
                 ) : logDetail ? (
                   <div className="space-y-3">
                     <div className="flex gap-4 text-xs text-textSecondary">
-                      <span>类型: {logDetail.conversation_type}</span>
-                      <span>消息数: {logDetail.message_count}</span>
-                      <span>模型: {logDetail.model || '-'}</span>
+                      <span>{t('admin.logType')} {logDetail.conversation_type}</span>
+                      <span>{t('admin.logMessageCount')} {logDetail.message_count}</span>
+                      <span>{t('admin.logModel')} {logDetail.model || '-'}</span>
                       <span>{formatTime(logDetail.created_at)}</span>
                     </div>
                     <div className="bg-canvas rounded-xl p-3 max-h-[50vh] overflow-y-auto">

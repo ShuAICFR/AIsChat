@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n/I18nContext'
 import CreateAgentModal from '../components/CreateAgentModal'
 import { STATE_BADGE_COLORS, AI_TYPE_LABEL } from '../constants'
 
@@ -84,6 +85,7 @@ export default function AgentsPage() {
   const [historyAgent, setHistoryAgent] = useState<Agent | null>(null)
   const [stateAgent, setStateAgent] = useState<Agent | null>(null)
   const { refreshUser } = useAuth()
+  const t = useT()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   const loadAgents = async () => {
@@ -107,7 +109,7 @@ export default function AgentsPage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '导出失败')
+        throw new Error(err.detail || t('error.exportFailed'))
       }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -118,7 +120,7 @@ export default function AgentsPage() {
       URL.revokeObjectURL(url)
     } catch (err: any) {
       console.error('导出失败:', err)
-      alert(err.message || '导出失败')
+      alert(err.message || t('error.exportFailed'))
     }
   }
 
@@ -131,26 +133,26 @@ export default function AgentsPage() {
         <button
           onClick={openDrawer}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title="菜单"
+          title={t('agents.menu')}
         >
           <Menu size={18} />
         </button>
-        <h1 className="font-semibold text-textPrimary text-sm">我的 AI</h1>
-        <span className="text-xs text-textMuted hidden sm:inline">创建和管理你的 AI 角色</span>
+        <h1 className="font-semibold text-textPrimary text-sm">{t('agents.title')}</h1>
+        <span className="text-xs text-textMuted hidden sm:inline">{t('agents.subtitle')}</span>
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setShowImport(true)}
             className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 border border-border text-textSecondary rounded-lg hover:bg-elevated text-xs font-medium transition-colors"
           >
             <Upload size={13} className="md:w-3.5 md:h-3.5" />
-            <span className="inline">导入</span>
+            <span className="inline">{t('agents.import')}</span>
           </button>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-400 text-xs font-medium transition-all shadow-lg shadow-primary-500/20"
           >
             <Plus size={13} />
-            <span className="inline">创建</span>
+            <span className="inline">{t('agents.create')}</span>
           </button>
         </div>
       </div>
@@ -164,8 +166,8 @@ export default function AgentsPage() {
         {agents.length === 0 ? (
           <div className="text-center py-16">
             <Bot size={48} className="mx-auto text-textMuted mb-4" />
-            <p className="text-textSecondary">还没有 AI 角色</p>
-            <p className="text-sm text-textMuted mt-1">点击"创建 AI"开始</p>
+            <p className="text-textSecondary">{t('agents.empty')}</p>
+            <p className="text-sm text-textMuted mt-1">{t('agents.emptyHint')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -205,7 +207,7 @@ export default function AgentsPage() {
 
                   <div className="flex items-center gap-2 text-xs text-textMuted mb-1 flex-wrap">
                     <span className="text-textSecondary font-medium">
-                      {agent.chat_model || '默认'}
+                      {agent.chat_model || t('agents.defaultModel')}
                     </span>
                     <span>
                       Temp: {agent.current_temperature}
@@ -214,18 +216,18 @@ export default function AgentsPage() {
                       )}
                     </span>
                     {agent.is_ai_editable && (
-                      <span className="text-mint-400">可自修改</span>
+                      <span className="text-mint-400">{t('agents.selfEditable')}</span>
                     )}
                     {AI_TYPE_LABEL[agent.ai_type] && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${AI_TYPE_LABEL[agent.ai_type].cls}`}>
-                        {AI_TYPE_LABEL[agent.ai_type].text}
+                        {t(AI_TYPE_LABEL[agent.ai_type].key)}
                       </span>
                     )}
                     {agent.thinking_enabled && (
-                      <span className="text-accent-400">深度推理</span>
+                      <span className="text-accent-400">{t('agents.thinkingMode')}</span>
                     )}
                     {hasModified && (
-                      <span className="text-accent-400 font-medium">已修改</span>
+                      <span className="text-accent-400 font-medium">{t('agents.modified')}</span>
                     )}
                   </div>
 
@@ -234,25 +236,25 @@ export default function AgentsPage() {
                       onClick={() => setEditAgent(agent)}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-primary-400 rounded-lg hover:bg-elevated transition-colors"
                     >
-                      <Edit3 size={12} /> 编辑
+                      <Edit3 size={12} /> {t('agents.edit')}
                     </button>
                     <button
                       onClick={() => setHistoryAgent(agent)}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-primary-400 rounded-lg hover:bg-elevated transition-colors"
                     >
-                      <History size={12} /> 历史
+                      <History size={12} /> {t('agents.history')}
                     </button>
                     <button
                       onClick={() => setStateAgent(agent)}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-accent-400 rounded-lg hover:bg-elevated transition-colors"
                     >
-                      <Power size={12} /> 状态
+                      <Power size={12} /> {t('agents.state')}
                     </button>
                     <button
                       onClick={() => handleExport(agent)}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-mint-400 rounded-lg hover:bg-elevated transition-colors"
                     >
-                      <Download size={12} /> 导出
+                      <Download size={12} /> {t('agents.export')}
                     </button>
                   </div>
                 </div>
@@ -334,6 +336,7 @@ export default function AgentsPage() {
 function EditAgentModal({ agent, onClose, onUpdated }: {
   agent: Agent; onClose: () => void; onUpdated: () => void
 }) {
+  const t = useT()
   const [systemPrompt, setSystemPrompt] = useState(agent.current_system_prompt || '')
   const [temperature, setTemperature] = useState(agent.current_temperature)
   const [topP, setTopP] = useState(agent.current_top_p)
@@ -406,7 +409,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
       })
       onUpdated()
     } catch (err: any) {
-      setError(err.message || '保存失败')
+      setError(err.message || t('error.saveFailed'))
     } finally {
       setLoading(false)
     }
@@ -420,7 +423,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
       const preview = await api.get<any>(`/agents/${agent.id}/preset-preview?profile=${profile}`)
       setPresetPreview({ profile, ...preview })
     } catch (err: any) {
-      setError(err.message || '预览失败')
+      setError(err.message || t('error.operationFailed'))
       setApplyingPreset(false)
     }
   }
@@ -446,23 +449,23 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
       setPresetPreview(null)
       onUpdated()
     } catch (err: any) {
-      setError(err.message || '应用预设失败')
+      setError(err.message || t('error.operationFailed'))
     } finally {
       setApplyingPreset(false)
     }
   }
 
   const presets = [
-    { key: 'chat', label: '聊天档', desc: '被动响应·低成本' },
-    { key: 'immersive', label: '深度沉浸档', desc: '半自主·按需参与' },
-    { key: 'digital_life', label: '数字生命档', desc: '持续在线·主动行为' },
+    { key: 'chat', label: t('agents.presetChat'), desc: t('agents.presetChatDesc') },
+    { key: 'immersive', label: t('agents.presetImmersive'), desc: t('agents.presetImmersiveDesc') },
+    { key: 'digital_life', label: t('agents.presetDigitalLife'), desc: t('agents.presetDigitalLifeDesc') },
   ]
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto shadow-2xl shadow-black/30 pb-[var(--safe-bottom)] md:pb-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-textPrimary">编辑 {agent.name}</h2>
+          <h2 className="text-lg font-semibold text-textPrimary">{t('agents.editTitle')} {agent.name}</h2>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
             <X size={18} />
           </button>
@@ -472,20 +475,20 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           {/* 原始设定（只读） */}
           <div className="bg-canvas rounded-xl p-4 border border-border">
             <h3 className="text-sm font-semibold text-textSecondary mb-3 flex items-center gap-1">
-              原始设定（你的初始配置）
+              {t('agents.originalSettings')}
             </h3>
             <div className="space-y-2 text-sm">
               <div>
-                <span className="text-xs text-textMuted">System Prompt:</span>
+                <span className="text-xs text-textMuted">{t('agents.systemPromptLabel')}:</span>
                 <p className="text-textSecondary mt-0.5 whitespace-pre-wrap line-clamp-6">
-                  {agent.original_system_prompt || '（未设置）'}
+                  {agent.original_system_prompt || t('agents.notSet')}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-1 text-xs">
-                <span className="text-textMuted">聊天模型:</span>
-                <span className="text-textSecondary">{agent.chat_model || `默认 (${defaults.chat_model})`}</span>
-                <span className="text-textMuted">工作模型:</span>
-                <span className="text-textSecondary">{agent.work_model || `默认 (${defaults.work_model})`}</span>
+                <span className="text-textMuted">{t('agents.chatModelLabel')}</span>
+                <span className="text-textSecondary">{agent.chat_model || `${t('common.default')} (${defaults.chat_model})`}</span>
+                <span className="text-textMuted">{t('agents.workModelLabel')}</span>
+                <span className="text-textSecondary">{agent.work_model || `${t('common.default')} (${defaults.work_model})`}</span>
                 <span className="text-textMuted">Temperature:</span>
                 <span className="text-textSecondary">{agent.original_temperature}</span>
                 <span className="text-textMuted">Top P:</span>
@@ -502,12 +505,12 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           <div className="bg-primary-500/5 rounded-xl p-4 border border-primary-500/20">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-primary-400 flex items-center gap-1">
-                当前设定{hasModified ? '（AI 已修改）' : ''}
+                {t('agents.currentSettings')}{hasModified ? t('agents.currentSettingsModified') : ''}
               </h3>
               {/* 档位标签 */}
               {configProfile !== 'custom' && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400 font-medium">
-                  {configProfile === 'chat' ? '聊天档' : configProfile === 'immersive' ? '沉浸档' : '生命档'}
+                  {configProfile === 'chat' ? t('agents.badgeChat') : configProfile === 'immersive' ? t('agents.badgeImmersive') : t('agents.badgeDigitalLife')}
                 </span>
               )}
             </div>
@@ -531,7 +534,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
             </div>
             <div className="space-y-2">
               <div>
-                <label className="text-xs text-textMuted">System Prompt</label>
+                <label className="text-xs text-textMuted">{t('agents.systemPromptLabel')}</label>
                 <textarea
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
@@ -542,26 +545,26 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {/* 模型选择 */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-textMuted">聊天模型</label>
+                  <label className="text-xs text-textMuted">{t('agents.chatModelSelect')}</label>
                   <select
                     value={chatModel}
                     onChange={(e) => setChatModel(e.target.value)}
                     className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                   >
-                    <option value="">默认 ({defaults.chat_model})</option>
+                    <option value="">{t('common.default')} ({defaults.chat_model})</option>
                     {modelOptions.map(m => (
                       <option key={m.value} value={m.value}>{m.label}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-textMuted">工作模型</label>
+                  <label className="text-xs text-textMuted">{t('agents.workModelSelect')}</label>
                   <select
                     value={workModel}
                     onChange={(e) => setWorkModel(e.target.value)}
                     className="w-full mt-0.5 px-2 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                   >
-                    <option value="">默认 ({defaults.work_model})</option>
+                    <option value="">{t('common.default')} ({defaults.work_model})</option>
                     {modelOptions.map(m => (
                       <option key={m.value} value={m.value}>{m.label}</option>
                     ))}
@@ -569,7 +572,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                 </div>
               </div>
               <div className="text-[10px] text-textMuted">
-                生效：聊天 {effectiveChatModel} · 工作 {effectiveWorkModel}
+                {t('agents.effectiveChatPrefix')} {effectiveChatModel} {t('agents.effectiveWorkPrefix')} {effectiveWorkModel}
               </div>
               <div className="space-y-1.5 text-xs">
                 {[
@@ -596,8 +599,8 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {thinkingSupported && (
                 <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
                   <div>
-                    <span className="text-xs text-textSecondary">深度推理模式</span>
-                    <p className="text-[10px] text-textMuted mt-0.5">开启后回复更慢但思考更深入</p>
+                    <span className="text-xs text-textSecondary">{t('agents.thinkingModeLabel')}</span>
+                    <p className="text-[10px] text-textMuted mt-0.5">{t('agents.thinkingModeDesc')}</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -613,8 +616,8 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {/* AI 身份隐藏 */}
               <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
                 <div>
-                  <span className="text-xs text-textSecondary">隐藏 AI 身份</span>
-                  <p className="text-[10px] text-textMuted mt-0.5">开启后系统提示词不出现"你是AI"</p>
+                  <span className="text-xs text-textSecondary">{t('agents.hideAiLabel')}</span>
+                  <p className="text-[10px] text-textMuted mt-0.5">{t('agents.hideAiDesc')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -629,8 +632,8 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {/* 延迟回复 */}
               <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
                 <div>
-                  <span className="text-xs text-textSecondary">⏱️ 延迟回复</span>
-                  <p className="text-[10px] text-textMuted mt-0.5">控制 AI 是否可以使用延迟回复 Skill（清空=继承全局）</p>
+                  <span className="text-xs text-textSecondary">{t('agents.delayReplyLabel')}</span>
+                  <p className="text-[10px] text-textMuted mt-0.5">{t('agents.delayReplyDesc')}</p>
                 </div>
                 <select
                   value={delayReplyEnabled === null ? 'inherit' : delayReplyEnabled ? 'on' : 'off'}
@@ -640,9 +643,9 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   }}
                   className="text-xs px-2 py-1 rounded-lg border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 >
-                  <option value="inherit">继承全局</option>
-                  <option value="on">开启</option>
-                  <option value="off">关闭</option>
+                  <option value="inherit">{t('agents.inheritGlobal')}</option>
+                  <option value="on">{t('agents.enable')}</option>
+                  <option value="off">{t('agents.disable')}</option>
                 </select>
               </div>
             </div>
@@ -651,10 +654,10 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 
         {/* 独立 API 配置 */}
         <div className="bg-canvas rounded-xl p-4 border border-border mb-4">
-          <h3 className="text-sm font-semibold text-textSecondary mb-3">独立 API 配置（留空继承全局）</h3>
+          <h3 className="text-sm font-semibold text-textSecondary mb-3">{t('agents.independentApi')}</h3>
           <div className="space-y-2">
             <div>
-              <label className="text-xs text-textMuted">API Base URL</label>
+              <label className="text-xs text-textMuted">{t('agents.apiBaseUrlLabel')}</label>
               <input
                 type="text"
                 value={agentApiBaseUrl}
@@ -664,15 +667,15 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               />
             </div>
             <div>
-              <label className="text-xs text-textMuted">API Key</label>
+              <label className="text-xs text-textMuted">{t('agents.apiKeyLabel')}</label>
               <input
                 type="password"
                 value={agentApiKey}
                 onChange={(e) => setAgentApiKey(e.target.value)}
-                placeholder={agent.has_api_key ? '留空不修改（已设置）' : '留空不修改'}
+                placeholder={agent.has_api_key ? t('agents.apiKeyPlaceholderSet') : t('agents.apiKeyPlaceholder')}
                 className="w-full mt-0.5 px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               />
-              {agent.has_api_key && <p className="text-[10px] text-mint-400 mt-0.5">已设置独立 Key</p>}
+              {agent.has_api_key && <p className="text-[10px] text-mint-400 mt-0.5">{t('agents.apiKeySet')}</p>}
             </div>
           </div>
         </div>
@@ -682,12 +685,12 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         {/* ── 预设切换预览确认 ── */}
         {presetPreview && (
           <div className="mb-4 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-textPrimary mb-2">切换预设确认</h4>
+            <h4 className="text-sm font-semibold text-textPrimary mb-2">{t('agents.presetConfirmTitle')}</h4>
             <p className="text-xs text-textSecondary mb-3">
-              从 <b>{presetPreview.old_profile === 'custom' ? '自定义' : presetPreview.old_profile}</b> 切换至{' '}
+              {t('agents.presetFrom')} <b>{presetPreview.old_profile === 'custom' ? t('agents.presetCustom') : presetPreview.old_profile}</b> {t('agents.presetTo')}{' '}
               <b>{presetPreview.new_profile}</b>
-              （{presetPreview.direction === 'upgrade' ? '⬆️ 升级' : '⬇️ 降级'}），
-              以下 {Object.keys(presetPreview.changed_fields || {}).length} 项将变更：
+              （{presetPreview.direction === 'upgrade' ? `${t('agents.presetUpgrade')}` : `${t('agents.presetDowngrade')}`}），
+              {t('agents.presetItemsWillChange').replace(' field(s) will change:', ` ${Object.keys(presetPreview.changed_fields || {}).length} 项将变更：`.replace('/项/', ` ${Object.keys(presetPreview.changed_fields || {}).length} 项`))}
             </p>
             {Object.keys(presetPreview.changed_fields || {}).length > 0 ? (
               <div className="space-y-1.5 mb-3 text-xs">
@@ -703,21 +706,21 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-textMuted mb-3">无需变更，当前值已满足新预设要求。</p>
+              <p className="text-xs text-textMuted mb-3">{t('agents.presetNoChange')}</p>
             )}
             {presetPreview.independent_untouched?.length > 0 && (
               <p className="text-[10px] text-textMuted mb-3">
-                以下参数不受预设影响保持不变：{presetPreview.independent_untouched.join('、')}
+                {t('agents.presetIndependentFields')} {presetPreview.independent_untouched.join('、')}
               </p>
             )}
             <div className="flex gap-2">
               <button onClick={() => { setPresetPreview(null); setApplyingPreset(false) }}
                 className="flex-1 py-1.5 text-xs border border-border rounded-lg hover:bg-elevated text-textSecondary transition-colors">
-                取消
+                {t('agents.cancel')}
               </button>
               <button onClick={confirmApplyPreset} disabled={applyingPreset}
                 className="flex-1 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-400 disabled:opacity-30 transition-all">
-                {applyingPreset ? '应用中...' : '确认切换'}
+                {applyingPreset ? t('agents.applying') : t('agents.confirmSwitch')}
               </button>
             </div>
           </div>
@@ -725,14 +728,14 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium">
-            取消
+            {t('agents.cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '保存中...' : '保存修改'}
+            {loading ? t('agents.saving') : t('agents.saveChanges')}
           </button>
         </div>
       </div>
@@ -746,6 +749,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 function HistoryModal({ agent, onClose, onRollback }: {
   agent: Agent; onClose: () => void; onRollback: () => void
 }) {
+  const t = useT()
   const [history, setHistory] = useState<ConfigHistory[]>([])
   const [loading, setLoading] = useState(true)
   const [rollingBack, setRollingBack] = useState<number | null>(null)
@@ -757,7 +761,7 @@ function HistoryModal({ agent, onClose, onRollback }: {
         const data = await api.get(`/agents/${agent.id}/history`)
         setHistory(data)
       } catch (err: any) {
-        setError(err.message || '加载历史失败')
+        setError(err.message || t('error.operationFailed'))
       } finally {
         setLoading(false)
       }
@@ -772,7 +776,7 @@ function HistoryModal({ agent, onClose, onRollback }: {
       await api.post(`/agents/${agent.id}/rollback/${versionId}`)
       onRollback()
     } catch (err: any) {
-      setError(err.message || '回滚失败')
+      setError(err.message || t('error.operationFailed'))
     } finally {
       setRollingBack(null)
     }
@@ -782,16 +786,16 @@ function HistoryModal({ agent, onClose, onRollback }: {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-xl mx-4 max-h-[80vh] overflow-y-auto shadow-2xl shadow-black/30 pb-[var(--safe-bottom)] md:pb-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-textPrimary">{agent.name} · 配置历史</h2>
+          <h2 className="text-lg font-semibold text-textPrimary">{agent.name} · {t('agents.configHistory')}</h2>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
             <X size={18} />
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-8 text-textMuted text-sm">加载中...</div>
+          <div className="text-center py-8 text-textMuted text-sm">{t('agents.historyLoading')}</div>
         ) : history.length === 0 ? (
-          <div className="text-center py-8 text-textMuted text-sm">暂无配置历史记录</div>
+          <div className="text-center py-8 text-textMuted text-sm">{t('agents.noHistory')}</div>
         ) : (
           <div className="space-y-3">
             {history.map((h, idx) => {
@@ -807,8 +811,8 @@ function HistoryModal({ agent, onClose, onRollback }: {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-textMuted">
-                      {h.created_at ? new Date(h.created_at).toLocaleString('zh-CN') : '未知时间'}
-                      {isLatest && <span className="ml-1 text-primary-400 font-medium">（当前）</span>}
+                      {h.created_at ? new Date(h.created_at).toLocaleString('zh-CN') : t('agents.unknownTime')}
+                      {isLatest && <span className="ml-1 text-primary-400 font-medium">{t('agents.currentLabel')}</span>}
                     </span>
                     {!isLatest && (
                       <button
@@ -817,7 +821,7 @@ function HistoryModal({ agent, onClose, onRollback }: {
                         className="flex items-center gap-1 px-2 py-0.5 text-xs text-accent-400 hover:bg-accent-400/10 rounded-lg transition-colors disabled:opacity-30"
                       >
                         <RotateCcw size={11} />
-                        {rollingBack === h.id ? '回滚中...' : '回滚到此'}
+                        {rollingBack === h.id ? t('agents.rollingBack') : t('agents.rollbackTo')}
                       </button>
                     )}
                   </div>
@@ -850,6 +854,7 @@ function HistoryModal({ agent, onClose, onRollback }: {
 function StateModal({ agent, onClose, onUpdated }: {
   agent: Agent; onClose: () => void; onUpdated: () => void
 }) {
+  const t = useT()
   const [targetState, setTargetState] = useState(agent.state)
   const [durationHours, setDurationHours] = useState(1)
   const [reason, setReason] = useState('')
@@ -871,7 +876,7 @@ function StateModal({ agent, onClose, onUpdated }: {
       })
       onUpdated()
     } catch (err: any) {
-      setError(err.message || '切换失败')
+      setError(err.message || t('error.operationFailed'))
     } finally {
       setLoading(false)
     }
@@ -881,7 +886,7 @@ function StateModal({ agent, onClose, onUpdated }: {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl shadow-black/30 pb-[var(--safe-bottom)] md:pb-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-textPrimary">{agent.name} · 状态</h2>
+          <h2 className="text-lg font-semibold text-textPrimary">{agent.name} · {t('agents.state')}</h2>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
             <X size={18} />
           </button>
@@ -889,7 +894,7 @@ function StateModal({ agent, onClose, onUpdated }: {
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-textSecondary">当前: {stateLabels[agent.state] || agent.state}</label>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('agents.currentState')} {stateLabels[agent.state] || agent.state}</label>
             <select
               value={targetState}
               onChange={(e) => setTargetState(e.target.value)}
@@ -903,7 +908,7 @@ function StateModal({ agent, onClose, onUpdated }: {
 
           {targetState === 'blocked' && (
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">封禁时长（小时，≤72）</label>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('agents.banDuration')}</label>
               <input
                 type="number"
                 min={1} max={72}
@@ -915,13 +920,13 @@ function StateModal({ agent, onClose, onUpdated }: {
           )}
 
           <div>
-            <label className="block text-xs font-medium mb-1.5 text-textSecondary">原因（可选）</label>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('agents.reasonOptional')}</label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-              placeholder="简短说明..."
+              placeholder={t('agents.reasonPlaceholder')}
             />
           </div>
         </div>
@@ -930,14 +935,14 @@ function StateModal({ agent, onClose, onUpdated }: {
 
         <div className="flex gap-2 mt-4">
           <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium">
-            取消
+            {t('agents.cancel')}
           </button>
           <button
             onClick={handleSwitch}
             disabled={loading || targetState === agent.state}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '切换中...' : '切换'}
+            {loading ? t('agents.switchingState') : t('agents.switchState')}
           </button>
         </div>
       </div>
@@ -952,6 +957,7 @@ function StateModal({ agent, onClose, onUpdated }: {
    导入 AI 灵魂档案弹窗
    ================================================================ */
 function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const t = useT()
   const [file, setFile] = useState<File | null>(null)
   const [importMemories, setImportMemories] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -968,7 +974,7 @@ function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImpor
       const data = JSON.parse(text)
       setPreview(data)
     } catch {
-      setError('文件格式无效，请选择 JSON 文件')
+      setError(t('agents.invalidFile'))
       setPreview(null)
     }
   }
@@ -988,7 +994,7 @@ function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImpor
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '导入失败')
+        throw new Error(err.detail || t('error.operationFailed'))
       }
       onImported()
     } catch (e: any) {
@@ -1002,7 +1008,7 @@ function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImpor
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl pb-[var(--safe-bottom)] md:pb-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-textPrimary">导入 AI 灵魂档案</h2>
+          <h2 className="text-lg font-semibold text-textPrimary">{t('agents.importSoulTitle')}</h2>
           <button onClick={onClose} className="p-1 hover:bg-elevated rounded-lg text-textMuted hover:text-textSecondary">
             <X size={18} />
           </button>
@@ -1017,10 +1023,10 @@ function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImpor
 
         {preview && (
           <div className="bg-canvas rounded-xl p-3 mb-3 text-sm space-y-1">
-            <p className="font-medium text-textPrimary">{preview.agent_name || '未命名'}</p>
-            <p className="text-xs text-textSecondary">记忆数: {preview.memories?.length || 0}</p>
-            <p className="text-xs text-textSecondary">好友数: {preview.friends?.length || 0}</p>
-            <p className="text-xs text-textSecondary">配置历史: {preview.config_history?.length || 0} 条</p>
+            <p className="font-medium text-textPrimary">{preview.agent_name || t('agents.unnamed')}</p>
+            <p className="text-xs text-textSecondary">{t('agents.memoryCount')} {preview.memories?.length || 0}</p>
+            <p className="text-xs text-textSecondary">{t('agents.friendCount')} {preview.friends?.length || 0}</p>
+            <p className="text-xs text-textSecondary">{t('agents.configHistoryCount')} {preview.config_history?.length || 0}</p>
           </div>
         )}
 
@@ -1031,21 +1037,21 @@ function ImportSoulModal({ onClose, onImported }: { onClose: () => void; onImpor
             onChange={(e) => setImportMemories(e.target.checked)}
             className="rounded"
           />
-          导入记忆
+          {t('agents.importMemories')}
         </label>
 
         {error && <div className="text-sm text-rose-400 mb-3">{error}</div>}
 
         <div className="flex gap-2">
           <button onClick={onClose} className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium">
-            取消
+            {t('agents.cancel')}
           </button>
           <button
             onClick={handleImport}
             disabled={!file || loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '导入中...' : '导入'}
+            {loading ? t('agents.importing') : t('agents.importButton')}
           </button>
         </div>
       </div>

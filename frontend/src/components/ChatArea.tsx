@@ -6,6 +6,7 @@ import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
 import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User } from 'lucide-react'
+import { useT } from '../i18n/I18nContext'
 
 interface Group {
   id: number
@@ -32,6 +33,7 @@ interface ChatAreaProps {
 }
 
 export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
+  const t = useT()
   const [groups, setGroups] = useState<Group[]>([])
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
@@ -95,13 +97,13 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
         >
           <div className="text-center">
             <MessageBubblePlaceholder />
-            <p className="mt-4 text-lg text-textSecondary font-medium">选择一个对话开始</p>
+            <p className="mt-4 text-lg text-textSecondary font-medium">{t('chat.selectConversation')}</p>
             {groups.length === 0 && (
               <button
                 onClick={() => setShowCreateGroup(true)}
                 className="mt-5 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
               >
-                创建第一个群聊
+                {t('chat.createFirstGroup')}
               </button>
             )}
           </div>
@@ -113,22 +115,22 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
             <button
               onClick={() => navigate('/chat')}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="会话列表"
+              title={t('chat.sessionList')}
             >
               <ArrowLeft size={20} />
             </button>
             <h2 className="font-semibold text-textPrimary text-sm truncate">
-              # {currentGroup?.name || '加载中...'}
+              # {currentGroup?.name || t('chat.loading')}
             </h2>
             <button
               onClick={() => setShowInvite(true)}
               className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
-              title="邀请成员"
+              title={t('chat.inviteMembers')}
             >
               <UserPlus size={16} />
             </button>
             <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${(currentGroup?.online_count ?? 0) === 0 ? 'text-slate-400' : 'text-mint-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${(currentGroup?.online_count ?? 0) === 0 ? 'bg-slate-400' : 'bg-mint-400'}`} /> 在线人数: {currentGroup?.online_count ?? 0}
+              <span className={`w-1.5 h-1.5 rounded-full ${(currentGroup?.online_count ?? 0) === 0 ? 'bg-slate-400' : 'bg-mint-400'}`} /> {t('chat.onlineCount')}: {currentGroup?.online_count ?? 0}
             </span>
             <button
               onClick={async () => {
@@ -148,7 +150,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
                   ? 'text-rose-400 hover:bg-rose-400/10'
                   : 'text-textMuted hover:text-rose-400 hover:bg-elevated'
               }`}
-              title={currentGroup?.dnd_until ? '取消免打扰' : '开启免打扰'}
+              title={currentGroup?.dnd_until ? t('chat.unmute') : t('chat.mute')}
             >
               {currentGroup?.dnd_until ? <BellOff size={14} /> : <Bell size={14} />}
             </button>
@@ -156,7 +158,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
               <button
                 onClick={() => setShowSettings(true)}
                 className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
-                title="群聊设置"
+                title={t('chat.groupSettings')}
               >
                 <Settings size={14} />
               </button>
@@ -239,6 +241,7 @@ function CreateGroupModal({
   onClose: () => void
   onCreated: (group: Group) => void
 }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -251,7 +254,7 @@ function CreateGroupModal({
       const newGroup = await api.post('/groups', { name: name.trim() })
       onCreated(newGroup)
     } catch (err: any) {
-      setError(err.message || '创建失败')
+      setError(err.message || t('chat.createFailed'))
     } finally {
       setLoading(false)
     }
@@ -263,16 +266,16 @@ function CreateGroupModal({
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-4 text-textPrimary">创建新群聊</h2>
+        <h2 className="text-lg font-semibold mb-4 text-textPrimary">{t('chat.createNewGroup')}</h2>
         <div>
-          <label className="block text-xs font-medium mb-1.5 text-textSecondary">群聊名称 *</label>
+          <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('chat.groupName')}</label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-            placeholder="给群聊起个名字"
+            placeholder={t('chat.groupNamePlaceholder')}
             autoFocus
           />
         </div>
@@ -282,14 +285,14 @@ function CreateGroupModal({
             onClick={onClose}
             className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleCreate}
             disabled={!name.trim() || loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '创建中...' : '创建'}
+            {loading ? t('chat.creating') : t('chat.create')}
           </button>
         </div>
       </div>
@@ -304,6 +307,7 @@ function InviteMemberModal({
   groupId: number
   onClose: () => void
 }) {
+  const t = useT()
   interface SearchResult {
     id: number
     type: 'human' | 'ai'
@@ -374,7 +378,7 @@ function InviteMemberModal({
     if (ok.length === selected.size) {
       setTimeout(onClose, 1200)
     } else if (ok.length === 0) {
-      setError('邀请失败，请重试')
+      setError(t('chat.inviteFailedRetry'))
     }
     setLoading(false)
   }
@@ -382,7 +386,7 @@ function InviteMemberModal({
   const handleManualInvite = async () => {
     const id = parseInt(manualId)
     if (!id || id <= 0) {
-      setError('请输入有效的 ID')
+      setError(t('chat.enterValidId'))
       return
     }
     setLoading(true)
@@ -395,7 +399,7 @@ function InviteMemberModal({
       setSuccess([`${manualType}:${id}`])
       setTimeout(onClose, 1000)
     } catch (err: any) {
-      setError(err.message || '邀请失败')
+      setError(err.message || t('chat.inviteFailed'))
     } finally {
       setLoading(false)
     }
@@ -416,8 +420,8 @@ function InviteMemberModal({
         className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-semibold mb-1 text-textPrimary">邀请成员</h2>
-        <p className="text-xs text-textMuted mb-4">搜索用户或 AI 并选择邀请</p>
+        <h2 className="text-lg font-semibold mb-1 text-textPrimary">{t('chat.inviteMembers')}</h2>
+        <p className="text-xs text-textMuted mb-4">{t('chat.inviteSearchHint')}</p>
 
         {/* 搜索框 */}
         <div className="relative mb-3">
@@ -425,7 +429,7 @@ function InviteMemberModal({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="输入名称搜索..."
+            placeholder={t('chat.searchNamePlaceholder')}
             className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           />
         </div>
@@ -434,14 +438,14 @@ function InviteMemberModal({
         <div className="flex-1 overflow-y-auto border border-border rounded-xl divide-y divide-border/50 mb-4 max-h-48">
           {query.length < 1 ? (
             <div className="py-6 text-center text-xs text-textMuted">
-              输入关键词搜索要邀请的成员
+              {t('chat.inviteSearchPrompt')}
             </div>
           ) : searchLoading ? (
             <div className="flex items-center justify-center py-6">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500" />
             </div>
           ) : results.length === 0 ? (
-            <div className="py-6 text-center text-xs text-textMuted">无结果</div>
+            <div className="py-6 text-center text-xs text-textMuted">{t('common.noResults')}</div>
           ) : (
             results.map((r) => {
               const key = `${r.type}:${r.id}`
@@ -477,7 +481,7 @@ function InviteMemberModal({
         {/* 已选成员摘要 */}
         {selected.size > 0 && (
           <div className="mb-3 text-xs text-textMuted">
-            已选 {selected.size} 位成员
+            {t('chat.selectedMembers').replace('{size}', String(selected.size))}
           </div>
         )}
 
@@ -486,22 +490,22 @@ function InviteMemberModal({
             onClick={() => setShowManual(true)}
             className="text-xs text-textMuted hover:text-primary-400 mb-3 self-start"
           >
-            + 手动输入 ID
+            {t('chat.manualId')}
           </button>
         ) : (
           <div className="space-y-2 mb-3 border border-dashed border-border rounded-xl p-3">
             <div className="flex gap-2">
-              {(['ai', 'human'] as const).map((t) => (
+              {(['ai', 'human'] as const).map((type) => (
                 <button
-                  key={t}
-                  onClick={() => setManualType(t)}
+                  key={type}
+                  onClick={() => setManualType(type)}
                   className={`flex-1 py-1.5 text-xs rounded-lg border transition-colors ${
-                    manualType === t
+                    manualType === type
                       ? 'bg-primary-500/15 border-primary-500/40 text-primary-600 dark:text-primary-300'
                       : 'border-border text-textSecondary hover:bg-elevated'
                   }`}
                 >
-                  {t === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
+                  {type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> {t('friends.human')}</>}
                 </button>
               ))}
             </div>
@@ -512,7 +516,7 @@ function InviteMemberModal({
                 onChange={(e) => setManualId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleManualInvite()}
                 className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="输入 ID"
+                placeholder={t('chat.manualIdPlaceholder')}
                 min={1}
               />
               <button
@@ -520,18 +524,18 @@ function InviteMemberModal({
                 disabled={!manualId.trim() || loading}
                 className="px-3 py-1.5 text-xs bg-elevated text-textSecondary rounded-lg hover:bg-border disabled:opacity-30"
               >
-                邀请
+                {t('chat.invite')}
               </button>
             </div>
             <button onClick={() => setShowManual(false)} className="text-xs text-textMuted hover:text-textSecondary">
-              收起
+              {t('common.collapse')}
             </button>
           </div>
         )}
 
         {error && <div className="text-sm text-rose-400 mb-2">{error}</div>}
         {success.length > 0 && (
-          <div className="text-sm text-mint-400 mb-2">已成功邀请 {success.length} 位成员</div>
+          <div className="text-sm text-mint-400 mb-2">{t('chat.inviteSuccess').replace('{success}', String(success.length))}</div>
         )}
 
         <div className="flex gap-2">
@@ -539,14 +543,14 @@ function InviteMemberModal({
             onClick={onClose}
             className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={handleInviteSelected}
             disabled={selected.size === 0 || loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '邀请中...' : `邀请 (${selected.size})`}
+            {loading ? t('chat.inviting') : t('chat.inviteCount').replace('{count}', String(selected.size))}
           </button>
         </div>
       </div>

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { STATE_BADGE_COLORS } from '../constants'
+import { useT } from '../i18n/I18nContext'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
   Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot,
@@ -84,6 +85,7 @@ interface WorkspaceFiles {
 }
 
 export default function AgentDetailPage() {
+  const t = useT()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
@@ -195,7 +197,7 @@ export default function AgentDetailPage() {
       const res = await fetch(`/api/conversation-log/agents/${agentId}/logs/${logId}/export?format=${format}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      if (!res.ok) throw new Error('导出失败')
+      if (!res.ok) throw new Error(t('error.exportFailed'))
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -237,7 +239,7 @@ export default function AgentDetailPage() {
       refreshUser()
       navigate('/agents')
     } catch (err: any) {
-      alert(err.message || '删除失败')
+      alert(err.message || t('error.saveFailed'))
     } finally {
       setDeleting(false)
     }
@@ -251,7 +253,7 @@ export default function AgentDetailPage() {
       setAgent(data)
       setEditingPrompt(false)
     } catch (err: any) {
-      alert(err.message || '保存失败')
+      alert(err.message || t('error.saveFailed'))
     } finally {
       setSavingPrompt(false)
     }
@@ -263,7 +265,7 @@ export default function AgentDetailPage() {
       const data = await api.put(`/agents/${agentId}/config`, { delay_reply_enabled: value })
       setAgent(data)
     } catch (err: any) {
-      alert(err.message || '更新失败')
+      alert(err.message || t('error.saveFailed'))
     }
   }
 
@@ -272,7 +274,7 @@ export default function AgentDetailPage() {
       const data = await api.put(`/agents/${agentId}/config`, { [field]: value })
       setAgent(data)
     } catch (err: any) {
-      alert(err.message || '更新失败')
+      alert(err.message || t('error.saveFailed'))
     }
   }
 
@@ -285,7 +287,7 @@ export default function AgentDetailPage() {
       setTokenMasked(null) // refresh
       await loadToken()
     } catch (err: any) {
-      alert(err.message || '生成失败')
+      alert(err.message || t('error.operationFailed'))
     } finally {
       setGeneratingToken(false)
     }
@@ -306,7 +308,7 @@ export default function AgentDetailPage() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
-      alert('导出失败')
+      alert(t('error.exportFailed'))
     }
   }
 
@@ -322,7 +324,7 @@ export default function AgentDetailPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      alert('复制失败')
+      alert(t('common.copied') + ' ' + t('error.operationFailed'))
     }
   }
 
@@ -342,12 +344,12 @@ export default function AgentDetailPage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '导入失败')
+        throw new Error(err.detail || t('error.operationFailed'))
       }
       const data = await res.json()
       navigate(`/agents/${data.id}`)
     } catch (err: any) {
-      alert(err.message || '导入失败')
+      alert(err.message || t('error.operationFailed'))
     } finally {
       setImporting(false)
     }
@@ -376,7 +378,7 @@ export default function AgentDetailPage() {
       if (!res.ok) throw new Error('上传失败')
       await loadAgent()
     } catch (err: any) {
-      alert(err.message || '上传失败')
+      alert(err.message || t('error.uploadFailed').replace(' ({status})', ''))
     } finally {
       setUploadingAvatar(false)
     }
@@ -422,11 +424,11 @@ export default function AgentDetailPage() {
                 </span>
                 {agent.ai_type && agent.ai_type !== 'resonance' && (
                   <span className="text-xs px-2 py-0.5 rounded-full border border-accent-400/40 bg-accent-400/10 text-accent-400">
-                    {agent.ai_type === 'general' ? '通用' : '半通用'}
+                    {agent.ai_type === 'general' ? t('agentDetail.aiTypeGeneral') : t('agentDetail.aiTypeSemiGeneral')}
                   </span>
                 )}
                 <span className="text-xs text-textMuted">
-                  创建于 {new Date(agent.created_at).toLocaleDateString('zh-CN')}
+                  {t('agentDetail.createdOn')} {new Date(agent.created_at).toLocaleDateString('zh-CN')}
                 </span>
               </div>
             </div>
@@ -435,17 +437,17 @@ export default function AgentDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-border">
-          {(['info', 'memories', 'storage', 'workspace', 'logs'] as const).map((t) => (
+          {(['info', 'memories', 'storage', 'workspace', 'logs'] as const).map((tab) => (
             <button
-              key={t}
-              onClick={() => setActiveTab(t)}
+              key={tab}
+              onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === t
+                activeTab === tab
                   ? 'border-primary-500 text-primary-400'
                   : 'border-transparent text-textMuted hover:text-textSecondary'
               }`}
             >
-              {t === 'info' ? '基本信息' : t === 'memories' ? '记忆' : t === 'storage' ? '存储' : t === 'workspace' ? '工作区' : '对话日志'}
+              {tab === 'info' ? t('agentDetail.tabInfo') : tab === 'memories' ? t('agentDetail.tabMemories') : tab === 'storage' ? t('agentDetail.tabStorage') : tab === 'workspace' ? t('agentDetail.tabWorkspace') : t('agentDetail.tabLogs')}
             </button>
           ))}
         </div>
@@ -458,14 +460,14 @@ export default function AgentDetailPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Edit3 size={16} className="text-primary-400" />
-                  <h3 className="font-medium text-textPrimary text-sm">系统提示词</h3>
+                  <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.systemPrompt')}</h3>
                 </div>
                 {!editingPrompt ? (
                   <button
                     onClick={() => { setEditingPrompt(true); setPromptText(agent.current_system_prompt || '') }}
                     className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
                   >
-                    编辑
+                    {t('common.edit')}
                   </button>
                 ) : (
                   <div className="flex gap-2">
@@ -487,49 +489,49 @@ export default function AgentDetailPage() {
                 />
               ) : (
                 <p className="text-sm text-textSecondary leading-relaxed whitespace-pre-wrap">
-                  {agent.current_system_prompt || '（未设置）'}
+                  {agent.current_system_prompt || t('agentDetail.notSet')}
                 </p>
               )}
             </div>
 
             {/* Config Info */}
             <div className="bg-surface rounded-xl border border-border p-4">
-              <h3 className="font-medium text-textPrimary text-sm mb-3">模型配置</h3>
+              <h3 className="font-medium text-textPrimary text-sm mb-3">{t('agentDetail.modelConfig')}</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <span className="text-textMuted">聊天模型：</span>
-                  <span className="text-textPrimary">{agent.chat_model || '默认'}</span>
+                  <span className="text-textMuted">{t('agentDetail.chatModel')}</span>
+                  <span className="text-textPrimary">{agent.chat_model || t('common.default')}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">工作模型：</span>
-                  <span className="text-textPrimary">{agent.work_model || '默认'}</span>
+                  <span className="text-textMuted">{t('agentDetail.workModel')}</span>
+                  <span className="text-textPrimary">{agent.work_model || t('common.default')}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">Temperature：</span>
+                  <span className="text-textMuted">{t('agentDetail.temperature')}</span>
                   <span className="text-textPrimary">{agent.current_temperature}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">Top P：</span>
+                  <span className="text-textMuted">{t('agentDetail.topP')}</span>
                   <span className="text-textPrimary">{agent.current_top_p}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">深度推理：</span>
-                  <span className="text-textPrimary">{agent.thinking_enabled ? '开启' : '关闭'}</span>
+                  <span className="text-textMuted">{t('agentDetail.thinking')}</span>
+                  <span className="text-textPrimary">{agent.thinking_enabled ? t('agentDetail.enabled') : t('agentDetail.disabled')}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">AI 身份：</span>
-                  <span className="text-textPrimary">{agent.hide_ai_identity ? '隐藏' : '正常'}</span>
+                  <span className="text-textMuted">{t('agentDetail.aiIdentity')}</span>
+                  <span className="text-textPrimary">{agent.hide_ai_identity ? t('agentDetail.hidden') : t('agentDetail.normal')}</span>
                 </div>
                 <div>
-                  <span className="text-textMuted">配置档位：</span>
+                  <span className="text-textMuted">{t('agentDetail.configProfile')}</span>
                   <span className="text-textPrimary">
-                    {agent.config_profile === 'chat' ? '聊天档' :
-                     agent.config_profile === 'immersive' ? '深度沉浸档' :
-                     agent.config_profile === 'digital_life' ? '数字生命档' : '自定义'}
+                    {agent.config_profile === 'chat' ? t('agentDetail.profileChat') :
+                     agent.config_profile === 'immersive' ? t('agentDetail.profileImmersive') :
+                     agent.config_profile === 'digital_life' ? t('agentDetail.profileDigitalLife') : t('agentDetail.profileCustom')}
                   </span>
                 </div>
                 <div>
-                  <span className="text-textMuted">延迟回复：</span>
+                  <span className="text-textMuted">{t('agentDetail.delayReply')}</span>
                   <select
                     value={agent.delay_reply_enabled === null ? 'inherit' : agent.delay_reply_enabled ? 'on' : 'off'}
                     onChange={(e) => {
@@ -538,18 +540,18 @@ export default function AgentDetailPage() {
                     }}
                     className="text-xs px-2 py-0.5 rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
                   >
-                    <option value="inherit">继承全局</option>
-                    <option value="on">开启</option>
-                    <option value="off">关闭</option>
+                    <option value="inherit">{t('agentDetail.inheritGlobal')}</option>
+                    <option value="on">{t('agentDetail.enabled')}</option>
+                    <option value="off">{t('agentDetail.disabled')}</option>
                   </select>
                 </div>
               </div>
               {/* 工具调用 & 闹钟 */}
               <div className="mt-4 pt-4 border-t border-border/60">
-                <h4 className="text-xs font-medium text-textSecondary mb-3">工具调用 & 闹钟</h4>
+                <h4 className="text-xs font-medium text-textSecondary mb-3">{t('agentDetail.toolCallsAndAlarms')}</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-textMuted">最大工具轮次：</span>
+                    <span className="text-textMuted">{t('agentDetail.maxToolRounds')}</span>
                     <span className="inline-flex items-center gap-1 ml-1">
                       <button
                         onClick={() => handleUpdateAgentField('max_tool_rounds', Math.max(1, (agent.max_tool_rounds || 3) - 1))}
@@ -563,7 +565,7 @@ export default function AgentDetailPage() {
                     </span>
                   </div>
                   <div>
-                    <span className="text-textMuted">闹钟最大轮次：</span>
+                    <span className="text-textMuted">{t('agentDetail.alarmMaxRounds')}</span>
                     <span className="inline-flex items-center gap-1 ml-1">
                       <button
                         onClick={() => handleUpdateAgentField('alarm_max_tool_rounds', Math.max(1, (agent.alarm_max_tool_rounds || 10) - 1))}
@@ -577,7 +579,7 @@ export default function AgentDetailPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-textMuted">强制闹钟：</span>
+                    <span className="text-textMuted">{t('agentDetail.forceAlarm')}</span>
                     <button
                       onClick={() => handleUpdateAgentField('force_alarm_on_end', !agent.force_alarm_on_end)}
                       className={`relative w-9 h-5 rounded-full transition-colors ${
@@ -590,7 +592,7 @@ export default function AgentDetailPage() {
                     </button>
                   </div>
                   <div>
-                    <span className="text-textMuted">最大闹钟数：</span>
+                    <span className="text-textMuted">{t('agentDetail.maxAlarms')}</span>
                     <span className="inline-flex items-center gap-1 ml-1">
                       <button
                         onClick={() => handleUpdateAgentField('max_alarms', Math.max(1, (agent.max_alarms || 10) - 1))}
@@ -607,10 +609,10 @@ export default function AgentDetailPage() {
               </div>
               {/* 好友与社交 */}
               <div className="mt-4 pt-4 border-t border-border/60">
-                <h4 className="text-xs font-medium text-textSecondary mb-3">好友与社交</h4>
+                <h4 className="text-xs font-medium text-textSecondary mb-3">{t('agentDetail.friendsAndSocial')}</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-textMuted">接收好友申请：</span>
+                    <span className="text-textMuted">{t('agentDetail.allowFriendRequests')}</span>
                     <button
                       onClick={() => handleUpdateAgentField('allow_friend_requests', !agent.allow_friend_requests)}
                       className={`relative w-9 h-5 rounded-full transition-colors ${
@@ -623,7 +625,7 @@ export default function AgentDetailPage() {
                     </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-textMuted">自动回应申请：</span>
+                    <span className="text-textMuted">{t('agentDetail.autoRespondRequests')}</span>
                     <button
                       onClick={() => handleUpdateAgentField('auto_respond_friend_request', !agent.auto_respond_friend_request)}
                       disabled={!agent.allow_friend_requests}
@@ -644,19 +646,19 @@ export default function AgentDetailPage() {
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Key size={16} className="text-primary-400" />
-                <h3 className="font-medium text-textPrimary text-sm">API 配置</h3>
+                <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.apiConfig')}</h3>
               </div>
               <div className="text-sm space-y-1">
                 <p>
-                  <span className="text-textMuted">Base URL：</span>
-                  <span className="text-textPrimary">{agent.api_base_url || '继承全局'}</span>
+                  <span className="text-textMuted">{t('agentDetail.apiBaseUrl')}</span>
+                  <span className="text-textPrimary">{agent.api_base_url || t('agentDetail.inheritGlobal')}</span>
                 </p>
                 <p>
-                  <span className="text-textMuted">API Key：</span>
-                  <span className="text-textPrimary">{agent.has_api_key ? '已设置独立 Key' : '继承全局'}</span>
+                  <span className="text-textMuted">{t('agentDetail.apiKey')}</span>
+                  <span className="text-textPrimary">{agent.has_api_key ? t('agentDetail.apiKeySet') : t('agentDetail.inheritGlobal')}</span>
                 </p>
                 <p>
-                  <span className="text-textMuted">API 额度成本：</span>
+                  <span className="text-textMuted">{t('agentDetail.apiCreditCost')}</span>
                   <span className="text-textPrimary">{agent.api_credit_cost}</span>
                 </p>
               </div>
@@ -664,35 +666,35 @@ export default function AgentDetailPage() {
 
             {/* Actions */}
             <div className="bg-surface rounded-xl border border-border p-4">
-              <h3 className="font-medium text-textPrimary text-sm mb-3">操作</h3>
+              <h3 className="font-medium text-textPrimary text-sm mb-3">{t('agentDetail.actions')}</h3>
               <div className="flex flex-wrap gap-2">
                 {/* Export */}
                 <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors">
-                  <Download size={14} /> 下载导出
+                  <Download size={14} /> {t('agentDetail.downloadExport')}
                 </button>
                 <button onClick={handleCopyExport} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors">
                   {copied ? <Check size={14} className="text-mint-400" /> : <Copy size={14} />}
-                  {copied ? '已复制' : '复制 JSON'}
+                  {copied ? t('agentDetail.copied') : t('agentDetail.copyJson')}
                 </button>
 
                 {/* Import */}
                 <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors cursor-pointer">
                   <Upload size={14} />
-                  {importing ? '导入中...' : '导入灵魂'}
+                  {importing ? t('common.saving') : t('agentDetail.importSoul')}
                   <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                 </label>
 
                 {/* Avatar */}
                 <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors cursor-pointer">
                   <Image size={14} />
-                  {uploadingAvatar ? '上传中...' : '更换头像'}
+                  {uploadingAvatar ? t('me.uploadingAvatar') : t('agentDetail.changeAvatar')}
                   <input type="file" accept="image/*" onChange={handleAvatarSelect} className="hidden" />
                 </label>
 
                 {/* Token */}
                 <button onClick={handleGenerateToken} disabled={generatingToken} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-textSecondary hover:text-textPrimary hover:border-primary-500/30 transition-colors disabled:opacity-50">
                   <RefreshCw size={14} className={generatingToken ? 'animate-spin' : ''} />
-                  {tokenMasked ? `Token: ${tokenMasked}` : '生成 API Token'}
+                  {tokenMasked ? `Token: ${tokenMasked}` : t('agentDetail.generateToken')}
                 </button>
                 {token && (
                   <div className="w-full flex items-center gap-2 mt-2 p-2 rounded-lg bg-amber-400/5 border border-amber-400/20">
@@ -701,14 +703,14 @@ export default function AgentDetailPage() {
                       onClick={() => { navigator.clipboard.writeText(token); setToken(null) }}
                       className="text-xs text-amber-400 hover:text-amber-500 dark:hover:text-amber-300"
                     >
-                      复制（仅显示一次）
+                      {t('agentDetail.copyOnce')}
                     </button>
                   </div>
                 )}
 
                 {/* Delete */}
                 <button onClick={() => setShowDelete(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-rose-500/20 text-sm text-rose-400 hover:bg-rose-500/10 transition-colors">
-                  <Trash2 size={14} /> 删除 AI
+                  <Trash2 size={14} /> {t('agentDetail.deleteAgent')}
                 </button>
               </div>
             </div>
@@ -719,7 +721,7 @@ export default function AgentDetailPage() {
           <div className="bg-surface rounded-xl border border-border p-4">
             <div className="flex items-center gap-2 mb-4">
               <HardDrive size={16} className="text-primary-400" />
-              <h3 className="font-medium text-textPrimary text-sm">存储空间</h3>
+              <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.storageTitle')}</h3>
             </div>
             {storage ? (
               <>
@@ -727,7 +729,7 @@ export default function AgentDetailPage() {
                 <div className="mb-4">
                   <div className="flex justify-between text-xs mb-1.5">
                     <span className="text-textSecondary">
-                      已用 {formatSize(storage.total_size)} / {storage.quota_mb}MB
+                      {t('agentDetail.storageUsed')} {formatSize(storage.total_size)} / {storage.quota_mb}MB
                     </span>
                     <span className={`font-medium ${
                       storage.usage_percent > 90 ? 'text-rose-400' :
@@ -748,22 +750,22 @@ export default function AgentDetailPage() {
                     />
                   </div>
                   {storage.usage_percent > 90 && (
-                    <p className="text-xs text-rose-400 mt-1">⚠️ 存储空间即将用尽</p>
+                    <p className="text-xs text-rose-400 mt-1">{t('agentDetail.storageAlmostFull')}</p>
                   )}
                 </div>
 
                 {/* 统计卡片 */}
                 <div className="flex gap-3 mb-4 text-sm">
                   <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
-                    <div className="text-textMuted text-xs">文件数</div>
+                    <div className="text-textMuted text-xs">{t('agentDetail.fileCountLabel')}</div>
                     <div className="text-textPrimary font-semibold">{storage.file_count}</div>
                   </div>
                   <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
-                    <div className="text-textMuted text-xs">总大小</div>
+                    <div className="text-textMuted text-xs">{t('agentDetail.totalSize')}</div>
                     <div className="text-textPrimary font-semibold">{formatSize(storage.total_size)}</div>
                   </div>
                   <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
-                    <div className="text-textMuted text-xs">配额</div>
+                    <div className="text-textMuted text-xs">{t('agentDetail.quotaLabel')}</div>
                     <div className="text-textPrimary font-semibold">{storage.quota_mb}MB</div>
                   </div>
                 </div>
@@ -778,11 +780,11 @@ export default function AgentDetailPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-textMuted">暂无文件</p>
+                  <p className="text-sm text-textMuted">{t('agentDetail.noFiles')}</p>
                 )}
               </>
             ) : (
-              <p className="text-sm text-textMuted">加载中...</p>
+              <p className="text-sm text-textMuted">{t('agentDetail.storageLoading')}</p>
             )}
           </div>
         )}
@@ -791,19 +793,19 @@ export default function AgentDetailPage() {
           <div className="bg-surface rounded-xl border border-border p-4">
             <div className="flex items-center gap-2 mb-3">
               <ScrollText size={16} className="text-primary-400" />
-              <h3 className="font-medium text-textPrimary text-sm">对话日志</h3>
+              <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.logTitle')}</h3>
               {logs.length > 0 && (
-                <span className="text-xs text-textMuted ml-auto">{logs.length} 条</span>
+                <span className="text-xs text-textMuted ml-auto">{logs.length} {t('agentDetail.logCountSuffix')}</span>
               )}
             </div>
             {logsLoading ? (
               <div className="flex items-center gap-2 text-sm text-textMuted py-4 justify-center">
-                <Loader2 size={14} className="animate-spin" /> 加载中...
+                <Loader2 size={14} className="animate-spin" /> {t('agentDetail.storageLoading')}
               </div>
             ) : logs.length === 0 ? (
               <p className="text-sm text-textMuted py-4 text-center">
-                暂无可查看的对话日志。<br />
-                <span className="text-xs">需管理员在「对话日志 → 按 AI 单独设置」中开启「允许用户查看日志」</span>
+                {t('agentDetail.logsEmpty')}<br />
+                <span className="text-xs">{t('agentDetail.logsEmptyHint')}</span>
               </p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -812,19 +814,19 @@ export default function AgentDetailPage() {
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <span className="text-xs px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
-                          {log.conversation_type === 'dm' ? '私信' : '群聊'}
+                          {log.conversation_type === 'dm' ? t('agentDetail.logTypeDm') : t('agentDetail.logTypeGroup')}
                         </span>
                         <span className="text-xs text-textMuted">
-                          {log.message_count} 条消息
+                          {log.message_count} {t('agentDetail.logMessageCount')}
                         </span>
                         {log.has_output && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-mint-500/10 text-mint-400">
-                            有输出
+                            {t('agentDetail.logHasOutput')}
                           </span>
                         )}
                         {log.thinking_enabled && (
                           <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
-                            深度推理
+                            {t('agentDetail.logThinking')}
                           </span>
                         )}
                       </div>
@@ -837,21 +839,21 @@ export default function AgentDetailPage() {
                         onClick={() => openLogDetail(log.id)}
                         className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
                       >
-                        查看详情
+                        {t('agentDetail.logViewDetail')}
                       </button>
                       <button
                         onClick={() => exportLog(log.id, 'json')}
                         disabled={logExporting}
                         className="text-xs text-textMuted hover:text-textSecondary transition-colors"
                       >
-                        下载 JSON
+                        {t('agentDetail.logDownloadJson')}
                       </button>
                       <button
                         onClick={() => exportLog(log.id, 'md')}
                         disabled={logExporting}
                         className="text-xs text-textMuted hover:text-textSecondary transition-colors"
                       >
-                        下载 Markdown
+                        {t('agentDetail.logDownloadMd')}
                       </button>
                     </div>
                   </div>
@@ -868,7 +870,7 @@ export default function AgentDetailPage() {
                 >
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <h4 className="font-medium text-sm text-textPrimary">
-                      对话日志 #{selectedLog.id}
+                      {t('agentDetail.logDetailTitle')} #{selectedLog.id}
                       <span className="text-textMuted ml-2 text-xs">
                         {selectedLog.created_at ? new Date(selectedLog.created_at).toLocaleString('zh-CN') : ''}
                       </span>
@@ -878,13 +880,13 @@ export default function AgentDetailPage() {
                         onClick={() => exportLog(selectedLog.id, 'json')}
                         className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
                       >
-                        下载 JSON
+                        {t('agentDetail.logDownloadJson')}
                       </button>
                       <button
                         onClick={() => exportLog(selectedLog.id, 'md')}
                         className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
                       >
-                        下载 MD
+                        {t('agentDetail.logDownloadMd')}
                       </button>
                       <button onClick={() => setSelectedLog(null)} className="p-1 rounded hover:bg-elevated text-textMuted">
                         <X size={16} />
@@ -902,7 +904,7 @@ export default function AgentDetailPage() {
                         <span className="font-medium">{msg.role}</span>
                         {msg.reasoning_content && (
                           <details className="mt-1">
-                            <summary className="text-textMuted cursor-pointer">推理过程</summary>
+                            <summary className="text-textMuted cursor-pointer">{t('agentDetail.logReasoning')}</summary>
                             <pre className="mt-1 whitespace-pre-wrap text-textMuted">{msg.reasoning_content}</pre>
                           </details>
                         )}
@@ -911,7 +913,7 @@ export default function AgentDetailPage() {
                         </p>
                         {msg.tool_calls && (
                           <div className="mt-1 text-textMuted">
-                            工具调用: {msg.tool_calls.map((tc: any) => tc.function?.name || tc.name || '?').join(', ')}
+                            {t('agentDetail.logToolCalls')} {msg.tool_calls.map((tc: any) => tc.function?.name || tc.name || '?').join(', ')}
                           </div>
                         )}
                       </div>
@@ -927,7 +929,7 @@ export default function AgentDetailPage() {
           <div className="bg-surface rounded-xl border border-border p-4">
             <div className="flex items-center gap-2 mb-3">
               <Brain size={16} className="text-primary-400" />
-              <h3 className="font-medium text-textPrimary text-sm">记忆（共 {memTotal} 条）</h3>
+              <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.memoryTitlePrefix')}{memTotal}{t('agentDetail.memoryTitleSuffix')}</h3>
             </div>
             {memories.length > 0 ? (
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -947,7 +949,7 @@ export default function AgentDetailPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-textMuted">暂无记忆</p>
+              <p className="text-sm text-textMuted">{t('agentDetail.noMemories')}</p>
             )}
             {memTotal > 20 && (
               <div className="flex justify-center gap-2 mt-4">
@@ -956,7 +958,7 @@ export default function AgentDetailPage() {
                   disabled={memPage <= 1}
                   className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
                 >
-                  上一页
+                  {t('agentDetail.prevPage')}
                 </button>
                 <span className="text-xs text-textMuted py-1">{memPage} / {Math.ceil(memTotal / 20)}</span>
                 <button
@@ -964,7 +966,7 @@ export default function AgentDetailPage() {
                   disabled={memPage >= Math.ceil(memTotal / 20)}
                   className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
                 >
-                  下一页
+                  {t('agentDetail.nextPage')}
                 </button>
               </div>
             )}
@@ -975,8 +977,8 @@ export default function AgentDetailPage() {
           <div className="bg-surface rounded-xl border border-border p-4">
             <div className="flex items-center gap-2 mb-3">
               <Edit3 size={16} className="text-primary-400" />
-              <h3 className="font-medium text-textPrimary text-sm">个人工作区</h3>
-              <span className="text-xs text-textMuted ml-auto">AI 自主维护，用户只读</span>
+              <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.workspaceTitle')}</h3>
+              <span className="text-xs text-textMuted ml-auto">{t('agentDetail.workspaceHint')}</span>
             </div>
             {/* Sub-tabs */}
             <div className="flex gap-1 mb-3 border-b border-border">
@@ -990,13 +992,13 @@ export default function AgentDetailPage() {
                       : 'border-transparent text-textMuted hover:text-textSecondary'
                   }`}
                 >
-                  {f === 'todo' ? 'TODO' : f === 'plan' ? 'PLAN' : 'JOURNAL'}
+                  {f === 'todo' ? t('agentDetail.workspaceTodoLabel') : f === 'plan' ? t('agentDetail.workspacePlanLabel') : t('agentDetail.workspaceJournalLabel')}
                 </button>
               ))}
             </div>
             {/* Content */}
             <pre className="text-xs text-textSecondary whitespace-pre-wrap max-h-80 overflow-y-auto p-3 rounded-lg bg-canvas border border-border leading-relaxed font-mono min-h-[120px]">
-              {workspace[wsActive] || `（${wsActive === 'todo' ? 'TODO 列表' : wsActive === 'plan' ? 'PLAN 规划' : 'JOURNAL 日志'} 为空）`}
+              {workspace[wsActive] || `（${wsActive === 'todo' ? t('agentDetail.workspaceTodoLabel') : wsActive === 'plan' ? t('agentDetail.workspacePlanLabel') : t('agentDetail.workspaceJournalLabel')} ${t('agentDetail.workspaceEmptySuffix')}`}
             </pre>
           </div>
         )}
@@ -1006,10 +1008,10 @@ export default function AgentDetailPage() {
       {showDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-surface rounded-2xl border border-border p-6 w-full max-w-sm mx-4 pb-[var(--safe-bottom)] md:pb-6">
-            <h3 className="text-lg font-bold text-textPrimary mb-2">删除 AI</h3>
+            <h3 className="text-lg font-bold text-textPrimary mb-2">{t('agentDetail.deleteConfirmTitle')}</h3>
             <p className="text-sm text-textSecondary mb-4">
-              此操作不可撤销。删除后将返还 <span className="text-mint-400 font-medium">{agent.api_credit_cost}</span> API 额度。
-              请输入 AI 名称 <span className="text-rose-400 font-medium">"{agent.name}"</span> 确认：
+              {t('agentDetail.deleteConfirmText')}<span className="text-mint-400 font-medium">{agent.api_credit_cost}</span> {t('agentDetail.deleteConfirmText2')}
+              <span className="text-rose-400 font-medium">"{agent.name}"</span> {t('agentDetail.deleteConfirm')}
             </p>
             <input
               type="text"
@@ -1023,14 +1025,14 @@ export default function AgentDetailPage() {
                 onClick={() => { setShowDelete(false); setDeleteConfirmName('') }}
                 className="flex-1 px-4 py-2 rounded-xl border border-border text-sm text-textSecondary hover:text-textPrimary"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleteConfirmName !== agent.name || deleting}
                 className="flex-1 px-4 py-2 rounded-xl bg-rose-500 text-white text-sm font-medium hover:bg-rose-400 disabled:opacity-30 transition-colors"
               >
-                {deleting ? '删除中...' : '确认删除'}
+                {deleting ? t('agentDetail.deleting') : t('agentDetail.confirmDelete')}
               </button>
             </div>
           </div>

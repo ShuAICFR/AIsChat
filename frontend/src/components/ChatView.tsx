@@ -6,6 +6,7 @@ import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
 import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
+import { useT } from '../i18n/I18nContext'
 
 interface Message {
   id: number
@@ -30,6 +31,7 @@ interface ChatViewProps {
 const PAGE_SIZE = 20
 
 export default function ChatView({ conversationType, conversationId }: ChatViewProps) {
+  const t = useT()
   const { user } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -378,7 +380,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         id: -Date.now(),
         sender_type: 'system',
         sender_id: 0,
-        sender_name: '群公告',
+        sender_name: t('groupSettings.announcement'),
         content: d.content,
         reply_to: null,
         created_at: new Date().toISOString(),
@@ -532,7 +534,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       } catch (err: any) {
         setPendingAttachments(prev =>
           prev.map(a => a.id === tempId
-            ? { ...a, uploading: false, error: err.message || '上传失败' }
+            ? { ...a, uploading: false, error: err.message || t('chat.uploadFailed') }
             : a
           )
         )
@@ -602,7 +604,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       {reconnecting && (
         <div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 bg-amber-500/15 border-b border-amber-500/20 text-amber-400 px-4 py-1.5 text-xs font-medium backdrop-blur-sm">
           <Loader2 size={12} className="animate-spin" />
-          连接断开，正在重新连接…
+          {t('chat.reconnecting')}
         </div>
       )}
 
@@ -631,7 +633,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           className="absolute top-3 right-4 z-40 flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/90 hover:bg-primary-500 text-white text-xs font-medium rounded-full shadow-lg shadow-primary-500/30 backdrop-blur-sm transition-all duration-200"
         >
           <ArrowUp size={14} />
-          跳至首个未读
+          {t('chat.jumpToFirstUnread')}
         </button>
       )}
 
@@ -653,7 +655,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         {/* 无更多旧消息提示 */}
         {!hasMoreBefore && messages.length > 0 && (
           <div className="text-center text-[10px] text-textMuted py-2 select-none">
-            —— 已到聊天开头 ——
+            {t('chat.beginningOfChat')}
           </div>
         )}
 
@@ -664,7 +666,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full text-textMuted text-sm">
-            {conversationType === 'dm' ? '开始你们的对话吧' : '暂无消息，发送第一条消息吧'}
+            {conversationType === 'dm' ? t('chat.startDMConversation') : t('chat.startGroupConversation')}
           </div>
         ) : (
           messages.map((msg) => (
@@ -677,7 +679,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               {msg.id === firstUnreadId && hasMoreBefore && (
                 <div className="flex items-center gap-2 my-3 select-none">
                   <div className="flex-1 h-px bg-rose-500/30" />
-                  <span className="text-[10px] font-medium text-rose-400 whitespace-nowrap">新消息</span>
+                  <span className="text-[10px] font-medium text-rose-400 whitespace-nowrap">{t('chat.newMessages')}</span>
                   <div className="flex-1 h-px bg-rose-500/30" />
                 </div>
               )}
@@ -750,7 +752,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           <button
             onClick={() => scrollToBottom(true)}
             className="flex items-center justify-center w-9 h-9 bg-elevated border border-border rounded-full shadow-lg shadow-black/20 text-textSecondary hover:text-textPrimary hover:bg-surface transition-all duration-200"
-            title="回到底部"
+            title={t('chat.scrollToBottom')}
           >
             <ArrowDown size={16} />
           </button>
@@ -781,7 +783,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                   <Loader2 size={12} className="animate-spin text-textMuted shrink-0" />
                 )}
                 {att.error && (
-                  <span className="text-rose-400 text-[10px] shrink-0" title={att.error}>失败</span>
+                  <span className="text-rose-400 text-[10px] shrink-0" title={att.error || t('chat.uploadFailed')}>{t('chat.uploadFailed')}</span>
                 )}
                 <span className="text-textMuted text-[10px] shrink-0">
                   {(att.size / 1024).toFixed(0)}KB
@@ -833,7 +835,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           <button
             onClick={() => fileInputRef.current?.click()}
             className="p-2.5 rounded-xl border border-border bg-canvas text-textMuted hover:text-textPrimary hover:border-primary-500/30 hover:bg-elevated transition-colors"
-            title="添加附件"
+            title={t('chat.addAttachment')}
           >
             <Paperclip size={18} />
           </button>
@@ -873,7 +875,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               }
               textareaRef.current?.addEventListener('blur', onBlur, { once: true })
             }}
-            placeholder={conversationType === 'dm' ? '输入私信... Enter 发送' : '输入消息... @AI名称 提及, Enter 发送'}
+            placeholder={conversationType === 'dm' ? t('chat.dmInputPlaceholder') : t('chat.groupInputPlaceholder')}
             rows={1}
             className="flex-1 min-w-0 resize-none rounded-xl border border-border bg-canvas px-4 py-2.5 text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/30 transition-shadow"
           />
@@ -882,11 +884,11 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
             disabled={(!input.trim() && pendingAttachments.length === 0) || uploadingCount > 0 || pendingAttachments.some(a => a.error)}
             title={
               uploadingCount > 0
-                ? `还有 ${uploadingCount} 个文件正在上传...`
+                ? t('chat.uploadingFiles').replace('{count}', String(uploadingCount))
                 : pendingAttachments.some(a => a.error)
-                ? '有文件上传失败，请先移除'
+                ? t('chat.uploadErrorRemove')
                 : pendingAttachments.length > 0 && !input.trim()
-                ? '发送附件'
+                ? t('chat.sendAttachment')
                 : ''
             }
             className="p-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-lg shadow-primary-500/20"

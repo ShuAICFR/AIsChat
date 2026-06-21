@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
+import { useT } from '../i18n/I18nContext'
 import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, Menu } from 'lucide-react'
 import { useNavigate, useBlocker, useOutletContext, useLocation } from 'react-router-dom'
 
@@ -28,16 +29,17 @@ const TIMEZONES = [
 ]
 
 const LANGUAGES = [
-  { code: 'zh', name: '中文（简体）' },
-  { code: 'en', name: 'English' },
+  { code: 'zh', key: 'settings.chinese' },
+  { code: 'en', key: 'settings.english' },
 ]
 
 const CHAT_STYLES = [
-  { value: 'cozy', label: '舒适模式', enLabel: 'Cozy', desc: '气泡间距宽松，头像较大，适合长时间阅读', enDesc: 'Relaxed bubble spacing, larger avatars' },
-  { value: 'compact', label: '紧凑模式', enLabel: 'Compact', desc: '气泡排列紧密，信息密度高，适合快速浏览', enDesc: 'Dense message layout, high information density' },
+  { value: 'cozy', key: 'settings.cozyMode', descKey: 'settings.cozyModeDesc' },
+  { value: 'compact', key: 'settings.compactMode', descKey: 'settings.compactModeDesc' },
 ]
 
 export default function SettingsPage() {
+  const t = useT()
   const { user, refreshUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
@@ -184,7 +186,7 @@ export default function SettingsPage() {
         ui_prefs: { chat_style: chatStyle },
       })
       setApiKey('')
-      setMessage('设置已保存')
+      setMessage(t('settings.saveSuccess'))
       // 更新快照以清除"未保存"状态
       setSavedValues({
         apiBaseUrl: apiBaseUrl || '',
@@ -198,7 +200,7 @@ export default function SettingsPage() {
       // 刷新 AI 列表以更新独立 API 状态
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
     } catch (err: any) {
-      setMessage(err.message || '保存失败')
+      setMessage(err.message || t('error.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -216,7 +218,7 @@ export default function SettingsPage() {
       // 刷新列表
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
     } catch (err: any) {
-      alert(err.message || '保存失败')
+      alert(err.message || t('error.saveFailed'))
     } finally {
       setAgentApiSaving(false)
     }
@@ -234,11 +236,11 @@ export default function SettingsPage() {
     setRedeemMsg('')
     try {
       const data = await api.post<{ message: string }>('/user/redeem', { code: redeemCode.trim() })
-      setRedeemMsg(data.message || '兑换成功')
+      setRedeemMsg(data.message || t('common.redeemSuccess'))
       setRedeemCode('')
       refreshUser()
     } catch (err: any) {
-      setRedeemMsg(err.message || '兑换失败')
+      setRedeemMsg(err.message || t('common.redeemFailed'))
     } finally {
       setRedeeming(false)
       setTimeout(() => setRedeemMsg(''), 4000)
@@ -252,11 +254,11 @@ export default function SettingsPage() {
         <button
           onClick={openDrawer}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title="菜单"
+          title={t('common.menu')}
         >
           <Menu size={18} />
         </button>
-        <h1 className="font-semibold text-textPrimary text-sm">设置</h1>
+        <h1 className="font-semibold text-textPrimary text-sm">{t('settings.title')}</h1>
       </div>
 
       {/* 内容 */}
@@ -270,7 +272,7 @@ export default function SettingsPage() {
             className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 rounded-xl bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-sm font-medium transition-colors"
           >
             <Shield size={16} />
-            管理面板
+            {t('settings.adminButton')}
           </button>
         )}
 
@@ -278,18 +280,18 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">额度</h2>
+            <h2 className="font-semibold text-textPrimary">{t('settings.quotaTitle')}</h2>
           </div>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="bg-canvas rounded-xl p-4 border border-border">
-              <p className="text-xs text-textMuted mb-1">AI 创建额度</p>
+              <p className="text-xs text-textMuted mb-1">{t('settings.aiQuota')}</p>
               <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
-              <p className="text-[10px] text-textMuted mt-1">每创建一个 AI 消耗 1 额度</p>
+              <p className="text-[10px] text-textMuted mt-1">{t('settings.aiQuotaHint')}</p>
             </div>
             <div className="bg-canvas rounded-xl p-4 border border-border">
-              <p className="text-xs text-textMuted mb-1">API 调用余额</p>
+              <p className="text-xs text-textMuted mb-1">{t('settings.apiCredit')}</p>
               <p className="text-2xl font-bold text-textPrimary">{user?.api_credit ?? 0}</p>
-              <p className="text-[10px] text-textMuted mt-1">每次 LLM 调用从此余额扣除</p>
+              <p className="text-[10px] text-textMuted mt-1">{t('settings.apiCreditHint')}</p>
             </div>
           </div>
           {/* 兑换码 */}
@@ -301,7 +303,7 @@ export default function SettingsPage() {
                 value={redeemCode}
                 onChange={(e) => setRedeemCode(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="输入兑换码（如 RC-xxxxxxxxxxxxxxxx）"
+                placeholder={t('me.redeemPlaceholder')}
               />
             </div>
             <button
@@ -310,7 +312,7 @@ export default function SettingsPage() {
               className="flex items-center gap-1 px-4 py-2 rounded-xl bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
             >
               {redeeming ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              兑换
+              {t('me.redeem')}
             </button>
           </div>
           {redeemMsg && (
@@ -324,31 +326,31 @@ export default function SettingsPage() {
         <div id="settings-api" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <Key size={18} className="text-primary-400 shrink-0" />
-            <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">API 提供商配置</h2>
-            <span className="text-[10px] text-textMuted ml-auto">以下为全局默认，所有 AI 共用</span>
+            <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">{t('settings.apiConfigTitle')}</h2>
+            <span className="text-[10px] text-textMuted ml-auto">{t('settings.apiConfigHint')}</span>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">Base URL</label>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.baseUrl')}</label>
               <input
                 type="text"
                 value={apiBaseUrl}
                 onChange={(e) => setApiBaseUrl(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder="例: https://api.deepseek.com"
+                placeholder={t('settings.baseUrlPlaceholder')}
               />
-              <p className="text-[10px] text-textMuted mt-1">API 服务地址，需兼容 OpenAI 接口格式。也可填第三方代理地址</p>
+              <p className="text-[10px] text-textMuted mt-1">{t('settings.baseUrlDesc')}</p>
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">API Key</label>
+              <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.apiKey')}</label>
               <div className="relative">
                 <input
                   type={showApiKey ? 'text' : 'password'}
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                  placeholder={user?.has_api_key ? '留空表示不修改（已设置）' : '输入 API Key，如 sk-xxxxxxxx'}
+                  placeholder={user?.has_api_key ? t('settings.apiKeyPlaceholderSet') : t('settings.apiKeyPlaceholder')}
                 />
                 <button
                   type="button"
@@ -361,8 +363,8 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mt-1.5">
                 <p className="text-xs text-textMuted">
                   {user?.has_api_key
-                    ? <><CheckCircle size={12} className="inline text-mint-400 mr-1" />已设置 API Key</>
-                    : <><AlertTriangle size={12} className="inline text-accent-400 mr-1" />尚未设置 API Key</>}
+                    ? <><CheckCircle size={12} className="inline text-mint-400 mr-1" />{t('settings.apiKeySet')}</>
+                    : <><AlertTriangle size={12} className="inline text-accent-400 mr-1" />{t('settings.apiKeyNotSet')}</>}
                 </p>
                 <button
                   onClick={handleTestConnection}
@@ -376,7 +378,7 @@ export default function SettingsPage() {
                   ) : testResult === 'fail' ? (
                     <XCircle size={12} className="text-rose-400" />
                   ) : null}
-                  {testing ? '测试中...' : testResult === 'success' ? '连接成功' : testResult === 'fail' ? '连接失败' : '测试连接'}
+                  {testing ? t('settings.testing') : testResult === 'success' ? t('settings.testSuccess') : testResult === 'fail' ? t('settings.testFailed') : t('settings.testConnection')}
                 </button>
               </div>
             </div>
@@ -390,14 +392,14 @@ export default function SettingsPage() {
             >
               {showAgentApi ? <ChevronDown size={16} className="text-textMuted" /> : <ChevronRight size={16} className="text-textMuted" />}
               <Bot size={16} className="text-primary-400" />
-              <span className="text-sm font-medium text-textPrimary">单 AI 配置（设置独立 API）</span>
-              <span className="text-[10px] text-textMuted">（为特定 AI 设置独立 API，覆盖全局）</span>
+              <span className="text-sm font-medium text-textPrimary">{t('settings.perAgentTitle')}</span>
+              <span className="text-[10px] text-textMuted">{t('settings.perAgentHint')}</span>
             </button>
 
             {showAgentApi && (
               <div className="mt-3">
                 {agents.length === 0 ? (
-                  <p className="text-xs text-textMuted py-4 text-center">暂无 AI，创建 AI 后可为每个 AI 配置独立 API</p>
+                  <p className="text-xs text-textMuted py-4 text-center">{t('settings.noAgentsForApi')}</p>
                 ) : (
                   <div className="space-y-2">
                     {agents.map((agent: any) => (
@@ -415,21 +417,21 @@ export default function SettingsPage() {
                               value={agentApiBaseUrl}
                               onChange={(e) => setAgentApiBaseUrl(e.target.value)}
                               className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                              placeholder="例: https://api.deepseek.com（留空则继承全局）"
+                              placeholder={t('settings.agentBaseUrlPlaceholder')}
                             />
                             <input
                               type="password"
                               value={agentApiKey}
                               onChange={(e) => setAgentApiKey(e.target.value)}
                               className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                              placeholder="例: sk-xxxxxxxx（留空则继承全局）"
+                              placeholder={t('settings.agentApiKeyPlaceholder')}
                             />
                             <button
                               onClick={() => handleSaveAgentApi(agent.id)}
                               disabled={agentApiSaving}
                               className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
                             >
-                              {agentApiSaving ? '保存中...' : '保存'}
+                              {agentApiSaving ? t('settings.agentApiSaving') : t('common.save')}
                             </button>
                           </div>
                         ) : (
@@ -438,11 +440,11 @@ export default function SettingsPage() {
                               <span className="text-sm text-textPrimary">{agent.name}</span>
                               {agent.api_base_url ? (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
-                                  独立 API
+                                  {t('settings.independentApiBadge')}
                                 </span>
                               ) : (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
-                                  继承全局
+                                  {t('settings.inheritGlobalBadge')}
                                 </span>
                               )}
                             </div>
@@ -467,9 +469,9 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">时区</h2>
+            <h2 className="font-semibold text-textPrimary">{t('settings.timezone')}</h2>
           </div>
-          <p className="text-xs text-textMuted mb-3">消息时间将按此时区显示</p>
+          <p className="text-xs text-textMuted mb-3">{t('settings.timezoneDesc')}</p>
           <select
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}
@@ -480,7 +482,7 @@ export default function SettingsPage() {
             ))}
           </select>
           <p className="text-xs text-textMuted mt-2">
-            当前: {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
+            {t('settings.currentTimestamp')} {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
           </p>
         </div>
 
@@ -488,16 +490,16 @@ export default function SettingsPage() {
         <div id="settings-language" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4">
             <Globe size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">语言</h2>
+            <h2 className="font-semibold text-textPrimary">{t('settings.language')}</h2>
           </div>
-          <p className="text-xs text-textMuted mb-3">界面和 AI 系统提示词将使用所选语言</p>
+          <p className="text-xs text-textMuted mb-3">{t('settings.languageDesc')}</p>
           <select
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           >
             {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.name}</option>
+              <option key={l.code} value={l.code}>{t(l.key)}</option>
             ))}
           </select>
         </div>
@@ -506,9 +508,9 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Layout size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">聊天样式</h2>
+            <h2 className="font-semibold text-textPrimary">{t('settings.chatStyle')}</h2>
           </div>
-          <p className="text-xs text-textMuted mb-3">控制群聊和私信界面中消息气泡的间距与布局风格</p>
+          <p className="text-xs text-textMuted mb-3">{t('settings.chatStyleDesc')}</p>
           <div className="flex gap-3">
             {CHAT_STYLES.map((s) => (
               <button
@@ -520,8 +522,8 @@ export default function SettingsPage() {
                     : 'border-border bg-canvas text-textSecondary hover:border-primary-500/30'
                 }`}
               >
-                <div className="font-medium">{language === 'en' ? s.enLabel : s.label}</div>
-                <div className="text-[10px] mt-0.5 opacity-70">{language === 'en' ? s.enDesc : s.desc}</div>
+                <div className="font-medium">{t(s.key)}</div>
+                <div className="text-[10px] mt-0.5 opacity-70">{t(s.descKey)}</div>
               </button>
             ))}
           </div>
@@ -531,13 +533,13 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">策略模式</h2>
+            <h2 className="font-semibold text-textPrimary">{t('settings.strategy')}</h2>
           </div>
 
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-medium mb-1.5 text-textSecondary">
-                自动审批超时（秒）: {autoTimeout}
+                {t('settings.autoApproveTimeout')} {autoTimeout}
               </label>
               <input
                 type="range"
@@ -559,7 +561,7 @@ export default function SettingsPage() {
                 />
                 <div className="w-9 h-5 bg-border peer-focus:ring-2 peer-focus:ring-primary-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all" />
               </label>
-              <span className="text-sm text-textSecondary">默认同意向量加速申请</span>
+              <span className="text-sm text-textSecondary">{t('settings.autoApproveDefault')}</span>
             </div>
           </div>
         </div>
@@ -568,14 +570,14 @@ export default function SettingsPage() {
         <div id="settings-appearance" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
           <div className="flex items-center gap-2 mb-4">
             <Palette size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">外观</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">即时生效</span>
+            <h2 className="font-semibold text-textPrimary">{t('settings.appearance')}</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-textPrimary">界面主题</p>
+              <p className="text-sm font-medium text-textPrimary">{t('settings.darkMode')}</p>
               <p className="text-xs text-textMuted mt-0.5">
-                {theme === 'dark' ? '当前：深色模式（深邃紫金）' : '当前：浅色模式'}
+                {theme === 'dark' ? t('settings.darkModeDesc') : t('settings.lightModeDesc')}
               </p>
             </div>
             <button
@@ -605,14 +607,14 @@ export default function SettingsPage() {
         <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <Bell size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">桌面通知</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">即时生效</span>
+            <h2 className="font-semibold text-textPrimary">{t('settings.notifications')}</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-textPrimary">标签页未读标记</p>
+              <p className="text-sm font-medium text-textPrimary">{t('settings.notificationsLabel')}</p>
               <p className="text-xs text-textMuted mt-0.5">
-                切换标签页时在标题栏显示未读消息数，有新消息时任务栏闪烁（免打扰的群和私信不计入）
+                {t('settings.notificationsDetailDesc')}
               </p>
             </div>
             <button
@@ -649,10 +651,10 @@ export default function SettingsPage() {
           className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
         >
           <Save size={16} />
-          {saving ? '保存中...' : '保存设置'}
+          {saving ? t('settings.saving') : t('settings.save')}
         </button>
         <p className="text-xs text-textMuted mt-2">
-          标有「即时生效」的选项修改后立即应用，无需点击保存。其余选项需点击保存后生效。
+          {t('settings.saveHint')}
         </p>
       </div>
 
@@ -665,9 +667,9 @@ export default function SettingsPage() {
                 <AlertTriangle size={20} className="text-accent-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-textPrimary">未保存的修改</h3>
+                <h3 className="text-lg font-semibold text-textPrimary">{t('settings.unsavedTitle')}</h3>
                 <p className="text-sm text-textSecondary mt-1">
-                  你有尚未保存的设置修改。离开此页面将丢失这些更改。确定要离开吗？
+                  {t('settings.unsavedDesc')}
                 </p>
               </div>
             </div>
@@ -676,13 +678,13 @@ export default function SettingsPage() {
                 onClick={() => blocker.reset?.()}
                 className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
               >
-                继续编辑
+                {t('settings.continueEditing')}
               </button>
               <button
                 onClick={() => blocker.proceed?.()}
                 className="flex-1 py-2.5 text-sm bg-rose-500 text-white rounded-xl hover:bg-rose-400 font-medium transition-all"
               >
-                放弃修改
+                {t('settings.discardChanges')}
               </button>
             </div>
           </div>

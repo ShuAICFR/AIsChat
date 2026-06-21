@@ -30,9 +30,9 @@ export const STATE_BADGE_COLORS: Record<string, string> = {
 // AI 类型标签（统一数据源，避免 AgentsPage / MePage 重复定义）
 // ============================================================
 
-/** AI 类型 → 显示标签 + Tailwind 颜色 */
-export const AI_TYPE_LABEL: Record<string, { text: string; cls: string }> = {
-  resonance: { text: '共振', cls: 'bg-violet-500/10 text-violet-400' },
-  general: { text: '通用', cls: 'bg-primary-500/10 text-primary-400' },
-  semi_general: { text: '半通用', cls: 'bg-amber-500/10 text-amber-400' },
+/** AI 类型 → i18n 键名 + Tailwind 颜色 */
+export const AI_TYPE_LABEL: Record<string, { key: string; cls: string }> = {
+  resonance: { key: 'aiType.resonance', cls: 'bg-violet-500/10 text-violet-400' },
+  general: { key: 'aiType.general', cls: 'bg-primary-500/10 text-primary-400' },
+  semi_general: { key: 'aiType.semiGeneral', cls: 'bg-amber-500/10 text-amber-400' },
 }

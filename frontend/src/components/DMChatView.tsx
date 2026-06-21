@@ -5,6 +5,7 @@ import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
 import { ArrowLeft, Bell, BellOff, Settings, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
+import { useT } from '../i18n/I18nContext'
 
 interface DMChatViewProps {
   sessionId: string
@@ -12,6 +13,7 @@ interface DMChatViewProps {
 }
 
 export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps) {
+  const t = useT()
   const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
@@ -47,7 +49,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         <button
           onClick={() => navigate('/chat')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title="会话列表"
+          title={t('dm.sessionList')}
         >
           <ArrowLeft size={20} />
         </button>
@@ -61,21 +63,21 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-textPrimary text-sm truncate">
-              {partner?.name || '加载中...'}
+              {partner?.name || t('dm.loading')}
             </span>
           </div>
           <span className="text-[10px] text-textMuted">
-            {partner?.type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 用户</>}
-            {partner?.state === 'active' && ' · 在线'}
-            {partner?.state === 'dnd' && ' · 免打扰'}
-            {(!partner?.state || partner?.state === 'offline') && ' · 离线'}
+            {partner?.type === 'ai' ? <><Bot size={12} className="inline" /> {t('dm.ai')}</> : <><User size={12} className="inline" /> {t('dm.user')}</>}
+            {partner?.state === 'active' && ` · ${t('dm.online')}`}
+            {partner?.state === 'dnd' && ` · ${t('dm.dnd')}`}
+            {(!partner?.state || partner?.state === 'offline') && ` · ${t('dm.offline')}`}
           </span>
         </div>
 
         {/* 在线状态指示 */}
         <span className="inline-flex items-center gap-1 text-[10px] text-mint-400 font-medium">
           <span className={`w-1.5 h-1.5 rounded-full ${stateColor}`} />
-          {partner?.state === 'active' ? '在线' : partner?.state === 'dnd' ? '勿扰' : '离线'}
+          {partner?.state === 'active' ? t('dm.online') : partner?.state === 'dnd' ? t('dm.shortDnd') : t('dm.offline')}
         </span>
 
         {/* 免打扰按钮 */}
@@ -86,7 +88,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
               ? 'text-rose-400 hover:bg-rose-400/10'
               : 'text-textMuted hover:text-rose-400 hover:bg-elevated'
           }`}
-          title={myDndUntil ? '取消免打扰' : '开启免打扰'}
+          title={myDndUntil ? t('dm.unmute') : t('dm.mute')}
         >
           {myDndUntil ? <BellOff size={14} /> : <Bell size={14} />}
         </button>
@@ -95,7 +97,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         <button
           onClick={() => setShowSettings(true)}
           className="p-1 rounded-lg hover:bg-elevated text-textMuted hover:text-textSecondary transition-colors"
-          title="私信设置"
+          title={t('dm.dmSettings')}
         >
           <Settings size={14} />
         </button>

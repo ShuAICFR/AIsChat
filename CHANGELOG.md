@@ -48,6 +48,10 @@
 - 📊 **用户额度状态端点**：`GET /user/credit-status` 返回剩余额度、估算 Token 数（api_credit × 10000）、月度消耗、绑定的池 Key 名。`GET /auth/me` 新增 `assigned_pool_key_name` 字段。
 - 🏷️ **兑换码增强**：管理员生成兑换码新增「备注」（保密，仅管理员可见）、「单码最大用量」、「API 池额度」字段。兑换码列表显示备注、API 池标记（琥珀色「池」徽章）、创建时间。
 - 📋 **API 用量日志**：新增 `api_usage_log` 表，记录每次 LLM 调用的 user_id/agent_id/pool_key_id/tokens_used/credit_spent/model，用于审计和用量统计。
+- 🌐 **前端全量 i18n 国际化**：~700 翻译键值（中/英双字典），28 个前端文件全面替换硬编码中文字符串为 `t()` 调用。覆盖登录页、管理员面板（4 个 Tab）、AI 管理、好友、设置、用量、群聊/私信设置、弹窗等全部 UI。翻译键按模块组织（`admin.*`、`agents.*`、`friends.*`、`settings.*` 等）。
+- 🌐 **全局默认语言**：`system_settings` 单行表（id=1），`default_language` 默认 `"en"`（英文）。管理员 `/admin?tab=system` 可切换全局默认语言。未登录时登录页自动获取并缓存全局语言偏好。新用户注册时从全局设置继承初始语言。
+- 🧙 **新用户初始化向导**：`users.setup_completed` 字段。新用户注册后强制跳转 `/setup` 两步向导（第 1 步选语言 → 第 2 步确认完成）。语言选择时界面即时预览切换。`ProtectedLayout` 路由守卫拦截。现有用户自动标记为已完成。
+- 🔧 `translations.ts` 扁平字典结构修复：`getTranslation()` 原用 `path.split('.')` 深度遍历但字典是扁平 key（`'nav.chat'`），导致所有 `t()` 调用返回原始 key。改为直接 `dict[path]` 查找。
 
 ### Changed
 
@@ -58,6 +62,9 @@
 
 - 🐛 修复聊天页返回路由不更新（移动端 ArrowLeft 未调用 `navigate('/chat')`）
 - 🐛 修复兑换码生成 500 错误（`datetime.now(timezone.utc)` 带时区与 PostgreSQL `TIMESTAMP WITHOUT TIME ZONE` 不兼容，三处加 `.replace(tzinfo=None)`）
+- 🐛 修复 i18n 全线失效：`getTranslation()` 深度遍历 bug 导致所有 `t()` 返回原始 key；`I18nProvider` 提到 `main.tsx` 覆盖登录页
+- 🐛 修复 `friendship.py` schema 缺少 `avatar_url`/`auto_respond_friend_request` 字段导致前端头像不显示
+- 🐛 修复 `ChatSidebar` 缺少 `useT` 导入导致 `t is not defined`
 
 ### Backend API
 
@@ -67,6 +74,9 @@
 - `DELETE /admin/api-key-pool/{id}` — 删除池 Key
 - `GET /user/credit-status` — 用户额度状态摘要
 - `POST /admin/redemption-codes` — 请求体新增 `note`/`max_usage`/`is_api_pool`
+- `GET /system/settings` — 获取全局系统设置（公开端点）
+- `PUT /admin/system-settings` — 管理员修改全局系统设置
+- `POST /auth/setup` — 新用户完成初始化设置（设置语言 + 标记完成）
 
 ---
 

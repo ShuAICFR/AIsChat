@@ -92,7 +92,7 @@ export function useWebSocket(
         if (msg.type === 'error') {
           const wsError: WsError = {
             code: msg.code || 'UNKNOWN',
-            message: msg.message || '未知错误',
+            message: msg.message || 'Unknown error',
             tool_call_id: msg.tool_call_id,
             timestamp: Date.now(),
           }

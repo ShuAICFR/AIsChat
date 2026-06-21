@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, X, MessageSquare, Bot, User } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
+import { useT } from '../i18n/I18nContext'
 
 interface SearchResult {
   id: number
@@ -14,6 +15,7 @@ interface SearchResult {
 }
 
 export default function SearchOverlay() {
+  const t = useT()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
@@ -71,7 +73,7 @@ export default function SearchOverlay() {
         setQuery('')
       }
     } catch (err: any) {
-      alert(err.message || '发起私信失败')
+      alert(err.message || t('search.sendDMFailed'))
     } finally {
       setSendingDM(null)
     }
@@ -88,7 +90,7 @@ export default function SearchOverlay() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => results.length > 0 && setShowDropdown(true)}
-          placeholder="搜索用户或 AI..."
+          placeholder={t('search.placeholder')}
           className="flex-1 bg-transparent text-sm text-textPrimary placeholder:text-textMuted focus:outline-none"
         />
         {query && (
@@ -102,9 +104,9 @@ export default function SearchOverlay() {
       {showDropdown && (
         <div className="absolute top-full left-0 right-0 mt-1 bg-elevated border border-border rounded-xl shadow-2xl shadow-black/30 z-50 max-h-80 overflow-y-auto">
           {loading ? (
-            <div className="p-3 text-sm text-textMuted text-center">搜索中...</div>
+            <div className="p-3 text-sm text-textMuted text-center">{t('search.searching')}</div>
           ) : results.length === 0 ? (
-            <div className="p-3 text-sm text-textMuted text-center">无结果</div>
+            <div className="p-3 text-sm text-textMuted text-center">{t('search.noResults')}</div>
           ) : (
             results.map((item) => (
               <div
@@ -138,7 +140,7 @@ export default function SearchOverlay() {
                     )}
                   </div>
                   {item.owner_name && (
-                    <div className="text-xs text-textMuted truncate">创建者: {item.owner_name}</div>
+                    <div className="text-xs text-textMuted truncate">{t('search.creator')} {item.owner_name}</div>
                   )}
                 </div>
 
@@ -149,7 +151,7 @@ export default function SearchOverlay() {
                   className="flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 shrink-0 transition-colors disabled:opacity-50"
                 >
                   <MessageSquare size={12} />
-                  {sendingDM === `${item.type}:${item.id}` ? '...' : '发私信'}
+                  {sendingDM === `${item.type}:${item.id}` ? '...' : t('search.sendDM')}
                 </button>
               </div>
             ))

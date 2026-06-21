@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { useT } from '../i18n/I18nContext'
 import { useIsDark } from '../hooks/useIsDark'
 import { fmtTokenNum } from '../utils/format'
 import {
@@ -32,6 +33,7 @@ interface AgentSummary {
 }
 
 export default function UsagePage() {
+  const t = useT()
   const [searchParams] = useSearchParams()
   const [days, setDays] = useState(30)
   const [overview, setOverview] = useState<AgentSummary[]>([])
@@ -102,7 +104,7 @@ export default function UsagePage() {
           <ArrowLeft size={18} />
         </button>
         <h2 className="text-lg font-semibold text-textPrimary flex items-center gap-2">
-          <BarChart3 size={20} className="text-primary-400" /> API 用量详情
+          <BarChart3 size={20} className="text-primary-400" /> {t('usage.title')}
         </h2>
       </div>
 
@@ -118,7 +120,7 @@ export default function UsagePage() {
                 : 'bg-surface border border-border text-textSecondary hover:bg-elevated'
             }`}
           >
-            {d} 天
+            {d}{t('usage.daysSuffix')}
           </button>
         ))}
       </div>
@@ -126,17 +128,17 @@ export default function UsagePage() {
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: '总 Token', value: fmtTokenNum(totalTokens), icon: BarChart3 },
-          { label: '调用次数', value: totalCalls, icon: Activity },
-          { label: '缓存命中率', value: `${cacheRate}%`, icon: FileText },
-          { label: '思考 Token', value: fmtTokenNum(totalReasoning), icon: Cpu },
+          { key: 'usage.totalTokens', value: fmtTokenNum(totalTokens), icon: BarChart3 },
+          { key: 'usage.calls', value: totalCalls, icon: Activity },
+          { key: 'usage.cacheHitRate', value: `${cacheRate}%`, icon: FileText },
+          { key: 'usage.thinkingTokens', value: fmtTokenNum(totalReasoning), icon: Cpu },
         ].map(item => {
           const Icon = item.icon;
           return (
-          <div key={item.label} className="bg-surface rounded-xl border border-border p-4 text-center">
+          <div key={item.key} className="bg-surface rounded-xl border border-border p-4 text-center">
             <div className="mb-1 flex justify-center"><Icon size={20} className="text-textSecondary" /></div>
             <div className="text-lg font-semibold text-textPrimary">{item.value}</div>
-            <div className="text-[10px] text-textMuted">{item.label}</div>
+            <div className="text-[10px] text-textMuted">{t(item.key)}</div>
           </div>
         )})}
       </div>
@@ -147,27 +149,27 @@ export default function UsagePage() {
           <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={24} /></div>
         ) : overview.length === 0 ? (
           <div className="text-center py-12 text-textMuted text-sm">
-            暂无用量数据。<br />
-            <span className="text-xs">AI 对话后数据会出现在这里。</span>
+            {t('usage.noData')}<br />
+            <span className="text-xs">{t('usage.noDataHint')}</span>
           </div>
         ) : (
           <>
             {/* AI 选择器 */}
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-xs text-textMuted shrink-0">查看 AI：</span>
+              <span className="text-xs text-textMuted shrink-0">{t('usage.selectAiLabel')}</span>
               <select
                 value={selectedAgent || ''}
                 onChange={e => setSelectedAgent(e.target.value ? parseInt(e.target.value) : null)}
                 className="px-3 py-1.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               >
-                <option value="">全部 AI</option>
+                <option value="">{t('usage.allAi')}</option>
                 {overview.map(a => (
                   <option key={a.agent_id} value={a.agent_id}>{a.agent_name}</option>
                 ))}
               </select>
               {selectedInfo && (
                 <span className="text-xs text-textMuted ml-auto">
-                  模型: {selectedInfo.model || '默认'} · {selectedInfo.total_calls} 次调用
+                  {t('usage.modelLabel')} {selectedInfo.model || t('usage.defaultModel')} · {selectedInfo.total_calls} {t('usage.callsLabel')}
                 </span>
               )}
             </div>
@@ -176,7 +178,7 @@ export default function UsagePage() {
             {chartLoading ? (
               <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={20} /></div>
             ) : dailyData.length === 0 ? (
-              <div className="text-center py-12 text-textMuted text-sm">该 AI 暂无每日用量数据</div>
+              <div className="text-center py-12 text-textMuted text-sm">{t('usage.noDailyData')}</div>
             ) : (
               <div className="h-72 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
@@ -199,14 +201,14 @@ export default function UsagePage() {
                       formatter={(value: number, name: string) => [fmtTokenNum(value),
                         name === 'prompt_tokens' ? 'Prompt' :
                         name === 'completion_tokens' ? 'Completion' :
-                        name === 'reasoning_tokens' ? '思考' : '缓存'
+                        name === 'reasoning_tokens' ? t('usage.thinkingLegend') : t('usage.cacheLegend')
                       ]}
                     />
                     <Legend
                       formatter={(v: string) =>
                         v === 'prompt_tokens' ? 'Prompt' :
                         v === 'completion_tokens' ? 'Completion' :
-                        v === 'reasoning_tokens' ? '思考' : '缓存'
+                        v === 'reasoning_tokens' ? t('usage.thinkingLegend') : t('usage.cacheLegend')
                       }
                     />
                     <Bar dataKey="prompt_tokens" stackId="a" fill={colors.prompt} name="prompt_tokens" />
@@ -225,19 +227,19 @@ export default function UsagePage() {
       {overview.length > 0 && (
         <div className="bg-surface rounded-2xl border border-border overflow-hidden">
           <div className="px-5 py-3 border-b border-border">
-            <h3 className="text-sm font-semibold text-textPrimary">AI 用量明细</h3>
+            <h3 className="text-sm font-semibold text-textPrimary">{t('usage.agentDetailTableTitle')}</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead className="bg-canvas">
                 <tr className="text-textMuted">
-                  <th className="text-left py-2 px-4 font-medium">AI</th>
-                  <th className="text-left py-2 px-4 font-medium hidden md:table-cell">模型</th>
-                  <th className="text-right py-2 px-4 font-medium">总 Token</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">Prompt</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">Completion</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">思考</th>
-                  <th className="text-right py-2 px-4 font-medium">调用</th>
+                  <th className="text-left py-2 px-4 font-medium">{t('usage.tableHeaderAI')}</th>
+                  <th className="text-left py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderModel')}</th>
+                  <th className="text-right py-2 px-4 font-medium">{t('usage.tableHeaderTokens')}</th>
+                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderPrompt')}</th>
+                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderCompletion')}</th>
+                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderReasoning')}</th>
+                  <th className="text-right py-2 px-4 font-medium">{t('usage.tableHeaderCalls')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">

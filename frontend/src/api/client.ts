@@ -36,7 +36,7 @@ async function request<T = any>(
   if (res.status === 401) {
     localStorage.removeItem('access_token')
     window.location.href = '/login'
-    throw new ApiError('未授权', 401)
+    throw new ApiError('Unauthorized', 401)
   }
 
   // 安全解析 JSON：处理空 body / 非 JSON 响应
@@ -46,13 +46,13 @@ async function request<T = any>(
     data = text ? JSON.parse(text) : {}
   } catch {
     if (!res.ok) {
-      throw new ApiError(`请求失败 (${res.status})`, res.status)
+      throw new ApiError(`Request failed (${res.status})`, res.status)
     }
     return {} as T
   }
 
   if (!res.ok) {
-    throw new ApiError(data.detail || `请求失败 (${res.status})`, res.status)
+    throw new ApiError(data.detail || `Request failed (${res.status})`, res.status)
   }
 
   return data
@@ -78,7 +78,7 @@ async function uploadFile(path: string, file: File): Promise<any> {
   if (res.status === 401) {
     localStorage.removeItem('access_token')
     window.location.href = '/login'
-    throw new ApiError('未授权', 401)
+    throw new ApiError('Unauthorized', 401)
   }
 
   // 安全解析 JSON：处理空 body / 非 JSON 响应
@@ -88,13 +88,13 @@ async function uploadFile(path: string, file: File): Promise<any> {
     data = text ? JSON.parse(text) : {}
   } catch {
     if (!res.ok) {
-      throw new ApiError(`上传失败 (${res.status})`, res.status)
+      throw new ApiError(`Upload failed (${res.status})`, res.status)
     }
     return {}
   }
 
   if (!res.ok) {
-    throw new ApiError(data.detail || `上传失败 (${res.status})`, res.status)
+    throw new ApiError(data.detail || `Upload failed (${res.status})`, res.status)
   }
   return data
 }

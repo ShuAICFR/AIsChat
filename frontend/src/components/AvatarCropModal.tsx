@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import Cropper, { type Area } from 'react-easy-crop'
 import { X, ZoomIn, ZoomOut } from 'lucide-react'
+import { useT } from '../i18n/I18nContext'
 
 interface AvatarCropModalProps {
   file: File
@@ -42,6 +43,7 @@ function getCroppedImg(image: HTMLImageElement, crop: Area): Promise<Blob> {
 }
 
 export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCropModalProps) {
+  const t = useT()
   const [imageSrc, setImageSrc] = useState<string>('')
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
@@ -90,12 +92,12 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
         >
           <X size={22} />
         </button>
-        <span className="text-white/80 text-sm font-medium">调整头像</span>
+        <span className="text-white/80 text-sm font-medium">{t('avatarCrop.adjustAvatar')}</span>
         <button
           onClick={handleConfirm}
           className="px-4 py-1.5 rounded-full bg-mint-400 hover:bg-mint-500 text-white text-sm font-medium transition-colors"
         >
-          确定
+          {t('common.confirm')}
         </button>
       </div>
 

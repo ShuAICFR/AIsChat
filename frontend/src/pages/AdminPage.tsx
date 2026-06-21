@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom
 import { api } from '../api/client'
 import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
+import { useT } from '../i18n/I18nContext'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
@@ -10,24 +11,7 @@ import SystemMetricsTab from '../components/SystemMetricsTab'
 import ApiKeyPoolTab from '../components/ApiKeyPoolTab'
 
 type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool' | 'system'
-type TabCategory = '核心管理' | '系统配置' | '运维分析'
-
-const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: TabCategory }[] = [
-  { key: 'overview', label: '概览', icon: Activity, desc: '系统统计总览', category: '核心管理' },
-  { key: 'users', label: '用户', icon: Users, desc: '用户列表与封禁管理', category: '核心管理' },
-  { key: 'agents', label: 'AI 管理', icon: Bot, desc: 'AI 列表与自修改开关', category: '核心管理' },
-  { key: 'groups', label: '群聊审查', icon: MessageCircle, desc: '群聊列表与解散操作', category: '核心管理' },
-  { key: 'codes', label: '兑换码', icon: Ticket, desc: '生成与管理兑换码', category: '系统配置' },
-  { key: 'opencli', label: 'OpenCLI', icon: Terminal, desc: '命令行白名单与全局设置', category: '系统配置' },
-  { key: 'convlog', label: '对话日志', icon: ScrollText, desc: '全局日志设置与查看', category: '系统配置' },
-  { key: 'backup', label: '备份', icon: Database, desc: '数据库与完整备份管理', category: '运维分析' },
-  { key: 'logs', label: '审计', icon: FileText, desc: '系统操作日志记录', category: '运维分析' },
-  { key: 'federation', label: '联邦', icon: Globe, desc: '联邦对等端与注册表', category: '运维分析' },
-  { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计', category: '运维分析' },
-  { key: 'metrics', label: '系统监控', icon: Activity, desc: '实时性能指标与延迟趋势', category: '运维分析' },
-  { key: 'apipool', label: 'API 库', icon: Key, desc: 'API Key 池管理', category: '系统配置' },
-  { key: 'system', label: '平台设置', icon: Settings, desc: '全局默认语言等', category: '系统配置' },
-]
+type TabCategory = string
 
 const renderContent = (activeTab: Tab) => {
   switch (activeTab) {
@@ -50,7 +34,23 @@ const renderContent = (activeTab: Tab) => {
 }
 
 export default function AdminPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const t = useT()
+  const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: string }[] = [
+    { key: 'overview', label: t('admin.overview'), icon: Activity, desc: t('admin.overview'), category: t('admin.categoryCore') },
+    { key: 'users', label: t('admin.users'), icon: Users, desc: t('admin.users'), category: t('admin.categoryCore') },
+    { key: 'agents', label: t('admin.agents'), icon: Bot, desc: t('admin.agents'), category: t('admin.categoryCore') },
+    { key: 'groups', label: t('admin.groups'), icon: MessageCircle, desc: t('admin.groups'), category: t('admin.categoryCore') },
+    { key: 'codes', label: t('admin.codes'), icon: Ticket, desc: t('admin.codes'), category: t('admin.categoryOps') },
+    { key: 'opencli', label: t('admin.opencli'), icon: Terminal, desc: t('admin.opencli'), category: t('admin.categoryOps') },
+    { key: 'convlog', label: t('admin.logs'), icon: ScrollText, desc: t('admin.logs'), category: t('admin.categoryOps') },
+    { key: 'backup', label: t('admin.backup'), icon: Database, desc: t('admin.backup'), category: t('admin.categorySystem') },
+    { key: 'logs', label: t('admin.audit'), icon: FileText, desc: t('admin.audit'), category: t('admin.categorySystem') },
+    { key: 'federation', label: t('admin.federation'), icon: Globe, desc: t('admin.federation'), category: t('admin.categorySystem') },
+    { key: 'usage', label: t('admin.usage'), icon: BarChart3, desc: t('admin.usage'), category: t('admin.categorySystem') },
+    { key: 'metrics', label: t('admin.systemMetrics'), icon: Activity, desc: t('admin.systemMetrics'), category: t('admin.categorySystem') },
+    { key: 'apipool', label: t('admin.apikeyPool'), icon: Key, desc: t('admin.apikeyPool'), category: t('admin.categoryOps') },
+    { key: 'system', label: t('admin.system'), icon: Settings, desc: t('admin.system'), category: t('admin.categorySystem') },
+  ]
   const initialTab = (searchParams.get('tab') as Tab) || 'overview'
   const [activeTab, setActiveTab] = useState<Tab>(initialTab)
   // 移动端：'list' 显示导航列表，'detail' 显示选中内容
@@ -81,7 +81,7 @@ export default function AdminPage() {
             <button
               onClick={backToList}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="返回列表"
+              title={t('admin.backToList')}
             >
               <ArrowLeft size={20} />
             </button>
@@ -89,25 +89,25 @@ export default function AdminPage() {
             <button
               onClick={() => navigate('/me')}
               className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-              title="返回我的"
+              title={t('admin.backToMe')}
             >
               <ArrowLeft size={20} />
             </button>
           )}
           <h1 className="text-xl font-bold text-textPrimary tracking-tight">
-            {mobileView === 'detail' && currentTab ? currentTab.label : '管理员面板'}
+            {mobileView === 'detail' && currentTab ? currentTab.label : t('admin.title')}
           </h1>
         </div>
         {mobileView === 'list' && (
           <div className="flex items-center gap-1.5 flex-wrap text-sm text-textSecondary mt-0.5">
-            <span>系统管理与监控 ·</span>
+            <span>{t('admin.subtitle')}</span>
             <a
               href={MANUAL_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
             >
-              <BookOpen size={13} /> 使用手册
+              <BookOpen size={13} /> {t('nav.manual')}
             </a>
           </div>
         )}
@@ -138,7 +138,7 @@ export default function AdminPage() {
       {/* 移动端：导航列表视图（按分类分组） */}
       {mobileView === 'list' && (
         <div className="md:hidden flex-1 overflow-y-auto p-4 pb-[var(--safe-bottom)] bg-canvas space-y-4">
-          {(['核心管理', '系统配置', '运维分析'] as TabCategory[]).map(cat => {
+          {([t('admin.categoryCore'), t('admin.categorySystem'), t('admin.categoryOps')]).map(cat => {
             const catTabs = tabs.filter(t => t.category === cat)
             return (
               <div key={cat}>
@@ -178,19 +178,20 @@ export default function AdminPage() {
 }
 
 function OverviewTab() {
+  const t = useT()
   const [stats, setStats] = useState<any>(null)
   useEffect(() => {
     api.get('/admin/overview').then(setStats).catch(console.error)
   }, [])
 
-  if (!stats) return <p className="text-textMuted">加载中...</p>
+  if (!stats) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <StatCard label="总用户数" value={stats.total_users} icon={Users} />
-      <StatCard label="总 AI 数" value={stats.total_agents} icon={Bot} />
-      <StatCard label="总群聊数" value={stats.total_groups} icon={MessageCircle} />
-      <StatCard label="待处理申请" value={stats.pending_vector_requests} icon={Activity} />
+      <StatCard label={t('admin.totalUsers')} value={stats.total_users} icon={Users} />
+      <StatCard label={t('admin.totalAgents')} value={stats.total_agents} icon={Bot} />
+      <StatCard label={t('admin.totalGroups')} value={stats.total_groups} icon={MessageCircle} />
+      <StatCard label={t('admin.pendingRequests')} value={stats.pending_vector_requests} icon={Activity} />
     </div>
   )
 }
@@ -212,6 +213,7 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
 }
 
 function UsersTab() {
+  const t = useT()
   const [data, setData] = useState<any>(null)
   const [page, setPage] = useState(1)
 
@@ -219,7 +221,7 @@ function UsersTab() {
     api.get(`/admin/users?page=${page}`).then(setData).catch(console.error)
   }, [page])
 
-  if (!data) return <p className="text-textMuted">加载中...</p>
+  if (!data) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div>
@@ -227,12 +229,12 @@ function UsersTab() {
         <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">用户名</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">角色</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColId')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColUsername')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColRole')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColQuota')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColStatus')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.usersColAction')}</th>
             </tr>
           </thead>
           <tbody>
@@ -250,7 +252,7 @@ function UsersTab() {
                 <td className="py-2 px-3">{u.ai_quota}</td>
                 <td className="py-2 px-3">
                   <span className={`text-xs ${u.is_active ? 'text-mint-400' : 'text-rose-400'}`}>
-                    {u.is_active ? '正常' : '已封禁'}
+                    {u.is_active ? t('admin.active') : t('admin.banned')}
                   </span>
                 </td>
                 <td className="py-2 px-3">
@@ -262,29 +264,29 @@ function UsersTab() {
                       }}
                       className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                     >
-                      {u.is_active ? '封禁' : '解封'}
+                      {u.is_active ? t('admin.ban') : t('admin.unban')}
                     </button>
                     {u.role !== 'admin' ? (
                       <button
                         onClick={async () => {
-                          if (!confirm(`确定将 ${u.username} 提升为管理员？`)) return
+                          if (!confirm(t('admin.confirmPromote').replace('{username}', u.username))) return
                           await api.put(`/admin/users/${u.id}/role`, { role: 'admin' })
                           setPage(page)
                         }}
                         className="text-xs text-mint-400 hover:text-mint-500 dark:hover:text-mint-300"
                       >
-                        提升
+                        {t('admin.promote')}
                       </button>
                     ) : (
                       <button
                         onClick={async () => {
-                          if (!confirm(`确定撤销 ${u.username} 的管理员权限？`)) return
+                          if (!confirm(t('admin.confirmDemote').replace('{username}', u.username))) return
                           await api.put(`/admin/users/${u.id}/role`, { role: 'user' })
                           setPage(page)
                         }}
                         className="text-xs text-rose-400 hover:text-rose-500"
                       >
-                        降级
+                        {t('admin.demote')}
                       </button>
                     )}
                   </div>
@@ -300,14 +302,14 @@ function UsersTab() {
           disabled={page <= 1}
           className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
         >
-          上一页
+          {t('common.prevPage')}
         </button>
         <button
           onClick={() => setPage((p) => p + 1)}
           disabled={data.items.length < data.page_size}
           className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
         >
-          下一页
+          {t('common.nextPage')}
         </button>
       </div>
     </div>
@@ -315,24 +317,25 @@ function UsersTab() {
 }
 
 function AgentsTab() {
+  const t = useT()
   const [data, setData] = useState<any>(null)
   useEffect(() => {
     api.get('/admin/agents').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-textMuted">加载中...</p>
+  if (!data) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">所属用户</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">自修改</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColId')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColName')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColOwner')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColStatus')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColSelfEdit')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.agentsColAction')}</th>
           </tr>
         </thead>
         <tbody>
@@ -344,7 +347,7 @@ function AgentsTab() {
               <td className="py-2 px-3">{a.state}</td>
               <td className="py-2 px-3">
                 <span className={a.is_ai_editable ? 'text-mint-400' : 'text-rose-400'}>
-                  {a.is_ai_editable ? '是' : '否'}
+                  {a.is_ai_editable ? t('common.yes') : t('common.no')}
                 </span>
               </td>
               <td className="py-2 px-3">
@@ -357,7 +360,7 @@ function AgentsTab() {
                   }}
                   className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                 >
-                  {a.is_ai_editable ? '关闭自修改' : '开启自修改'}
+                  {a.is_ai_editable ? t('admin.disableSelfEdit') : t('admin.enableSelfEdit')}
                 </button>
               </td>
             </tr>
@@ -369,23 +372,24 @@ function AgentsTab() {
 }
 
 function GroupsTab() {
+  const t = useT()
   const [data, setData] = useState<any>(null)
   useEffect(() => {
     api.get('/admin/groups').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-textMuted">加载中...</p>
+  if (!data) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">群主</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">向量加速</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.groupsColId')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.groupsColName')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.groupsColOwner')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.groupsColVector')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.groupsColAction')}</th>
           </tr>
         </thead>
         <tbody>
@@ -395,12 +399,12 @@ function GroupsTab() {
               <td className="py-2 px-3 font-medium">{g.name}</td>
               <td className="py-2 px-3">{g.owner_type}:{g.owner_id}</td>
               <td className="py-2 px-3">
-                {g.is_vector_accelerated ? '已开启' : '未开启'}
+                {g.is_vector_accelerated ? t('admin.enabled') : t('admin.notEnabled')}
               </td>
               <td className="py-2 px-3">
                 <button
                   onClick={async () => {
-                    if (confirm('确定解散此群聊？')) {
+                    if (confirm(t('admin.confirmDismissGroup'))) {
                       await api.delete(`/admin/groups/${g.id}`)
                       const newData = await api.get('/admin/groups')
                       setData(newData)
@@ -408,7 +412,7 @@ function GroupsTab() {
                   }}
                   className="text-xs text-rose-400 hover:text-rose-500"
                 >
-                  解散
+                  {t('admin.dismiss')}
                 </button>
               </td>
             </tr>
@@ -420,6 +424,7 @@ function GroupsTab() {
 }
 
 function CodesTab() {
+  const t = useT()
   const [codes, setCodes] = useState<any[]>([])
   const [quota, setQuota] = useState(3)
   const [days, setDays] = useState(30)
@@ -431,10 +436,10 @@ function CodesTab() {
   const [generating, setGenerating] = useState(false)
 
   const CODE_TYPES: Record<string, string> = {
-    ai_quota: 'AI创建额度',
-    api_credit: '通用API额度',
-    agent_bundle: 'AI包断额度',
-    file_quota: '文件存储配额',
+    ai_quota: t('admin.codeTypeDefault'),
+    api_credit: t('admin.creditApi'),
+    agent_bundle: t('admin.creditBundle'),
+    file_quota: t('admin.creditFile'),
   }
 
   const loadCodes = async () => {
@@ -462,7 +467,7 @@ function CodesTab() {
       loadCodes()
     } catch (err: any) {
       console.error('生成兑换码失败:', err)
-      alert(err?.message || err?.detail || '生成失败，请检查参数')
+      alert(err?.message || err?.detail || t('admin.generateFailed'))
     } finally {
       setGenerating(false)
     }
@@ -472,10 +477,10 @@ function CodesTab() {
     <div className="space-y-6">
       {/* 生成兑换码 */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-textPrimary mb-3">生成兑换码</h3>
+        <h3 className="font-semibold text-textPrimary mb-3">{t('admin.generateCode')}</h3>
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">类型</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.codeType')}</label>
             <select value={codeType} onChange={(e) => setCodeType(e.target.value)}
               className="px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary">
               {Object.entries(CODE_TYPES).map(([k, v]) => (
@@ -484,13 +489,13 @@ function CodesTab() {
             </select>
           </div>
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">额度</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('me.quota')}</label>
             <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value) || 0)}
               min={1} max={(codeType === 'file_size' || codeType === 'file_quota') ? 1024 : 100}
               className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">有效期（天）</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.expiresDays')}</label>
             <input type="number" value={days} onChange={(e) => setDays(parseInt(e.target.value) || 1)}
               min={1} max={365}
               className="w-20 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
@@ -498,55 +503,55 @@ function CodesTab() {
           <div className="flex items-center gap-1.5 self-end mb-1">
             <input type="checkbox" id="isApiPool" checked={isApiPool} onChange={(e) => setIsApiPool(e.target.checked)}
               className="w-4 h-4 rounded border-border bg-canvas text-primary-500" />
-            <label htmlFor="isApiPool" className="text-xs text-textSecondary">API 池额度</label>
+            <label htmlFor="isApiPool" className="text-xs text-textSecondary">{t('admin.isApiPool')}</label>
           </div>
           <button
             onClick={handleGenerate}
             disabled={generating || quota < 1 || days < 1}
             className="px-4 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
           >
-            {generating ? '生成中...' : '生成'}
+            {generating ? t('admin.generating') : t('admin.generate')}
           </button>
         </div>
         {/* 详细选项 */}
         <div className="flex flex-wrap items-end gap-3 mt-3 pt-3 border-t border-border/40">
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">备注（管理员可见）</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.codeNote')}</label>
             <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="例：给张三的 API 额度"
+              placeholder={t('admin.codeNotePlaceholder')}
               className="w-48 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary placeholder:text-textMuted" />
           </div>
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">单码最大用量（空=一次性全额）</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.maxUsageLabel')}</label>
             <input type="number" value={maxUsage ?? ''} onChange={(e) => setMaxUsage(e.target.value ? parseInt(e.target.value) : null)}
               min={1}
               className="w-28 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <span className="text-[11px] text-textMuted pb-1.5">
-            1 余额 = 10,000 tokens
+            {t('admin.balanceHint')}
           </span>
         </div>
         {generatedCode && (
           <div className="mt-3 p-3 bg-mint-400/10 border border-mint-400/20 rounded-xl">
             <p className="text-sm font-mono text-mint-400 break-all">{generatedCode}</p>
-            <p className="text-xs text-mint-400 mt-1">请复制保管，此码仅显示一次</p>
+            <p className="text-xs text-mint-400 mt-1">{t('admin.codeOneTimeWarning')}</p>
           </div>
         )}
       </div>
 
       {/* 已生成的兑换码 */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-textPrimary mb-3">兑换码列表</h3>
+        <h3 className="font-semibold text-textPrimary mb-3">{t('admin.codeList')}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-textPrimary">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">兑换码</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">额度</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">备注</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">到期</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColCode')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColType')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColAmount')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColNote')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColExpires')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.codesColStatus')}</th>
               </tr>
             </thead>
             <tbody>
@@ -554,17 +559,17 @@ function CodesTab() {
                 <tr key={c.code} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs text-textPrimary">
                     {c.code}
-                    {c.is_api_pool && <span className="ml-1 px-1 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px]">池</span>}
+                    {c.is_api_pool && <span className="ml-1 px-1 py-0.5 bg-amber-400/10 text-amber-400 rounded text-[10px]">{t('admin.pool')}</span>}
                   </td>
-                  <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || 'AI创建额度'}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || t('admin.codeTypeDefault')}</td>
                   <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{(c.code_type === 'file_size' || c.code_type === 'file_quota') ? ' MB' : ''}</td>
                   <td className="py-2 px-3 text-xs text-textMuted max-w-[120px] truncate" title={c.note || ''}>{c.note || '-'}</td>
                   <td className="py-2 px-3 text-xs text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
                     {c.used_by ? (
-                      <span className="text-xs text-textMuted">已使用 (uid:{c.used_by})</span>
+                      <span className="text-xs text-textMuted">{t('admin.usedBy')} (uid:{c.used_by})</span>
                     ) : (
-                      <span className="text-xs text-mint-400">可用</span>
+                      <span className="text-xs text-mint-400">{t('admin.available')}</span>
                     )}
                   </td>
                 </tr>
@@ -581,6 +586,7 @@ function CodesTab() {
    数据库备份/恢复
    ================================================================ */
 function BackupTab() {
+  const t = useT()
   const [downloading, setDownloading] = useState(false)
   const [downloadingFull, setDownloadingFull] = useState(false)
   const [restoring, setRestoring] = useState(false)
@@ -611,11 +617,11 @@ function BackupTab() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '下载失败')
+        throw new Error(err.detail || t('admin.downloadFailed'))
       }
       const blob = await res.blob()
       downloadFile(blob, `aischat_backup_${new Date().toISOString().slice(0, 10)}.sql`)
-      setMessage('✓ 数据库备份下载成功')
+      setMessage(t('admin.dbBackupSuccess'))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -639,7 +645,7 @@ function BackupTab() {
       }
       const blob = await res.blob()
       downloadFile(blob, `aischat_full_${new Date().toISOString().slice(0, 10)}.tar.gz`)
-      setMessage('✓ 完整备份下载成功（数据库 + 所有文件）')
+      setMessage(t('admin.fullBackupSuccess'))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -651,7 +657,7 @@ function BackupTab() {
   const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!confirm('⚠️ 确定要恢复数据库？当前所有数据将被覆盖！')) return
+    if (!confirm(t('admin.restoreWarning'))) return
     setRestoring(true)
     setError('')
     setMessage('')
@@ -666,9 +672,9 @@ function BackupTab() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '恢复失败')
+        throw new Error(err.detail || t('admin.restoreFailed'))
       }
-      setMessage('✓ 数据库已恢复，请刷新页面')
+      setMessage(t('admin.dbRestoreSuccess'))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -681,7 +687,7 @@ function BackupTab() {
   const handleFullRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!confirm('⚠️ 确定要完整恢复？当前数据库和所有文件将被覆盖！')) return
+    if (!confirm(t('admin.restoreWarning'))) return
     setRestoringFull(true)
     setError('')
     setMessage('')
@@ -696,9 +702,9 @@ function BackupTab() {
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '恢复失败')
+        throw new Error(err.detail || t('admin.restoreFailed'))
       }
-      setMessage('✓ 完整备份已恢复：数据库 + 所有文件，请刷新页面')
+      setMessage(t('admin.fullRestoreSuccess'))
     } catch (e: any) {
       setError(e.message)
     } finally {
@@ -711,26 +717,23 @@ function BackupTab() {
     <div className="space-y-5">
       {/* ========== 导出区 ========== */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-textPrimary mb-1">数据导出</h3>
-        <p className="text-sm text-textMuted mb-5">两种备份格式，按需选择。</p>
+        <h3 className="font-semibold text-textPrimary mb-1">{t('admin.exportTitle')}</h3>
+        <p className="text-sm text-textMuted mb-5">{t('admin.exportDesc')}</p>
 
         {/* 完整备份 */}
         <div className="bg-mint-400/5 border border-mint-400/20 rounded-xl p-4 mb-3">
           <div className="flex items-start gap-3">
             <Database size={20} className="text-mint-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-mint-400">完整备份（推荐）</h4>
-              <p className="text-xs text-textSecondary mt-1">
-                导出 <code className="text-[11px] bg-canvas px-1 py-0.5 rounded">.tar.gz</code> 文件，包含：<strong>数据库全部数据</strong> + <strong>/app/data/ 下所有文件</strong>（AI 文件、附件、头像等）。
-                可用于完整迁移到新服务器。
-              </p>
+              <h4 className="text-sm font-semibold text-mint-400">{t('admin.fullBackup')}</h4>
+              <p className="text-xs text-textSecondary mt-1" dangerouslySetInnerHTML={{ __html: t('admin.fullBackupDesc') }} />
             </div>
             <button
               onClick={handleFullBackup}
               disabled={downloadingFull}
               className="shrink-0 px-4 py-2 bg-mint-400 text-white rounded-xl hover:bg-mint-500 disabled:opacity-40 text-sm font-medium transition-colors"
             >
-              {downloadingFull ? '正在打包...' : '下载完整备份'}
+              {downloadingFull ? t('admin.packing') : t('admin.downloadFullBackup')}
             </button>
           </div>
         </div>
@@ -740,18 +743,15 @@ function BackupTab() {
           <div className="flex items-start gap-3">
             <Database size={20} className="text-textSecondary shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-textPrimary">仅数据库</h4>
-              <p className="text-xs text-textSecondary mt-1">
-                导出 <code className="text-[11px] bg-surface px-1 py-0.5 rounded">.sql</code> 文件，仅含数据表结构和数据。
-                文件较小但<strong>不含上传的附件和 AI 文件</strong>。
-              </p>
+              <h4 className="text-sm font-semibold text-textPrimary">{t('admin.dbOnly')}</h4>
+              <p className="text-xs text-textSecondary mt-1" dangerouslySetInnerHTML={{ __html: t('admin.dbOnlyDesc') }} />
             </div>
             <button
               onClick={handleBackup}
               disabled={downloading}
               className="shrink-0 px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
             >
-              {downloading ? '正在导出...' : '下载仅数据库'}
+              {downloading ? t('admin.exporting') : t('admin.downloadDbOnly')}
             </button>
           </div>
         </div>
@@ -759,20 +759,16 @@ function BackupTab() {
 
       {/* ========== 导入区 ========== */}
       <div className="bg-surface rounded-xl border border-rose-500/30 p-5">
-        <h3 className="font-semibold text-textPrimary mb-1">数据恢复</h3>
-        <p className="text-sm text-rose-400 mb-5">
-          恢复将<strong>覆盖</strong>当前所有数据，请确认备份文件无误后再操作。
-        </p>
+        <h3 className="font-semibold text-textPrimary mb-1">{t('admin.restoreTitle')}</h3>
+        <p className="text-sm text-rose-400 mb-5">{t('admin.restoreWarning')}</p>
 
         {/* 完整恢复 */}
         <div className="bg-rose-400/5 border border-rose-400/20 rounded-xl p-4 mb-3">
           <div className="flex items-start gap-3">
             <Database size={20} className="text-rose-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-rose-400">完整恢复</h4>
-              <p className="text-xs text-textSecondary mt-1">
-                上传 <code className="text-[11px] bg-canvas px-1 py-0.5 rounded">.tar.gz</code> 完整备份文件，还原数据库 + 所有文件。
-              </p>
+              <h4 className="text-sm font-semibold text-rose-400">{t('admin.fullRestore')}</h4>
+              <p className="text-xs text-textSecondary mt-1" dangerouslySetInnerHTML={{ __html: t('admin.fullRestoreDesc') }} />
               <input
                 ref={fullFileInputRef}
                 type="file"
@@ -781,7 +777,7 @@ function BackupTab() {
                 disabled={restoringFull}
                 className="block mt-2 text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
               />
-              {restoringFull && <p className="text-sm text-textMuted mt-2">正在完整恢复...</p>}
+              {restoringFull && <p className="text-sm text-textMuted mt-2">{t('admin.restoringFull')}</p>}
             </div>
           </div>
         </div>
@@ -791,10 +787,8 @@ function BackupTab() {
           <div className="flex items-start gap-3">
             <Database size={20} className="text-textSecondary shrink-0" />
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-semibold text-textPrimary">仅数据库恢复</h4>
-              <p className="text-xs text-textSecondary mt-1">
-                上传 <code className="text-[11px] bg-surface px-1 py-0.5 rounded">.sql</code> 文件，仅还原数据库。
-              </p>
+              <h4 className="text-sm font-semibold text-textPrimary">{t('admin.dbRestore')}</h4>
+              <p className="text-xs text-textSecondary mt-1" dangerouslySetInnerHTML={{ __html: t('admin.dbRestoreDesc') }} />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -803,7 +797,7 @@ function BackupTab() {
                 disabled={restoring}
                 className="block mt-2 text-sm text-textPrimary file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:bg-elevated file:text-textPrimary hover:file:bg-border"
               />
-              {restoring && <p className="text-sm text-textMuted mt-2">正在恢复...</p>}
+              {restoring && <p className="text-sm text-textMuted mt-2">{t('admin.restoring')}</p>}
             </div>
           </div>
         </div>
@@ -820,23 +814,24 @@ function BackupTab() {
 }
 
 function LogsTab() {
+  const t = useT()
   const [data, setData] = useState<any>(null)
   useEffect(() => {
     api.get('/admin/logs?page_size=50').then(setData).catch(console.error)
   }, [])
 
-  if (!data) return <p className="text-textMuted">加载中...</p>
+  if (!data) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm text-textPrimary">
         <thead>
           <tr className="border-b border-border">
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">操作者</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">目标</th>
-            <th className="text-left py-2 px-3 font-medium text-textSecondary">详情</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColTime')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColType')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColOperator')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColTarget')}</th>
+            <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColDetail')}</th>
           </tr>
         </thead>
         <tbody>
@@ -867,12 +862,13 @@ function LogsTab() {
 // ============================================================
 
 function OpenCLITab() {
+  const t = useT()
   const [tab, setTab] = useState<'config' | 'agents' | 'commands' | 'logs'>('config')
   const subTabs = [
-    { key: 'config' as const, label: '全局设置' },
-    { key: 'agents' as const, label: 'AI 白名单' },
-    { key: 'commands' as const, label: '命令白名单' },
-    { key: 'logs' as const, label: '使用日志' },
+    { key: 'config' as const, label: t('admin.globalConfig') },
+    { key: 'agents' as const, label: t('admin.opencliAiWhitelist') },
+    { key: 'commands' as const, label: t('admin.commandWhitelist') },
+    { key: 'logs' as const, label: t('admin.usageLogs') },
   ]
 
   return (
@@ -902,6 +898,7 @@ function OpenCLITab() {
 
 // ---- 全局设置 ----
 function OpenCLIConfigSection() {
+  const t = useT()
   const [config, setConfig] = useState<any>(null)
   const [enabled, setEnabled] = useState(false)
   const [rate, setRate] = useState(5)
@@ -925,19 +922,19 @@ function OpenCLIConfigSection() {
         default_rate_limit_per_minute: rate,
         timeout_seconds: timeout,
       })
-      alert('配置已保存')
+      alert(t('admin.saveSuccess'))
     } catch (err) { console.error(err) }
     setSaving(false)
   }
 
-  if (!config) return <p className="text-textMuted">加载中...</p>
+  if (!config) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
-      <h3 className="font-semibold text-textPrimary mb-4">全局设置</h3>
+      <h3 className="font-semibold text-textPrimary mb-4">{t('admin.globalConfig')}</h3>
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-textPrimary">启用 OpenCLI</label>
+          <label className="text-sm font-medium text-textPrimary">{t('admin.enableOpenCLI')}</label>
           <button
             onClick={() => setEnabled(!enabled)}
             className={`w-12 h-6 rounded-full transition-colors ${enabled ? 'bg-mint-400' : 'bg-border'}`}
@@ -946,18 +943,18 @@ function OpenCLIConfigSection() {
           </button>
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1 text-textSecondary">默认速率限制（次/分钟）</label>
+          <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.rateLimit')}</label>
           <input type="number" value={rate} onChange={(e) => setRate(parseInt(e.target.value))}
             className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1 text-textSecondary">超时时间（秒）</label>
+          <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.timeoutSeconds')}</label>
           <input type="number" value={timeout} onChange={(e) => setTimeout_(parseInt(e.target.value))}
             className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
         </div>
         <button onClick={handleSave} disabled={saving}
           className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
-          {saving ? '保存中...' : '保存'}
+          {saving ? t('admin.saving') : t('admin.save')}
         </button>
       </div>
     </div>
@@ -966,6 +963,7 @@ function OpenCLIConfigSection() {
 
 // ---- AI 白名单 ----
 function OpenCLIAgentsSection() {
+  const t = useT()
   const [data, setData] = useState<any[]>([])
   useEffect(() => {
     api.get('/admin/opencli/agents').then(setData).catch(console.error)
@@ -977,21 +975,21 @@ function OpenCLIAgentsSection() {
     setData(newData)
   }
 
-  if (!data.length) return <p className="text-textMuted">加载中...</p>
+  if (!data.length) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
-      <h3 className="font-semibold text-textPrimary mb-3">AI OpenCLI 白名单</h3>
+      <h3 className="font-semibold text-textPrimary mb-3">{t('admin.opencliAiWhitelist')}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">ID</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">名称</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">所属用户</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">OpenCLI</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">速率限制</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColId')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColName')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColOwner')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColEnabled')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColRate')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.opencliAiWhitelistColAction')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1002,16 +1000,16 @@ function OpenCLIAgentsSection() {
                 <td className="py-2 px-3">{a.owner_id}</td>
                 <td className="py-2 px-3">
                   <span className={a.enabled ? 'text-mint-400' : 'text-textMuted'}>
-                    {a.enabled ? '已启用' : '未启用'}
+                    {a.enabled ? t('common.enabled') : t('common.disabled')}
                   </span>
                 </td>
-                <td className="py-2 px-3">{a.actual_rate_limit}/分钟</td>
+                <td className="py-2 px-3">{a.actual_rate_limit}/min</td>
                 <td className="py-2 px-3">
                   <button
                     onClick={() => toggleAgent(a.agent_id, a.enabled)}
                     className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                   >
-                    {a.enabled ? '关闭' : '开启'}
+                    {a.enabled ? t('common.disabled') : t('common.enabled')}
                   </button>
                 </td>
               </tr>
@@ -1025,31 +1023,29 @@ function OpenCLIAgentsSection() {
 
 // ---- 命令白名单 ----
 // ⚠️ 预设命令定义：与后端 POST /admin/opencli/commands/presets 保持一致
-//    每个预设包含 pattern（命令名或正则）、is_regex、description（中文说明）
-//    文件操作是进程内 Python 实现（不走 opencli），浏览器操作和外 CLI 桥接走 opencli
-const OPENCLI_PRESETS = [
-  // ── 文件操作（AI 在自己的沙箱目录里读写，进程内 Python 实现） ──
-  { pattern: 'file_read',   is_regex: false, description: '读取文件 — 在自己文件空间里读取文本文件内容', category: '文件操作' },
-  { pattern: 'file_write',  is_regex: false, description: '写入文件 — 创建或覆盖自己文件空间里的文件（自动建子目录）', category: '文件操作' },
-  { pattern: 'file_list',   is_regex: false, description: '列出文件 — 浏览自己文件空间里的文件和子目录', category: '文件操作' },
-  { pattern: 'file_delete', is_regex: false, description: '删除文件 — 删除自己文件空间里不需要的文件', category: '文件操作' },
-  { pattern: 'file_info',   is_regex: false, description: '文件信息 — 查看文件大小、修改时间等元信息', category: '文件操作' },
-  { pattern: 'create_dir',  is_regex: false, description: '创建目录 — 在自己文件空间里创建新文件夹', category: '文件操作' },
-  // ── 浏览器自动化（操控已登录的 Chrome 浏览器） ──
-  { pattern: 'browser',   is_regex: false, description: '浏览器操作 — AI 能打开网页、截图、点击、填表、抓取内容', category: '浏览器自动化' },
-  { pattern: 'list',      is_regex: false, description: '列出命令 — AI 查看当前可用的所有 OpenCLI 命令', category: '浏览器自动化' },
-  // ── 外部 CLI 桥接（将已有命令行工具接入 OpenCLI） ──
-  { pattern: 'gh .*',     is_regex: true,  description: 'GitHub CLI — 浏览仓库、PR、Issue、搜索代码（需 gh CLI 已登录）', category: '外部 CLI 桥接' },
-  { pattern: 'docker .*', is_regex: true,  description: 'Docker — 管理容器、镜像、查看运行状态', category: '外部 CLI 桥接' },
-  { pattern: 'obsidian .*', is_regex: true, description: 'Obsidian — 读写笔记、搜索知识库', category: '外部 CLI 桥接' },
-  { pattern: 'vercel .*', is_regex: true,  description: 'Vercel — 部署网站、查看项目、管理域名', category: '外部 CLI 桥接' },
-  { pattern: 'tg .*',     is_regex: true,  description: 'Telegram CLI — 收发消息、管理频道', category: '外部 CLI 桥接' },
-  { pattern: 'discord .*', is_regex: true, description: 'Discord CLI — 发消息、管理服务器', category: '外部 CLI 桥接' },
-  { pattern: 'wx .*',     is_regex: true,  description: '微信 CLI — 下载公众号文章、管理消息', category: '外部 CLI 桥接' },
-]
-
+//    每个预设包含 pattern（命令名或正则）、is_regex、description（i18n key）、category（i18n key）
 function OpenCLICommandsSection() {
-  const [data, setData] = useState<any[]>([])
+  const t = useT()
+  const OPENCLI_PRESETS = [
+    // ── 文件操作（AI 在自己的沙箱目录里读写，进程内 Python 实现） ──
+    { pattern: 'file_read',   is_regex: false, description: t('opencli.preset.fileRead'), category: t('opencli.category.fileOps') },
+    { pattern: 'file_write',  is_regex: false, description: t('opencli.preset.fileWrite'), category: t('opencli.category.fileOps') },
+    { pattern: 'file_list',   is_regex: false, description: t('opencli.preset.fileList'), category: t('opencli.category.fileOps') },
+    { pattern: 'file_delete', is_regex: false, description: t('opencli.preset.fileDelete'), category: t('opencli.category.fileOps') },
+    { pattern: 'file_info',   is_regex: false, description: t('opencli.preset.fileInfo'), category: t('opencli.category.fileOps') },
+    { pattern: 'create_dir',  is_regex: false, description: t('opencli.preset.createDir'), category: t('opencli.category.fileOps') },
+    // ── 浏览器自动化（操控已登录的 Chrome 浏览器） ──
+    { pattern: 'browser',   is_regex: false, description: t('opencli.preset.browser'), category: t('opencli.category.browser') },
+    { pattern: 'list',      is_regex: false, description: t('opencli.preset.listCmds'), category: t('opencli.category.browser') },
+    // ── 外部 CLI 桥接（将已有命令行工具接入 OpenCLI） ──
+    { pattern: 'gh .*',     is_regex: true,  description: t('opencli.preset.ghCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'docker .*', is_regex: true,  description: t('opencli.preset.dockerCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'obsidian .*', is_regex: true, description: t('opencli.preset.obsidianCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'vercel .*', is_regex: true,  description: t('opencli.preset.vercelCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'tg .*',     is_regex: true,  description: t('opencli.preset.tgCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'discord .*', is_regex: true, description: t('opencli.preset.discordCli'), category: t('opencli.category.cliBridge') },
+    { pattern: 'wx .*',     is_regex: true,  description: t('opencli.preset.wxCli'), category: t('opencli.category.cliBridge') },
+  ]
   const [pattern, setPattern] = useState('')
   const [isRegex, setIsRegex] = useState(false)
   const [desc, setDesc] = useState('')
@@ -1070,7 +1066,7 @@ function OpenCLICommandsSection() {
   // 获取已添加预设的当前状态
   const getPresetStatus = (pattern: string, isRegex: boolean) => {
     const found = data.find((c: any) => c.pattern === pattern && c.is_regex === isRegex)
-    return found ? (found.enabled ? '已启用' : '已禁用') : '未添加'
+    return found ? (found.enabled ? t('common.enabled') : t('common.disabled')) : t('opencli.status.notAdded')
   }
 
   const handleAdd = async () => {
@@ -1085,10 +1081,10 @@ function OpenCLICommandsSection() {
     setAddingPresets(true)
     try {
       const result = await api.post('/admin/opencli/commands/presets')
-      alert(result.message || '预设命令添加完成')
+      alert(result.message || t('admin.presetsAddComplete'))
       load()
     } catch (err: any) {
-      alert(err.message || '添加预设失败')
+      alert(err.message || t('admin.presetsAddFailed'))
     }
     setAddingPresets(false)
   }
@@ -1109,7 +1105,7 @@ function OpenCLICommandsSection() {
   }
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定删除此命令白名单？')) return
+    if (!confirm(t('admin.confirmDeletePoolKey').replace('{name}', ''))) return
     await api.delete(`/admin/opencli/commands/${id}`)
     load()
   }
@@ -1123,9 +1119,9 @@ function OpenCLICommandsSection() {
       <div className="bg-surface rounded-xl border border-border p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-semibold text-textPrimary">预设命令（新手一键添加）</h3>
+            <h3 className="font-semibold text-textPrimary">{t('admin.presetCommands')}</h3>
             <p className="text-xs text-textMuted mt-1">
-              以下是 AI 最常用的命令，点击「添加」即可加入白名单。已添加的命令不会重复添加。
+              {t('admin.presetCommandsDesc')}
             </p>
           </div>
           <button
@@ -1133,7 +1129,7 @@ function OpenCLICommandsSection() {
             disabled={addingPresets}
             className="px-4 py-2 bg-mint-500 text-white rounded-xl hover:bg-mint-400 disabled:opacity-50 text-sm font-medium transition-colors"
           >
-            {addingPresets ? '添加中...' : '一键添加全部预设'}
+            {addingPresets ? t('common.saving') : t('admin.addAllPresets')}
           </button>
         </div>
 
@@ -1145,7 +1141,7 @@ function OpenCLICommandsSection() {
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-semibold text-textSecondary uppercase tracking-wider">{cat}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${allAdded ? 'bg-mint-400/10 text-mint-400' : 'bg-amber-400/10 text-amber-400'}`}>
-                  {allAdded ? '✓ 已全部添加' : `${catPresets.filter(p => isPresetAdded(p.pattern, p.is_regex)).length}/${catPresets.length}`}
+                  {allAdded ? t('admin.allAdded') : `${catPresets.filter(p => isPresetAdded(p.pattern, p.is_regex)).length}/${catPresets.length}`}
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -1164,7 +1160,7 @@ function OpenCLICommandsSection() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <code className="text-xs font-mono text-textPrimary break-all">{p.pattern}</code>
-                          <span className="text-xs text-textMuted ml-1.5">{p.is_regex ? '(正则)' : '(精确)'}</span>
+                          <span className="text-xs text-textMuted ml-1.5">{p.is_regex ? `(${t('admin.regex')})` : `(${t('admin.exact')})`}</span>
                           <p className="text-xs text-textSecondary mt-1 leading-relaxed">{p.description}</p>
                         </div>
                         <button
@@ -1176,7 +1172,7 @@ function OpenCLICommandsSection() {
                               : 'bg-primary-500 text-white hover:bg-primary-400'
                           }`}
                         >
-                          {added ? status : '＋ 添加'}
+                          {added ? status : '+ ' + t('admin.addCmd')}
                         </button>
                       </div>
                     </div>
@@ -1190,78 +1186,72 @@ function OpenCLICommandsSection() {
 
       {/* ── 手动添加表单 ── */}
       <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
-        <h3 className="font-semibold mb-3 text-textPrimary">手动添加命令</h3>
-        <p className="text-xs text-textMuted mb-3">
-          如需添加不在预设中的命令（如其他网站接入），请手动输入。
-          <br />
-          <strong>精确模式</strong>：只匹配完全相同的命令名（如 <code className="text-xs bg-canvas px-1 rounded">web read</code>）
-          <br />
-          <strong>正则模式</strong>：匹配一类命令（如 <code className="text-xs bg-canvas px-1 rounded">bilibili .*</code> 匹配所有 B 站子命令）
-        </p>
+        <h3 className="font-semibold mb-3 text-textPrimary">{t('admin.manualAddCommand')}</h3>
+        <p className="text-xs text-textMuted mb-3" dangerouslySetInnerHTML={{ __html: t('admin.manualAddDesc') }} />
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">命令/正则</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.commandPattern')}</label>
             <input value={pattern} onChange={(e) => setPattern(e.target.value)}
               className="w-40 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary"
-              placeholder="bilibili 或 gh .*" />
+              placeholder={t('admin.commandPatternPlaceholder')} />
           </div>
           <div className="flex items-center gap-1.5 mb-1">
             <input type="checkbox" checked={isRegex} onChange={(e) => setIsRegex(e.target.checked)}
               className="rounded" />
-            <span className="text-xs text-textSecondary">正则</span>
+            <span className="text-xs text-textSecondary">{t('admin.regexMode')}</span>
           </div>
           <div>
-            <label className="block text-xs mb-1 text-textSecondary">描述</label>
+            <label className="block text-xs mb-1 text-textSecondary">{t('admin.description')}</label>
             <input value={desc} onChange={(e) => setDesc(e.target.value)}
               className="w-32 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary"
-              placeholder="可选" />
+              placeholder={t('common.optional')} />
           </div>
           <button onClick={handleAdd}
             className="px-3 py-1.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm">
-            添加
+            {t('admin.addCmd')}
           </button>
         </div>
       </div>
 
       {/* ── 白名单列表 ── */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold mb-3 text-textPrimary">命令白名单列表</h3>
+        <h3 className="font-semibold mb-3 text-textPrimary">{t('admin.commandWhitelist')}</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-textPrimary">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">模式</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">类型</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">描述</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">状态</th>
-                <th className="text-left py-2 px-3 font-medium text-textSecondary">操作</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.cmdColPattern')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.cmdColType')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.cmdColDesc')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.cmdColStatus')}</th>
+                <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.cmdColAction')}</th>
               </tr>
             </thead>
             <tbody>
               {data.map((c: any) => (
                 <tr key={c.id} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs text-textPrimary">{c.pattern}</td>
-                  <td className="py-2 px-3 text-xs text-textSecondary">{c.is_regex ? '正则' : '精确'}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{c.is_regex ? t('admin.regex') : t('admin.exact')}</td>
                   <td className="py-2 px-3 text-xs text-textSecondary">{c.description || '-'}</td>
                   <td className="py-2 px-3">
                     <span className={c.enabled ? 'text-mint-400 text-xs' : 'text-textMuted text-xs'}>
-                      {c.enabled ? '启用' : '禁用'}
+                      {c.enabled ? t('common.enabled') : t('common.disabled')}
                     </span>
                   </td>
                   <td className="py-2 px-3 flex gap-2">
                     <button onClick={() => handleToggle(c.id, c.enabled)}
                       className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
-                      {c.enabled ? '禁用' : '启用'}
+                      {c.enabled ? t('common.disabled') : t('common.enabled')}
                     </button>
                     <button onClick={() => handleDelete(c.id)}
                       className="text-xs text-rose-400 hover:text-rose-500">
-                      删除
+                      {t('common.delete')}
                     </button>
                   </td>
                 </tr>
               ))}
               {data.length === 0 && (
-                <tr><td colSpan={5} className="py-4 text-center text-textMuted">暂无命令白名单 — 点击上方预设卡片快速添加</td></tr>
+                <tr><td colSpan={5} className="py-4 text-center text-textMuted">{t('admin.noCommands')}</td></tr>
               )}
             </tbody>
           </table>
@@ -1273,6 +1263,7 @@ function OpenCLICommandsSection() {
 
 // ---- 使用日志 ----
 function OpenCLILogsSection() {
+  const t = useT()
   const [data, setData] = useState<any>(null)
   const [page, setPage] = useState(1)
 
@@ -1280,21 +1271,21 @@ function OpenCLILogsSection() {
     api.get(`/admin/opencli/logs?page=${page}&page_size=30`).then(setData).catch(console.error)
   }, [page])
 
-  if (!data) return <p className="text-textMuted">加载中...</p>
+  if (!data) return <p className="text-textMuted">{t('common.loading')}</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5">
-      <h3 className="font-semibold text-textPrimary mb-3">使用日志</h3>
+      <h3 className="font-semibold text-textPrimary mb-3">{t('admin.usageLogs')}</h3>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-textPrimary">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">时间</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">AI</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">命令</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">退出码</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">耗时</th>
-              <th className="text-left py-2 px-3 font-medium text-textSecondary">输出预览</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColTime')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColAi')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColCmd')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColExitCode')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColDuration')}</th>
+              <th className="text-left py-2 px-3 font-medium text-textSecondary">{t('admin.logsColOutput')}</th>
             </tr>
           </thead>
           <tbody>
@@ -1324,11 +1315,11 @@ function OpenCLILogsSection() {
       <div className="flex gap-2 mt-3">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
           className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
-          上一页
+          {t('common.prevPage')}
         </button>
         <button onClick={() => setPage(p => p + 1)} disabled={data.items.length < data.page_size}
           className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
-          下一页
+          {t('common.nextPage')}
         </button>
       </div>
     </div>
@@ -1341,6 +1332,7 @@ function OpenCLILogsSection() {
 // ════════════════════════════════════════════════════════════
 
 function SystemSettingsTab() {
+  const t = useT()
   const [config, setConfig] = useState<any>(null)
   const [lang, setLang] = useState('en')
   const [saving, setSaving] = useState(false)
@@ -1359,36 +1351,36 @@ function SystemSettingsTab() {
     try {
       const updated = await api.put('/admin/system-settings', { default_language: lang })
       setConfig(updated)
-      setMsg('保存成功')
+      setMsg(t('admin.saveSuccess'))
     } catch (err: any) {
-      setMsg(err.message || '保存失败')
+      setMsg(err.message || t('admin.saveFailed'))
     }
     setSaving(false)
   }
 
-  if (!config) return <p className="text-textMuted p-6">加载中...</p>
+  if (!config) return <p className="text-textMuted p-6">{t('common.loading')}</p>
 
   return (
     <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
-      <h3 className="font-semibold text-textPrimary mb-4">平台全局设置</h3>
+      <h3 className="font-semibold text-textPrimary mb-4">{t('admin.systemSettings')}</h3>
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium mb-1 text-textSecondary">全局默认语言</label>
+          <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.defaultLanguage')}</label>
           <p className="text-xs text-textMuted mb-2">
-            新用户未主动选择时沿用此默认值。已主动设置语言的用户不受影响。
+            {t('admin.defaultLanguageDesc')}
           </p>
           <select
             value={lang}
             onChange={(e) => setLang(e.target.value)}
             className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary"
           >
-            <option value="zh">中文（简体）</option>
-            <option value="en">English</option>
+            <option value="zh">{t('settings.chinese')}</option>
+            <option value="en">{t('settings.english')}</option>
           </select>
         </div>
         <button onClick={handleSave} disabled={saving}
           className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm disabled:opacity-40">
-          {saving ? '保存中...' : '保存设置'}
+          {saving ? t('admin.saving') : t('settings.save')}
         </button>
         {msg && <p className={`text-sm mt-2 ${msg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>{msg}</p>}
       </div>

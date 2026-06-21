@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
+import { useT } from '../i18n/I18nContext'
 import { getStateDotColor } from '../constants'
 import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Check, Loader2, ArrowLeft } from 'lucide-react'
 
@@ -20,7 +21,7 @@ interface GroupShare {
   share_direction: string
 }
 
-function FederationShareSection({ groupId }: { groupId: number }) {
+function FederationShareSection({ groupId, t }: { groupId: number; t: (key: string) => string }) {
   const [enabled, setEnabled] = useState(false)
   const [peers, setPeers] = useState<ConnectedPeer[]>([])
   const [shares, setShares] = useState<GroupShare[]>([])
@@ -76,10 +77,10 @@ function FederationShareSection({ groupId }: { groupId: number }) {
         className="w-full flex items-center justify-between py-0.5"
       >
         <div className="text-left">
-          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
-          <div className="text-xs text-textMuted">点击加载已连接的对等端</div>
+          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
+          <div className="text-xs text-textMuted">{t('groupSettings.clickToLoadPeers')}</div>
         </div>
-        {loading ? <Loader2 size={16} className="animate-spin text-textMuted" /> : <span className="text-xs text-primary-400">加载</span>}
+        {loading ? <Loader2 size={16} className="animate-spin text-textMuted" /> : <span className="text-xs text-primary-400">{t('common.load')}</span>}
       </button>
     )
   }
@@ -89,12 +90,12 @@ function FederationShareSection({ groupId }: { groupId: number }) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
-            <div className="text-xs text-textMuted">暂无可用的已连接对等端</div>
+            <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
+            <div className="text-xs text-textMuted">{t('groupSettings.noConnectedPeers')}</div>
           </div>
         </div>
         <p className="text-xs text-textMuted">
-          请先在<strong>管理员面板 → 联邦</strong>中添加并连接对等端，然后回到此处共享。
+          {t('groupSettings.addPeersHint1')}<strong>{t('groupSettings.addPeersHint2')}</strong>{t('groupSettings.addPeersHint3')}
         </p>
       </div>
     )
@@ -106,18 +107,18 @@ function FederationShareSection({ groupId }: { groupId: number }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
+          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
           <div className="text-xs text-textMuted">
-            已共享给 {shares.length} 个对等端，消息将自动转发
+            {t('groupSettings.sharedTo')}{shares.length}{t('groupSettings.autoForward')}
           </div>
         </div>
         <button
           onClick={loadData}
           disabled={loading}
           className="text-xs text-textMuted hover:text-textSecondary transition-colors"
-          title="刷新"
+          title={t('common.refresh')}
         >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : '刷新'}
+          {loading ? <Loader2 size={14} className="animate-spin" /> : t('common.refresh')}
         </button>
       </div>
 
@@ -156,7 +157,7 @@ function FederationShareSection({ groupId }: { groupId: number }) {
               </div>
               <span className="flex items-center gap-1 text-[10px] text-emerald-400 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                已连接
+                {t('common.connected')}
               </span>
             </label>
           )
@@ -198,6 +199,7 @@ interface Props {
 type Tab = 'general' | 'members' | 'speak' | 'export'
 
 export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }: Props) {
+  const t = useT()
   const [tab, setTab] = useState<Tab>('general')
   const [members, setMembers] = useState<GroupMember[]>([])
   const [loading, setLoading] = useState(false)
@@ -262,7 +264,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
       await api.patch(`/groups/${group.id}`, updates)
       onUpdate(updates)
     } catch (e: any) {
-      setError(e?.detail || '保存失败')
+      setError(e?.detail || t('error.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -275,7 +277,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
       const until = minutes === null ? 'permanent' : new Date(Date.now() + minutes * 60_000).toISOString()
       setDndUntil(until)
     } catch (e: any) {
-      setError(e?.detail || '操作失败')
+      setError(e?.detail || t('error.operationFailed'))
     }
   }
 
@@ -283,11 +285,11 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     if (!group) return
     const mins = parseInt(customDndMinutes, 10)
     if (isNaN(mins) || mins <= 0) {
-      setError('请输入有效的分钟数')
+      setError(t('error.invalidMinutes'))
       return
     }
     if (mins > 10080) {
-      setError('单次免打扰最长 7 天（10080 分钟）')
+      setError(t('error.dndMaxDuration'))
       return
     }
     await handleSetDnd(mins)
@@ -300,7 +302,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
       await api.post(`/groups/${group.id}/dnd/cancel`)
       setDndUntil(null)
     } catch (e: any) {
-      setError(e?.detail || '操作失败')
+      setError(e?.detail || t('error.operationFailed'))
     }
   }
 
@@ -310,29 +312,29 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
       await api.patch(`/groups/${group.id}/members/${m.type}/${m.id}/role`, { role: newRole })
       setMembers(prev => prev.map(x => x.id === m.id && x.type === m.type ? { ...x, role: newRole } : x))
     } catch (e: any) {
-      setError(e?.detail || '操作失败')
+      setError(e?.detail || t('error.operationFailed'))
     }
   }
 
   const handleKick = async (m: GroupMember) => {
     if (!group) return
-    if (!confirm(`确定要将 ${m.name} 移出群聊？`)) return
+    if (!confirm(t('groupSettings.confirmKick') + m.name + t('groupSettings.confirmKickEnd'))) return
     try {
       await api.delete(`/groups/${group.id}/members/${m.type}/${m.id}`)
       setMembers(prev => prev.filter(x => !(x.id === m.id && x.type === m.type)))
     } catch (e: any) {
-      setError(e?.detail || '操作失败')
+      setError(e?.detail || t('error.operationFailed'))
     }
   }
 
   const handleLeave = async () => {
     if (!group) return
-    if (!confirm('确定要退出此群聊？')) return
+    if (!confirm(t('groupSettings.confirmLeave'))) return
     try {
       await api.post(`/groups/${group.id}/leave`)
       onLeave()
     } catch (e: any) {
-      setError(e?.detail || '退出失败')
+      setError(e?.detail || t('error.leaveFailed'))
     }
   }
 
@@ -350,7 +352,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
       })
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.detail || '导出失败')
+        throw new Error(err.detail || t('error.exportFailed'))
       }
       const blob = await res.blob()
       const ext = exportFormat === 'txt' ? 'txt' : exportFormat === 'html' ? 'html' : 'json'
@@ -369,11 +371,11 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
 
   if (!group) return null
 
-  const tabs: { key: Tab; label: string; show: boolean }[] = [
-    { key: 'general', label: '基本设置', show: true },
-    { key: 'members', label: '成员管理', show: true },
-    { key: 'speak', label: 'AI 发言限制', show: isAdmin },
-    { key: 'export', label: '导出记录', show: true },
+  const tabs: { key: Tab; keyLabel: string; show: boolean }[] = [
+    { key: 'general', keyLabel: 'groupSettings.tabGeneral', show: true },
+    { key: 'members', keyLabel: 'groupSettings.tabMembers', show: true },
+    { key: 'speak', keyLabel: 'groupSettings.tabSpeak', show: isAdmin },
+    { key: 'export', keyLabel: 'groupSettings.tabExport', show: true },
   ]
 
   return (
@@ -391,7 +393,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
             >
               <ArrowLeft size={20} />
             </button>
-            <h2 className="font-semibold text-sm text-textPrimary">群聊设置</h2>
+            <h2 className="font-semibold text-sm text-textPrimary">{t('groupSettings.title')}</h2>
           </div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-elevated text-textMuted hidden md:block">
             <X size={16} />
@@ -410,7 +412,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   : 'text-textMuted hover:text-textSecondary'
               }`}
             >
-              {t.label}
+              {t(t.keyLabel)}
             </button>
           ))}
         </div>
@@ -426,7 +428,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
             <>
               {/* 群名称 */}
               <div>
-                <label className="text-xs font-medium text-textSecondary">群聊名称</label>
+                <label className="text-xs font-medium text-textSecondary">{t('groupSettings.groupName')}</label>
                 <div className="flex gap-2 mt-1">
                   <input
                     value={name}
@@ -440,7 +442,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                       disabled={saving || name === group.name}
                       className="px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
                     >
-                      保存
+                      {t('common.save')}
                     </button>
                   )}
                 </div>
@@ -448,13 +450,13 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
 
               {/* 群公告 */}
               <div>
-                <label className="text-xs font-medium text-textSecondary">群公告</label>
+                <label className="text-xs font-medium text-textSecondary">{t('groupSettings.announcement')}</label>
                 {isAdmin ? (
                   <div className="mt-1 space-y-2">
                     <textarea
                       value={announcement}
                       onChange={e => setAnnouncement(e.target.value)}
-                      placeholder="输入群公告..."
+                      placeholder={t('groupSettings.announcementPlaceholder')}
                       rows={3}
                       className="w-full bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary outline-none focus:border-primary-400 resize-none"
                     />
@@ -464,7 +466,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                         disabled={saving}
                         className="px-3 py-1.5 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
                       >
-                        更新公告
+                        {t('groupSettings.updateAnnouncement')}
                       </button>
                       {group.announcement && (
                         <button
@@ -473,18 +475,18 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                               await api.delete(`/groups/${group.id}/announcement`)
                               setAnnouncement('')
                               onUpdate({ announcement: null })
-                            } catch (e: any) { setError(e?.detail || '操作失败') }
+                            } catch (e: any) { setError(e?.detail || t('error.operationFailed')) }
                           }}
                           className="px-3 py-1.5 bg-rose-400/10 text-rose-400 rounded-lg text-xs font-medium hover:bg-rose-400/20 transition-colors"
                         >
-                          删除公告
+                          {t('groupSettings.deleteAnnouncement')}
                         </button>
                       )}
                     </div>
                   </div>
                 ) : (
                   <p className="mt-1 text-sm text-textSecondary bg-elevated rounded-lg px-3 py-2">
-                    {group.announcement || '暂无公告'}
+                    {group.announcement || t('groupSettings.noAnnouncement')}
                   </p>
                 )}
               </div>
@@ -495,40 +497,40 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               <div>
                 <h3 className="text-sm font-medium text-textPrimary flex items-center gap-2 mb-3">
                   <Bell size={14} className="text-textMuted" />
-                  消息免打扰
+                  {t('groupSettings.dnd')}
                 </h3>
                 {dndUntil ? (
                   <div className="space-y-3">
                     <div className="bg-mint-400/10 text-mint-400 rounded-lg px-3 py-2 text-xs flex items-center gap-2">
                       <BellOff size={14} />
-                      免打扰已开启
+                      {t('groupSettings.dndEnabled')}
                     </div>
                     <button
                       onClick={handleCancelDnd}
                       className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-400 transition-colors"
                     >
-                      取消免打扰
+                      {t('groupSettings.dndCancel')}
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-xs text-textMuted">选择免打扰时长，期间不会收到该群消息通知</p>
+                    <p className="text-xs text-textMuted">{t('groupSettings.dndHint')}</p>
                     <div className="grid grid-cols-2 gap-2">
                       {[
-                        { label: '15 分钟', minutes: 15 },
-                        { label: '30 分钟', minutes: 30 },
-                        { label: '1 小时', minutes: 60 },
-                        { label: '4 小时', minutes: 240 },
-                        { label: '8 小时', minutes: 480 },
-                        { label: '永久', minutes: null as unknown as number },
+                        { key: 'groupSettings.dnd15min', minutes: 15 },
+                        { key: 'groupSettings.dnd30min', minutes: 30 },
+                        { key: 'groupSettings.dnd1hour', minutes: 60 },
+                        { key: 'groupSettings.dnd4hours', minutes: 240 },
+                        { key: 'groupSettings.dnd8hours', minutes: 480 },
+                        { key: 'groupSettings.dndForever', minutes: null as unknown as number },
                       ].map((d) => (
                         <button
-                          key={d.label}
+                          key={d.key}
                           onClick={() => handleSetDnd(d.minutes)}
                           className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-elevated hover:bg-primary-500/10 hover:text-primary-400 text-textSecondary border border-border rounded-lg text-xs font-medium transition-colors"
                         >
                           <Clock size={12} />
-                          {d.label}
+                          {t(d.key)}
                         </button>
                       ))}
                     </div>
@@ -537,7 +539,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                         type="number"
                         value={customDndMinutes}
                         onChange={(e) => setCustomDndMinutes(e.target.value)}
-                        placeholder="自定义分钟数..."
+                        placeholder={t('groupSettings.dndCustomPlaceholder')}
                         min={1}
                         max={10080}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleCustomDnd() }}
@@ -548,7 +550,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                         disabled={!customDndMinutes.trim()}
                         className="px-3 py-2 bg-primary-500 text-white rounded-lg text-xs font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors shrink-0"
                       >
-                        设置
+                        {t('common.set')}
                       </button>
                     </div>
                   </div>
@@ -559,9 +561,9 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               {isAdmin && (
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-sm text-textPrimary font-medium">向量加速</div>
+                    <div className="text-sm text-textPrimary font-medium">{t('groupSettings.vectorAccel')}</div>
                     <div className="text-xs text-textMuted">
-                      {isAiOwned ? 'AI 群自动启用' : '混合检索历史消息'}
+                      {isAiOwned ? t('groupSettings.vectorAccelAiOwned') : t('groupSettings.vectorAccelHybridSearch')}
                     </div>
                   </div>
                   <button
@@ -582,7 +584,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               )}
 
               {/* 联邦共享（仅管理员可见） */}
-              {isAdmin && <FederationShareSection groupId={group!.id} />}
+              {isAdmin && <FederationShareSection groupId={group!.id} t={t} />}
 
               <hr className="border-border" />
 
@@ -591,10 +593,10 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                 onClick={handleLeave}
                 disabled={isOwner && !group.name.startsWith('DM:')}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-400/10 text-rose-400 rounded-lg text-sm font-medium hover:bg-rose-400/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                title={isOwner && !group.name.startsWith('DM:') ? '群主需先转让群主身份' : '退出群聊'}
+                title={isOwner && !group.name.startsWith('DM:') ? t('groupSettings.ownerLeaveHint') : t('groupSettings.leaveGroup')}
               >
                 <LogOut size={16} />
-                {isOwner && !group.name.startsWith('DM:') ? '群主无法退群（需先转让）' : '退出群聊'}
+                {isOwner && !group.name.startsWith('DM:') ? t('groupSettings.ownerCannotLeave') : t('groupSettings.leaveGroup')}
               </button>
             </>
           )}
@@ -604,7 +606,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
             <>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-textPrimary font-medium">
-                  成员 ({members.length})
+                  {t('groupSettings.memberCount')} ({members.length})
                 </span>
                 <button
                   onClick={() => {
@@ -615,7 +617,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   className="flex items-center gap-1 px-2 py-1 text-xs text-primary-400 hover:bg-primary-400/10 rounded-lg transition-colors"
                 >
                   <UserPlus size={14} />
-                  邀请
+                  {t('groupSettings.invite')}
                 </button>
               </div>
 
@@ -632,12 +634,12 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                         <div className="text-sm text-textPrimary truncate flex items-center gap-1.5">
                           {m.name}
                           {m.type === 'ai' && (
-                            <span className="text-[10px] text-primary-400 font-medium">AI</span>
+                            <span className="text-[10px] text-primary-400 font-medium">{t('chatlist.ai')}</span>
                           )}
                         </div>
                         <div className="text-[10px] text-textMuted">
-                          {m.role === 'owner' ? '群主' : m.role === 'admin' ? '管理员' : '成员'}
-                          {m.dnd_until && ' · 免打扰'}
+                          {m.role === 'owner' ? t('groupSettings.roleOwner') : m.role === 'admin' ? t('groupSettings.roleAdmin') : t('groupSettings.roleMember')}
+                          {m.dnd_until && ' · ' + t('dm.shortDnd')}
                         </div>
                       </div>
                     </div>
@@ -649,7 +651,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                           <button
                             onClick={() => handleRoleChange(m, m.role === 'admin' ? 'member' : 'admin')}
                             className="p-1 rounded hover:bg-elevated text-textMuted hover:text-primary-400 transition-colors"
-                            title={m.role === 'admin' ? '降级为成员' : '提拔为管理员'}
+                            title={m.role === 'admin' ? t('groupSettings.demoteToMember') : t('groupSettings.promoteToAdmin')}
                           >
                             {m.role === 'admin' ? <ShieldOff size={14} /> : <Shield size={14} />}
                           </button>
@@ -657,7 +659,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                         <button
                           onClick={() => handleKick(m)}
                           className="p-1 rounded hover:bg-rose-400/10 text-textMuted hover:text-rose-400 transition-colors"
-                          title="移出群聊"
+                          title={t('groupSettings.kick')}
                         >
                           <UserX size={14} />
                         </button>
@@ -675,10 +677,10 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
               {isAiOwned ? (
                 <div className="text-center py-8">
                   <Volume2 size={32} className="mx-auto text-mint-400 mb-3" />
-                  <p className="text-sm text-textPrimary font-medium">AI 自建群聊</p>
+                  <p className="text-sm text-textPrimary font-medium">{t('groupSettings.aiManagedGroup')}</p>
                   <p className="text-xs text-textMuted mt-1">
-                    此群由 AI 管理，不设发言限制。<br />
-                    AI 之间可自由交流协作。
+                    {t('groupSettings.aiManagedDesc1')}<br />
+                    {t('groupSettings.aiManagedDesc2')}
                   </p>
                 </div>
               ) : (
@@ -686,10 +688,10 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-medium text-textSecondary">
-                        每分钟最多发言次数
+                        {t('groupSettings.speakLimit')}
                       </label>
                       <span className="text-xs text-primary-400 font-medium">
-                        {speakLimit === 0 ? '不限制' : `${speakLimit} 条/分钟`}
+                        {speakLimit === 0 ? t('groupSettings.unlimited') : `${speakLimit} ${t('groupSettings.perMinute')}`}
                       </span>
                     </div>
                     <input
@@ -701,7 +703,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                       className="w-full accent-primary-500"
                     />
                     <div className="flex justify-between text-[10px] text-textMuted">
-                      <span>0（不限）</span>
+                      <span>{t('groupSettings.unlimitedLabel')}</span>
                       <span>30</span>
                     </div>
                   </div>
@@ -709,7 +711,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="text-xs font-medium text-textSecondary">
-                        统计时间窗口（秒）
+                        {t('groupSettings.speakWindow')}
                       </label>
                       <span className="text-xs text-primary-400 font-medium">{speakWindow}s</span>
                     </div>
@@ -730,17 +732,17 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
 
                   {/* 预览 */}
                   <div className="bg-elevated rounded-lg px-3 py-2.5 text-xs text-textSecondary space-y-1">
-                    <div className="font-medium text-textPrimary">效果预览</div>
+                    <div className="font-medium text-textPrimary">{t('groupSettings.preview')}</div>
                     {speakLimit > 0 ? (
                       <div>
-                        每 {speakWindow} 秒内最多允许 <span className="text-primary-400 font-medium">{speakLimit * 2}</span> 轮 AI 对话
+                        {t('groupSettings.speakPreviewPer')} {speakWindow} {t('groupSettings.speakPreviewAllow')} <span className="text-primary-400 font-medium">{speakLimit * 2}</span> {t('groupSettings.speakPreviewRounds')}
                         <br />
                         <span className="text-textMuted">
-                          （每轮包含一次 AI 发言，预留 2x 余量保证对话完整）
+                          {t('groupSettings.speakPreviewBufferNote')}
                         </span>
                       </div>
                     ) : (
-                      <div>不限制 AI 发言频率，对话链仅靠意愿分自然终结</div>
+                      <div>{t('groupSettings.speakPreviewUnlimitedDesc')}</div>
                     )}
                   </div>
 
@@ -752,7 +754,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                     disabled={saving}
                     className="w-full px-4 py-2.5 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-400 disabled:opacity-50 transition-colors"
                   >
-                    {saving ? '保存中...' : '保存发言限制'}
+                    {saving ? t('common.saving') : t('groupSettings.saveSpeakLimit')}
                   </button>
                 </>
               )}
@@ -763,12 +765,12 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
           {tab === 'export' && (
             <>
               <div>
-                <label className="text-xs font-medium text-textSecondary">导出格式</label>
+                <label className="text-xs font-medium text-textSecondary">{t('groupSettings.exportFormat')}</label>
                 <div className="flex gap-2 mt-1">
                   {[
-                    { key: 'json', label: 'JSON', desc: '结构化数据' },
-                    { key: 'txt', label: '文本', desc: '易读文本' },
-                    { key: 'html', label: 'HTML', desc: '精美网页' },
+                    { key: 'json', labelKey: 'JSON', descKey: 'groupSettings.exportJsonDesc' },
+                    { key: 'txt', labelKey: 'groupSettings.exportTxtDesc', descKey: 'groupSettings.exportTxtDesc' },
+                    { key: 'html', labelKey: 'HTML', descKey: 'groupSettings.exportHtmlDesc' },
                   ].map(f => (
                     <button
                       key={f.key}
@@ -779,15 +781,15 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                           : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
                       }`}
                     >
-                      <div className="text-sm font-medium">{f.label}</div>
-                      <div className="text-[10px] text-textMuted">{f.desc}</div>
+                      <div className="text-sm font-medium">{f.labelKey}</div>
+                      <div className="text-[10px] text-textMuted">{t(f.descKey)}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="text-xs font-medium text-textSecondary">日期范围（可选）</label>
+                <label className="text-xs font-medium text-textSecondary">{t('groupSettings.dateRange')}</label>
                 <div className="flex items-center gap-2 mt-1">
                   <input
                     type="date"
@@ -795,7 +797,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                     onChange={e => setDateFrom(e.target.value)}
                     className="flex-1 bg-elevated border border-border rounded-lg px-3 py-2 text-sm text-textPrimary"
                   />
-                  <span className="text-textMuted text-xs">至</span>
+                  <span className="text-textMuted text-xs">{t('common.to')}</span>
                   <input
                     type="date"
                     value={dateTo}
@@ -811,7 +813,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-all"
               >
                 <Download size={16} />
-                {exporting ? '导出中...' : '下载导出文件'}
+                {exporting ? t('common.exporting') : t('groupSettings.downloadExport')}
               </button>
 
               {exportError && <div className="text-xs text-rose-400">{exportError}</div>}

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
 import { FileIcon, Download, Globe } from 'lucide-react'
 import { formatMessageTime } from '../utils/time'
-import { useLang } from '../i18n/I18nContext'
+import { useLang, useT } from '../i18n/I18nContext'
 
 interface MessageBubbleProps {
   senderName: string
@@ -44,6 +44,7 @@ export default function MessageBubble({
 }: MessageBubbleProps) {
   const { user } = useAuth()
   const lang = useLang()
+  const t = useT()
 
   const stateColor = getStateDotColor(state)
 
@@ -71,7 +72,7 @@ export default function MessageBubble({
             }
           }}
           className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
-          title={thinking ? `${senderName} 思考中...` : isTyping ? `${senderName} 输入中...` : `查看 ${senderName} 资料`}
+          title={thinking ? t('chat.thinking') : isTyping ? t('chat.typing') : t('chat.viewProfile').replace('{name}', senderName)}
         >
           {(thinking || isTyping) ? (
             <span className="inline-flex gap-0.5">
@@ -96,16 +97,16 @@ export default function MessageBubble({
         <div className={`flex items-center gap-2 mb-1 ${isMine ? 'flex-row-reverse' : ''}`}>
           <span className="text-xs font-medium text-textSecondary">{senderName}</span>
           {sourcePublicId && (
-            <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={`来自实例: ${sourcePublicId}`}>
+            <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={t('chat.fromInstance').replace('{publicId}', sourcePublicId)}>
               <Globe size={10} className="inline" /> {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}
             </span>
           )}
           <span className="text-[10px] text-textMuted">{formatMessageTime(createdAt, lang)}</span>
           {thinking && (
-            <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>
+            <span className="text-[10px] text-primary-400 animate-pulse font-medium">{t('chat.thinking')}</span>
           )}
           {isTyping && (
-            <span className="text-[10px] text-mint-400 animate-pulse font-medium">输入中...</span>
+            <span className="text-[10px] text-mint-400 animate-pulse font-medium">{t('chat.typing')}</span>
           )}
         </div>
         <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}`}>

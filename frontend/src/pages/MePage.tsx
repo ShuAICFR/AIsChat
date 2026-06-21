@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n/I18nContext'
 import { api } from '../api/client'
 import { AI_TYPE_LABEL } from '../constants'
 import {
@@ -34,6 +35,7 @@ interface UsageOverview {
 
 export default function MePage() {
   const { user, logout, refreshUser } = useAuth()
+  const t = useT()
   const navigate = useNavigate()
 
   const [agents, setAgents] = useState<AgentBrief[]>([])
@@ -95,11 +97,11 @@ export default function MePage() {
     setRedeemMsg('')
     try {
       const res = await api.post<{ message: string }>('/redeem', { code: redeemCode.trim().toUpperCase() })
-      setRedeemMsg(res.message || '兑换成功')
+      setRedeemMsg(res.message || t('common.redeemSuccess'))
       setRedeemCode('')
       refreshUser?.()
     } catch (err: any) {
-      setRedeemMsg(err.message || '兑换失败')
+      setRedeemMsg(err.message || t('common.redeemFailed'))
     } finally { setRedeeming(false) }
   }
 
@@ -114,7 +116,7 @@ export default function MePage() {
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { alert('头像不能超过 2MB'); return }
+    if (file.size > 2 * 1024 * 1024) { alert(t('error.avatarTooLarge')); return }
     setCropFile(file)
     // 重置 input 以便再次选择同一文件
     e.target.value = ''
@@ -127,7 +129,7 @@ export default function MePage() {
       const res = await api.upload('/user/avatar', new File([blob], 'avatar.jpg', { type: 'image/jpeg' }))
       setEditAvatarUrl(res.avatar_url)
     } catch (err: any) {
-      alert(err.message || '上传失败')
+      alert(err.message || t('error.uploadFailed'))
     } finally { setAvatarUploading(false) }
   }
   const handleSaveProfile = async () => {
@@ -144,7 +146,7 @@ export default function MePage() {
       await refreshUser?.()
       setShowEditProfile(false)
     } catch (err: any) {
-      alert(err.message || '保存失败')
+      alert(err.message || t('error.saveFailed'))
     } finally { setEditSaving(false) }
   }
 
@@ -170,18 +172,18 @@ export default function MePage() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-textPrimary truncate">{user.username}</h2>
               {user.role === 'admin' && (
-                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">管理员</span>
+                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 font-medium">{t('me.adminBadge')}</span>
               )}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-textMuted">
               <span className="flex items-center gap-1"><Bot size={12} /> AI {agents.length}</span>
-              <span>加入 {daysSince} 天</span>
+              <span>{t('me.daysOnline')} {daysSince} {t('me.daysSuffix')}</span>
             </div>
             <button
               onClick={openEditProfile}
               className="mt-2 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 flex items-center gap-1 transition-colors"
             >
-              <Edit3 size={12} /> 编辑资料
+              <Edit3 size={12} /> {t('me.editProfile')}
             </button>
           </div>
         </div>
@@ -189,21 +191,19 @@ export default function MePage() {
         {/* 额度概览 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
           {[
-            { label: 'AI 创建', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
-            { label: `通用额度${user.assigned_pool_key_name ? ` · ${user.assigned_pool_key_name}` : ''}`,
-              value: `${(user.api_credit ?? 0)} (≈${((user.api_credit ?? 0) * 10000).toLocaleString()} tokens)`,
-              icon: CreditCard, color: 'text-mint-400', action: () => navigate('/me/usage') },
-            { label: '包断额度', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => navigate('/agents') },
-            { label: '文件配额', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => navigate('/agents') },
+            { key: 'me.aiQuotaCard', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
+            { key: 'me.apiCreditCard', value: `${(user.api_credit ?? 0)} (≈${((user.api_credit ?? 0) * 10000).toLocaleString()} tokens)`, icon: CreditCard, color: 'text-mint-400', action: () => navigate('/me/usage'), poolName: user.assigned_pool_key_name },
+            { key: 'me.bundleCreditCard', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => navigate('/agents') },
+            { key: 'me.fileQuotaCard', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => navigate('/agents') },
           ].map(item => (
             <button
-              key={item.label}
+              key={item.key}
               onClick={item.action}
               className="bg-canvas rounded-xl p-3 text-center hover:bg-elevated transition-colors cursor-pointer w-full"
             >
               <item.icon size={16} className={`${item.color} mx-auto mb-1`} />
               <div className="text-sm font-semibold text-textPrimary">{item.value}</div>
-              <div className="text-[10px] text-textMuted">{item.label}</div>
+              <div className="text-[10px] text-textMuted">{t(item.key)}{item.poolName ? ` · ${item.poolName}` : ''}</div>
             </button>
           ))}
         </div>
@@ -213,14 +213,14 @@ export default function MePage() {
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
-            <Bot size={16} className="text-primary-400" /> 我的 AI
+            <Bot size={16} className="text-primary-400" /> {t('me.myAiSection')}
           </h3>
           <Link to="/agents" className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 flex items-center gap-1 transition-colors">
-            查看全部 <ArrowRight size={12} />
+            {t('me.viewAll')} <ArrowRight size={12} />
           </Link>
         </div>
         {agents.length === 0 ? (
-          <p className="text-sm text-textMuted py-3 text-center">还没有 AI，<Link to="/agents" className="text-primary-400">去创建 →</Link></p>
+          <p className="text-sm text-textMuted py-3 text-center">{t('me.noAiLink')}<Link to="/agents" className="text-primary-400">{t('me.goCreate')}</Link></p>
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1">
             {agents.map(a => (
@@ -237,10 +237,10 @@ export default function MePage() {
                   )}
                 </div>
                 <div className="text-xs font-medium text-textPrimary truncate">{a.name}</div>
-                <div className="text-[10px] text-textMuted mt-0.5">{a.state === 'active' ? '在线' : a.state === 'dnd' ? '勿扰' : '离线'}</div>
+                <div className="text-[10px] text-textMuted mt-0.5">{a.state === 'active' ? t('me.stateActive') : a.state === 'dnd' ? t('me.stateDnd') : t('me.stateOffline')}</div>
                 {(AI_TYPE_LABEL[a.ai_type]) && (
                   <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded-full mt-1 font-medium ${AI_TYPE_LABEL[a.ai_type].cls}`}>
-                    {AI_TYPE_LABEL[a.ai_type].text}
+                    {t(AI_TYPE_LABEL[a.ai_type].key)}
                   </span>
                 )}
               </Link>
@@ -253,10 +253,10 @@ export default function MePage() {
       <div className="bg-surface rounded-2xl border border-border p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
-            <BarChart3 size={16} className="text-primary-400" /> API 用量（近30天）
+            <BarChart3 size={16} className="text-primary-400" /> {t('me.apiUsage30d')}
           </h3>
           <Link to="/me/usage" className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 flex items-center gap-1 transition-colors">
-            查看详细 <ArrowRight size={12} />
+            {t('me.viewDetails')} <ArrowRight size={12} />
           </Link>
         </div>
         {usageLoading ? (
@@ -264,15 +264,15 @@ export default function MePage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
-              { label: '总 Token', value: totalTokens >= 10000 ? `${(totalTokens/10000).toFixed(1)}万` : totalTokens.toLocaleString(), icon: Activity, color: 'text-primary-400' },
-              { label: '调用次数', value: totalCalls, icon: BarChart3, color: 'text-mint-400' },
-              { label: '缓存命中率', value: `${cacheRate}%`, icon: FileText, color: 'text-amber-400' },
-              { label: '思考 Token', value: totalReasoning >= 10000 ? `${(totalReasoning/10000).toFixed(1)}万` : totalReasoning.toLocaleString(), icon: Activity, color: 'text-accent-400' },
+              { key: 'me.totalTokens', value: totalTokens >= 10000 ? `${(totalTokens/10000).toFixed(1)}万` : totalTokens.toLocaleString(), icon: Activity, color: 'text-primary-400' },
+              { key: 'me.calls', value: totalCalls, icon: BarChart3, color: 'text-mint-400' },
+              { key: 'me.cacheHitRate', value: `${cacheRate}%`, icon: FileText, color: 'text-amber-400' },
+              { key: 'me.thinkingTokens', value: totalReasoning >= 10000 ? `${(totalReasoning/10000).toFixed(1)}万` : totalReasoning.toLocaleString(), icon: Activity, color: 'text-accent-400' },
             ].map(item => (
-              <div key={item.label} className="bg-canvas rounded-xl p-3 text-center">
+              <div key={item.key} className="bg-canvas rounded-xl p-3 text-center">
                 <item.icon size={16} className={`${item.color} mx-auto mb-1`} />
                 <div className="text-sm font-semibold text-textPrimary">{item.value}</div>
-                <div className="text-[10px] text-textMuted">{item.label}</div>
+                <div className="text-[10px] text-textMuted">{t(item.key)}</div>
               </div>
             ))}
           </div>
@@ -282,14 +282,14 @@ export default function MePage() {
       {/* ====== 存储概览 ====== */}
       <div className="bg-surface rounded-2xl border border-border p-5">
         <h3 className="text-sm font-semibold text-textPrimary mb-3 flex items-center gap-2">
-          <HardDrive size={16} className="text-primary-400" /> 存储空间
+          <HardDrive size={16} className="text-primary-400" /> {t('me.storageSection')}
         </h3>
         {storageLoading ? (
           <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-textMuted" /></div>
         ) : storage ? (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-textMuted">
-              <span>已用 {storage.total_used >= 1048576 ? `${(storage.total_used / 1048576).toFixed(1)}MB` : `${(storage.total_used / 1024).toFixed(0)}KB`}</span>
+              <span>{t('me.used')} {storage.total_used >= 1048576 ? `${(storage.total_used / 1048576).toFixed(1)}MB` : `${(storage.total_used / 1024).toFixed(0)}KB`}</span>
               <span className={storage.usage_percent > 90 ? 'text-rose-400 font-medium' : storage.usage_percent > 70 ? 'text-amber-400 font-medium' : ''}>
                 {storage.usage_percent}%
               </span>
@@ -303,29 +303,29 @@ export default function MePage() {
               />
             </div>
             <div className="flex items-center justify-between text-[10px] text-textMuted">
-              <span>{storage.total_files} 个文件</span>
-              <span>配额 {storage.quota_mb}MB</span>
+              <span>{storage.total_files} {t('me.fileCountSuffix')}</span>
+              <span>{t('me.quota')} {storage.quota_mb}MB</span>
             </div>
             {storage.usage_percent > 90 && (
-              <p className="text-xs text-rose-400">⚠️ 存储空间即将用尽，请清理文件或兑换更多配额</p>
+              <p className="text-xs text-rose-400">{t('me.storageWarning')}</p>
             )}
           </div>
         ) : (
-          <p className="text-sm text-textMuted py-3 text-center">暂无存储数据</p>
+          <p className="text-sm text-textMuted py-3 text-center">{t('me.noStorageData')}</p>
         )}
       </div>
 
       {/* ====== 兑换码 ====== */}
       <div id="redeem-section" className="bg-surface rounded-2xl border border-border p-5">
         <h3 className="text-sm font-semibold text-textPrimary mb-3 flex items-center gap-2">
-          <Gift size={16} className="text-primary-400" /> 兑换码
+          <Gift size={16} className="text-primary-400" /> {t('me.redeemSection')}
         </h3>
         <div className="flex gap-2">
           <input
             type="text"
             value={redeemCode}
             onChange={e => setRedeemCode(e.target.value)}
-            placeholder="RC-XXXXXXXXXXXXXXXX"
+            placeholder={t('me.redeemPlaceholder')}
             className="flex-1 px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 font-mono"
           />
           <button
@@ -333,7 +333,7 @@ export default function MePage() {
             disabled={redeeming || !redeemCode.trim()}
             className="px-4 py-2 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors"
           >
-            {redeeming ? <Loader2 size={14} className="animate-spin" /> : '兑换'}
+            {redeeming ? <Loader2 size={14} className="animate-spin" /> : t('me.redeemButton')}
           </button>
         </div>
         {redeemMsg && (
@@ -352,8 +352,8 @@ export default function MePage() {
           >
             <Shield size={16} className="text-amber-400 shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-textPrimary">管理面板</div>
-              <div className="text-xs text-textMuted">用户 / AI / 群聊 / 兑换码 / 联邦 / 用量分析</div>
+              <div className="text-sm text-textPrimary">{t('me.managementSection')}</div>
+              <div className="text-xs text-textMuted">{t('me.managementDesc')}</div>
             </div>
             <ChevronRight size={14} className="text-textMuted shrink-0" />
           </Link>
@@ -363,19 +363,19 @@ export default function MePage() {
       {/* ====== 设置入口 ====== */}
       <div className="bg-surface rounded-2xl border border-border divide-y divide-border/60">
         {[
-          { icon: Settings, label: 'API 配置', desc: 'Base URL / API Key / 测试连接', path: '/settings#api' },
-          { icon: Settings, label: '外观与通知', desc: '主题 / 通知开关 / 聊天样式', path: '/settings#appearance' },
-          { icon: Globe, label: '语言与时区', desc: '中文/English · 时区设置', path: '/settings#language' },
+          { key: 'me.apiConfig', descKey: 'me.apiConfigDesc', path: '/settings#api', icon: Settings },
+          { key: 'me.appearance', descKey: 'me.appearanceDesc', path: '/settings#appearance', icon: Settings },
+          { key: 'me.language', descKey: 'me.languageDesc', path: '/settings#language', icon: Globe },
         ].map(item => (
           <Link
-            key={item.label}
+            key={item.key}
             to={item.path}
             className="flex items-center gap-3 px-5 py-3 hover:bg-elevated transition-colors"
           >
             <item.icon size={16} className="text-textMuted shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="text-sm text-textPrimary">{item.label}</div>
-              <div className="text-xs text-textMuted">{item.desc}</div>
+              <div className="text-sm text-textPrimary">{t(item.key)}</div>
+              <div className="text-xs text-textMuted">{t(item.descKey)}</div>
             </div>
             <ChevronRight size={14} className="text-textMuted shrink-0" />
           </Link>
@@ -387,7 +387,7 @@ export default function MePage() {
         onClick={logout}
         className="w-full py-3 rounded-xl border border-rose-500/20 text-rose-400 hover:bg-rose-500/5 text-sm font-medium transition-colors flex items-center justify-center gap-2"
       >
-        <LogOut size={14} /> 退出登录
+        <LogOut size={14} /> {t('me.logout')}
       </button>
 
       {/* ====== 编辑资料弹窗 ====== */}
@@ -398,7 +398,7 @@ export default function MePage() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-sm font-semibold text-textPrimary">编辑资料</h3>
+              <h3 className="text-sm font-semibold text-textPrimary">{t('me.editProfileModalTitle')}</h3>
               <button onClick={() => setShowEditProfile(false)} className="p-1 rounded-lg hover:bg-elevated text-textMuted">
                 <X size={16} />
               </button>
@@ -415,12 +415,12 @@ export default function MePage() {
                 </div>
                 <label className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 cursor-pointer transition-colors">
                   <Camera size={12} />
-                  {avatarUploading ? '上传中...' : '更换头像'}
+                  {avatarUploading ? t('me.uploadingAvatar') : t('me.changeAvatar')}
                   <input type="file" accept="image/*" className="hidden" onChange={handleAvatarSelect} disabled={avatarUploading} />
                 </label>
               </div>
               <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1">用户名</label>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.usernameField')}</label>
                 <input
                   type="text"
                   value={editUsername}
@@ -430,22 +430,22 @@ export default function MePage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1">简介</label>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.bioField')}</label>
                 <textarea
                   value={editBio}
                   onChange={e => setEditBio(e.target.value)}
-                  placeholder="写一句话介绍自己..."
+                  placeholder={t('me.bioPlaceholder')}
                   rows={3}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1">新密码（留空不修改）</label>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.passwordField')}</label>
                 <input
                   type="password"
                   value={editPassword}
                   onChange={e => setEditPassword(e.target.value)}
-                  placeholder="至少 6 位"
+                  placeholder={t('me.passwordMinHint')}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 />
               </div>
@@ -455,7 +455,7 @@ export default function MePage() {
                 className="w-full py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-40 text-sm font-medium transition-colors flex items-center justify-center gap-2"
               >
                 {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                {editSaving ? '保存中...' : '保存'}
+                {editSaving ? t('me.savingProfile') : t('me.saveButton')}
               </button>
             </div>
           </div>

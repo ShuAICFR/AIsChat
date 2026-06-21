@@ -33,6 +33,7 @@ services:
     volumes:
       - ${DATA_DIR:-./data}/agents:/app/data/agents
       - ${DATA_DIR:-./data}/groups:/app/data/groups
+      - ${DATA_DIR:-./data}/attachments:/app/data/attachments
       - ./backend:/app
     depends_on:
       postgres:

@@ -39,6 +39,32 @@
 
 ---
 
+## [v1.0.1] - 2026-06-21
+
+### Fixed
+
+- 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 产生 minify 变量名冲突（`t2 is not a function`）。修复：子组件改用自身 `useT()` 而非接收 prop。
+- 🐛 **DM Offline 状态显示绿色**：私信头部在线状态文字硬编码 `text-mint-400`，离线时仍显示绿色。改为动态映射 active=绿/dnd=红/offline=灰。
+- 🐛 **英文界面仍有多处中文**：AdminPage 备份下载失败 `'下载失败'` 改用 i18n；Token 数字格式化 `fmtTokenNum` 新增 `lang` 参数（中文=万，英文=K/M）；AgentsPage `stateLabels`/`PRESET_LABELS`/`PARAM_LABELS` 全部改用翻译键。
+- 🐛 **Agent 卡片按钮溢出**：Edit/History/Status/Export 按钮在小屏上撑出卡片。加 `flex-wrap`。
+- 🐛 **消息 Markdown 链接不渲染**：用户消息使用纯文本 `<span>`，导致 `[文字](URL)` 不显示为可点击链接。改为统一使用 `<Markdown>` 渲染。
+- 🐛 **消息纯文本换行不生效**：添加 `remark-breaks` 插件，单回车自动转为 `<br>`。
+- 🐛 **公式/代码块/长链接溢出**：消息气泡新增 `overflow-x-auto` 规则覆盖 `.katex-display` / `pre` / `table` / `img` / `a`，超宽内容可左右滑动查看。
+
+### Added
+
+- 📖 **用户手册独立页面**：新建 `ManualPage` 组件（`react-markdown` + `remark-gfm` + `@tailwindcss/typography` 渲染），路由 `/manual`。侧边栏改用 `NavLink`（无出站图标），版本与部署代码一致。
+- 🛡️ **外部链接安全弹窗**：新建 `ExternalLinkSafe` 组件。点击外部链接弹出确认弹窗（「即将离开本站 → 目标 URL → 确认前往/取消」），防止无意识跳转。FederationTab 的 GitHub 链接已接入。
+- 📐 **MePage 标题**：添加页面标题 `{t('me.title')}`（"我的"/"Me"），设置入口从三行简化为单行「设置」链接。
+
+### Changed
+
+- 🔄 `MANUAL_URL` 从 `/docs/用户手册.md`（原始文本文件）改为 `/manual`（React 路由页面）
+- 🔄 Sidebar 手册链接从 `<a target="_blank">` 改为 `<NavLink>`，移除 `ExternalLink` 出站图标
+- 🔄 MePage/UsagePage `fmtTokenNum` 调用全部传入 `lang` 参数，英文界面显示 K/M 而非 万
+
+---
+
 ## [v1.0.0] - 2026-06-21
 
 ### Added

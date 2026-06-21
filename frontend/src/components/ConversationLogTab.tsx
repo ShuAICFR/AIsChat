@@ -283,7 +283,11 @@ export default function ConversationLogTab() {
                     <span className="text-textMuted ml-1">（{agentSettings.system_default_access ? '全局默认开' : '全局默认关'}）</span>
                   </label>
                   <button
-                    onClick={() => setAgentAccess(agentAccess === null ? null : !agentAccess)}
+                    onClick={() => {
+                      if (agentAccess === null) setAgentAccess(true)
+                      else if (agentAccess === true) setAgentAccess(false)
+                      else setAgentAccess(null)
+                    }}
                     className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
                       agentAccess === true ? 'bg-mint-400' :
                       agentAccess === false ? 'bg-rose-400' :

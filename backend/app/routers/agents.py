@@ -501,10 +501,14 @@ async def get_agent_storage(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """查看 AI 的文件空间占用"""
+    """查看 AI 的文件空间占用（工作区 + 附件 + 数据库文件元数据）"""
     import os
+    from app.models.file import FileMetadata as FM
+    from sqlalchemy import select, func as sqlfunc
+
     agent = await _require_agent_owner(agent_id, current_user, db)
 
+    # 1. 扫描工作区目录
     workspace_dir = f"uploads/workspace/{agent_id}"
     total_size = 0
     file_count = 0
@@ -522,11 +526,31 @@ async def get_agent_storage(
                     "name": fn,
                 })
 
+    # 2. 查 file_metadata 表中该 AI 的文件（agent.user_id 对应的 owner 记录 + ai 类型）
+    from app.models.agent import Agent as AgentModel
+    ag = await db.get(AgentModel, agent_id)
+    if ag and ag.user_id:
+        db_result = await db.execute(
+            select(sqlfunc.sum(FM.size), sqlfunc.count(FM.id))
+            .where(FM.owner_type == "ai", FM.owner_id == ag.user_id)
+        )
+        db_sum, db_count = db_result.one()
+        if db_sum:
+            total_size += db_sum
+        if db_count:
+            file_count += db_count
+
+    # 3. 配额（默认每 AI 100MB）
+    quota_mb = int(os.getenv("STORAGE_QUOTA_PER_AI_MB", "100"))
+    quota_bytes = quota_mb * 1024 * 1024
+
     return {
         "agent_id": agent_id,
-        "workspace_dir": workspace_dir,
         "total_size": total_size,
         "file_count": file_count,
+        "quota_bytes": quota_bytes,
+        "quota_mb": quota_mb,
+        "usage_percent": round(total_size / quota_bytes * 100, 1) if quota_bytes > 0 else 0,
         "files": sorted(files, key=lambda f: f["size"], reverse=True)[:50],
     }
 

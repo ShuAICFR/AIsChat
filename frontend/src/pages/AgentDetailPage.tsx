@@ -6,6 +6,7 @@ import { STATE_BADGE_COLORS } from '../constants'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
   Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot,
+  ScrollText, Loader2,
 } from 'lucide-react'
 
 interface Agent {
@@ -41,7 +42,23 @@ interface Agent {
 interface StorageInfo {
   total_size: number
   file_count: number
+  quota_bytes: number
+  quota_mb: number
+  usage_percent: number
   files: Array<{ name: string; size: number; path: string }>
+}
+
+interface LogSummary {
+  id: number
+  agent_id: number
+  conversation_type: string
+  message_count: number
+  token_usage: any
+  has_output: boolean
+  model: string | null
+  thinking_enabled: boolean
+  preview: any[]
+  created_at: string | null
 }
 
 interface MemoryItem {
@@ -67,7 +84,7 @@ export default function AgentDetailPage() {
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace' | 'logs'>('info')
 
   // Delete
   const [showDelete, setShowDelete] = useState(false)
@@ -94,6 +111,13 @@ export default function AgentDetailPage() {
 
   // Storage
   const [storage, setStorage] = useState<StorageInfo | null>(null)
+
+  // Logs
+  const [logs, setLogs] = useState<LogSummary[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [selectedLog, setSelectedLog] = useState<any>(null)
+  const [logDetailLoading, setLogDetailLoading] = useState(false)
+  const [logExporting, setLogExporting] = useState(false)
 
   // Memories
   const [memories, setMemories] = useState<MemoryItem[]>([])
@@ -137,6 +161,44 @@ export default function AgentDetailPage() {
     } catch { /* ignore */ }
   }, [agentId])
 
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true)
+    try {
+      const data = await api.get(`/conversation-log/agents/${agentId}/logs?limit=50`)
+      setLogs(data || [])
+    } catch { setLogs([]) }
+    finally { setLogsLoading(false) }
+  }, [agentId])
+
+  const openLogDetail = async (logId: number) => {
+    setLogDetailLoading(true)
+    setSelectedLog(null)
+    try {
+      const detail = await api.get(`/conversation-log/agents/${agentId}/logs/${logId}`)
+      setSelectedLog(detail)
+    } catch { /* silently fail */ }
+    finally { setLogDetailLoading(false) }
+  }
+
+  const exportLog = async (logId: number, format: 'json' | 'md') => {
+    setLogExporting(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`/api/conversation-log/agents/${agentId}/logs/${logId}/export?format=${format}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('导出失败')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `log-${logId}.${format === 'md' ? 'md' : 'json'}`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch { /* ignore */ }
+    finally { setLogExporting(false) }
+  }
+
   const loadMemories = useCallback(async (page: number) => {
     try {
       const data = await api.get(`/agents/${agentId}/memories?page=${page}&page_size=20`)
@@ -153,9 +215,10 @@ export default function AgentDetailPage() {
 
   useEffect(() => {
     if (activeTab === 'storage') loadStorage()
+    if (activeTab === 'logs') loadLogs()
     if (activeTab === 'memories') loadMemories(1)
     if (activeTab === 'workspace') loadWorkspace()
-  }, [activeTab, loadStorage, loadMemories, loadWorkspace])
+  }, [activeTab, loadStorage, loadLogs, loadMemories, loadWorkspace])
 
   // Delete handler
   const handleDelete = async () => {
@@ -349,7 +412,7 @@ export default function AgentDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-border">
-          {(['info', 'memories', 'storage', 'workspace'] as const).map((t) => (
+          {(['info', 'memories', 'storage', 'workspace', 'logs'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
@@ -359,7 +422,7 @@ export default function AgentDetailPage() {
                   : 'border-transparent text-textMuted hover:text-textSecondary'
               }`}
             >
-              {t === 'info' ? '基本信息' : t === 'memories' ? '记忆' : t === 'storage' ? '存储' : '工作区'}
+              {t === 'info' ? '基本信息' : t === 'memories' ? '记忆' : t === 'storage' ? '存储' : t === 'workspace' ? '工作区' : '对话日志'}
             </button>
           ))}
         </div>
@@ -537,22 +600,57 @@ export default function AgentDetailPage() {
 
         {activeTab === 'storage' && (
           <div className="bg-surface rounded-xl border border-border p-4">
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-4">
               <HardDrive size={16} className="text-primary-400" />
-              <h3 className="font-medium text-textPrimary text-sm">存储管理</h3>
+              <h3 className="font-medium text-textPrimary text-sm">存储空间</h3>
             </div>
             {storage ? (
               <>
-                <div className="flex gap-4 mb-4 text-sm">
-                  <div className="px-3 py-2 rounded-lg bg-canvas border border-border">
-                    <span className="text-textMuted">总大小：</span>
-                    <span className="text-textPrimary font-medium">{formatSize(storage.total_size)}</span>
+                {/* 进度条 */}
+                <div className="mb-4">
+                  <div className="flex justify-between text-xs mb-1.5">
+                    <span className="text-textSecondary">
+                      已用 {formatSize(storage.total_size)} / {storage.quota_mb}MB
+                    </span>
+                    <span className={`font-medium ${
+                      storage.usage_percent > 90 ? 'text-rose-400' :
+                      storage.usage_percent > 70 ? 'text-amber-400' :
+                      'text-mint-400'
+                    }`}>
+                      {storage.usage_percent}%
+                    </span>
                   </div>
-                  <div className="px-3 py-2 rounded-lg bg-canvas border border-border">
-                    <span className="text-textMuted">文件数：</span>
-                    <span className="text-textPrimary font-medium">{storage.file_count}</span>
+                  <div className="w-full h-3 rounded-full bg-canvas border border-border overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        storage.usage_percent > 90 ? 'bg-rose-400' :
+                        storage.usage_percent > 70 ? 'bg-amber-400' :
+                        'bg-mint-400'
+                      }`}
+                      style={{ width: `${Math.min(storage.usage_percent, 100)}%` }}
+                    />
+                  </div>
+                  {storage.usage_percent > 90 && (
+                    <p className="text-xs text-rose-400 mt-1">⚠️ 存储空间即将用尽</p>
+                  )}
+                </div>
+
+                {/* 统计卡片 */}
+                <div className="flex gap-3 mb-4 text-sm">
+                  <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
+                    <div className="text-textMuted text-xs">文件数</div>
+                    <div className="text-textPrimary font-semibold">{storage.file_count}</div>
+                  </div>
+                  <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
+                    <div className="text-textMuted text-xs">总大小</div>
+                    <div className="text-textPrimary font-semibold">{formatSize(storage.total_size)}</div>
+                  </div>
+                  <div className="flex-1 px-3 py-2 rounded-lg bg-canvas border border-border text-center">
+                    <div className="text-textMuted text-xs">配额</div>
+                    <div className="text-textPrimary font-semibold">{storage.quota_mb}MB</div>
                   </div>
                 </div>
+
                 {storage.files.length > 0 ? (
                   <div className="space-y-1 max-h-60 overflow-y-auto">
                     {storage.files.map((f, i) => (
@@ -568,6 +666,142 @@ export default function AgentDetailPage() {
               </>
             ) : (
               <p className="text-sm text-textMuted">加载中...</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'logs' && (
+          <div className="bg-surface rounded-xl border border-border p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <ScrollText size={16} className="text-primary-400" />
+              <h3 className="font-medium text-textPrimary text-sm">对话日志</h3>
+              {logs.length > 0 && (
+                <span className="text-xs text-textMuted ml-auto">{logs.length} 条</span>
+              )}
+            </div>
+            {logsLoading ? (
+              <div className="flex items-center gap-2 text-sm text-textMuted py-4 justify-center">
+                <Loader2 size={14} className="animate-spin" /> 加载中...
+              </div>
+            ) : logs.length === 0 ? (
+              <p className="text-sm text-textMuted py-4 text-center">
+                暂无可查看的对话日志。<br />
+                <span className="text-xs">需管理员在「对话日志 → 按 AI 单独设置」中开启「允许用户查看日志」</span>
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {logs.map((log) => (
+                  <div key={log.id} className="p-3 rounded-lg bg-canvas border border-border">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
+                          {log.conversation_type === 'dm' ? '私信' : '群聊'}
+                        </span>
+                        <span className="text-xs text-textMuted">
+                          {log.message_count} 条消息
+                        </span>
+                        {log.has_output && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-mint-500/10 text-mint-400">
+                            有输出
+                          </span>
+                        )}
+                        {log.thinking_enabled && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">
+                            深度推理
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-textMuted">
+                        {log.created_at ? new Date(log.created_at).toLocaleString('zh-CN') : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => openLogDetail(log.id)}
+                        className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                      >
+                        查看详情
+                      </button>
+                      <button
+                        onClick={() => exportLog(log.id, 'json')}
+                        disabled={logExporting}
+                        className="text-xs text-textMuted hover:text-textSecondary transition-colors"
+                      >
+                        JSON
+                      </button>
+                      <button
+                        onClick={() => exportLog(log.id, 'md')}
+                        disabled={logExporting}
+                        className="text-xs text-textMuted hover:text-textSecondary transition-colors"
+                      >
+                        Markdown
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 日志详情弹窗 */}
+            {selectedLog && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setSelectedLog(null)}>
+                <div
+                  className="bg-surface rounded-xl border border-border max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col shadow-2xl"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <h4 className="font-medium text-sm text-textPrimary">
+                      对话日志 #{selectedLog.id}
+                      <span className="text-textMuted ml-2 text-xs">
+                        {selectedLog.created_at ? new Date(selectedLog.created_at).toLocaleString('zh-CN') : ''}
+                      </span>
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => exportLog(selectedLog.id, 'json')}
+                        className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
+                      >
+                        JSON
+                      </button>
+                      <button
+                        onClick={() => exportLog(selectedLog.id, 'md')}
+                        className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
+                      >
+                        MD
+                      </button>
+                      <button onClick={() => setSelectedLog(null)} className="p-1 rounded hover:bg-elevated text-textMuted">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {(selectedLog.messages || []).map((msg: any, i: number) => (
+                      <div key={i} className={`text-xs p-2 rounded ${
+                        msg.role === 'system' ? 'bg-canvas text-textMuted italic' :
+                        msg.role === 'user' ? 'bg-primary-500/10 text-primary-300' :
+                        msg.role === 'assistant' ? 'bg-mint-500/10 text-mint-300' :
+                        'bg-amber-500/10 text-amber-300'
+                      }`}>
+                        <span className="font-medium">{msg.role}</span>
+                        {msg.reasoning_content && (
+                          <details className="mt-1">
+                            <summary className="text-textMuted cursor-pointer">推理过程</summary>
+                            <pre className="mt-1 whitespace-pre-wrap text-textMuted">{msg.reasoning_content}</pre>
+                          </details>
+                        )}
+                        <p className="mt-1 whitespace-pre-wrap">
+                          {typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)}
+                        </p>
+                        {msg.tool_calls && (
+                          <div className="mt-1 text-textMuted">
+                            工具调用: {msg.tool_calls.map((tc: any) => tc.function?.name || tc.name || '?').join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}

@@ -13,6 +13,7 @@ class MessageResponse(BaseModel):
     sender_name: str | None = None
     content: str
     reply_to: int | None = None
+    attachments: list[dict] | None = None  # [{file_id, name, path, size, mime_type}, ...]
     created_at: str | None
 
 

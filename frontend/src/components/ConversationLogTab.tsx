@@ -378,7 +378,7 @@ export default function ConversationLogTab() {
                         {log.preview.slice(0, 2).map((p: any, i: number) => (
                           <div key={i} className="truncate">
                             <span className="font-medium">{p.role}:</span>{' '}
-                            {p.content || (p.tool_calls ? `🔧 ${p.tool_calls.join(', ')}` : '...')}
+                            {p.content || (p.tool_calls ? p.tool_calls.join(', ') : '...')}
                           </div>
                         ))}
                       </div>
@@ -398,7 +398,7 @@ export default function ConversationLogTab() {
               >
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-textPrimary">对话日志 #{selectedLog}</h3>
-                  <button onClick={() => { setSelectedLog(null); setLogDetail(null) }} className="text-textMuted hover:text-textSecondary">✕</button>
+                  <button onClick={() => { setSelectedLog(null); setLogDetail(null) }} className="text-textMuted hover:text-textSecondary"><X size={16} /></button>
                 </div>
                 {detailLoading ? (
                   <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={24} /></div>

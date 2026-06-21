@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff, Menu, UserPlus, Users } from 'lucide-react'
+import { Plus, BellOff, Menu, UserPlus, Users, Bot } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Group {
@@ -234,7 +234,7 @@ export default function ChatSidebar({
                   )}
                 </div>
                 <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
-                  {s.partner.type === 'ai' && <span className="text-[10px] shrink-0">🤖</span>}
+                  {s.partner.type === 'ai' && <Bot size={10} className="shrink-0 text-textMuted" />}
                   <span className="truncate min-w-0 flex-1">
                     {s.last_message_preview || '暂无消息'}
                   </span>

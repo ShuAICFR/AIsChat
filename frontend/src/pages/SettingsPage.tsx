@@ -348,8 +348,8 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mt-1.5">
                 <p className="text-xs text-textMuted">
                   {user?.has_api_key
-                    ? '✅ 已设置 API Key'
-                    : '⚠️ 尚未设置 API Key'}
+                    ? <><CheckCircle size={12} className="inline text-mint-400 mr-1" />已设置 API Key</>
+                    : <><AlertTriangle size={12} className="inline text-accent-400 mr-1" />尚未设置 API Key</>}
                 </p>
                 <button
                   onClick={handleTestConnection}
@@ -639,7 +639,7 @@ export default function SettingsPage() {
           {saving ? '保存中...' : '保存设置'}
         </button>
         <p className="text-xs text-textMuted mt-2">
-          💡 标有「即时生效」的选项修改后立即应用，无需点击保存。其余选项需点击保存后生效。
+          标有「即时生效」的选项修改后立即应用，无需点击保存。其余选项需点击保存后生效。
         </p>
       </div>
 

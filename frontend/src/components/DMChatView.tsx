@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
-import { ArrowLeft, Bell, BellOff, Settings } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface DMChatViewProps {
@@ -65,7 +65,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
             </span>
           </div>
           <span className="text-[10px] text-textMuted">
-            {partner?.type === 'ai' ? '🤖 AI' : '👤 用户'}
+            {partner?.type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 用户</>}
             {partner?.state === 'active' && ' · 在线'}
             {partner?.state === 'dnd' && ' · 免打扰'}
             {(!partner?.state || partner?.state === 'offline') && ' · 离线'}

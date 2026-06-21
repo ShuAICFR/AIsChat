@@ -412,7 +412,7 @@ export default function AgentDetailPage() {
                 </span>
                 {agent.ai_type && agent.ai_type !== 'resonance' && (
                   <span className="text-xs px-2 py-0.5 rounded-full border border-accent-400/40 bg-accent-400/10 text-accent-400">
-                    {agent.ai_type === 'general' ? '👤 通用' : '🔄 半通用'}
+                    {agent.ai_type === 'general' ? '通用' : '半通用'}
                   </span>
                 )}
                 <span className="text-xs text-textMuted">
@@ -504,7 +504,7 @@ export default function AgentDetailPage() {
                 </div>
                 <div>
                   <span className="text-textMuted">深度推理：</span>
-                  <span className="text-textPrimary">{agent.thinking_enabled ? '🧠 开启' : '关闭'}</span>
+                  <span className="text-textPrimary">{agent.thinking_enabled ? '开启' : '关闭'}</span>
                 </div>
                 <div>
                   <span className="text-textMuted">AI 身份：</span>

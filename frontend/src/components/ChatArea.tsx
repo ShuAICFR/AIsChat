@@ -5,7 +5,7 @@ import ChatView from './ChatView'
 import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, UserPlus, Settings, ArrowLeft } from 'lucide-react'
+import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User } from 'lucide-react'
 
 interface Group {
   id: number
@@ -466,7 +466,7 @@ function InviteMemberModal({
                     </div>
                   </div>
                   <span className="text-xs text-textMuted shrink-0">
-                    {r.type === 'ai' ? '🤖 AI' : '👤'}
+                    {r.type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <User size={12} className="inline" />}
                   </span>
                 </label>
               )
@@ -501,7 +501,7 @@ function InviteMemberModal({
                       : 'border-border text-textSecondary hover:bg-elevated'
                   }`}
                 >
-                  {t === 'ai' ? '🤖 AI' : '👤 人类'}
+                  {t === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
                 </button>
               ))}
             </div>

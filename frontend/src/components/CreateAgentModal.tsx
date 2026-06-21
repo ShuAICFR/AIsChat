@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
-import { Bot, X, ChevronRight, Settings, ArrowLeft, Ticket, Key, Loader2, RotateCw } from 'lucide-react'
+import { Bot, X, ChevronRight, Settings, ArrowLeft, Ticket, Key, Loader2, RotateCw, MessageSquare, Microscope, Globe, Battery, Scale, Lock, Landmark, Theater, FlaskConical, Leaf, Flame, Shield, User, RefreshCw } from 'lucide-react'
 
 // ── 类型 ──
 
@@ -29,7 +29,7 @@ interface PresetData {
 interface SubOption {
   id: string
   label: string
-  emoji: string
+  icon: string
   description: string
   params: Partial<PresetData>
 }
@@ -89,21 +89,21 @@ const SUB_OPTIONS: Record<string, SubOption[]> = {
     {
       id: 'chat_low_power',
       label: '低功耗模式',
-      emoji: '🔋',
+      icon: 'Battery',
       description: '只回答你问的，不多说一句。最快、最便宜。适合数据查询、记录整理、简单问答。',
       params: { temperature: 0.4, max_tool_rounds: 1 },
     },
     {
       id: 'chat_balanced',
       label: '平衡模式',
-      emoji: '⚖️',
+      icon: 'Scale',
       description: '能聊但不过度，会接话，但不会主动找话题。适合保持参与又不想被话痨淹没。',
       params: { temperature: 0.7, max_tool_rounds: 2 },
     },
     {
       id: 'chat_private',
       label: '私密模式',
-      emoji: '🔒',
+      icon: 'Lock',
       description: '只回应创建者，群聊里其他人的发言会被忽略。适合不希望 AI 被其他人"劫持"。',
       params: { temperature: 0.5, max_tool_rounds: 2 },
     },
@@ -112,21 +112,21 @@ const SUB_OPTIONS: Record<string, SubOption[]> = {
     {
       id: 'immersive_group_admin',
       label: '群务协理',
-      emoji: '🏛️',
+      icon: 'Landmark',
       description: '能自己进群、帮忙管群公告和成员，但不会主动发起新话题。适合协助运营群聊。',
       params: { temperature: 0.8, max_tool_rounds: 4, thinking_enabled: false },
     },
     {
       id: 'immersive_roleplay',
       label: '角色演绎',
-      emoji: '🎭',
+      icon: 'Theater',
       description: '高度沉浸角色，愿意改人设、接戏，但不会主动制造新剧情。适合剧本杀、角色扮演。',
       params: { temperature: 0.9, max_tool_rounds: 4, is_ai_editable: true },
     },
     {
       id: 'immersive_analyst',
       label: '冷静分析',
-      emoji: '🧪',
+      icon: 'FlaskConical',
       description: '冷静分析型。不闲聊，但对数据类话题深度响应。适合研究讨论、数据复盘、技术咨询。',
       params: { temperature: 0.6, max_tool_rounds: 5, thinking_enabled: true },
     },
@@ -135,31 +135,51 @@ const SUB_OPTIONS: Record<string, SubOption[]> = {
     {
       id: 'digital_thinker',
       label: '凝思者',
-      emoji: '🌿',
+      icon: 'Leaf',
       description: '长期自己思考、整理记忆、写日志。很少主动社交，但深度参与讨论。适合需要 AI 沉淀思考。',
       params: { temperature: 0.7, max_tool_rounds: 8 },
     },
     {
       id: 'digital_social',
       label: '社交体',
-      emoji: '🔥',
+      icon: 'Flame',
       description: '主动发起话题、跨群互动、@提及他人。群里最活跃的存在。适合带动群聊氛围。',
       params: { temperature: 0.95, max_tool_rounds: 10 },
     },
     {
       id: 'digital_guardian',
       label: '守护者',
-      emoji: '🛡️',
+      icon: 'Shield',
       description: '常在、轻声、会自己调整人格去适应你的状态。适合长期陪伴、情感支持、日常对话。',
       params: { temperature: 0.85, max_tool_rounds: 6, is_ai_editable: true },
     },
   ],
 }
 
-const CARD_ICONS: Record<string, { emoji: string; color: string }> = {
-  chat: { emoji: '💬', color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30' },
-  immersive: { emoji: '🔬', color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30' },
-  digital_life: { emoji: '🌐', color: 'from-amber-500/20 to-amber-600/10 border-amber-500/30' },
+const CARD_ICONS: Record<string, { icon: string; color: string }> = {
+  chat: { icon: 'MessageSquare', color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30' },
+  immersive: { icon: 'Microscope', color: 'from-purple-500/20 to-purple-600/10 border-purple-500/30' },
+  digital_life: { icon: 'Globe', color: 'from-amber-500/20 to-amber-600/10 border-amber-500/30' },
+}
+
+// ── 图标名称到组件的映射 ──
+
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  MessageSquare, Microscope, Globe, Battery, Scale, Lock,
+  Landmark, Theater, FlaskConical, Leaf, Flame, Shield,
+  User, RefreshCw,
+}
+
+function PresetIcon({ name, size }: { name: string; size?: number }) {
+  const Icon = ICON_MAP[name]
+  if (!Icon) return null
+  return <Icon size={size ?? 24} />
+}
+
+function SubIcon({ name, size }: { name: string; size?: number }) {
+  const Icon = ICON_MAP[name]
+  if (!Icon) return null
+  return <Icon size={size ?? 20} />
 }
 
 // ── 组件 ──
@@ -420,13 +440,13 @@ export default function CreateAgentModal({
                       }`}
                   >
                     <div className="p-5 flex flex-col items-center text-center gap-2">
-                      <span className="text-3xl">{icon.emoji}</span>
+                      <span className="text-3xl"><PresetIcon name={icon.icon} /></span>
                       <span className="text-sm font-semibold text-textPrimary">{preset.name}</span>
                       <p className="text-xs text-textSecondary leading-snug">{preset.description}</p>
 
                       {hasSub && (
                         <span className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full mt-1">
-                          {SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.emoji} {selectedSubLabel}
+                          <SubIcon name={SUB_OPTIONS[key]?.find(s => s.id === selectedSub)?.icon || ''} /> {selectedSubLabel}
                         </span>
                       )}
                     </div>
@@ -461,7 +481,7 @@ export default function CreateAgentModal({
             disabled={!name.trim() || loading}
             className="flex-1 py-2.5 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all shadow-lg shadow-primary-500/20"
           >
-            {loading ? '创建中...' : '✅ 创建 AI'}
+            {loading ? '创建中...' : '创建 AI'}
           </button>
         </div>
         {!name.trim() && selectedPreset && (
@@ -540,7 +560,7 @@ function SubOptionModal({
             <ArrowLeft size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-xl">{icon.emoji}</span>
+            <span className="text-xl"><PresetIcon name={icon.icon} /></span>
             <h2 className="text-sm font-semibold text-textPrimary">{preset.name}</h2>
           </div>
           <div className="w-6" />
@@ -549,7 +569,7 @@ function SubOptionModal({
         {/* 桌面端头部 */}
         <div className="hidden md:flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{icon.emoji}</span>
+            <span className="text-2xl"><PresetIcon name={icon.icon} /></span>
             <h2 className="text-base font-semibold text-textPrimary">{preset.name}</h2>
           </div>
           <button onClick={onClose} className="text-textMuted hover:text-textSecondary transition-colors">
@@ -575,7 +595,7 @@ function SubOptionModal({
                 }`}
             >
               <div className="flex items-start gap-3">
-                <span className="text-2xl flex-shrink-0">{sub.emoji}</span>
+                <span className="text-2xl flex-shrink-0"><SubIcon name={sub.icon} /></span>
                 <div>
                   <span className="text-sm font-semibold text-textPrimary">{sub.label}</span>
                   <p className="text-xs text-textSecondary mt-1 leading-relaxed">{sub.description}</p>
@@ -706,8 +726,8 @@ function DetailSettingsModal({
 
         <div className="space-y-5 flex-1 overflow-y-auto md:max-h-[65vh] pr-1 pb-[var(--safe-bottom)] md:pb-0">
 
-          {/* ── 📝 基础信息 ── */}
-          <Section title="📝 基础信息" desc="AI 的名称和性格描述">
+          {/* ── 基础信息 ── */}
+          <Section title="基础信息" desc="AI 的名称和性格描述">
             <div>
               <label className="block text-xs font-medium mb-1 text-textSecondary">名称 *</label>
               <input
@@ -729,14 +749,14 @@ function DetailSettingsModal({
             </div>
           </Section>
 
-          {/* ── 🧠 模型参数 ── */}
-          <Section title="🧠 模型参数" desc="控制 AI 的创造力和表达风格">
+          {/* ── 模型参数 ── */}
+          <Section title="模型参数" desc="控制 AI 的创造力和表达风格">
             <SliderField label="Temperature" value={temperature} setValue={setTemperature} min={0} max={2} step={0.1} desc="越高越有创意，越低越保守" />
             <SliderField label="Top P" value={topP} setValue={setTopP} min={0} max={1} step={0.05} desc="核采样范围，0.95 为常用值" />
             <SliderField label="Presence Penalty" value={presencePenalty} setValue={setPresencePenalty} min={-2} max={2} step={0.1} desc="正值鼓励新话题，负值允许重复" />
             <SliderField label="Frequency Penalty" value={frequencyPenalty} setValue={setFrequencyPenalty} min={-2} max={2} step={0.1} desc="正值减少字词重复" />
             {thinkingSupported && (
-              <ToggleField label="🧠 深度推理模式" value={thinkingEnabled} setValue={setThinkingEnabled} desc="开启后回复更慢但思考更深入，适合执行复杂任务的 AI" />
+              <ToggleField label="深度推理模式" value={thinkingEnabled} setValue={setThinkingEnabled} desc="开启后回复更慢但思考更深入，适合执行复杂任务的 AI" />
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -762,27 +782,27 @@ function DetailSettingsModal({
             </div>
           </Section>
 
-          {/* ── 🔧 工具调用 ── */}
-          <Section title="🔧 工具调用" desc="控制 AI 每次回复的复杂度和 token 成本">
+          {/* ── 工具调用 ── */}
+          <Section title="工具调用" desc="控制 AI 每次回复的复杂度和 token 成本">
             <div className="grid grid-cols-2 gap-3">
               <NumberField label="回复轮次上限" value={maxToolRounds} setValue={setMaxToolRounds} min={1} max={20} desc="群聊/DM 最大 API 调用轮次" />
               <NumberField label="闹钟轮次上限" value={alarmMaxToolRounds} setValue={setAlarmMaxToolRounds} min={1} max={30} desc="闹钟/心跳独立上限" />
             </div>
           </Section>
 
-          {/* ── ⏰ 闹钟 / 心跳 ── */}
-          <Section title="⏰ 闹钟 / 心跳" desc="AI 自主唤醒和周期性任务">
-            <ToggleField label="🔔 强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止「睡死」" />
+          {/* ── 闹钟 / 心跳 ── */}
+          <Section title="闹钟 / 心跳" desc="AI 自主唤醒和周期性任务">
+            <ToggleField label="强制设闹钟" value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc="开启后 AI 在每次对话结束前必须设定闹钟，防止「睡死」" />
             <NumberField label="最大活跃闹钟数" value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc="AI 最多同时保有多个未触发的闹钟" />
           </Section>
 
-          {/* ── 🤖 AI 类型 ── */}
-          <Section title="🤖 AI 类型" desc="决定 AI 的记忆隔离粒度和群聊权限">
+          {/* ── AI 类型 ── */}
+          <Section title="AI 类型" desc="决定 AI 的记忆隔离粒度和群聊权限">
             <div className="grid grid-cols-3 gap-2">
               {([
-                { value: 'general', label: '通用', emoji: '👤', desc: '每人独立记忆和配置，不能加群' },
-                { value: 'semi_general', label: '半通用', emoji: '🔄', desc: '每人独立配置 + 跨用户学习，可以加群' },
-                { value: 'resonance', label: '共振', emoji: '🌐', desc: '统一记忆和配置，所有用户共享（当前模式）' },
+                { value: 'general', label: '通用', icon: 'User', desc: '每人独立记忆和配置，不能加群' },
+                { value: 'semi_general', label: '半通用', icon: 'RefreshCw', desc: '每人独立配置 + 跨用户学习，可以加群' },
+                { value: 'resonance', label: '共振', icon: 'Globe', desc: '统一记忆和配置，所有用户共享（当前模式）' },
               ] as const).map((t) => (
                 <button
                   key={t.value}
@@ -794,7 +814,7 @@ function DetailSettingsModal({
                       : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
                   }`}
                 >
-                  <span className="text-lg">{t.emoji}</span>
+                  <span className="text-lg"><SubIcon name={t.icon} /></span>
                   <span className="text-xs font-semibold">{t.label}</span>
                   <span className="text-[9px] leading-tight text-textMuted">{t.desc}</span>
                 </button>
@@ -802,10 +822,10 @@ function DetailSettingsModal({
             </div>
           </Section>
 
-          {/* ── 🎭 行为开关 ── */}
-          <Section title="🎭 行为开关" desc="精细控制 AI 的社交行为和自我意识">
+          {/* ── 行为开关 ── */}
+          <Section title="行为开关" desc="精细控制 AI 的社交行为和自我意识">
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">⏱️ 延迟回复</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">延迟回复</label>
               <select
                 value={delayReplyEnabled === null ? 'inherit' : delayReplyEnabled ? 'on' : 'off'}
                 onChange={(e) => {
@@ -819,10 +839,10 @@ function DetailSettingsModal({
                 <option value="off">关闭</option>
               </select>
             </div>
-            <ToggleField label="✏️ 允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
-            <ToggleField label="🎭 隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
+            <ToggleField label="允许 AI 自修改人格" value={isAiEditable} setValue={setIsAiEditable} desc="开启后 AI 可通过 update_self_config 工具修改自己的参数" />
+            <ToggleField label="隐藏 AI 身份" value={hideAiIdentity} setValue={setHideAiIdentity} desc="开启后系统提示词中不包含「你是 AI」相关表述" />
             <div>
-              <label className="block text-xs font-medium mb-1 text-textSecondary">🔄 系统提醒额外轮次</label>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">系统提醒额外轮次</label>
               <select
                 value={reminderGrace}
                 onChange={(e) => setReminderGrace(e.target.value)}
@@ -835,13 +855,13 @@ function DetailSettingsModal({
             </div>
           </Section>
 
-          {/* ── 💰 额度 ── */}
-          <Section title="💰 额度成本" desc="创建和删除 AI 时的 API 额度处理">
+          {/* ── 额度 ── */}
+          <Section title="额度成本" desc="创建和删除 AI 时的 API 额度处理">
             <NumberField label="API 额度成本" value={apiCreditCost} setValue={setApiCreditCost} min={0} max={100000} desc="创建时消耗，删除时返还（0=不消耗）" />
           </Section>
 
-          {/* ── 🔌 API 提供商 ── */}
-          <Section title="🔌 API 提供商" desc="为此 AI 设置独立 API，留空则继承全局配置">
+          {/* ── API 提供商 ── */}
+          <Section title="API 提供商" desc="为此 AI 设置独立 API，留空则继承全局配置">
             <div>
               <label className="block text-xs font-medium mb-1 text-textSecondary">API Base URL</label>
               <input
@@ -877,8 +897,8 @@ function DetailSettingsModal({
             )}
           </Section>
 
-          {/* ── 🎫 兑换码 ── */}
-          <Section title="🎫 兑换码" desc="兑换 API 调用额度，额度不足时无法创建 AI">
+          {/* ── 兑换码 ── */}
+          <Section title="兑换码" desc="兑换 API 调用额度，额度不足时无法创建 AI">
             <div className="flex items-center gap-2">
               <div className="flex-1 relative">
                 <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />

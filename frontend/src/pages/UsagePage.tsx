@@ -7,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer
 } from 'recharts'
-import { ArrowLeft, Loader2, BarChart3 } from 'lucide-react'
+import { ArrowLeft, Loader2, BarChart3, Activity, FileText, Cpu } from 'lucide-react'
 
 interface DailyPoint {
   date: string
@@ -126,17 +126,19 @@ export default function UsagePage() {
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: '总 Token', value: fmtTokenNum(totalTokens), icon: '📊' },
-          { label: '调用次数', value: totalCalls, icon: '📞' },
-          { label: '缓存命中率', value: `${cacheRate}%`, icon: '💾' },
-          { label: '思考 Token', value: fmtTokenNum(totalReasoning), icon: '🧠' },
-        ].map(item => (
+          { label: '总 Token', value: fmtTokenNum(totalTokens), icon: BarChart3 },
+          { label: '调用次数', value: totalCalls, icon: Activity },
+          { label: '缓存命中率', value: `${cacheRate}%`, icon: FileText },
+          { label: '思考 Token', value: fmtTokenNum(totalReasoning), icon: Cpu },
+        ].map(item => {
+          const Icon = item.icon;
+          return (
           <div key={item.label} className="bg-surface rounded-xl border border-border p-4 text-center">
-            <div className="text-xl mb-1">{item.icon}</div>
+            <div className="mb-1 flex justify-center"><Icon size={20} className="text-textSecondary" /></div>
             <div className="text-lg font-semibold text-textPrimary">{item.value}</div>
             <div className="text-[10px] text-textMuted">{item.label}</div>
           </div>
-        ))}
+        )})}
       </div>
 
       {/* AI 选择 + 图表 */}

@@ -4,7 +4,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
-import { FileIcon, Download } from 'lucide-react'
+import { FileIcon, Download, Globe } from 'lucide-react'
 
 function formatTime(utcStr: string, timezone: string): string {
   try {
@@ -100,7 +100,7 @@ export default function MessageBubble({
           <span className="text-xs font-medium text-textSecondary">{senderName}</span>
           {sourcePublicId && (
             <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={`来自实例: ${sourcePublicId}`}>
-              🌐 {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}
+              <Globe size={10} className="inline" /> {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}
             </span>
           )}
           <span className="text-[10px] text-textMuted">{formatTime(createdAt, tz)}</span>

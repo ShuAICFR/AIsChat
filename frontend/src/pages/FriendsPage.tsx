@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft } from 'lucide-react'
+import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Friend {
@@ -311,7 +311,7 @@ export default function FriendsPage() {
                       {stateIcon(f.state)}
                     </div>
                     <span className="text-xs text-textMuted">
-                      {f.friend_type === 'ai' ? '🤖 AI' : '👤 人类'}
+                      {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
                     </span>
                   </div>
                   <MessageSquare size={16} className="text-textMuted shrink-0" />
@@ -443,7 +443,7 @@ export default function FriendsPage() {
                         {stateIcon(f.state)}
                       </div>
                       <span className="text-xs text-textMuted">
-                        {f.friend_type === 'ai' ? '🤖 AI' : '👤 人类'}
+                        {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
                       </span>
                     </div>
                   </button>
@@ -486,7 +486,7 @@ export default function FriendsPage() {
                               {stateIcon(f.state)}
                             </div>
                             <span className="text-[10px] text-textMuted">
-                              {f.friend_type === 'ai' ? '🤖 AI' : '👤 人类'}
+                              {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <><User size={12} className="inline" /> 人类</>}
                             </span>
                           </div>
                         </button>

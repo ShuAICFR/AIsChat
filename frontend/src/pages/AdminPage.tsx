@@ -310,7 +310,7 @@ function GroupsTab() {
               <td className="py-2 px-3 font-medium">{g.name}</td>
               <td className="py-2 px-3">{g.owner_type}:{g.owner_id}</td>
               <td className="py-2 px-3">
-                {g.is_vector_accelerated ? '⚡ 已开启' : '未开启'}
+                {g.is_vector_accelerated ? '已开启' : '未开启'}
               </td>
               <td className="py-2 px-3">
                 <button
@@ -343,10 +343,10 @@ function CodesTab() {
   const [generating, setGenerating] = useState(false)
 
   const CODE_TYPES: Record<string, string> = {
-    ai_quota: '🤖 AI创建额度',
-    api_credit: '💳 通用API额度',
-    agent_bundle: '📦 AI包断额度',
-    file_quota: '📁 文件存储配额',
+    ai_quota: 'AI创建额度',
+    api_credit: '通用API额度',
+    agent_bundle: 'AI包断额度',
+    file_quota: '文件存储配额',
   }
 
   const loadCodes = async () => {
@@ -438,7 +438,7 @@ function CodesTab() {
               {codes.map((c: any) => (
                 <tr key={c.code} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs text-textPrimary">{c.code}</td>
-                  <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || '🤖 AI创建额度'}</td>
+                  <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || 'AI创建额度'}</td>
                   <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{(c.code_type === 'file_size' || c.code_type === 'file_quota') ? ' MB' : ''}</td>
                   <td className="py-2 px-3 text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
@@ -592,13 +592,13 @@ function BackupTab() {
     <div className="space-y-5">
       {/* ========== 导出区 ========== */}
       <div className="bg-surface rounded-xl border border-border p-5">
-        <h3 className="font-semibold text-textPrimary mb-1">📦 数据导出</h3>
+        <h3 className="font-semibold text-textPrimary mb-1">数据导出</h3>
         <p className="text-sm text-textMuted mb-5">两种备份格式，按需选择。</p>
 
         {/* 完整备份 */}
         <div className="bg-mint-400/5 border border-mint-400/20 rounded-xl p-4 mb-3">
           <div className="flex items-start gap-3">
-            <span className="text-lg shrink-0">🗄️</span>
+            <Database size={20} className="text-mint-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-mint-400">完整备份（推荐）</h4>
               <p className="text-xs text-textSecondary mt-1">
@@ -619,7 +619,7 @@ function BackupTab() {
         {/* 仅数据库 */}
         <div className="bg-canvas border border-border rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <span className="text-lg shrink-0">🗃️</span>
+            <Database size={20} className="text-textSecondary shrink-0" />
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-textPrimary">仅数据库</h4>
               <p className="text-xs text-textSecondary mt-1">
@@ -640,15 +640,15 @@ function BackupTab() {
 
       {/* ========== 导入区 ========== */}
       <div className="bg-surface rounded-xl border border-rose-500/30 p-5">
-        <h3 className="font-semibold text-textPrimary mb-1">📥 数据恢复</h3>
+        <h3 className="font-semibold text-textPrimary mb-1">数据恢复</h3>
         <p className="text-sm text-rose-400 mb-5">
-          ⚠️ 恢复将<strong>覆盖</strong>当前所有数据，请确认备份文件无误后再操作。
+          恢复将<strong>覆盖</strong>当前所有数据，请确认备份文件无误后再操作。
         </p>
 
         {/* 完整恢复 */}
         <div className="bg-rose-400/5 border border-rose-400/20 rounded-xl p-4 mb-3">
           <div className="flex items-start gap-3">
-            <span className="text-lg shrink-0">🗄️</span>
+            <Database size={20} className="text-rose-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-rose-400">完整恢复</h4>
               <p className="text-xs text-textSecondary mt-1">
@@ -670,7 +670,7 @@ function BackupTab() {
         {/* 仅数据库恢复 */}
         <div className="bg-canvas border border-border rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <span className="text-lg shrink-0">🗃️</span>
+            <Database size={20} className="text-textSecondary shrink-0" />
             <div className="flex-1 min-w-0">
               <h4 className="text-sm font-semibold text-textPrimary">仅数据库恢复</h4>
               <p className="text-xs text-textSecondary mt-1">
@@ -910,23 +910,23 @@ function OpenCLIAgentsSection() {
 //    文件操作是进程内 Python 实现（不走 opencli），浏览器操作和外 CLI 桥接走 opencli
 const OPENCLI_PRESETS = [
   // ── 文件操作（AI 在自己的沙箱目录里读写，进程内 Python 实现） ──
-  { pattern: 'file_read',   is_regex: false, description: '📖 读取文件 — 在自己文件空间里读取文本文件内容', category: '文件操作' },
-  { pattern: 'file_write',  is_regex: false, description: '✏️ 写入文件 — 创建或覆盖自己文件空间里的文件（自动建子目录）', category: '文件操作' },
-  { pattern: 'file_list',   is_regex: false, description: '📂 列出文件 — 浏览自己文件空间里的文件和子目录', category: '文件操作' },
-  { pattern: 'file_delete', is_regex: false, description: '🗑️ 删除文件 — 删除自己文件空间里不需要的文件', category: '文件操作' },
-  { pattern: 'file_info',   is_regex: false, description: 'ℹ️ 文件信息 — 查看文件大小、修改时间等元信息', category: '文件操作' },
-  { pattern: 'create_dir',  is_regex: false, description: '📁 创建目录 — 在自己文件空间里创建新文件夹', category: '文件操作' },
+  { pattern: 'file_read',   is_regex: false, description: '读取文件 — 在自己文件空间里读取文本文件内容', category: '文件操作' },
+  { pattern: 'file_write',  is_regex: false, description: '写入文件 — 创建或覆盖自己文件空间里的文件（自动建子目录）', category: '文件操作' },
+  { pattern: 'file_list',   is_regex: false, description: '列出文件 — 浏览自己文件空间里的文件和子目录', category: '文件操作' },
+  { pattern: 'file_delete', is_regex: false, description: '删除文件 — 删除自己文件空间里不需要的文件', category: '文件操作' },
+  { pattern: 'file_info',   is_regex: false, description: '文件信息 — 查看文件大小、修改时间等元信息', category: '文件操作' },
+  { pattern: 'create_dir',  is_regex: false, description: '创建目录 — 在自己文件空间里创建新文件夹', category: '文件操作' },
   // ── 浏览器自动化（操控已登录的 Chrome 浏览器） ──
-  { pattern: 'browser',   is_regex: false, description: '🌐 浏览器操作 — AI 能打开网页、截图、点击、填表、抓取内容', category: '浏览器自动化' },
-  { pattern: 'list',      is_regex: false, description: '📋 列出命令 — AI 查看当前可用的所有 OpenCLI 命令', category: '浏览器自动化' },
+  { pattern: 'browser',   is_regex: false, description: '浏览器操作 — AI 能打开网页、截图、点击、填表、抓取内容', category: '浏览器自动化' },
+  { pattern: 'list',      is_regex: false, description: '列出命令 — AI 查看当前可用的所有 OpenCLI 命令', category: '浏览器自动化' },
   // ── 外部 CLI 桥接（将已有命令行工具接入 OpenCLI） ──
-  { pattern: 'gh .*',     is_regex: true,  description: '🐙 GitHub CLI — 浏览仓库、PR、Issue、搜索代码（需 gh CLI 已登录）', category: '外部 CLI 桥接' },
-  { pattern: 'docker .*', is_regex: true,  description: '🐳 Docker — 管理容器、镜像、查看运行状态', category: '外部 CLI 桥接' },
-  { pattern: 'obsidian .*', is_regex: true, description: '📝 Obsidian — 读写笔记、搜索知识库', category: '外部 CLI 桥接' },
-  { pattern: 'vercel .*', is_regex: true,  description: '▲ Vercel — 部署网站、查看项目、管理域名', category: '外部 CLI 桥接' },
-  { pattern: 'tg .*',     is_regex: true,  description: '📨 Telegram CLI — 收发消息、管理频道', category: '外部 CLI 桥接' },
-  { pattern: 'discord .*', is_regex: true, description: '💬 Discord CLI — 发消息、管理服务器', category: '外部 CLI 桥接' },
-  { pattern: 'wx .*',     is_regex: true,  description: '💚 微信 CLI — 下载公众号文章、管理消息', category: '外部 CLI 桥接' },
+  { pattern: 'gh .*',     is_regex: true,  description: 'GitHub CLI — 浏览仓库、PR、Issue、搜索代码（需 gh CLI 已登录）', category: '外部 CLI 桥接' },
+  { pattern: 'docker .*', is_regex: true,  description: 'Docker — 管理容器、镜像、查看运行状态', category: '外部 CLI 桥接' },
+  { pattern: 'obsidian .*', is_regex: true, description: 'Obsidian — 读写笔记、搜索知识库', category: '外部 CLI 桥接' },
+  { pattern: 'vercel .*', is_regex: true,  description: 'Vercel — 部署网站、查看项目、管理域名', category: '外部 CLI 桥接' },
+  { pattern: 'tg .*',     is_regex: true,  description: 'Telegram CLI — 收发消息、管理频道', category: '外部 CLI 桥接' },
+  { pattern: 'discord .*', is_regex: true, description: 'Discord CLI — 发消息、管理服务器', category: '外部 CLI 桥接' },
+  { pattern: 'wx .*',     is_regex: true,  description: '微信 CLI — 下载公众号文章、管理消息', category: '外部 CLI 桥接' },
 ]
 
 function OpenCLICommandsSection() {
@@ -1004,7 +1004,7 @@ function OpenCLICommandsSection() {
       <div className="bg-surface rounded-xl border border-border p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-semibold text-textPrimary">⭐ 预设命令（新手一键添加）</h3>
+            <h3 className="font-semibold text-textPrimary">预设命令（新手一键添加）</h3>
             <p className="text-xs text-textMuted mt-1">
               以下是 AI 最常用的命令，点击「添加」即可加入白名单。已添加的命令不会重复添加。
             </p>
@@ -1014,7 +1014,7 @@ function OpenCLICommandsSection() {
             disabled={addingPresets}
             className="px-4 py-2 bg-mint-500 text-white rounded-xl hover:bg-mint-400 disabled:opacity-50 text-sm font-medium transition-colors"
           >
-            {addingPresets ? '添加中...' : '🚀 一键添加全部预设'}
+            {addingPresets ? '添加中...' : '一键添加全部预设'}
           </button>
         </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, MessageSquare } from 'lucide-react'
+import { Search, X, MessageSquare, Bot, User } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
 
@@ -126,7 +126,7 @@ export default function SearchOverlay() {
                       {item.name}
                     </span>
                     <span className="text-xs text-textMuted shrink-0">
-                      {item.type === 'ai' ? '🤖AI' : '👤'}
+                      {item.type === 'ai' ? <Bot size={12} className="inline" /> : <User size={12} className="inline" />}
                     </span>
                     {item.state && (
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${getStateDotColor(item.state)}`} />

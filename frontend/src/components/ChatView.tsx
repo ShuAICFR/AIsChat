@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
-import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon } from 'lucide-react'
+import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Message {
@@ -342,7 +342,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         id: -Date.now(),
         sender_type: 'system',
         sender_id: 0,
-        sender_name: '📢 群公告',
+        sender_name: '群公告',
         content: d.content,
         reply_to: null,
         created_at: new Date().toISOString(),
@@ -759,7 +759,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                 <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(m.state)}`} />
                 <span className="font-medium">{m.name}</span>
                 <span className="text-textMuted text-xs ml-auto">
-                  {m.type === 'ai' ? '🤖 AI' : '👤'}
+                  {m.type === 'ai' ? <><Bot size={12} className="inline" /> AI</> : <User size={12} className="inline" />}
                 </span>
               </button>
             ))}

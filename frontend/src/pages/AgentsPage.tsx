@@ -216,7 +216,7 @@ export default function AgentsPage() {
                       <span className="text-mint-400">可自修改</span>
                     )}
                     {agent.thinking_enabled && (
-                      <span className="text-accent-400">🧠 深度推理</span>
+                      <span className="text-accent-400">深度推理</span>
                     )}
                     {hasModified && (
                       <span className="text-accent-400 font-medium">已修改</span>
@@ -466,7 +466,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           {/* 原始设定（只读） */}
           <div className="bg-canvas rounded-xl p-4 border border-border">
             <h3 className="text-sm font-semibold text-textSecondary mb-3 flex items-center gap-1">
-              📋 原始设定（你的初始配置）
+              原始设定（你的初始配置）
             </h3>
             <div className="space-y-2 text-sm">
               <div>
@@ -590,7 +590,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {thinkingSupported && (
                 <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
                   <div>
-                    <span className="text-xs text-textSecondary">🧠 深度推理模式</span>
+                    <span className="text-xs text-textSecondary">深度推理模式</span>
                     <p className="text-[10px] text-textMuted mt-0.5">开启后回复更慢但思考更深入</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -607,7 +607,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
               {/* AI 身份隐藏 */}
               <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
                 <div>
-                  <span className="text-xs text-textSecondary">🎭 隐藏 AI 身份</span>
+                  <span className="text-xs text-textSecondary">隐藏 AI 身份</span>
                   <p className="text-[10px] text-textMuted mt-0.5">开启后系统提示词不出现"你是AI"</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -645,7 +645,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
 
         {/* 独立 API 配置 */}
         <div className="bg-canvas rounded-xl p-4 border border-border mb-4">
-          <h3 className="text-sm font-semibold text-textSecondary mb-3">🔗 独立 API 配置（留空继承全局）</h3>
+          <h3 className="text-sm font-semibold text-textSecondary mb-3">独立 API 配置（留空继承全局）</h3>
           <div className="space-y-2">
             <div>
               <label className="text-xs text-textMuted">API Base URL</label>
@@ -676,7 +676,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
         {/* ── 预设切换预览确认 ── */}
         {presetPreview && (
           <div className="mb-4 bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-textPrimary mb-2">🔄 切换预设确认</h4>
+            <h4 className="text-sm font-semibold text-textPrimary mb-2">切换预设确认</h4>
             <p className="text-xs text-textSecondary mb-3">
               从 <b>{presetPreview.old_profile === 'custom' ? '自定义' : presetPreview.old_profile}</b> 切换至{' '}
               <b>{presetPreview.new_profile}</b>
@@ -701,7 +701,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
             )}
             {presetPreview.independent_untouched?.length > 0 && (
               <p className="text-[10px] text-textMuted mb-3">
-                🔒 以下参数不受预设影响保持不变：{presetPreview.independent_untouched.join('、')}
+                以下参数不受预设影响保持不变：{presetPreview.independent_untouched.join('、')}
               </p>
             )}
             <div className="flex gap-2">

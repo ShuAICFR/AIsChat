@@ -76,7 +76,7 @@ function FederationShareSection({ groupId }: { groupId: number }) {
         className="w-full flex items-center justify-between py-0.5"
       >
         <div className="text-left">
-          <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
           <div className="text-xs text-textMuted">点击加载已连接的对等端</div>
         </div>
         {loading ? <Loader2 size={16} className="animate-spin text-textMuted" /> : <span className="text-xs text-primary-400">加载</span>}
@@ -89,7 +89,7 @@ function FederationShareSection({ groupId }: { groupId: number }) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+            <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
             <div className="text-xs text-textMuted">暂无可用的已连接对等端</div>
           </div>
         </div>
@@ -106,7 +106,7 @@ function FederationShareSection({ groupId }: { groupId: number }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-textPrimary font-medium">🌐 联邦共享</div>
+          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />联邦共享</div>
           <div className="text-xs text-textMuted">
             已共享给 {shares.length} 个对等端，消息将自动转发
           </div>

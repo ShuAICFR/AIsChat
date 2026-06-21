@@ -11,6 +11,8 @@ class MessageResponse(BaseModel):
     sender_type: str
     sender_id: int
     sender_name: str | None = None
+    sender_avatar_url: str | None = None
+    source_public_id: str | None = None
     content: str
     reply_to: int | None = None
     attachments: list[dict] | None = None  # [{file_id, name, path, size, mime_type}, ...]

@@ -386,15 +386,15 @@ async def _get_messages(
     result = await db.execute(query)
     messages = result.scalars().all()
 
-    # 收集所有发送者 ID，批量查名称和类型
+    # 收集所有发送者 ID，批量查名称、类型和头像
     sender_ids = {m.sender_id for m in messages}
     sender_info: dict[int, dict] = {}
     if sender_ids:
         result = await db.execute(
-            select(User.id, User.username, User.type).where(User.id.in_(sender_ids))
+            select(User.id, User.username, User.type, User.avatar_url).where(User.id.in_(sender_ids))
         )
         for row in result.all():
-            sender_info[row[0]] = {"name": row[1], "type": row[2] or "human"}
+            sender_info[row[0]] = {"name": row[1], "type": row[2] or "human", "avatar_url": row[3]}
 
     # 按时间升序排列（前端从上到下显示）
     sorted_messages = sorted(messages, key=lambda m: m.id) if after_id else list(reversed(messages))
@@ -405,6 +405,7 @@ async def _get_messages(
             "sender_id": m.sender_id,
             "sender_name": sender_info.get(m.sender_id, {}).get("name", f"用户{m.sender_id}"),
             "sender_type": sender_info.get(m.sender_id, {}).get("type", "human"),
+            "sender_avatar_url": sender_info.get(m.sender_id, {}).get("avatar_url"),
             "content": m.content,
             "reply_to": m.reply_to,
             "read_at": str(m.read_at) if m.read_at else None,

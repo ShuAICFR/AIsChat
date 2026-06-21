@@ -11,8 +11,30 @@ from app.models.dm import DMSession, DMMessage
 from app.models.user import User
 from app.models.agent import Agent
 from app.models.federation import FederationDMShare
+from app.models.friendship import Friendship
 
 logger = logging.getLogger(__name__)
+
+
+async def _require_friendship(db: AsyncSession, user_a_id: int, user_b_id: int):
+    """校验两个用户是否可以私信。规则：human→human 必须互为好友，涉及 AI 则免校验。"""
+    # 查双方类型
+    result = await db.execute(
+        select(User.type).where(User.id.in_([user_a_id, user_b_id]))
+    )
+    types = {row[0] for row in result.all()}
+    # 只要有一方是 AI，允许自由私信
+    if "ai" in types:
+        return
+    # 双方都是人类，检查是否互为好友（双向）
+    friendship = await db.execute(
+        select(Friendship).where(
+            ((Friendship.user_id == user_a_id) & (Friendship.friend_id == user_b_id) & (Friendship.friend_type == "human")) |
+            ((Friendship.user_id == user_b_id) & (Friendship.friend_id == user_a_id) & (Friendship.friend_type == "human"))
+        )
+    )
+    if not friendship.first():
+        raise ValueError("你们还不是好友，无法发送私信。请先添加好友后再试。")
 
 
 def generate_dm_session_id(user_a_id: int, user_b_id: int) -> str:
@@ -46,6 +68,8 @@ async def get_or_create_dm_session(
 
     is_new = False
     if session is None:
+        # 新建会话前校验：human→human 必须互为好友
+        await _require_friendship(db, current_user_id, target_user_id)
         is_new = True
         user_ids = sorted([current_user_id, target_user_id])
         session = DMSession(
@@ -242,6 +266,10 @@ async def send_dm_message(
 
     if sender_id not in (session.user1_id, session.user2_id):
         raise ValueError("无权在此会话中发言")
+
+    # 校验好友关系（human→human 必须互为好友）
+    receiver_id = session.user2_id if session.user1_id == sender_id else session.user1_id
+    await _require_friendship(db, sender_id, receiver_id)
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     msg = DMMessage(

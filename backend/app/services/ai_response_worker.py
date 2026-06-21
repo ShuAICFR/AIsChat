@@ -322,7 +322,7 @@ async def _maybe_trigger_ai_reply(
         logger.info(f"AI {agent.name}({agent_id}) 速率限制，跳过")
         return
 
-    # 5. 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
+    # 5. 获取 API 配置（v0.5.0: 公共辅助函数；v1.0.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}, "
                 f"credit_source={credit_source}")
@@ -483,7 +483,7 @@ async def _tool_call_loop(
 
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
-    v0.6.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
+    v1.0.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
     """
     if effective_cfg is None:
         effective_cfg = {}
@@ -714,7 +714,7 @@ async def _tool_call_loop(
             await save_current_task(db, agent.id, last_task)
         except Exception:
             pass
-    # v0.6.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
+    # v1.0.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
     if total_usage["api_calls"] > 0 and total_usage["total_tokens"] > 0:
         try:
             from app.services.quota_service import deduct_credit
@@ -768,7 +768,7 @@ async def _trigger_dm_ai_reply(
     from app.services.agent_service import get_effective_config as _get_eff_cfg
     effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
-    # 获取 API 配置（v0.6.0: 四层优先链含池 Key）
+    # 获取 API 配置（v1.0.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 中断标记：如果 AI 之前在忙，记录中断
@@ -1022,7 +1022,7 @@ async def _process_alarm_event(db, event: dict):
         )
         await db.flush()
 
-    # 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
+    # 获取 API 配置（v0.5.0: 公共辅助函数；v1.0.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 构建系统提示词（层级化：内核 + 人格 + 协议）

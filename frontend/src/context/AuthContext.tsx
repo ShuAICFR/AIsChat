@@ -17,7 +17,7 @@ interface User {
   avatar_url: string | null
   bio: string | null
   created_at: string | null
-  assigned_pool_key_name: string | null  // v0.6.0: 绑定的池 Key 名
+  assigned_pool_key_name: string | null  // v1.0.0: 绑定的池 Key 名
 }
 
 interface AuthContextType {

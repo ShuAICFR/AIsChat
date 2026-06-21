@@ -50,8 +50,8 @@ async def run_migrations():
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
-            await _migrate_api_key_pool_tables(db)    # v0.6.0 API Key 池 + 用户绑定 + 用量日志
-            await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
+            await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志
+            await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1097,7 +1097,7 @@ async def _migrate_agent_metrics(db):
 
 
 async def _migrate_api_key_pool_tables(db):
-    """v0.6.0: API Key 池 + 用户绑定 + 用量日志"""
+    """v1.0.0: API Key 池 + 用户绑定 + 用量日志"""
     logger.info("  🔧 迁移 API Key 池系统...")
     created_any = False
 
@@ -1159,7 +1159,7 @@ async def _migrate_api_key_pool_tables(db):
 
 
 async def _migrate_redemption_code_details(db):
-    """v0.6.0: 兑换码增强——备注、最大用量、API 池标记、创建时间"""
+    """v1.0.0: 兑换码增强——备注、最大用量、API 池标记、创建时间"""
     logger.info("  🏷️ 迁移兑换码详细字段...")
     created_any = False
 

@@ -422,9 +422,9 @@ function CodesTab() {
   const [quota, setQuota] = useState(3)
   const [days, setDays] = useState(30)
   const [codeType, setCodeType] = useState('ai_quota')
-  const [note, setNote] = useState('')              // v0.6.0
-  const [maxUsage, setMaxUsage] = useState<number | null>(null)  // v0.6.0
-  const [isApiPool, setIsApiPool] = useState(false)  // v0.6.0
+  const [note, setNote] = useState('')              // v1.0.0
+  const [maxUsage, setMaxUsage] = useState<number | null>(null)  // v1.0.0
+  const [isApiPool, setIsApiPool] = useState(false)  // v1.0.0
   const [generatedCode, setGeneratedCode] = useState('')
   const [generating, setGenerating] = useState(false)
 

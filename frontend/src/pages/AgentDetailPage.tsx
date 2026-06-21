@@ -727,14 +727,14 @@ export default function AgentDetailPage() {
                         disabled={logExporting}
                         className="text-xs text-textMuted hover:text-textSecondary transition-colors"
                       >
-                        JSON
+                        下载 JSON
                       </button>
                       <button
                         onClick={() => exportLog(log.id, 'md')}
                         disabled={logExporting}
                         className="text-xs text-textMuted hover:text-textSecondary transition-colors"
                       >
-                        Markdown
+                        下载 Markdown
                       </button>
                     </div>
                   </div>
@@ -761,13 +761,13 @@ export default function AgentDetailPage() {
                         onClick={() => exportLog(selectedLog.id, 'json')}
                         className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
                       >
-                        JSON
+                        下载 JSON
                       </button>
                       <button
                         onClick={() => exportLog(selectedLog.id, 'md')}
                         className="text-xs px-2 py-1 rounded border border-border hover:bg-canvas text-textSecondary transition-colors"
                       >
-                        MD
+                        下载 MD
                       </button>
                       <button onClick={() => setSelectedLog(null)} className="p-1 rounded hover:bg-elevated text-textMuted">
                         <X size={16} />

@@ -48,8 +48,8 @@ export default function MePage() {
 
   useEffect(() => {
     // 加载我的 AI 列表
-    api.get<{ items: AgentBrief[] }>('/agents').then(r => {
-      setAgents((r.items || []).slice(0, 3))
+    api.get<AgentBrief[]>('/agents').then(r => {
+      setAgents((Array.isArray(r) ? r : []).slice(0, 3))
     }).catch(() => {})
 
     // 加载用量概览

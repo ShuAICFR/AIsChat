@@ -7,6 +7,8 @@ import DMPage from './pages/DMPage'
 import AgentsPage from './pages/AgentsPage'
 import AgentDetailPage from './pages/AgentDetailPage'
 import SettingsPage from './pages/SettingsPage'
+import MePage from './pages/MePage'
+import UsagePage from './pages/UsagePage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 
@@ -48,6 +50,8 @@ export const router = createBrowserRouter([
       { path: 'friends', element: <FriendsPage /> },
       { path: 'agents', element: <AgentsPage /> },
       { path: 'agents/:id', element: <AgentDetailPage /> },
+      { path: 'me', element: <MePage /> },
+      { path: 'me/usage', element: <UsagePage /> },
       { path: 'settings', element: <SettingsPage /> },
       {
         path: 'admin',

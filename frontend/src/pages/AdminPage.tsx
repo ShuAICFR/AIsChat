@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3 } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
+import UsageDashboardTab from '../components/UsageDashboardTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: '概览', icon: Activity },
@@ -19,6 +20,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: 'backup', label: '备份', icon: Database },
   { key: 'logs', label: '审计', icon: FileText },
   { key: 'federation', label: '联邦', icon: Globe },
+  { key: 'usage', label: '用量分析', icon: BarChart3 },
 ]
 
 export default function AdminPage() {
@@ -84,6 +86,7 @@ export default function AdminPage() {
         {activeTab === 'logs' && <LogsTab />}
         {activeTab === 'federation' && <FederationTab />}
         {activeTab === 'convlog' && <ConversationLogTab />}
+        {activeTab === 'usage' && <UsageDashboardTab />}
       </div>
     </div>
   )
@@ -341,8 +344,9 @@ function CodesTab() {
 
   const CODE_TYPES: Record<string, string> = {
     ai_quota: '🤖 AI创建额度',
-    api_credit: '💳 API调用额度',
-    file_size: '📁 文件存储额度',
+    api_credit: '💳 通用API额度',
+    agent_bundle: '📦 AI包断额度',
+    file_quota: '📁 文件存储配额',
   }
 
   const loadCodes = async () => {
@@ -391,7 +395,7 @@ function CodesTab() {
           <div>
             <label className="block text-xs mb-1 text-textSecondary">额度</label>
             <input type="number" value={quota} onChange={(e) => setQuota(parseInt(e.target.value) || 0)}
-              min={1} max={codeType === 'file_size' ? 1024 : 100}
+              min={1} max={(codeType === 'file_size' || codeType === 'file_quota') ? 1024 : 100}
               className="w-24 px-2 py-1.5 border border-border bg-canvas rounded-xl text-sm text-textPrimary" />
           </div>
           <div>
@@ -435,7 +439,7 @@ function CodesTab() {
                 <tr key={c.code} className="border-b border-border/50">
                   <td className="py-2 px-3 font-mono text-xs text-textPrimary">{c.code}</td>
                   <td className="py-2 px-3 text-xs text-textSecondary">{CODE_TYPES[c.code_type] || c.code_type || '🤖 AI创建额度'}</td>
-                  <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{c.code_type === 'file_size' ? ' MB' : ''}</td>
+                  <td className="py-2 px-3 text-textPrimary">{c.quota_amount}{(c.code_type === 'file_size' || c.code_type === 'file_quota') ? ' MB' : ''}</td>
                   <td className="py-2 px-3 text-textSecondary">{c.expires_at ? new Date(c.expires_at).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="py-2 px-3">
                     {c.used_by ? (

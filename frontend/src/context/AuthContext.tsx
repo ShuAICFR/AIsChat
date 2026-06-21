@@ -8,10 +8,14 @@ interface User {
   is_active: boolean
   ai_quota: number
   api_credit: number
+  agent_bundle_credit: number
+  file_quota_mb: number
   has_api_key: boolean
   timezone: string
   language: string
   ui_prefs: Record<string, any>
+  avatar_url: string | null
+  created_at: string | null
 }
 
 interface AuthContextType {

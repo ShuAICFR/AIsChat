@@ -1,11 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { MessageCircle, Bot, Settings, Users } from 'lucide-react'
+import { MessageCircle, Bot, User, Users } from 'lucide-react'
 
 const tabs = [
   { path: '/chat', label: '聊天', icon: MessageCircle },
   { path: '/friends', label: '好友', icon: Users },
   { path: '/agents', label: 'AI', icon: Bot },
-  { path: '/settings', label: '设置', icon: Settings },
+  { path: '/me', label: '我的', icon: User },
 ]
 
 interface MobileNavProps {
@@ -20,7 +20,7 @@ export default function MobileNav({ closeDrawer }: MobileNavProps) {
     if (path === '/chat') return location.pathname.startsWith('/chat') || location.pathname === '/'
     if (path === '/friends') return location.pathname.startsWith('/friends')
     if (path === '/agents') return location.pathname.startsWith('/agents')
-    if (path === '/settings') return location.pathname.startsWith('/settings')
+    if (path === '/me') return location.pathname.startsWith('/me')
     return false
   }
 

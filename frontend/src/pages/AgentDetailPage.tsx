@@ -31,6 +31,10 @@ interface Agent {
   ai_type: string
   config_profile: string
   delay_reply_enabled: boolean | null
+  max_tool_rounds: number
+  alarm_max_tool_rounds: number
+  force_alarm_on_end: boolean
+  max_alarms: number
   api_credit_cost: number
   api_base_url: string | null
   has_api_key: boolean
@@ -253,6 +257,15 @@ export default function AgentDetailPage() {
   const handleToggleDelayReply = async (value: boolean | null) => {
     try {
       const data = await api.put(`/agents/${agentId}/config`, { delay_reply_enabled: value })
+      setAgent(data)
+    } catch (err: any) {
+      alert(err.message || '更新失败')
+    }
+  }
+
+  const handleUpdateAgentField = async (field: string, value: any) => {
+    try {
+      const data = await api.put(`/agents/${agentId}/config`, { [field]: value })
       setAgent(data)
     } catch (err: any) {
       alert(err.message || '更新失败')
@@ -519,6 +532,67 @@ export default function AgentDetailPage() {
                     <option value="on">开启</option>
                     <option value="off">关闭</option>
                   </select>
+                </div>
+              </div>
+              {/* 工具调用 & 闹钟 */}
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <h4 className="text-xs font-medium text-textSecondary mb-3">工具调用 & 闹钟</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-textMuted">最大工具轮次：</span>
+                    <span className="inline-flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => handleUpdateAgentField('max_tool_rounds', Math.max(1, (agent.max_tool_rounds || 3) - 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >−</button>
+                      <span className="text-textPrimary font-mono w-5 text-center">{agent.max_tool_rounds || 3}</span>
+                      <button
+                        onClick={() => handleUpdateAgentField('max_tool_rounds', Math.min(20, (agent.max_tool_rounds || 3) + 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >+</button>
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-textMuted">闹钟最大轮次：</span>
+                    <span className="inline-flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => handleUpdateAgentField('alarm_max_tool_rounds', Math.max(1, (agent.alarm_max_tool_rounds || 10) - 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >−</button>
+                      <span className="text-textPrimary font-mono w-5 text-center">{agent.alarm_max_tool_rounds || 10}</span>
+                      <button
+                        onClick={() => handleUpdateAgentField('alarm_max_tool_rounds', Math.min(50, (agent.alarm_max_tool_rounds || 10) + 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >+</button>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-textMuted">强制闹钟：</span>
+                    <button
+                      onClick={() => handleUpdateAgentField('force_alarm_on_end', !agent.force_alarm_on_end)}
+                      className={`relative w-9 h-5 rounded-full transition-colors ${
+                        agent.force_alarm_on_end ? 'bg-mint-400' : 'bg-border'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        agent.force_alarm_on_end ? 'translate-x-4.5' : 'translate-x-0.5'
+                      }`} style={agent.force_alarm_on_end ? {transform: 'translateX(18px)'} : {transform: 'translateX(2px)'}} />
+                    </button>
+                  </div>
+                  <div>
+                    <span className="text-textMuted">最大闹钟数：</span>
+                    <span className="inline-flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => handleUpdateAgentField('max_alarms', Math.max(1, (agent.max_alarms || 10) - 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >−</button>
+                      <span className="text-textPrimary font-mono w-5 text-center">{agent.max_alarms || 10}</span>
+                      <button
+                        onClick={() => handleUpdateAgentField('max_alarms', Math.min(50, (agent.max_alarms || 10) + 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >+</button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

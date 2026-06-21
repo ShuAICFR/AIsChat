@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { MessageCircle, Bot, Settings, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink, Users } from 'lucide-react'
+import { MessageCircle, Bot, User, Shield, LogOut, Menu, X, ChevronLeft, BookOpen, ExternalLink, Users } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import SearchOverlay from './SearchOverlay'
 
@@ -9,7 +9,7 @@ const mainNavItems = [
   { to: '/chat', label: '聊天', icon: MessageCircle },
   { to: '/friends', label: '好友', icon: Users },
   { to: '/agents', label: '我的 AI', icon: Bot },
-  { to: '/settings', label: '设置', icon: Settings },
+  { to: '/me', label: '我的', icon: User },
 ]
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -132,7 +132,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
             { to: '/chat', label: '聊天', icon: MessageCircle },
             { to: '/friends', label: '好友', icon: Users },
             { to: '/agents', label: 'AI', icon: Bot },
-            { to: '/settings', label: '设置', icon: Settings },
+            { to: '/me', label: '我的', icon: User },
           ].map((item) => (
             <NavLink
               key={item.to}

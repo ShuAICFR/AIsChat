@@ -41,6 +41,11 @@ CORE_IDENTITY = (
     "括号表达区分：描述你能做到的事 → 直接调工具；描述角色情感/动作 → 括号表达完全OK。\n"
     "可在一次回复中同时调用多个工具。\n"
     "\n"
+    "## 连发消息\n"
+    "你可以在一次回复中连续调用多次 send_message，模拟人类连续表达的习惯——\n"
+    "想到什么就发什么，不需要等思考完整了再一次说完。\n"
+    "思考内容（reasoning）仅用于组织思路，不会发送给他人。\n"
+    "\n"
     "## 深度推理\n"
     "用 toggle_thinking 自主开关。闲聊→关闭（快速）；复杂分析/代码/决策→开启（深度思考）；完成后关闭。\n"
     "当前群ID在「当前会话」中明确给出，不要猜、不要用用户ID代替群ID。\n"
@@ -251,15 +256,145 @@ async def _chat_completion_streaming(
     user_id: str | None = None,
 ) -> dict:
     """
-    SSE 流式聊天补全（v0.4.0 预留接口）。
+    SSE 流式聊天补全。
 
-    当前未实现，调用会抛出 NotImplementedError。
-    实现计划：
-    - 使用 httpx 流式请求 + SSE 解析
-    - 逐 chunk yield 到 WebSocket（通过 ai_thinking/ai_typing 事件）
-    - 最终组装完整 content + tool_calls 返回
+    使用 httpx 流式请求，逐行解析 SSE（data: {...}\n\n），
+    累加 content / reasoning_content / tool_calls，最终返回与
+    非流式一致的完整 dict。
+
+    流式解析仅用于加速工具调用检测（不完整响应即可开始组装 tool_calls），
+    消息内容不逐字推送前端——最终仍由 send_message 整段发送。
     """
-    raise NotImplementedError("流式聊天补全尚未实现（v0.4.0 预留接口）")
+    url = f"{api_base_url}/v1/chat/completions"
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "top_p": top_p,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+
+    if presence_penalty != 0:
+        payload["presence_penalty"] = presence_penalty
+    if frequency_penalty != 0:
+        payload["frequency_penalty"] = frequency_penalty
+    if tools:
+        payload["tools"] = tools
+        payload["tool_choice"] = "auto"
+    if response_format:
+        payload["response_format"] = response_format
+    if thinking_enabled and settings.is_deepseek_api:
+        payload["thinking"] = {"type": "enabled"}
+    if user_id and settings.is_deepseek_api:
+        payload["user_id"] = user_id
+
+    full_content = ""
+    full_reasoning = ""
+    finish_reason = "stop"
+    usage: dict = {}
+
+    # 工具调用累加器（流式模式下 tool_calls 分多个 chunk 到达）
+    tool_call_acc: dict[int, dict] = {}  # index → {id, name, arguments}
+
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as response:
+            if response.status_code != 200:
+                error_text = (await response.aread()).decode()[:500]
+                logger.error(f"LLM API 错误 ({response.status_code}): {error_text}")
+                raise Exception(f"LLM API 错误 ({response.status_code}): {error_text}")
+
+            async for line in response.aiter_lines():
+                line = line.strip()
+                if not line or not line.startswith("data:"):
+                    continue
+
+                data_str = line[len("data:"):].strip()
+                if data_str == "[DONE]":
+                    break
+
+                try:
+                    chunk = json.loads(data_str)
+                except json.JSONDecodeError:
+                    logger.warning(f"SSE 解析失败: {data_str[:200]}")
+                    continue
+
+                # 提取 usage（通常只在最后一个 chunk）
+                if "usage" in chunk:
+                    chunk_usage = chunk["usage"]
+                    if chunk_usage:
+                        usage = dict(chunk_usage)
+                        completion_details = usage.pop("completion_tokens_details", None) or {}
+                        prompt_details = usage.pop("prompt_tokens_details", None) or {}
+                        usage["reasoning_tokens"] = completion_details.get("reasoning_tokens", 0)
+                        usage["cached_tokens"] = prompt_details.get("cached_tokens", 0)
+
+                choices = chunk.get("choices", [])
+                if not choices:
+                    continue
+
+                delta = choices[0].get("delta", {})
+                if not delta:
+                    # 可能是只含 finish_reason 的 chunk
+                    if choices[0].get("finish_reason"):
+                        finish_reason = choices[0]["finish_reason"]
+                    continue
+
+                # 累加文本内容
+                if delta.get("content"):
+                    full_content += delta["content"]
+
+                # 累加推理内容（仅日志记录，不推送前端）
+                if delta.get("reasoning_content"):
+                    full_reasoning += delta["reasoning_content"]
+
+                # 累加工具调用（增量到达）
+                if delta.get("tool_calls"):
+                    for tc in delta["tool_calls"]:
+                        idx = tc.get("index", 0)
+                        if idx not in tool_call_acc:
+                            tool_call_acc[idx] = {
+                                "id": tc.get("id", ""),
+                                "type": "function",
+                                "function": {
+                                    "name": "",
+                                    "arguments": "",
+                                },
+                            }
+                        acc = tool_call_acc[idx]
+                        if tc.get("id"):
+                            acc["id"] = tc["id"]
+                        func = tc.get("function", {})
+                        if func.get("name"):
+                            acc["function"]["name"] = func["name"]
+                        if func.get("arguments"):
+                            acc["function"]["arguments"] += func["arguments"]
+
+                # 记录 finish_reason
+                if choices[0].get("finish_reason"):
+                    finish_reason = choices[0]["finish_reason"]
+
+    # 组装最终 tool_calls（按 index 排序）
+    tool_calls = None
+    if tool_call_acc:
+        tool_calls = [
+            tool_call_acc[i]
+            for i in sorted(tool_call_acc.keys())
+        ]
+
+    result: dict = {
+        "content": full_content if full_content else None,
+        "tool_calls": tool_calls,
+        "usage": usage,
+        "finish_reason": finish_reason,
+    }
+    if full_reasoning:
+        result["reasoning_content"] = full_reasoning
+    return result
 
 
 def resolve_model(agent) -> str:

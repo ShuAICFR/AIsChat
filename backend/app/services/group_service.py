@@ -171,7 +171,7 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
                 if avatar_url:
                     member_avatars.append(avatar_url)
         except Exception:
-            pass
+            logger.warning("获取群聊 %d 成员头像失败，跳过", group.id, exc_info=True)
 
         groups.append({
             "id": group.id,

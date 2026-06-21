@@ -891,8 +891,129 @@ def _strip_delay_reply_from_manage_skills(tools: list[dict]) -> list[dict]:
 
 
 # ============================================================
-# 工具 Handler 函数
+# 工具格式校验（v1.1.0: 独立、无状态、可并发调用）
 # ============================================================
+
+# 懒加载的工具 schema 索引，首次调用 validate_tool_call 时构建
+_TOOL_SCHEMA_INDEX: dict[str, dict] | None = None
+
+
+def _build_tool_schema_index() -> dict[str, dict]:
+    """从 TOOL_DEFINITIONS 构建工具名 → 参数 schema 的索引"""
+    index: dict[str, dict] = {}
+    for t in TOOL_DEFINITIONS:
+        name = t["function"]["name"]
+        params = t["function"].get("parameters", {})
+        index[name] = {
+            "type": params.get("type", "object"),
+            "properties": params.get("properties", {}),
+            "required": params.get("required", []),
+        }
+    return index
+
+
+def _get_tool_schema_index() -> dict[str, dict]:
+    """获取工具 schema 索引（懒加载）"""
+    global _TOOL_SCHEMA_INDEX
+    if _TOOL_SCHEMA_INDEX is None:
+        _TOOL_SCHEMA_INDEX = _build_tool_schema_index()
+    return _TOOL_SCHEMA_INDEX
+
+
+def _python_type_name(value) -> str:
+    """返回值的 JSON Schema 类型名"""
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    if value is None:
+        return "null"
+    return type(value).__name__
+
+
+_TYPE_COMPAT: dict[str, tuple] = {
+    "string": (str,),
+    "integer": (int,),
+    "number": (int, float),
+    "boolean": (bool,),
+    "array": (list,),
+    "object": (dict,),
+    "null": (type(None),),
+}
+
+
+def _check_type(value, expected: str) -> bool:
+    """检查值是否兼容期望的 JSON Schema 类型"""
+    compat = _TYPE_COMPAT.get(expected, ())
+    if compat:
+        return isinstance(value, compat)
+    return True  # 未知类型放行
+
+
+def validate_tool_call(tool_name: str, arguments: dict) -> tuple[bool, str | None]:
+    """
+    校验工具调用格式。
+
+    纯函数：无 DB 访问、无全局状态依赖（首次调用时懒加载一次 schema 索引）。
+    可被并发安全调用。
+
+    参数:
+        tool_name: 工具名
+        arguments: 工具参数 dict
+
+    返回:
+        (True, None) — 校验通过
+        (False, "错误说明") — 校验失败，含具体的字段/类型/期望信息
+    """
+    index = _get_tool_schema_index()
+
+    # ── 1. 工具是否存在 ──
+    if tool_name not in index:
+        available = "、".join(sorted(index.keys()))
+        return False, f"未知工具「{tool_name}」。当前可用工具：{available}"
+
+    schema = index[tool_name]
+    props = schema["properties"]
+    required: list = schema["required"]
+
+    # ── 2. 必填字段检查 ──
+    for field in required:
+        if field not in arguments or arguments[field] is None:
+            # 构建期望格式说明
+            need_parts = [f"{f} ({props[f].get('type', 'any')})" for f in required]
+            got_parts = [f"{k}: {_python_type_name(v)}" for k, v in arguments.items()]
+            return False, (
+                f"工具 {tool_name} 的参数格式错误：缺少必填字段 {field}。"
+                f"期望格式：{{{', '.join(need_parts)}}}，"
+                f"实际收到：{{{', '.join(got_parts) if got_parts else '(空)'}}}"
+            )
+
+    # ── 3. 字段类型检查 ──
+    for key, value in arguments.items():
+        if key not in props:
+            continue  # 额外字段不拒绝（LLM 有时会加多余字段，宽容处理）
+        expected_type = props[key].get("type", "")
+        if not expected_type:
+            continue  # 无类型约束则跳过
+        # null 值且字段 nullable 时放行
+        if value is None and props[key].get("nullable"):
+            continue
+        if value is not None and not _check_type(value, expected_type):
+            got_type = _python_type_name(value)
+            return False, (
+                f"工具 {tool_name} 的参数格式错误：字段 {key} 期望类型为 {expected_type}，"
+                f"实际收到 {got_type}（值：{json.dumps(value, ensure_ascii=False)[:100]}）"
+            )
+
+    return True, None
 
 async def _handle_send_message(
     db: AsyncSession, agent_id: int, group_id: int,

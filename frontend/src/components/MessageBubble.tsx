@@ -18,6 +18,7 @@ interface MessageBubbleProps {
   senderType?: string
   senderId?: number
   thinking?: boolean
+  isTyping?: boolean
   sourcePublicId?: string | null
   attachments?: Array<{file_id: number, name: string, size: number, mime_type: string}> | null
   onAvatarClick?: (type: string, id: number, name: string, state?: string) => void
@@ -39,7 +40,7 @@ function fileIconColor(mimeType: string): string {
 
 export default function MessageBubble({
   senderName, senderAvatarUrl, content, isMine, createdAt, state,
-  senderType, senderId, thinking, sourcePublicId, attachments, onAvatarClick,
+  senderType, senderId, thinking, isTyping, sourcePublicId, attachments, onAvatarClick,
 }: MessageBubbleProps) {
   const { user } = useAuth()
   const lang = useLang()
@@ -56,10 +57,10 @@ export default function MessageBubble({
 
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
-      {/* 头像 — 思考时带脉动光环 */}
+      {/* 头像 — 思考/输入中时带脉动光环 */}
       <div className="relative shrink-0">
-        {/* 仅在 AI 思考中显示脉动 */}
-        {!isMine && thinking && (
+        {/* 仅在 AI 思考中/输入中显示脉动 */}
+        {!isMine && (thinking || isTyping) && (
           <div className="absolute -inset-0.5 w-10 h-10 rounded-full ai-pulse-active" />
         )}
         {/* 头像 */}
@@ -70,9 +71,9 @@ export default function MessageBubble({
             }
           }}
           className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
-          title={thinking ? `${senderName} 思考中...` : `查看 ${senderName} 资料`}
+          title={thinking ? `${senderName} 思考中...` : isTyping ? `${senderName} 输入中...` : `查看 ${senderName} 资料`}
         >
-          {thinking ? (
+          {(thinking || isTyping) ? (
             <span className="inline-flex gap-0.5">
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -85,7 +86,7 @@ export default function MessageBubble({
           )}
         </div>
         {/* 在线状态点 */}
-        {!isMine && state && !thinking && (
+        {!isMine && state && !thinking && !isTyping && (
           <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full ${stateColor} border-2 border-canvas`} />
         )}
       </div>
@@ -103,9 +104,14 @@ export default function MessageBubble({
           {thinking && (
             <span className="text-[10px] text-primary-400 animate-pulse font-medium">思考中...</span>
           )}
+          {isTyping && (
+            <span className="text-[10px] text-mint-400 animate-pulse font-medium">输入中...</span>
+          )}
         </div>
-        <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking ? 'opacity-70' : ''}`}>
-          {isMine ? (
+        <div className={`px-4 py-2.5 text-sm leading-relaxed ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}`}>
+          {isTyping ? (
+            <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />
+          ) : isMine ? (
             <span className="whitespace-pre-wrap">{content}</span>
           ) : (
             <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>

@@ -419,6 +419,7 @@ async def _maybe_trigger_ai_reply(
                     "agent_id": agent.id,
                     "agent_name": agent.name,
                     "group_id": group_id,
+                    "trigger": "user",
                 },
             },
         )
@@ -438,6 +439,7 @@ async def _maybe_trigger_ai_reply(
             effective_cfg=effective_cfg,
             credit_source=credit_source,
             pool_key_id=pool_key_id,
+            trigger="user",
         )
     finally:
         await manager.broadcast_to_group(
@@ -447,6 +449,7 @@ async def _maybe_trigger_ai_reply(
                 "data": {
                     "agent_id": agent.id,
                     "group_id": group_id,
+                    "trigger": "user",
                 },
             },
         )
@@ -475,6 +478,7 @@ async def _tool_call_loop(
     effective_cfg: dict | None = None,
     credit_source: str = "user_key",
     pool_key_id: int | None = None,
+    trigger: str = "user",
 ):
     """
     工具调用循环：LLM 必须通过工具调用来执行所有操作（包括发消息）。
@@ -484,6 +488,7 @@ async def _tool_call_loop(
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
     v1.0.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
+    v1.1.0: stream=True 流式调用 + 工具格式校验 + trigger 字段（user/auto）。
     """
     if effective_cfg is None:
         effective_cfg = {}
@@ -522,6 +527,7 @@ async def _tool_call_loop(
                 presence_penalty=effective_cfg["presence_penalty"] or 0.5,
                 frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
                 thinking_enabled=effective_cfg["thinking_enabled"],
+                stream=True,  # v1.1.0: 流式调用
             )
         except Exception as e:
             logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
@@ -632,8 +638,61 @@ async def _tool_call_loop(
                 arguments = json.loads(arguments_str)
             except json.JSONDecodeError:
                 arguments = {}
+                # v1.1.0: JSON 解析失败时注入具体错误
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": json.dumps({
+                        "error": True,
+                        "message": (
+                            f"工具 {tool_name} 的参数 JSON 格式无效，无法解析。"
+                            f"期望合法的 JSON 字符串，实际收到：{arguments_str[:200]}"
+                        ),
+                    }, ensure_ascii=False),
+                })
+                continue
+
+            # v1.1.0: 工具格式校验
+            from app.services.tool_registry import validate_tool_call
+            is_valid, validate_error = validate_tool_call(tool_name, arguments)
+            if not is_valid:
+                logger.warning(f"工具格式校验失败: {validate_error}")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "content": json.dumps({
+                        "error": True,
+                        "message": validate_error,
+                    }, ensure_ascii=False),
+                })
+                continue
 
             logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
+
+            # v1.1.0: 消息类工具推送"正在输入中…"状态
+            _typing_tools = ("send_message", "send_dm")
+            if tool_name in _typing_tools and trigger == "user":
+                _typing_data: dict = {
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "trigger": trigger,
+                }
+                if conversation_type == "dm" and session_id:
+                    _typing_data["session_id"] = session_id
+                elif group_id is not None:
+                    _typing_data["group_id"] = group_id
+                _typing_event = {
+                    "type": "ai_typing",
+                    "conversation_type": conversation_type,
+                    "data": _typing_data,
+                }
+                try:
+                    if conversation_type == "dm" and session_id:
+                        await manager.broadcast_to_dm(session_id, _typing_event)
+                    elif group_id is not None:
+                        await manager.broadcast_to_group(group_id, _typing_event)
+                except Exception:
+                    pass  # 推送失败不阻塞工具执行
 
             # 追踪"值得中断恢复的任务"（同时作为工具结果摘要注入给 LLM）
             _work_tools = {
@@ -815,6 +874,7 @@ async def _trigger_dm_ai_reply(
                     "agent_id": agent.id,
                     "agent_name": agent.name,
                     "session_id": session_id,
+                    "trigger": "user",
                 },
             },
         )
@@ -835,6 +895,7 @@ async def _trigger_dm_ai_reply(
             effective_cfg=effective_cfg,
             credit_source=credit_source,
             pool_key_id=pool_key_id,
+            trigger="user",
         )
     finally:
         await manager.broadcast_to_dm(
@@ -845,6 +906,7 @@ async def _trigger_dm_ai_reply(
                 "data": {
                     "agent_id": agent.id,
                     "session_id": session_id,
+                    "trigger": "user",
                 },
             },
         )
@@ -1122,6 +1184,7 @@ async def _process_alarm_event(db, event: dict):
             effective_cfg=effective_cfg,
             credit_source=credit_source,
             pool_key_id=pool_key_id,
+            trigger="auto",  # v1.1.0: 闹钟不显示"正在思考/输入中"
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

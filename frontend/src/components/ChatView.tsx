@@ -43,6 +43,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     type: string; id: number; name: string; state?: string
   } | null>(null)
   const [thinkingAgents, setThinkingAgents] = useState<Map<number, string>>(new Map())
+  const [typingAgents, setTypingAgents] = useState<Map<number, string>>(new Map())
   // @提及 自动补全（仅群聊）
   const [groupMembers, setGroupMembers] = useState<Array<{ type: string; id: number; name: string; state?: string }>>([])
   const [mentionActive, setMentionActive] = useState(false)
@@ -226,6 +227,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
   useEffect(() => {
     if (!conversationId) return
     setThinkingAgents(new Map())
+    setTypingAgents(new Map())
     setMessages([])
     setHasMoreBefore(false)
     setHasMoreAfter(false)
@@ -312,9 +314,17 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           next.delete(msg.sender_id)
           return next
         })
+        // AI 消息到达 → 清除"输入中"状态
+        setTypingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(msg.sender_id)
+          return next
+        })
       }
     } else if (lastMessage.type === 'ai_thinking') {
       const d = lastMessage.data
+      // v1.1.0: 仅用户触发的对话显示"思考中"（闹钟等自主行为不显示）
+      if (d.trigger === 'auto') return
       const thinkingBelongsToHere =
         (conversationType === 'group' && d.group_id === conversationId) ||
         (conversationType === 'dm' && d.session_id === conversationId)
@@ -326,6 +336,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       })
     } else if (lastMessage.type === 'ai_thinking_end') {
       const d = lastMessage.data
+      if (d.trigger === 'auto') return
       const endBelongsToHere =
         (conversationType === 'group' && d.group_id === conversationId) ||
         (conversationType === 'dm' && d.session_id === conversationId)
@@ -333,6 +344,31 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       setThinkingAgents((prev) => {
         const next = new Map(prev)
         next.delete(d.agent_id)
+        return next
+      })
+      // thinking 结束也清除 typing（兜底）
+      setTypingAgents((prev) => {
+        const next = new Map(prev)
+        next.delete(d.agent_id)
+        return next
+      })
+    } else if (lastMessage.type === 'ai_typing') {
+      // v1.1.0: AI 准备发送消息，"输入中"是"思考"的下一阶段
+      const d = lastMessage.data
+      if (d.trigger === 'auto') return
+      const typingBelongsToHere =
+        (conversationType === 'group' && d.group_id === conversationId) ||
+        (conversationType === 'dm' && d.session_id === conversationId)
+      if (!typingBelongsToHere) return
+      // 清除"思考中"（进入"输入中"阶段）
+      setThinkingAgents((prev) => {
+        const next = new Map(prev)
+        next.delete(d.agent_id)
+        return next
+      })
+      setTypingAgents((prev) => {
+        const next = new Map(prev)
+        next.set(d.agent_id, d.agent_name)
         return next
       })
     } else if (lastMessage.type === 'announcement') {
@@ -679,6 +715,23 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
             }
           />
         ))}
+
+        {/* AI 输入中占位气泡（v1.1.0：流式状态显示） */}
+        {Array.from(typingAgents.entries()).map(([agentId, agentName]) => (
+            <MessageBubble
+              key={`typing-${agentId}`}
+              senderName={agentName}
+              content=""
+              isMine={false}
+              createdAt={new Date().toISOString()}
+              senderType="ai"
+              senderId={agentId}
+              isTyping={true}
+              onAvatarClick={(type, id, name, state) =>
+                setProfileCard({ type, id, name, state })
+              }
+            />
+          ))}
 
         {/* 底部加载指示器 */}
         {loadingState === 'newer' && (

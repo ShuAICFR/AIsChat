@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Plus, BellOff, Menu, UserPlus, Users, Bot } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 import { formatRelativeTime } from '../utils/time'
-import { useLang } from '../i18n/I18nContext'
+import { useLang, useT } from '../i18n/I18nContext'
 
 interface Group {
   id: number
@@ -96,6 +96,7 @@ export default function ChatSidebar({
   const sortedDMSessions = [...dmSessions].sort(sortByTime)
 
   const lang = useLang()
+  const t = useT()
 
   // 群聊头像组：4 个头像的 2×2 网格或默认图标
   const GroupAvatarGroup = ({ avatars }: { avatars: string[] }) => {

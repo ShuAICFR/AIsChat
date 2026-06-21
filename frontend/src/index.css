@@ -121,6 +121,9 @@
   @apply text-textPrimary;
 }
 .katex .mathnormal {
+  @apply text-primary-600;
+}
+.dark .katex .mathnormal {
   @apply text-primary-300;
 }
 

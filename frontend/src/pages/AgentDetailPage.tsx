@@ -440,7 +440,7 @@ export default function AgentDetailPage() {
                 {!editingPrompt ? (
                   <button
                     onClick={() => { setEditingPrompt(true); setPromptText(agent.current_system_prompt || '') }}
-                    className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                    className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
                   >
                     编辑
                   </button>
@@ -449,7 +449,7 @@ export default function AgentDetailPage() {
                     <button onClick={() => setEditingPrompt(false)} className="text-xs text-textMuted hover:text-textSecondary">
                       <X size={14} />
                     </button>
-                    <button onClick={handleSavePrompt} disabled={savingPrompt} className="text-xs text-primary-400 hover:text-primary-300">
+                    <button onClick={handleSavePrompt} disabled={savingPrompt} className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                       {savingPrompt ? '...' : <Check size={14} />}
                     </button>
                   </div>
@@ -582,7 +582,7 @@ export default function AgentDetailPage() {
                     <code className="text-xs text-amber-400 flex-1 break-all">{token}</code>
                     <button
                       onClick={() => { navigator.clipboard.writeText(token); setToken(null) }}
-                      className="text-xs text-amber-400 hover:text-amber-300"
+                      className="text-xs text-amber-400 hover:text-amber-500 dark:hover:text-amber-300"
                     >
                       复制（仅显示一次）
                     </button>
@@ -718,7 +718,7 @@ export default function AgentDetailPage() {
                     <div className="flex items-center gap-2 mt-2">
                       <button
                         onClick={() => openLogDetail(log.id)}
-                        className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                        className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
                       >
                         查看详情
                       </button>
@@ -778,9 +778,9 @@ export default function AgentDetailPage() {
                     {(selectedLog.messages || []).map((msg: any, i: number) => (
                       <div key={i} className={`text-xs p-2 rounded ${
                         msg.role === 'system' ? 'bg-canvas text-textMuted italic' :
-                        msg.role === 'user' ? 'bg-primary-500/10 text-primary-300' :
-                        msg.role === 'assistant' ? 'bg-mint-500/10 text-mint-300' :
-                        'bg-amber-500/10 text-amber-300'
+                        msg.role === 'user' ? 'bg-primary-500/10 text-primary-600 dark:text-primary-300' :
+                        msg.role === 'assistant' ? 'bg-mint-500/10 text-mint-500 dark:text-mint-400' :
+                        'bg-amber-500/10 text-accent-600 dark:text-accent-300'
                       }`}>
                         <span className="font-medium">{msg.role}</span>
                         {msg.reasoning_content && (

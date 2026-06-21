@@ -752,7 +752,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                 onClick={() => insertMention(m.name)}
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
                   i === mentionIdx
-                    ? 'bg-primary-500/15 text-primary-300'
+                    ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
                     : 'text-textPrimary hover:bg-elevated'
                 }`}
               >

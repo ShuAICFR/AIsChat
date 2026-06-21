@@ -173,7 +173,7 @@ export default function ChatSidebar({
               }}
               className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                 g.id === activeGroupId
-                  ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
+                  ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300 border-l-2 border-primary-400'
                   : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
               }`}
             >
@@ -218,7 +218,7 @@ export default function ChatSidebar({
                 }}
                 className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${
                   s.session_id === activeSessionId
-                    ? 'bg-primary-500/15 text-primary-300 border-l-2 border-primary-400'
+                    ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300 border-l-2 border-primary-400'
                     : 'hover:bg-elevated text-textSecondary border-l-2 border-transparent'
                 }`}
               >

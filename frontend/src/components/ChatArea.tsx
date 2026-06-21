@@ -497,7 +497,7 @@ function InviteMemberModal({
                   onClick={() => setManualType(t)}
                   className={`flex-1 py-1.5 text-xs rounded-lg border transition-colors ${
                     manualType === t
-                      ? 'bg-primary-500/15 border-primary-500/40 text-primary-300'
+                      ? 'bg-primary-500/15 border-primary-500/40 text-primary-600 dark:text-primary-300'
                       : 'border-border text-textSecondary hover:bg-elevated'
                   }`}
                 >

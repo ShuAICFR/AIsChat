@@ -15,7 +15,7 @@ const mainNavItems = [
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-3 px-3 py-2.5 mx-2 rounded-xl text-sm font-medium transition-all duration-200 ${
     isActive
-      ? 'bg-primary-500/15 text-primary-300'
+      ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
       : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
   }`
 
@@ -141,7 +141,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               className={({ isActive }) =>
                 `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary-500/15 text-primary-300'
+                    ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }
@@ -157,7 +157,7 @@ export default function Sidebar({ mobile, onClose }: { mobile?: boolean; onClose
               className={({ isActive }) =>
                 `flex items-center justify-center w-10 h-10 rounded-xl transition-all duration-200 ${
                   isActive
-                    ? 'bg-primary-500/15 text-primary-300'
+                    ? 'bg-primary-500/15 text-primary-600 dark:text-primary-300'
                     : 'text-textSecondary hover:text-textPrimary hover:bg-elevated'
                 }`
               }

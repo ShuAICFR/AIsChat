@@ -82,7 +82,7 @@ export default function LoginPage() {
                 onClick={() => { setMode('login'); setError('') }}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   mode === 'login'
-                    ? 'bg-primary-600/20 text-primary-300 shadow-sm'
+                    ? 'bg-primary-600/20 text-primary-600 dark:text-primary-300 shadow-sm'
                     : 'text-textMuted hover:text-textSecondary'
                 }`}
               >
@@ -92,7 +92,7 @@ export default function LoginPage() {
                 onClick={() => { setMode('register'); setError('') }}
                 className={`flex-1 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   mode === 'register'
-                    ? 'bg-primary-600/20 text-primary-300 shadow-sm'
+                    ? 'bg-primary-600/20 text-primary-600 dark:text-primary-300 shadow-sm'
                     : 'text-textMuted hover:text-textSecondary'
                 }`}
               >

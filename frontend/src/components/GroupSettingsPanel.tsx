@@ -775,7 +775,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                       onClick={() => setExportFormat(f.key)}
                       className={`flex-1 py-3 px-2 rounded-xl border text-center transition-colors ${
                         exportFormat === f.key
-                          ? 'border-primary-400 bg-primary-500/10 text-primary-300'
+                          ? 'border-primary-400 bg-primary-500/10 text-primary-600 dark:text-primary-300'
                           : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
                       }`}
                     >

@@ -354,7 +354,7 @@ export default function SettingsPage() {
                 <button
                   onClick={handleTestConnection}
                   disabled={testing}
-                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 disabled:opacity-50 transition-colors"
                 >
                   {testing ? (
                     <Loader2 size={12} className="animate-spin" />

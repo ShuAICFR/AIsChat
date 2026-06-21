@@ -47,7 +47,7 @@ export default function AdminPage() {
             href={MANUAL_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-300 transition-colors"
+            className="inline-flex items-center gap-1 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
           >
             <BookOpen size={13} /> 使用手册
           </a>
@@ -62,7 +62,7 @@ export default function AdminPage() {
             onClick={() => setActiveTab(tab.key)}
             className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.key
-                ? 'border-primary-400 text-primary-300'
+                ? 'border-primary-400 text-primary-600 dark:text-primary-300'
                 : 'border-transparent text-textMuted hover:text-textSecondary'
             }`}
           >
@@ -154,7 +154,7 @@ function UsersTab() {
                 <td className="py-2 px-3 font-medium">{u.username}</td>
                 <td className="py-2 px-3">
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    u.role === 'admin' ? 'bg-primary-500/10 text-primary-300' : ''
+                    u.role === 'admin' ? 'bg-primary-500/10 text-primary-600 dark:text-primary-300' : ''
                   }`}>
                     {u.role}
                   </span>
@@ -172,7 +172,7 @@ function UsersTab() {
                         await api.post(`/admin/users/${u.id}/ban`, {})
                         setPage(page) // 触发刷新
                       }}
-                      className="text-xs text-primary-400 hover:text-primary-300"
+                      className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                     >
                       {u.is_active ? '封禁' : '解封'}
                     </button>
@@ -183,7 +183,7 @@ function UsersTab() {
                           await api.put(`/admin/users/${u.id}/role`, { role: 'admin' })
                           setPage(page)
                         }}
-                        className="text-xs text-mint-400 hover:text-mint-300"
+                        className="text-xs text-mint-400 hover:text-mint-500 dark:hover:text-mint-300"
                       >
                         提升
                       </button>
@@ -267,7 +267,7 @@ function AgentsTab() {
                     const newData = await api.get('/admin/agents')
                     setData(newData)
                   }}
-                  className="text-xs text-primary-400 hover:text-primary-300"
+                  className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                 >
                   {a.is_ai_editable ? '关闭自修改' : '开启自修改'}
                 </button>
@@ -886,7 +886,7 @@ function OpenCLIAgentsSection() {
                 <td className="py-2 px-3">
                   <button
                     onClick={() => toggleAgent(a.agent_id, a.enabled)}
-                    className="text-xs text-primary-400 hover:text-primary-300"
+                    className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300"
                   >
                     {a.enabled ? '关闭' : '开启'}
                   </button>
@@ -1127,7 +1127,7 @@ function OpenCLICommandsSection() {
                   </td>
                   <td className="py-2 px-3 flex gap-2">
                     <button onClick={() => handleToggle(c.id, c.enabled)}
-                      className="text-xs text-primary-400 hover:text-primary-300">
+                      className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                       {c.enabled ? '禁用' : '启用'}
                     </button>
                     <button onClick={() => handleDelete(c.id)}

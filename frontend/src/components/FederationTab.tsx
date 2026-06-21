@@ -364,7 +364,7 @@ export default function FederationTab() {
                       placeholder="粘贴新 Token 替换旧 Token"
                     />
                     <p className="text-[10px] text-textMuted mt-1">
-                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">github.com/settings/tokens →</a>
+                      留空则使用已存储的 Token。获取: <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">github.com/settings/tokens →</a>
                     </p>
                   </div>
                 </details>
@@ -372,7 +372,7 @@ export default function FederationTab() {
                 <>
                   <label className="text-xs text-textMuted">
                     GitHub Token{' '}
-                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                    <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                       获取 →
                     </a>
                   </label>
@@ -419,7 +419,7 @@ export default function FederationTab() {
           </h2>
           <button
             onClick={() => setEditInstance(!editInstance)}
-            className="text-xs text-primary-400 hover:text-primary-300 transition-colors"
+            className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
           >
             {editInstance ? '取消' : '编辑'}
           </button>
@@ -490,7 +490,7 @@ export default function FederationTab() {
             <div>
               <label className="text-xs text-textMuted">
                 GitHub Token{' '}
-                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">
+                <a href="https://github.com/settings/tokens/new" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
                   获取 →
                 </a>
               </label>
@@ -690,7 +690,7 @@ export default function FederationTab() {
           </h2>
           <button
             onClick={() => setShowAddPeer(!showAddPeer)}
-            className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+            className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
           >
             <Plus size={14} /> 添加
           </button>
@@ -808,14 +808,14 @@ export default function FederationTab() {
                     <>
                       <button
                         onClick={() => handleRotateUrl(peer.id)}
-                        className="p-1.5 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 hover:bg-purple-500/10 rounded-lg transition-colors"
                         title="轮换 URL"
                       >
                         <RefreshCw size={14} />
                       </button>
                       <button
                         onClick={() => handleDisconnect(peer.id)}
-                        className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-rose-400 hover:text-rose-500 dark:hover:text-rose-300 hover:bg-rose-500/10 rounded-lg transition-colors"
                         title="断开"
                       >
                         <Power size={14} />
@@ -825,7 +825,7 @@ export default function FederationTab() {
                     <>
                       <button
                         onClick={() => handleConnect(peer.id)}
-                        className="p-1.5 text-primary-400 hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition-colors"
+                        className="p-1.5 text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition-colors"
                         title="连接"
                       >
                         <RefreshCw size={14} />

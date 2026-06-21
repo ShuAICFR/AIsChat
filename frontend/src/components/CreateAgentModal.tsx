@@ -790,7 +790,7 @@ function DetailSettingsModal({
                   onClick={() => setAiType(t.value)}
                   className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-center transition-all ${
                     aiType === t.value
-                      ? 'border-primary-400 bg-primary-500/10 text-primary-300'
+                      ? 'border-primary-400 bg-primary-500/10 text-primary-600 dark:text-primary-300'
                       : 'border-border bg-canvas text-textSecondary hover:bg-elevated'
                   }`}
                 >

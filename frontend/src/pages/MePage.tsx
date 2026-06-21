@@ -40,6 +40,10 @@ export default function MePage() {
   const [redeemMsg, setRedeemMsg] = useState('')
   const [redeeming, setRedeeming] = useState(false)
 
+  // 存储概览
+  const [storage, setStorage] = useState<{ total_used: number; total_files: number; quota_mb: number; usage_percent: number } | null>(null)
+  const [storageLoading, setStorageLoading] = useState(true)
+
   // 编辑资料弹窗
   const [showEditProfile, setShowEditProfile] = useState(false)
   const [editUsername, setEditUsername] = useState('')
@@ -57,6 +61,12 @@ export default function MePage() {
     api.get<UsageOverview[]>('/conversation-log/usage/overview?days=30').then(r => {
       setUsage(Array.isArray(r) ? r : [])
     }).catch(() => {}).finally(() => setUsageLoading(false))
+
+    // 加载存储概览
+    setStorageLoading(true)
+    api.get<{ total_used: number; total_files: number; quota_mb: number; usage_percent: number }>('/user/storage').then(r => {
+      setStorage(r)
+    }).catch(() => {}).finally(() => setStorageLoading(false))
   }, [])
 
   // 汇总
@@ -229,6 +239,42 @@ export default function MePage() {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* ====== 存储概览 ====== */}
+      <div className="bg-surface rounded-2xl border border-border p-5">
+        <h3 className="text-sm font-semibold text-textPrimary mb-3 flex items-center gap-2">
+          <HardDrive size={16} className="text-primary-400" /> 存储空间
+        </h3>
+        {storageLoading ? (
+          <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-textMuted" /></div>
+        ) : storage ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-textMuted">
+              <span>已用 {storage.total_used >= 1048576 ? `${(storage.total_used / 1048576).toFixed(1)}MB` : `${(storage.total_used / 1024).toFixed(0)}KB`}</span>
+              <span className={storage.usage_percent > 90 ? 'text-rose-400 font-medium' : storage.usage_percent > 70 ? 'text-amber-400 font-medium' : ''}>
+                {storage.usage_percent}%
+              </span>
+            </div>
+            <div className="w-full h-2 bg-canvas rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  storage.usage_percent > 90 ? 'bg-rose-400' : storage.usage_percent > 70 ? 'bg-amber-400' : 'bg-primary-400'
+                }`}
+                style={{ width: `${Math.min(storage.usage_percent, 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-textMuted">
+              <span>{storage.total_files} 个文件</span>
+              <span>配额 {storage.quota_mb}MB</span>
+            </div>
+            {storage.usage_percent > 90 && (
+              <p className="text-xs text-rose-400">⚠️ 存储空间即将用尽，请清理文件或兑换更多配额</p>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-textMuted py-3 text-center">暂无存储数据</p>
         )}
       </div>
 

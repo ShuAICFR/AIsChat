@@ -163,3 +163,71 @@ async def test_api_connection(
         return {"ok": False, "message": "连接超时，请检查网络或 API 地址"}
     except Exception as e:
         return {"ok": False, "message": f"连接失败: {str(e)}"}
+
+
+@router.get("/storage")
+async def get_user_storage(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户存储概览（所有 AI 的文件总和 + 进度条数据）"""
+    import os
+    from sqlalchemy import select
+    from app.models.agent import Agent
+    from app.models.file import FileMetadata as FM
+    from app.models.user import User
+
+    # 获取用户所有 AI
+    agent_result = await db.execute(
+        select(Agent).where(Agent.owner_id == current_user["user_id"])
+    )
+    agents = agent_result.scalars().all()
+
+    total_used = 0
+    total_files = 0
+    per_agent: list[dict] = []
+
+    for agent in agents:
+        agent_used = 0
+        agent_files = 0
+
+        # 工作区文件
+        workspace_dir = f"uploads/workspace/{agent.id}"
+        if os.path.exists(workspace_dir):
+            for dirpath, _dirnames, filenames in os.walk(workspace_dir):
+                for fn in filenames:
+                    fp = os.path.join(dirpath, fn)
+                    agent_used += os.path.getsize(fp)
+                    agent_files += 1
+
+        # 数据库记录的文件
+        db_result = await db.execute(
+            select(FM).where(FM.owner_type == "ai", FM.owner_id == agent.user_id)
+        )
+        for fm in db_result.scalars():
+            agent_used += fm.size or 0
+            agent_files += 1
+
+        total_used += agent_used
+        total_files += agent_files
+        per_agent.append({
+            "agent_id": agent.id,
+            "agent_name": agent.name,
+            "used": agent_used,
+            "files": agent_files,
+        })
+
+    # 用户配额
+    user_result = await db.execute(select(User).where(User.id == current_user["user_id"]))
+    user = user_result.scalar_one()
+    quota_mb = user.file_quota_mb or 100
+    quota_bytes = quota_mb * 1024 * 1024
+
+    return {
+        "total_used": total_used,
+        "total_files": total_files,
+        "quota_mb": quota_mb,
+        "quota_bytes": quota_bytes,
+        "usage_percent": round(total_used / quota_bytes * 100, 1) if quota_bytes > 0 else 0,
+        "per_agent": per_agent,
+    }

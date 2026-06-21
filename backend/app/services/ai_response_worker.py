@@ -462,7 +462,7 @@ async def _tool_call_loop(
     # 追踪 AI 在做什么（用于中断恢复）
     last_task = None
     # 累积 token 消耗（跨多轮工具调用）
-    total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "reasoning_tokens": 0, "cached_tokens": 0}
     # system_reminder 额外轮次：AI 返回文字但忘了调 send_message 时，提醒不消耗配额
     _reminder_extra = 0
 
@@ -496,7 +496,7 @@ async def _tool_call_loop(
         # 累积 token 消耗
         usage = response.get("usage", {})
         if usage:
-            for k in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            for k in ("prompt_tokens", "completion_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"):
                 total_usage[k] = total_usage.get(k, 0) + usage.get(k, 0)
 
         # ── 提醒：有文字但没有工具调用 ──

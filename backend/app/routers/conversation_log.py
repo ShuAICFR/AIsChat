@@ -6,6 +6,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.utils.auth import get_current_user
@@ -206,3 +207,43 @@ async def export_log_detail(
             media_type="application/json; charset=utf-8",
             headers={"Content-Disposition": f"attachment; filename=log-{log_id}.json"},
         )
+
+
+# ============================================================
+# Token 用量端点
+# ============================================================
+
+from datetime import datetime, timedelta, timezone as tz
+
+
+@router.get("/conversation-log/usage/overview")
+async def get_usage_overview(
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前用户所有 AI 的 token 消耗汇总（近 N 天）"""
+    from app.services.conversation_log_service import get_user_agents_token_summary
+    end_date = datetime.now(tz.utc)
+    start_date = end_date - timedelta(days=days)
+    return await get_user_agents_token_summary(db, current_user["user_id"], start_date, end_date)
+
+
+@router.get("/conversation-log/usage/agents/{agent_id}/daily")
+async def get_agent_daily_usage(
+    agent_id: int,
+    days: int = Query(30, ge=1, le=365),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单个 AI 每日 token 消耗分布"""
+    from app.services.conversation_log_service import get_agent_token_daily
+    # 权限：用户只能看自己拥有的 AI
+    from app.models.agent import Agent
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar()
+    if not agent or agent.owner_id != current_user["user_id"]:
+        raise HTTPException(status_code=403, detail="无权查看此 AI 的用量数据")
+    end_date = datetime.now(tz.utc)
+    start_date = end_date - timedelta(days=days)
+    return await get_agent_token_daily(db, agent_id, start_date, end_date)

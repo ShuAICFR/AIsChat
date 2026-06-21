@@ -33,8 +33,14 @@ class User(Base):
     # 对话日志：用户自己保留的对话日志数（NULL=使用系统默认值，≤ 管理员上限）
     conversation_logs_limit = Column(Integer, nullable=True)
 
-    # API 调用额度（用于 LLM API 调用计费）
+    # API 调用额度（用于 LLM API 调用计费，1 credit = 10,000 token）
     api_credit = Column(Integer, default=0)
+
+    # AI 包断额度（创建 AI 时一次性支付 api_credit_cost，该 AI 后续调用全免）
+    agent_bundle_credit = Column(Integer, default=0)
+
+    # 文件存储配额（MB）
+    file_quota_mb = Column(Integer, default=100)
 
     # 语言偏好（zh / en）
     language = Column(String(10), default="zh")

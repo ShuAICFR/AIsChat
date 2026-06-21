@@ -656,6 +656,37 @@ async def _migrate_api_credit(db):
     else:
         logger.info("  ⏭ redemption_codes.code_type 已存在，跳过")
 
+    # v0.5.0 新增：AI 包断额度 + 文件配额
+    if not await _column_exists(db, "users", "agent_bundle_credit"):
+        logger.info("  📦 添加 users.agent_bundle_credit 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN agent_bundle_credit INTEGER NOT NULL DEFAULT 0"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.agent_bundle_credit 已存在，跳过")
+
+    if not await _column_exists(db, "users", "file_quota_mb"):
+        logger.info("  💾 添加 users.file_quota_mb 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN file_quota_mb INTEGER NOT NULL DEFAULT 100"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.file_quota_mb 已存在，跳过")
+
+    # 更新兑换码 CHECK 约束：支持 4 种类型
+    try:
+        logger.info("  🔄 更新 redemption_codes.code_type CHECK 约束")
+        await db.execute(text("""
+            ALTER TABLE redemption_codes DROP CONSTRAINT IF EXISTS ck_redemption_code_type
+        """))
+        await db.execute(text("""
+            ALTER TABLE redemption_codes ADD CONSTRAINT ck_redemption_code_type
+            CHECK (code_type IN ('ai_quota', 'api_credit', 'agent_bundle', 'file_quota'))
+        """))
+        # 同时扩宽列
+        await db.execute(text("ALTER TABLE redemption_codes ALTER COLUMN code_type TYPE VARCHAR(20)"))
+        created_any = True
+    except Exception as e:
+        logger.warning(f"  ⚠️ 兑换码 CHECK 约束更新跳过: {e}")
+
     if created_any:
         await db.flush()
         logger.info("  ✅ API 额度/配置系统迁移完成")

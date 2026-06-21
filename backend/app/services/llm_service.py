@@ -265,10 +265,22 @@ async def _chat_completion_non_streaming(
         choice = data["choices"][0]
         message = choice["message"]
 
+        usage = data.get("usage", {})
+        # 提取 reasoning_tokens（DeepSeek thinking 模式）
+        completion_details = usage.get("completion_tokens_details", {})
+        if completion_details.get("reasoning_tokens"):
+            usage = dict(usage)
+            usage["reasoning_tokens"] = completion_details["reasoning_tokens"]
+        # 提取 cached_tokens（prompt cache 命中）
+        prompt_details = usage.get("prompt_tokens_details", {})
+        if prompt_details.get("cached_tokens"):
+            usage = dict(usage)
+            usage["cached_tokens"] = prompt_details["cached_tokens"]
+
         result = {
             "content": message.get("content"),
             "tool_calls": message.get("tool_calls"),
-            "usage": data.get("usage", {}),
+            "usage": usage,
             "finish_reason": choice.get("finish_reason", "stop"),
         }
         # DeepSeek 推理模式会返回 reasoning_content，必须传回给 API

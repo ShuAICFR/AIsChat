@@ -85,12 +85,16 @@ async def redeem_code(
     code_type = code_obj.code_type or "ai_quota"
     if code_type == "api_credit":
         user.api_credit += code_obj.quota_amount
-        msg = f"兑换成功，获得 {code_obj.quota_amount} API 调用额度"
-        current_amount = user.api_credit
+        msg = f"兑换成功，获得 {code_obj.quota_amount} 通用 API 额度"
+    elif code_type == "agent_bundle":
+        user.agent_bundle_credit += code_obj.quota_amount
+        msg = f"兑换成功，获得 {code_obj.quota_amount} AI 包断额度"
+    elif code_type == "file_quota":
+        user.file_quota_mb += code_obj.quota_amount
+        msg = f"兑换成功，获得 {code_obj.quota_amount} MB 文件存储配额"
     else:
         user.ai_quota += code_obj.quota_amount
         msg = f"兑换成功，获得 {code_obj.quota_amount} AI 创建额度"
-        current_amount = user.ai_quota
 
     # 标记兑换码已使用
     code_obj.used_by = current_user["user_id"]
@@ -100,8 +104,10 @@ async def redeem_code(
 
     return {
         "message": msg,
-        "current_quota": user.ai_quota,
-        "current_api_credit": user.api_credit,
+        "ai_quota": user.ai_quota,
+        "api_credit": user.api_credit,
+        "agent_bundle_credit": user.agent_bundle_credit,
+        "file_quota_mb": user.file_quota_mb,
     }
 
 

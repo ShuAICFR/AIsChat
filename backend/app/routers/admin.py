@@ -44,7 +44,7 @@ class BanUserRequest(BaseModel):
 
 class GenerateCodeRequest(BaseModel):
     quota_amount: int = Field(..., ge=1, le=100)
-    code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit|file_size)$")
+    code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit|agent_bundle|file_quota)$")
     expires_in_days: int = Field(..., ge=1, le=365)
 
 
@@ -124,6 +124,9 @@ async def list_users(
                 "role": u.role,
                 "is_active": u.is_active,
                 "ai_quota": u.ai_quota,
+                "api_credit": u.api_credit,
+                "agent_bundle_credit": u.agent_bundle_credit,
+                "file_quota_mb": u.file_quota_mb,
                 "created_at": str(u.created_at) if u.created_at else None,
             }
             for u in users
@@ -1203,3 +1206,50 @@ async def get_agent_conv_log_detail(
         return detail
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+
+# ============================================================
+# Token 用量分析（管理员）
+# ============================================================
+
+from datetime import datetime, timedelta, timezone as tz
+
+
+@router.get("/admin/usage/global")
+async def get_global_usage(
+    days: int = Query(30, ge=1, le=365),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """全站 token 消耗总览"""
+    from app.services.conversation_log_service import get_admin_global_token_stats
+    end_date = datetime.now(tz.utc)
+    start_date = end_date - timedelta(days=days)
+    return await get_admin_global_token_stats(db, start_date, end_date)
+
+
+@router.get("/admin/usage/by-user")
+async def get_usage_by_user(
+    days: int = Query(30, ge=1, le=365),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """按用户分组的 token 消耗明细"""
+    from app.services.conversation_log_service import get_admin_users_token_summary
+    end_date = datetime.now(tz.utc)
+    start_date = end_date - timedelta(days=days)
+    return await get_admin_users_token_summary(db, start_date, end_date)
+
+
+@router.get("/admin/usage/agents/{agent_id}/daily")
+async def get_agent_daily_usage_admin(
+    agent_id: int,
+    days: int = Query(30, ge=1, le=365),
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取单个 AI 每日 token 消耗分布"""
+    from app.services.conversation_log_service import get_agent_token_daily
+    end_date = datetime.now(tz.utc)
+    start_date = end_date - timedelta(days=days)
+    return await get_agent_token_daily(db, agent_id, start_date, end_date)

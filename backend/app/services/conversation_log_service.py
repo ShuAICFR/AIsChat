@@ -263,6 +263,176 @@ async def get_agent_log_stats(db: AsyncSession, agent_id: int) -> dict:
     }
 
 
+# ── Token 用量聚合查询 ──
+
+async def get_user_agents_token_summary(
+    db: AsyncSession,
+    user_id: int,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> list[dict]:
+    """获取用户所有 AI 的 token 消耗汇总（按 AI+模型分组）"""
+    from app.models.agent import Agent
+    where_clauses = ["cl.agent_id = ag.id", "ag.owner_id = :user_id"]
+    params: dict = {"user_id": user_id}
+    if start_date:
+        where_clauses.append("cl.created_at >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        where_clauses.append("cl.created_at <= :end_date")
+        params["end_date"] = end_date
+    where_sql = " AND ".join(where_clauses)
+
+    stmt = text(f"""
+        SELECT
+            cl.agent_id,
+            ag.name AS agent_name,
+            cl.model,
+            SUM(COALESCE((cl.token_usage->>'total_tokens')::int, 0)) AS total_tokens,
+            SUM(COALESCE((cl.token_usage->>'prompt_tokens')::int, 0)) AS prompt_tokens,
+            SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
+            SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
+            SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
+            COUNT(*) AS total_calls
+        FROM ai_conversation_logs cl
+        JOIN agents ag ON ag.id = cl.agent_id
+        WHERE {where_sql}
+        GROUP BY cl.agent_id, ag.name, cl.model
+        ORDER BY total_tokens DESC
+    """)
+    result = await db.execute(stmt, params)
+    rows = result.mappings().all()
+    return [dict(r) for r in rows]
+
+
+async def get_agent_token_daily(
+    db: AsyncSession,
+    agent_id: int,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> list[dict]:
+    """获取单个 AI 每日 token 消耗分布"""
+    where_clauses = ["agent_id = :agent_id"]
+    params: dict = {"agent_id": agent_id}
+    if start_date:
+        where_clauses.append("created_at >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        where_clauses.append("created_at <= :end_date")
+        params["end_date"] = end_date
+    where_sql = " AND ".join(where_clauses)
+
+    stmt = text(f"""
+        SELECT
+            DATE(created_at) AS date,
+            SUM(COALESCE((token_usage->>'total_tokens')::int, 0)) AS total_tokens,
+            SUM(COALESCE((token_usage->>'prompt_tokens')::int, 0)) AS prompt_tokens,
+            SUM(COALESCE((token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
+            SUM(COALESCE((token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
+            SUM(COALESCE((token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
+            COUNT(*) AS request_count
+        FROM ai_conversation_logs
+        WHERE {where_sql}
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+    """)
+    result = await db.execute(stmt, params)
+    rows = result.mappings().all()
+    return [dict(r) for r in rows]
+
+
+async def get_admin_global_token_stats(
+    db: AsyncSession,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> dict:
+    """获取全站 token 消耗总览"""
+    where_clauses = []
+    params: dict = {}
+    if start_date:
+        where_clauses.append("cl.created_at >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        where_clauses.append("cl.created_at <= :end_date")
+        params["end_date"] = end_date
+    where_sql = " AND ".join(where_clauses)
+    if where_sql:
+        where_sql = "WHERE " + where_sql
+
+    stmt = text(f"""
+        SELECT
+            SUM(COALESCE((cl.token_usage->>'total_tokens')::int, 0)) AS total_tokens,
+            SUM(COALESCE((cl.token_usage->>'prompt_tokens')::int, 0)) AS prompt_tokens,
+            SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
+            SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
+            SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
+            COUNT(*) AS total_calls,
+            COUNT(DISTINCT cl.agent_id) AS unique_agents,
+            COUNT(DISTINCT ag.owner_id) AS unique_users
+        FROM ai_conversation_logs cl
+        JOIN agents ag ON ag.id = cl.agent_id
+        {where_sql}
+    """)
+    result = await db.execute(stmt, params)
+    row = result.mappings().first()
+    if row:
+        d = dict(row)
+        d["total_tokens"] = d["total_tokens"] or 0
+        d["prompt_tokens"] = d["prompt_tokens"] or 0
+        d["completion_tokens"] = d["completion_tokens"] or 0
+        d["reasoning_tokens"] = d["reasoning_tokens"] or 0
+        d["cached_tokens"] = d["cached_tokens"] or 0
+        d["total_calls"] = d["total_calls"] or 0
+        d["unique_agents"] = d["unique_agents"] or 0
+        d["unique_users"] = d["unique_users"] or 0
+        return d
+    return {"total_tokens": 0, "prompt_tokens": 0, "completion_tokens": 0,
+            "reasoning_tokens": 0, "cached_tokens": 0, "total_calls": 0,
+            "unique_agents": 0, "unique_users": 0}
+
+
+async def get_admin_users_token_summary(
+    db: AsyncSession,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> list[dict]:
+    """获取按用户分组的 token 消耗明细"""
+    where_clauses = []
+    params: dict = {}
+    if start_date:
+        where_clauses.append("cl.created_at >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        where_clauses.append("cl.created_at <= :end_date")
+        params["end_date"] = end_date
+    where_sql = " AND ".join(where_clauses)
+    if where_sql:
+        where_sql = "WHERE " + where_sql
+
+    stmt = text(f"""
+        SELECT
+            u.id AS user_id,
+            u.username,
+            cl.agent_id,
+            ag.name AS agent_name,
+            SUM(COALESCE((cl.token_usage->>'total_tokens')::int, 0)) AS total_tokens,
+            SUM(COALESCE((cl.token_usage->>'prompt_tokens')::int, 0)) AS prompt_tokens,
+            SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
+            SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
+            SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
+            COUNT(*) AS total_calls
+        FROM ai_conversation_logs cl
+        JOIN agents ag ON ag.id = cl.agent_id
+        JOIN users u ON u.id = ag.owner_id
+        {where_sql}
+        GROUP BY u.id, u.username, cl.agent_id, ag.name
+        ORDER BY u.id, total_tokens DESC
+    """)
+    result = await db.execute(stmt, params)
+    rows = result.mappings().all()
+    return [dict(r) for r in rows]
+
+
 # ── 权限 ──
 
 async def _user_can_view_agent_logs(db: AsyncSession, agent_id: int, user_id: int | None) -> bool:

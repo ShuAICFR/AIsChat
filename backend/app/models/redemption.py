@@ -10,7 +10,7 @@ class RedemptionCode(Base):
 
     code = Column(String(32), primary_key=True)
     quota_amount = Column(Integer, nullable=False)
-    code_type = Column(String(10), default="ai_quota")  # 'ai_quota' | 'api_credit'
+    code_type = Column(String(20), default="ai_quota")  # 'ai_quota' | 'api_credit' | 'agent_bundle' | 'file_quota'
     expires_at = Column(DateTime)
     used_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     used_at = Column(DateTime)

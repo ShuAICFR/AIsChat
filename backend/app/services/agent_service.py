@@ -295,7 +295,7 @@ async def create_agent(
 
     # 创建 Agent 对应的 users 条目（统一 ID 空间，用于私信等场景）
     ai_user = User(
-        username=f"{name}_agent",
+        username=name,
         type="ai",
         password_hash="",
         role="ai",

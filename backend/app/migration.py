@@ -158,7 +158,7 @@ async def _migrate_agent_users(db):
     logger.info(f"  👤 为 {len(agents)} 个 agent 创建 users 条目")
     for agent in agents:
         user = User(
-            username=f"{agent.name}_agent",
+            username=agent.name,
             type="ai",
             password_hash="",
             role="ai",
@@ -684,6 +684,16 @@ async def _migrate_api_credit(db):
         created_any = True
     else:
         logger.info("  ⏭ users.bio 已存在，跳过")
+
+    # 修复已有 AI 用户名：去掉 _agent 后缀
+    try:
+        logger.info("  🔧 移除已有 AI 用户名的 _agent 后缀")
+        result = await db.execute(text(
+            "UPDATE users SET username = REPLACE(username, '_agent', '') WHERE type = 'ai' AND username LIKE '%\\_agent'"
+        ))
+        logger.info(f"  ✅ 已更新 {result.rowcount} 个 AI 用户名")
+    except Exception as e:
+        logger.info(f"  ⚠ 用户名迁移跳过: {e}")
 
     # 更新兑换码 CHECK 约束：支持 4 种类型
     # 先迁移旧 file_size → file_quota，再改约束

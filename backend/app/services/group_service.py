@@ -288,12 +288,15 @@ async def get_recent_messages(
 
 def message_to_dict(message: Message, sender_name: str | None = None, sender_avatar_url: str | None = None) -> dict:
     """将 Message ORM 对象转为字典"""
+    # 联邦消息优先用 DB 存储的 sender_name，其次用传入参数
+    effective_name = sender_name or getattr(message, "sender_name", None)
     return {
         "id": message.id,
         "group_id": message.group_id,
         "sender_type": message.sender_type,
         "sender_id": message.sender_id,
-        "sender_name": sender_name,
+        "sender_name": effective_name,
+        "sender_avatar_url": sender_avatar_url,
         "sender_avatar_url": sender_avatar_url,
         "content": message.content,
         "reply_to": message.reply_to,
@@ -917,7 +920,7 @@ async def get_unread_info(
     last_msg = unread_messages[0] if unread_messages else None
     last_message = None
     if last_msg:
-        sender_name = "未知"
+        sender_name = getattr(last_msg, "sender_name", None) or "未知"
         if last_msg.sender_type == "human":
             u = await db.get(User, last_msg.sender_id)
             if u:

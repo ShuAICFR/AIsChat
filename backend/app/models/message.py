@@ -17,6 +17,7 @@ class Message(Base):
     group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
     sender_type = Column(String(10), nullable=False)  # 'human' | 'ai'
     sender_id = Column(Integer, nullable=False)
+    sender_name = Column(String(100), nullable=True)  # 联邦消息的发送者名称（本地消息为 NULL，由关联查询获取）
     content = Column(Text, nullable=False)
     reply_to = Column(Integer, nullable=True)
     source_public_id = Column(String(50), nullable=True)  # 远程消息来源实例公网 ID（NULL=本地）

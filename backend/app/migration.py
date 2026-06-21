@@ -49,6 +49,7 @@ async def run_migrations():
             await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
             await _migrate_file_system(db)             # v0.5.0 文件协作系统
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
+            await _migrate_message_sender_name(db)     # v1.1.0 联邦消息发送者名称
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _migrate_system_settings(db)          # v1.0.0 全局系统设置 + 新用户初始化向导
@@ -1114,6 +1115,20 @@ async def _migrate_message_attachments(db):
         logger.info("  ✅ dm_messages.attachments 迁移完成")
     else:
         logger.info("  ⏭ dm_messages.attachments 已存在，跳过")
+
+
+async def _migrate_message_sender_name(db):
+    """v1.1.0: 联邦消息发送者名称 — messages 表加 sender_name VARCHAR(100)"""
+    logger.info("  👤 添加 messages.sender_name 列（联邦消息发送者名称）...")
+
+    if not await _column_exists(db, "messages", "sender_name"):
+        await db.execute(text(
+            "ALTER TABLE messages ADD COLUMN sender_name VARCHAR(100)"
+        ))
+        await db.flush()
+        logger.info("  ✅ messages.sender_name 迁移完成")
+    else:
+        logger.info("  ⏭ messages.sender_name 已存在，跳过")
 
 
 async def _migrate_memory_archive_columns(db):

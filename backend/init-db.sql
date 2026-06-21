@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS messages (
     group_id INT REFERENCES groups(id) ON DELETE CASCADE,
     sender_type VARCHAR(10) CHECK (sender_type IN ('human', 'ai')),
     sender_id INT,
+    sender_name VARCHAR(100),
     content TEXT NOT NULL,
     reply_to INT,
     source_public_id VARCHAR(50),

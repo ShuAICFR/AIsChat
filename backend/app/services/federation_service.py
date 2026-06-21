@@ -698,6 +698,7 @@ async def handle_remote_message(
         group_id=group_id,
         sender_type=msg_dict.get("sender_type", "human"),
         sender_id=0,  # 远程发送者，本地无对应 user_id，用 0 占位
+        sender_name=msg_dict.get("sender_name") or f"{source_public_id} User",
         content=msg_dict.get("content", ""),
         reply_to=msg_dict.get("reply_to"),
         source_public_id=source_public_id,

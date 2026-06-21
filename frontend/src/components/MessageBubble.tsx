@@ -20,12 +20,13 @@ function ChatCodeRenderer({ className, children, inline, ...props }: any) {
   }
 
   if (inline) {
-    return <code className={className} {...props}>{children}</code>
+    return <code className={className}>{children}</code>
   }
+  // block <code> 替代 <pre>，避免 react-markdown 嵌套在 <p> 中导致 HTML 规范错误
   return (
-    <pre className={className}>
-      <code {...props}>{children}</code>
-    </pre>
+    <code className={`block overflow-x-auto whitespace-pre-wrap rounded-xl bg-elevated border border-border p-4 text-xs ${className || ''}`}>
+      {children}
+    </code>
   )
 }
 

@@ -647,6 +647,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               )}
               <MessageBubble
                 senderName={msg.sender_name || `${msg.sender_type}:${msg.sender_id}`}
+                senderAvatarUrl={msg.sender_avatar_url}
                 content={msg.content}
                 isMine={isOwnMessage(msg)}
                 createdAt={msg.created_at}

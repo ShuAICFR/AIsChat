@@ -186,23 +186,26 @@ async def get_messages(
 
     messages = await get_recent_messages(db, group_id, limit, before_id=before_id, after_id=after_id)
 
-    # 批量解析发送者名称
+    # 批量解析发送者名称 + 头像
     human_ids = {m.sender_id for m in messages if m.sender_type == "human"}
     ai_ids = {m.sender_id for m in messages if m.sender_type == "ai"}
 
     name_map: dict[tuple, str] = {}
+    avatar_map: dict[tuple, str | None] = {}
     if human_ids:
         result = await db.execute(select(User).where(User.id.in_(human_ids)))
         for u in result.scalars().all():
             name_map[("human", u.id)] = u.username
+            avatar_map[("human", u.id)] = u.avatar_url
     if ai_ids:
         result = await db.execute(select(Agent).where(Agent.id.in_(ai_ids)))
         for a in result.scalars().all():
             name_map[("ai", a.id)] = a.name
+            avatar_map[("ai", a.id)] = a.avatar_url
 
     # messages 已由 service 层按时间升序排列
     return [
-        message_to_dict(m, sender_name=name_map.get((m.sender_type, m.sender_id)))
+        message_to_dict(m, sender_name=name_map.get((m.sender_type, m.sender_id)), sender_avatar_url=avatar_map.get((m.sender_type, m.sender_id)))
         for m in messages
     ]
 

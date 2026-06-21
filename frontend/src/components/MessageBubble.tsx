@@ -17,6 +17,7 @@ function formatTime(utcStr: string, timezone: string): string {
 
 interface MessageBubbleProps {
   senderName: string
+  senderAvatarUrl?: string | null
   content: string
   isMine: boolean
   createdAt: string
@@ -84,6 +85,8 @@ export default function MessageBubble({
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
+          ) : senderAvatarUrl ? (
+            <img src={senderAvatarUrl} alt={senderName} className="w-full h-full rounded-full object-cover" />
           ) : (
             senderName.charAt(0).toUpperCase()
           )}

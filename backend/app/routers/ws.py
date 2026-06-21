@@ -293,7 +293,22 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                             await ws.send_json(build_ws_error("SEND_FAILED", "消息发送失败"))
                             continue
 
-                        msg_data = message_to_dict(message, sender_name=username)
+                        # 获取发送者头像
+                        sender_avatar = None
+                        if sender_type == "human":
+                            from app.models.user import User as UserModel
+                            u_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                            u = u_result.scalar_one_or_none()
+                            if u:
+                                sender_avatar = u.avatar_url
+                        elif sender_type == "ai":
+                            from app.models.agent import Agent as AgentModel
+                            a_result = await db.execute(select(AgentModel).where(AgentModel.id == user_id))
+                            a = a_result.scalar_one_or_none()
+                            if a:
+                                sender_avatar = a.avatar_url
+
+                        msg_data = message_to_dict(message, sender_name=username, sender_avatar_url=sender_avatar)
 
                         # 先回显给发送者
                         await ws.send_json({"type": "message", "conversation_type": "group", "data": msg_data})

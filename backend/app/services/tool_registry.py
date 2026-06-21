@@ -913,7 +913,16 @@ async def _handle_send_message(
 
     # 通过 WebSocket 广播
     agent_name = context.get("agent_name", f"AI:{agent_id}")
-    msg_data = message_to_dict(message, sender_name=agent_name)
+    sender_avatar = None
+    try:
+        from app.models.agent import Agent as AgentModel
+        a_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+        a_obj = a_result.scalar_one_or_none()
+        if a_obj:
+            sender_avatar = a_obj.avatar_url
+    except Exception:
+        pass
+    msg_data = message_to_dict(message, sender_name=agent_name, sender_avatar_url=sender_avatar)
     manager = context.get("manager")
     if manager:
         await manager.broadcast_to_group(
@@ -1838,7 +1847,7 @@ async def _handle_cross_post(
             # WebSocket 广播
             manager = context.get("manager")
             if manager:
-                msg_data = message_to_dict(message, sender_name=agent.name)
+                msg_data = message_to_dict(message, sender_name=agent.name, sender_avatar_url=agent.avatar_url)
                 await manager.broadcast_to_group(
                     target_id,
                     {"type": "message", "data": msg_data},

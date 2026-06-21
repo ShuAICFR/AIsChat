@@ -263,7 +263,7 @@ async def get_recent_messages(
     return messages
 
 
-def message_to_dict(message: Message, sender_name: str | None = None) -> dict:
+def message_to_dict(message: Message, sender_name: str | None = None, sender_avatar_url: str | None = None) -> dict:
     """将 Message ORM 对象转为字典"""
     return {
         "id": message.id,
@@ -271,6 +271,7 @@ def message_to_dict(message: Message, sender_name: str | None = None) -> dict:
         "sender_type": message.sender_type,
         "sender_id": message.sender_id,
         "sender_name": sender_name,
+        "sender_avatar_url": sender_avatar_url,
         "content": message.content,
         "reply_to": message.reply_to,
         "source_public_id": getattr(message, "source_public_id", None),

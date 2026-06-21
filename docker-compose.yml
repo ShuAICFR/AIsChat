@@ -51,4 +51,4 @@ services:
       - ./docs:/app/public/docs
     depends_on:
       - backend
-    command: npm run dev -- --host 0.0.0.0
+    command: yarn dev -- --host 0.0.0.0

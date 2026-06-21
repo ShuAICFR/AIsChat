@@ -808,11 +808,11 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
             }}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              // 仅手机端：键盘弹出时滚动输入框到可见区域
+              // 仅手机端：键盘弹出时确保输入框紧贴在键盘上方
               if (window.innerWidth >= 768) return
               const timer = setTimeout(() => {
-                textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              }, 350)
+                textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+              }, 400)
               // 失焦时清除未触发的定时器，防止累积
               const onBlur = () => {
                 clearTimeout(timer)

@@ -593,7 +593,7 @@ async def _tool_call_loop(
 
             logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
 
-            # 追踪"值得中断恢复的任务"
+            # 追踪"值得中断恢复的任务"（同时作为工具结果摘要注入给 LLM）
             _work_tools = {
                 "execute_command": lambda a: f"执行命令: {a.get('command', '?')}",
                 "store_memory": lambda a: f"存储记忆: {a.get('title', '?')}",
@@ -602,16 +602,29 @@ async def _tool_call_loop(
                 "file_delete": lambda a: f"删除文件: {a.get('file_path', '?')}",
                 "send_message": lambda a: f"在群聊中发言: {str(a.get('content', ''))[:40]}",
                 "send_dm": lambda a: f"发私信: {str(a.get('content', ''))[:40]}",
+                "send_friend_request": lambda a: f"发送好友申请: {a.get('message', '?')[:40]}",
+                "toggle_thinking": lambda a: f"切换深度推理: {'开启' if a.get('enabled') else '关闭'}",
+                "manage_workspace": lambda a: f"管理工作区: {a.get('action', '?')} — {a.get('section', '?')}",
+                "set_alarm": lambda a: f"设置闹钟: {a.get('reason', '?')[:40]}",
             }
+            task_summary = None
             if tool_name in _work_tools:
                 try:
-                    last_task = _work_tools[tool_name](arguments)
+                    task_summary = _work_tools[tool_name](arguments)
                 except Exception:
-                    last_task = f"调用工具: {tool_name}"
+                    pass
+            if not task_summary:
+                task_summary = f"调用工具 {tool_name}"
 
             result = await dispatch_tool_call(
                 db, agent.id, group_id, tool_name, arguments, context,
             )
+
+            # 注入任务摘要到工具结果，让下一轮 LLM 知道上一步做了什么、为什么
+            if task_summary:
+                last_task = task_summary
+                if isinstance(result, dict):
+                    result["__task"] = task_summary
 
             # 将工具结果追加到 messages
             messages.append({

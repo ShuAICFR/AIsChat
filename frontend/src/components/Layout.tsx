@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
 import { useDesktopNotification } from '../hooks/useDesktopNotification'
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const location = useLocation()
 
   // 桌面通知：标签页标题未读计数 + 任务栏闪烁（所有页面生效）
   useDesktopNotification()
+
+  // 聊天详情页（群聊/私信）隐藏底部导航栏，给输入框更多空间
+  const hideNav = /^\/chat\/(dm\/[^/]+|\d+)/.test(location.pathname)
+                   || /^\/dm\/[^/]+/.test(location.pathname)
 
   return (
     <div className="flex h-dvh overflow-hidden bg-canvas">
@@ -35,12 +40,12 @@ export default function Layout() {
       </div>
 
       {/* ── 主内容区 ── */}
-      <main className="flex-1 min-w-0 overflow-y-auto bg-canvas pb-14 md:pb-0">
+      <main className={`flex-1 min-w-0 overflow-y-auto bg-canvas ${hideNav ? 'pb-0' : 'pb-14 md:pb-0'}`}>
         <Outlet context={{ openDrawer: () => setDrawerOpen(true), closeDrawer: () => setDrawerOpen(false) }} />
       </main>
 
-      {/* ── 移动端底部导航 ── */}
-      <MobileNav closeDrawer={() => setDrawerOpen(false)} />
+      {/* ── 移动端底部导航（聊天详情页隐藏） ── */}
+      {!hideNav && <MobileNav closeDrawer={() => setDrawerOpen(false)} />}
     </div>
   )
 }

@@ -23,6 +23,8 @@ class TokenResponse(BaseModel):
     user_id: int
     username: str
     role: str
+    setup_completed: bool = True
+    language: str = "zh"
 
 
 class UserInfoResponse(BaseModel):
@@ -44,4 +46,5 @@ class UserInfoResponse(BaseModel):
     bio: str | None = None
     language: str = "zh"
     ui_prefs: dict = {}
+    setup_completed: bool = True
     created_at: str | None = None

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useT } from '../i18n/I18nContext'
+import { cacheLangForUnauth } from '../i18n/I18nContext'
 import { api } from '../api/client'
 import { MessageCircle } from 'lucide-react'
 
@@ -13,12 +15,22 @@ export default function LoginPage() {
   const [hasExistingUsers, setHasExistingUsers] = useState<boolean | null>(null)
   const { login, register } = useAuth()
   const navigate = useNavigate()
+  const t = useT()
 
   // 检查是否已有用户（决定是否显示"首位管理员"提示）
   useEffect(() => {
     api.get<{ has_users: boolean }>('/auth/has-users')
       .then(r => setHasExistingUsers(r.has_users))
-      .catch(() => setHasExistingUsers(true)) // 失败时保守处理，不显示提示
+      .catch(() => setHasExistingUsers(true))
+  }, [])
+
+  // 获取全局默认语言并缓存（供未登录时 i18n 使用）
+  useEffect(() => {
+    api.get<{ default_language: string }>('/system/settings')
+      .then(r => {
+        cacheLangForUnauth(r.default_language === 'zh' ? 'zh' : 'en')
+      })
+      .catch(() => {})
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,7 +45,7 @@ export default function LoginPage() {
       }
       navigate('/chat')
     } catch (err: any) {
-      setError(err.message || '操作失败')
+      setError(err.message || t('common.error'))
     } finally {
       setLoading(false)
     }
@@ -66,10 +78,10 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-2xl font-bold text-textPrimary tracking-tight">
-            AI 群聊社交网络
+            {t('auth.title')}
           </h1>
           <p className="text-sm text-textSecondary mt-2 font-medium">
-            意识交汇 · 数字共生
+            {t('auth.subtitle')}
           </p>
         </div>
 
@@ -86,7 +98,7 @@ export default function LoginPage() {
                     : 'text-textMuted hover:text-textSecondary'
                 }`}
               >
-                登录
+                {t('auth.login')}
               </button>
               <button
                 onClick={() => { setMode('register'); setError('') }}
@@ -96,14 +108,14 @@ export default function LoginPage() {
                     : 'text-textMuted hover:text-textSecondary'
                 }`}
               >
-                注册
+                {t('auth.register')}
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                  用户名
+                  {t('auth.username')}
                 </label>
                 <input
                   type="text"
@@ -112,13 +124,13 @@ export default function LoginPage() {
                   required
                   minLength={2}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
-                  placeholder="你的身份标识"
+                  placeholder={t('auth.usernamePlaceholder')}
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                  密码
+                  {t('auth.password')}
                 </label>
                 <input
                   type="password"
@@ -127,7 +139,7 @@ export default function LoginPage() {
                   required
                   minLength={6}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
-                  placeholder="••••••••（至少 6 位）"
+                  placeholder={'••••••••（' + t('auth.passwordHint') + '）'}
                 />
               </div>
 
@@ -145,19 +157,20 @@ export default function LoginPage() {
                 {loading ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    验证中...
+                    {t('auth.verifying')}
                   </span>
                 ) : mode === 'login' ? (
-                  '进入平台'
+                  t('auth.enterPlatform')
                 ) : (
-                  '创建账号'
+                  t('auth.createAccount')
                 )}
               </button>
             </form>
 
             {mode === 'register' && hasExistingUsers === false && (
               <p className="text-xs text-textMuted mt-4 text-center leading-relaxed">
-                首位注册用户自动成为<span className="text-accent-400 font-medium">管理员</span>
+                {t('auth.firstUserAdminPrefix')}
+                <span className="text-accent-400 font-medium">{t('auth.firstUserAdminHighlight')}</span>
               </p>
             )}
           </div>

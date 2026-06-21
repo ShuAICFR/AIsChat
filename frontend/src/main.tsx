@@ -4,6 +4,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './App'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
+import { I18nProvider } from './i18n/I18nContext'
 import './index.css'
 import 'katex/dist/katex.min.css'
 
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <I18nProvider>
+          <RouterProvider router={router} />
+        </I18nProvider>
       </AuthProvider>
     </ThemeProvider>
   </React.StrictMode>,

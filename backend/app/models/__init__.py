@@ -26,6 +26,7 @@ from app.models.conversation_log import ConversationLogConfig, ConversationLog
 from app.models.agent_metrics import AgentMetricsSnapshot
 from app.models.api_key_pool import ApiKeyPool, UserApiAssignment
 from app.models.api_usage_log import ApiUsageLog
+from app.models.system_settings import SystemSettings
 
 __all__ = [
     "User",
@@ -65,4 +66,5 @@ __all__ = [
     "ApiKeyPool",
     "UserApiAssignment",
     "ApiUsageLog",
+    "SystemSettings",
 ]

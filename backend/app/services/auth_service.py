@@ -36,7 +36,15 @@ async def register_user(
         password_hash=hash_password(password),
         role="admin" if is_first else "user",
         ai_quota=3,
+        setup_completed=False,  # 新用户需完成初始化设置向导
     )
+    # 读取全局默认语言作为新用户初始语言
+    try:
+        from app.services.system_settings_service import get_settings
+        sys = await get_settings(db)
+        user.language = sys.get("default_language", "zh")
+    except Exception:
+        user.language = "zh"
     db.add(user)
     await db.flush()
     await db.refresh(user)
@@ -79,6 +87,8 @@ async def login_user(
         "user_id": user.id,
         "username": user.username,
         "role": user.role,
+        "setup_completed": getattr(user, "setup_completed", True),
+        "language": getattr(user, "language", "zh") or "zh",
     }
 
 
@@ -121,6 +131,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "timezone": user.timezone or "Asia/Shanghai",
         "language": user.language or "zh",
         "ui_prefs": user.ui_prefs or {},
+        "setup_completed": getattr(user, "setup_completed", True),
         "created_at": str(user.created_at) if user.created_at else None,
         "assigned_pool_key_name": assigned_pool_key_name,
     }

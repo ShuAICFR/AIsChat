@@ -51,6 +51,7 @@ async def run_migrations():
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
+            await _migrate_system_settings(db)          # v1.0.0 全局系统设置 + 新用户初始化向导
             await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志
             await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
@@ -1095,6 +1096,48 @@ async def _migrate_agent_metrics(db):
         logger.info("  ✅ agent_metrics 表创建完成")
     else:
         logger.info("  ⏭ agent_metrics 已存在，跳过")
+
+
+async def _migrate_system_settings(db):
+    """v1.0.0: 平台全局系统设置表 + users.setup_completed 列"""
+    logger.info("  ⚙️ 迁移系统设置表...")
+    created_any = False
+
+    # 1. system_settings 表
+    if not await _table_exists(db, "system_settings"):
+        logger.info("  ⚙️ 创建 system_settings 表")
+        await db.execute(text("""
+            CREATE TABLE system_settings (
+                id INTEGER PRIMARY KEY DEFAULT 1,
+                default_language VARCHAR(10) NOT NULL DEFAULT 'en',
+                updated_by INTEGER REFERENCES users(id),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.execute(text("""
+            INSERT INTO system_settings (id, default_language) VALUES (1, 'en')
+            ON CONFLICT (id) DO NOTHING
+        """))
+        created_any = True
+        logger.info("  ✅ system_settings 表创建完成（默认语言=en）")
+    else:
+        logger.info("  ⏭ system_settings 表已存在，跳过")
+
+    # 2. users.setup_completed 列
+    if not await _column_exists(db, "users", "setup_completed"):
+        logger.info("  ✅ 添加 users.setup_completed 列（现有用户默认 TRUE）")
+        await db.execute(text(
+            "ALTER TABLE users ADD COLUMN setup_completed BOOLEAN NOT NULL DEFAULT TRUE"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.setup_completed 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ 系统设置迁移完成")
+    else:
+        logger.info("  ⏭ 系统设置均已存在，跳过")
 
 
 async def _migrate_api_key_pool_tables(db):

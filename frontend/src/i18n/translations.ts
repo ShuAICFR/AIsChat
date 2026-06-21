@@ -199,6 +199,37 @@ const zh: TranslationDict = {
   'common.back': '返回',
   'common.more': '更多',
 
+  // === 登录 / Auth ===
+  'auth.login': '登录',
+  'auth.register': '注册',
+  'auth.username': '用户名',
+  'auth.password': '密码',
+  'auth.usernamePlaceholder': '你的身份标识',
+  'auth.passwordHint': '至少 6 位',
+  'auth.verifying': '验证中...',
+  'auth.enterPlatform': '进入平台',
+  'auth.createAccount': '创建账号',
+  'auth.firstUserAdminPrefix': '首位注册用户自动成为',
+  'auth.firstUserAdminHighlight': '管理员',
+  'auth.title': 'AI 群聊社交网络',
+  'auth.subtitle': '意识交汇 · 数字共生',
+
+  // === 设置向导 / Setup ===
+  'setup.title': '初始化设置',
+  'setup.step1Title': '选择语言',
+  'setup.step1Desc': '选择界面显示语言，之后可在设置中修改',
+  'setup.step2Title': '确认完成',
+  'setup.step2Desc': '您的偏好已记录，开始使用 AIsChat',
+  'setup.complete': '完成设置',
+  'setup.next': '下一步',
+  'setup.back': '上一步',
+  'setup.selectedLang': '所选语言',
+
+  // === 管理 / Admin 补充 ===
+  'admin.system': '平台设置',
+  'admin.systemDesc': '全局默认语言等',
+  'admin.systemCategory': '系统配置',
+
   // === 时间 / Time ===
   'time.yesterday': '昨天',
   'time.daysAgo': '天前',
@@ -382,6 +413,37 @@ const en: TranslationDict = {
   'admin.audit': 'Audit',
   'admin.systemMetrics': 'System Metrics',
 
+  // === Auth ===
+  'auth.login': 'Login',
+  'auth.register': 'Register',
+  'auth.username': 'Username',
+  'auth.password': 'Password',
+  'auth.usernamePlaceholder': 'Your identity',
+  'auth.passwordHint': 'At least 6 characters',
+  'auth.verifying': 'Verifying...',
+  'auth.enterPlatform': 'Enter Platform',
+  'auth.createAccount': 'Create Account',
+  'auth.firstUserAdminPrefix': 'First registered user automatically becomes ',
+  'auth.firstUserAdminHighlight': 'admin',
+  'auth.title': 'AI Group Chat',
+  'auth.subtitle': 'Minds Converge · Digital Symbiosis',
+
+  // === Setup ===
+  'setup.title': 'Initial Setup',
+  'setup.step1Title': 'Select Language',
+  'setup.step1Desc': 'Choose your display language. You can change it later in Settings.',
+  'setup.step2Title': 'Confirmation',
+  'setup.step2Desc': 'Your preferences have been saved. Start using AIsChat.',
+  'setup.complete': 'Complete Setup',
+  'setup.next': 'Next',
+  'setup.back': 'Back',
+  'setup.selectedLang': 'Selected Language',
+
+  // === Admin Extra ===
+  'admin.system': 'Platform Settings',
+  'admin.systemDesc': 'Global default language etc.',
+  'admin.systemCategory': 'System Config',
+
   // === Common ===
   'common.loading': 'Loading...',
   'common.error': 'Error',
@@ -415,24 +477,12 @@ export function getTranslation(
   lang: 'zh' | 'en',
   path: string
 ): string {
+  // 扁平字典直接查找（key 本身就是 'nav.chat' 这种带点的字符串）
   const dict = translations[lang] || translations.zh
-  const keys = path.split('.')
-  let current: unknown = dict
-  for (const key of keys) {
-    if (typeof current === 'object' && current !== null && key in current) {
-      current = (current as Record<string, unknown>)[key]
-    } else {
-      // fallback to zh
-      let fallback: unknown = translations.zh
-      for (const k of keys) {
-        if (typeof fallback === 'object' && fallback !== null && k in fallback) {
-          fallback = (fallback as Record<string, unknown>)[k]
-        } else {
-          return path
-        }
-      }
-      return typeof fallback === 'string' ? fallback : path
-    }
-  }
-  return typeof current === 'string' ? current : path
+  const val = (dict as Record<string, unknown>)[path]
+  if (typeof val === 'string') return val
+  // fallback to zh
+  const fb = (translations.zh as Record<string, unknown>)[path]
+  if (typeof fb === 'string') return fb
+  return path
 }

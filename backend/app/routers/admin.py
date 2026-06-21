@@ -753,6 +753,45 @@ async def upload_full_restore(
 
 
 # ============================================================
+# 系统设置（全局默认语言等）
+# ============================================================
+
+from app.services.system_settings_service import get_settings, update_settings
+from app.schemas.system_settings import UpdateSystemSettingsRequest, SystemSettingsResponse
+
+
+@router.get("/system-settings", response_model=SystemSettingsResponse)
+async def get_system_settings(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取全局系统设置"""
+    return await get_settings(db)
+
+
+@router.put("/system-settings", response_model=SystemSettingsResponse)
+async def update_system_settings(
+    req: UpdateSystemSettingsRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新全局系统设置"""
+    try:
+        result = await update_settings(
+            db,
+            default_language=req.default_language,
+            updated_by=admin["user_id"],
+        )
+        await _log_admin_action(
+            db, admin["user_id"], "update_system_settings", "system", 1,
+            req.model_dump(exclude_none=True),
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ============================================================
 # OpenCLI 权限管理
 # ============================================================
 

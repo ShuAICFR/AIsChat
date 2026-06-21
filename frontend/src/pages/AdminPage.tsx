@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings } from 'lucide-react'
 import { MANUAL_URL } from '../constants'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
@@ -9,7 +9,7 @@ import UsageDashboardTab from '../components/UsageDashboardTab'
 import SystemMetricsTab from '../components/SystemMetricsTab'
 import ApiKeyPoolTab from '../components/ApiKeyPoolTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool' | 'system'
 type TabCategory = '核心管理' | '系统配置' | '运维分析'
 
 const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; category: TabCategory }[] = [
@@ -26,6 +26,7 @@ const tabs: { key: Tab; label: string; icon: React.ElementType; desc: string; ca
   { key: 'usage', label: '用量分析', icon: BarChart3, desc: '全站 Token 消耗统计', category: '运维分析' },
   { key: 'metrics', label: '系统监控', icon: Activity, desc: '实时性能指标与延迟趋势', category: '运维分析' },
   { key: 'apipool', label: 'API 库', icon: Key, desc: 'API Key 池管理', category: '系统配置' },
+  { key: 'system', label: '平台设置', icon: Settings, desc: '全局默认语言等', category: '系统配置' },
 ]
 
 const renderContent = (activeTab: Tab) => {
@@ -43,6 +44,7 @@ const renderContent = (activeTab: Tab) => {
     case 'usage': return <UsageDashboardTab />
     case 'metrics': return <SystemMetricsTab />
     case 'apipool': return <ApiKeyPoolTab />
+    case 'system': return <SystemSettingsTab />
     default: return <OverviewTab />
   }
 }
@@ -1328,6 +1330,67 @@ function OpenCLILogsSection() {
           className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
           下一页
         </button>
+      </div>
+    </div>
+  )
+}
+
+
+// ════════════════════════════════════════════════════════════
+// 平台设置 Tab（全局默认语言等）
+// ════════════════════════════════════════════════════════════
+
+function SystemSettingsTab() {
+  const [config, setConfig] = useState<any>(null)
+  const [lang, setLang] = useState('en')
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  useEffect(() => {
+    api.get('/admin/system-settings').then(d => {
+      setConfig(d)
+      setLang(d.default_language || 'en')
+    }).catch(console.error)
+  }, [])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setMsg('')
+    try {
+      const updated = await api.put('/admin/system-settings', { default_language: lang })
+      setConfig(updated)
+      setMsg('保存成功')
+    } catch (err: any) {
+      setMsg(err.message || '保存失败')
+    }
+    setSaving(false)
+  }
+
+  if (!config) return <p className="text-textMuted p-6">加载中...</p>
+
+  return (
+    <div className="bg-surface rounded-xl border border-border p-5 max-w-lg">
+      <h3 className="font-semibold text-textPrimary mb-4">平台全局设置</h3>
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1 text-textSecondary">全局默认语言</label>
+          <p className="text-xs text-textMuted mb-2">
+            新用户未主动选择时沿用此默认值。已主动设置语言的用户不受影响。
+          </p>
+          <select
+            value={lang}
+            onChange={(e) => setLang(e.target.value)}
+            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary"
+          >
+            <option value="zh">中文（简体）</option>
+            <option value="en">English</option>
+          </select>
+        </div>
+        <button onClick={handleSave} disabled={saving}
+          className="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm disabled:opacity-40">
+          {saving ? '保存中...' : '保存设置'}
+        </button>
+        {msg && <p className={`text-sm mt-2 ${msg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>{msg}</p>}
       </div>
     </div>
   )

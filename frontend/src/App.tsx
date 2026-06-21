@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
@@ -11,9 +11,12 @@ import MePage from './pages/MePage'
 import UsagePage from './pages/UsagePage'
 import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
+import SetupPage from './pages/SetupPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
+  const location = useLocation()
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -22,6 +25,12 @@ function ProtectedLayout() {
     )
   }
   if (!user) return <Navigate to="/login" replace />
+
+  // 新用户需先完成初始化设置向导
+  if (!user.setup_completed && location.pathname !== '/setup') {
+    return <Navigate to="/setup" replace />
+  }
+
   return <Layout />
 }
 
@@ -53,6 +62,7 @@ export const router = createBrowserRouter([
       { path: 'me', element: <MePage /> },
       { path: 'me/usage', element: <UsagePage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'setup', element: <SetupPage /> },
       {
         path: 'admin',
         element: <AdminGuard><AdminPage /></AdminGuard>,

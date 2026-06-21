@@ -3,7 +3,6 @@ import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
 import { useDesktopNotification } from '../hooks/useDesktopNotification'
-import { I18nProvider } from '../i18n/I18nContext'
 
 export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -17,7 +16,6 @@ export default function Layout() {
                    || /^\/dm\/[^/]+/.test(location.pathname)
 
   return (
-    <I18nProvider>
     <div className="flex h-dvh overflow-hidden bg-canvas">
       {/* ── 桌面端侧栏（始终可见） ── */}
       <div className="hidden md:block shrink-0">
@@ -49,6 +47,5 @@ export default function Layout() {
       {/* ── 移动端底部导航（聊天详情页隐藏） ── */}
       {!hideNav && <MobileNav closeDrawer={() => setDrawerOpen(false)} />}
     </div>
-    </I18nProvider>
   )
 }

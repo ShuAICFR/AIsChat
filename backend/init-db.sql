@@ -518,6 +518,28 @@ CREATE TABLE IF NOT EXISTS federation_group_shares (
 );
 
 -- ============================================================
+-- 平台全局系统设置（单行表，id=1）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS system_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    default_language VARCHAR(10) NOT NULL DEFAULT 'en',
+    updated_by INTEGER REFERENCES users(id),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+INSERT INTO system_settings (id, default_language) SELECT 1, 'en'
+WHERE NOT EXISTS (SELECT 1 FROM system_settings WHERE id = 1);
+
+-- users.setup_completed（幂等：已存在则跳过）
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'users' AND column_name = 'setup_completed'
+    ) THEN
+        ALTER TABLE users ADD COLUMN setup_completed BOOLEAN NOT NULL DEFAULT TRUE;
+    END IF;
+END $$;
+
+-- ============================================================
 -- 索引
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_messages_group_id ON messages(group_id);

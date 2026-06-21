@@ -52,4 +52,7 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     bio = Column(Text, nullable=True)
 
+    # 初始化设置向导是否完成
+    setup_completed = Column(Boolean, default=False)
+
     created_at = Column(DateTime, server_default=func.now())

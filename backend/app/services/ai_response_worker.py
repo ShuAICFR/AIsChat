@@ -252,6 +252,21 @@ async def _maybe_trigger_ai_reply(
         logger.info(f"AI {agent.name}({agent_id}) 在 DND，消息已暂存")
         return
 
+    # ═══════════════════════════════════════════════════════
+    # Gate 1: 快速过滤器（按 config_profile 差异化）
+    # 聊天档：仅 @提及 或 human 发消息才进入 Gate 2
+    # 沉浸档：@提及 + 话题相关性 → Gate 2
+    # 数字生命档：全部进入 Gate 2
+    # ═══════════════════════════════════════════════════════
+    profile = getattr(agent, 'config_profile', 'chat') or 'chat'
+
+    if not is_mentioned and profile == 'chat':
+        # 聊天档：只有被 @ 才回复（省掉意愿计算、记忆检索等全部后续处理）
+        # human 发的消息也放行（可能是对话的延续）
+        if sender_type != 'human':
+            logger.info(f"AI {agent.name}({agent_id}) 聊天档未@且非人类消息，Gate 1 静默")
+            return
+
     # 3. 计算意愿（v0.4.0: WillingnessResult 含逐因子原因 + 行为级别）
     w = await calculate_willingness(db, agent_id, group_id, content)
     logger.info(f"🔍 AI {agent.name}({agent_id}): {w.score}分 [{w.level}] — {w.reason}")

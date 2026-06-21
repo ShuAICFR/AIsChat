@@ -38,6 +38,7 @@ async def run_migrations():
             await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
             await _migrate_reminder_not_count(db)     # v0.4.1 系统提醒不计入轮次
             await _migrate_agents_user_id(db)
+            await _migrate_friend_controls(db)         # v1.0.0 好友控制字段（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -52,7 +53,6 @@ async def run_migrations():
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志
             await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
-            await _migrate_friend_controls(db)         # v1.0.0 好友控制字段
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()

@@ -115,6 +115,8 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
 async def update_user_settings(
     db: AsyncSession,
     user_id: int,
+    username: str | None = None,
+    password: str | None = None,
     api_base_url: str | None = None,
     api_key: str | None = None,
     auto_approve_vector_timeout: int | None = None,
@@ -125,12 +127,20 @@ async def update_user_settings(
     avatar_url: str | None = None,
     bio: str | None = None,
 ) -> dict:
-    """更新用户设置"""
+    """更新用户设置（含用户名和密码修改）"""
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise ValueError("用户不存在")
 
+    if username is not None:
+        # 检查用户名唯一性
+        existing = await db.execute(select(User).where(User.username == username, User.id != user_id))
+        if existing.scalar_one_or_none():
+            raise ValueError("用户名已被占用")
+        user.username = username
+    if password is not None:
+        user.password_hash = hash_password(password)
     if api_base_url is not None:
         user.api_base_url = api_base_url
     if api_key is not None:

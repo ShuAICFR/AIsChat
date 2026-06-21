@@ -15,6 +15,8 @@ router = APIRouter(prefix="/user", tags=["用户设置"])
 
 class UpdateSettingsRequest(BaseModel):
     """更新用户设置请求"""
+    username: str | None = Field(None, min_length=1, max_length=50)
+    password: str | None = Field(None, min_length=6, max_length=100)
     api_base_url: str | None = None
     api_key: str | None = None
     auto_approve_vector_timeout: int | None = None
@@ -37,11 +39,13 @@ async def update_settings(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """更新用户设置（API Key、策略模式等）"""
+    """更新用户设置（用户名、密码、API Key、策略模式等）"""
     try:
         return await update_user_settings(
             db,
             user_id=current_user["user_id"],
+            username=req.username,
+            password=req.password,
             api_base_url=req.api_base_url,
             api_key=req.api_key,
             auto_approve_vector_timeout=req.auto_approve_vector_timeout,
@@ -49,6 +53,8 @@ async def update_settings(
             timezone=req.timezone,
             language=req.language,
             ui_prefs=req.ui_prefs,
+            avatar_url=req.avatar_url,
+            bio=req.bio,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

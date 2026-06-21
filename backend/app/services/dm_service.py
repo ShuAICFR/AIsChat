@@ -262,13 +262,14 @@ async def send_dm_message(
     await db.flush()
     await db.refresh(msg)
 
-    # 构建返回的消息字典（含 sender_type，前端阵营判断需要）
+    # 构建返回的消息字典（含 sender_type 和 avatar，前端阵营判断需要）
     result = await db.execute(
-        select(User.username, User.type).where(User.id == sender_id)
+        select(User.username, User.type, User.avatar_url).where(User.id == sender_id)
     )
     row = result.one_or_none()
     sender_name = row[0] if row else f"用户{sender_id}"
     sender_type = (row[1] or "human") if row else "human"
+    sender_avatar_url = row[2] if row else None
     # 解析 attachments
     parsed_attachments = None
     if msg.attachments:
@@ -282,6 +283,7 @@ async def send_dm_message(
         "sender_id": msg.sender_id,
         "sender_name": sender_name,
         "sender_type": sender_type,
+        "sender_avatar_url": sender_avatar_url,
         "content": msg.content,
         "reply_to": msg.reply_to,
         "attachments": parsed_attachments,

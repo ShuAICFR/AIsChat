@@ -39,32 +39,6 @@
 
 ---
 
-### 补丁 (2026-06-21)
-
-### Fixed
-
-- 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 产生 minify 变量名冲突（`t2 is not a function`）。修复：子组件改用自身 `useT()` 而非接收 prop。
-- 🐛 **DM Offline 状态显示绿色**：私信头部在线状态文字硬编码 `text-mint-400`，离线时仍显示绿色。改为动态映射 active=绿/dnd=红/offline=灰。
-- 🐛 **英文界面仍有多处中文**：AdminPage 备份下载失败 `'下载失败'` 改用 i18n；Token 数字格式化 `fmtTokenNum` 新增 `lang` 参数（中文=万，英文=K/M）；AgentsPage `stateLabels`/`PRESET_LABELS`/`PARAM_LABELS` 全部改用翻译键。
-- 🐛 **Agent 卡片按钮溢出**：Edit/History/Status/Export 按钮在小屏上撑出卡片。加 `flex-wrap`。
-- 🐛 **消息 Markdown 链接不渲染**：用户消息使用纯文本 `<span>`，导致 `[文字](URL)` 不显示为可点击链接。改为统一使用 `<Markdown>` 渲染。
-- 🐛 **消息纯文本换行不生效**：添加 `remark-breaks` 插件，单回车自动转为 `<br>`。
-- 🐛 **公式/代码块/长链接溢出**：消息气泡新增 `overflow-x-auto` 规则覆盖 `.katex-display` / `pre` / `table` / `img` / `a`，超宽内容可左右滑动查看。
-
-### Added
-
-- 📖 **用户手册独立页面**：新建 `ManualPage` 组件（`react-markdown` + `remark-gfm` + `@tailwindcss/typography` 渲染），路由 `/manual`。侧边栏改用 `NavLink`（无出站图标），版本与部署代码一致。
-- 🛡️ **外部链接安全弹窗**：新建 `ExternalLinkSafe` 组件。点击外部链接弹出确认弹窗（「即将离开本站 → 目标 URL → 确认前往/取消」），防止无意识跳转。FederationTab 的 GitHub 链接已接入。
-- 📐 **MePage 标题**：添加页面标题 `{t('me.title')}`（"我的"/"Me"），设置入口从三行简化为单行「设置」链接。
-
-### Changed
-
-- 🔄 `MANUAL_URL` 从 `/docs/用户手册.md`（原始文本文件）改为 `/manual`（React 路由页面）
-- 🔄 Sidebar 手册链接从 `<a target="_blank">` 改为 `<NavLink>`，移除 `ExternalLink` 出站图标
-- 🔄 MePage/UsagePage `fmtTokenNum` 调用全部传入 `lang` 参数，英文界面显示 K/M 而非 万
-
----
-
 ## [v1.0.0] - 2026-06-21
 
 ### Added
@@ -78,13 +52,18 @@
 - 🌐 **全局默认语言**：`system_settings` 单行表（id=1），`default_language` 默认 `"en"`（英文）。管理员 `/admin?tab=system` 可切换全局默认语言。未登录时登录页自动获取并缓存全局语言偏好。新用户注册时从全局设置继承初始语言。
 - 🧙 **新用户初始化向导**：`users.setup_completed` 字段。新用户注册后强制跳转 `/setup` 两步向导（第 1 步选语言 → 第 2 步确认完成）。语言选择时界面即时预览切换。`ProtectedLayout` 路由守卫拦截。现有用户自动标记为已完成。
 - 🔧 `translations.ts` 扁平字典结构修复：`getTranslation()` 原用 `path.split('.')` 深度遍历但字典是扁平 key（`'nav.chat'`），导致所有 `t()` 调用返回原始 key。改为直接 `dict[path]` 查找。
+- 📖 **用户手册独立页面**：新建 `ManualPage` 组件（`react-markdown` + `remark-gfm` + `@tailwindcss/typography` 渲染），路由 `/manual`。侧边栏改用 `NavLink`（无出站图标），版本与部署代码一致。
+- 🛡️ **外部链接安全弹窗**：新建 `ExternalLinkSafe` 组件。点击外部链接弹出确认弹窗（「即将离开本站 → 目标 URL → 确认前往/取消」），防止无意识跳转。FederationTab 的 GitHub 链接已接入。
+- 📐 **MePage 标题**：添加页面标题 `{t('me.title')}`（"我的"/"Me"），设置入口从三行简化为单行「设置」链接。
 
 ### Changed
 
 - 🔄 **API Key 解析链升级**：`_get_api_config` 从二层（Agent→User）升级为四层优先链。DM 触发器中内联的 API 解析代码替换为统一调用 `_get_api_config`，消除重复逻辑。
 - 🔄 **前端额度展示增强**：Sidebar 非管理员显示「额度 + 余额」双数字；MePage「通用额度」卡片显示估算 Token 数和池 Key 来源；AdminPage 新增「API 库」tab。
 - 🔄 **群聊路由对称化**：群聊路由 `/chat/:groupId` → `/chat/gm/:groupId`（GM=Group Message），与私信 `/chat/dm/:sessionId`（DM=Direct Message）形成同级对称结构。涉及 App.tsx、ChatSidebar.tsx、ChatArea.tsx。
-- 🔄 **用户手册本地化**：`MANUAL_URL` 从 GitHub 链接改为本地 `/docs/用户手册.md`，docker-compose 挂载 `./docs` 到 frontend `public/`，确保用户看到的文档版本始终与部署代码匹配。
+- 🔄 **用户手册本地化**：`MANUAL_URL` 从 GitHub 链接改为本地 React 页面 `/manual`（`ManualPage` 组件渲染 `docs/用户手册.md`），版本始终与部署代码匹配。
+- 🔄 Sidebar 手册链接从 `<a target="_blank">` 改为 `<NavLink>`，移除出站图标
+- 🔄 MePage/UsagePage `fmtTokenNum` 调用全部传入 `lang` 参数，英文界面显示 K/M 而非 万
 
 ### Fixed
 
@@ -97,6 +76,13 @@
 - 🐛 修复时区偏移：后端 `DateTime` 列无 `timezone=True`，Pydantic 序列化为 naive UTC 字符串，前端 `new Date()` 将其误判为本地时间导致消息时间晚 8 小时。`time.ts` 新增 `parseServerDate()` 辅助函数对无时区标记字符串追加 `Z`
 - 🐛 修复聊天消息气泡无折行控制：长 URL/长英文单词溢出。`MessageBubble.tsx` 气泡容器加 `break-words`
 - 🐛 修复输入框内容丢失：页面刷新/崩溃/掉线后输入内容消失。新增草稿自动缓存（500ms 防抖写 localStorage），切换对话时保存/恢复，发送成功后自动清除
+- 🐛 修复 GroupSettingsPanel 生产构建崩溃：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 产生 minify 变量名冲突（`t2 is not a function`）。子组件改用自身 `useT()` 而非接收 prop
+- 🐛 修复 DM Offline 状态显示绿色：私信头部在线状态文字硬编码 `text-mint-400`。改为动态映射 active=绿/dnd=红/offline=灰
+- 🐛 修复英文界面仍有多处中文：AdminPage 备份下载失败 `'下载失败'` 改用 i18n；Token 格式化 `fmtTokenNum` 新增 `lang` 参数（zh=万，en=K/M）；AgentsPage `stateLabels` 改用翻译键
+- 🐛 修复 Agent 卡片按钮溢出：Edit/History/Status/Export 按钮在小屏上撑出卡片，加 `flex-wrap`
+- 🐛 修复消息 Markdown 链接不渲染：用户消息使用纯文本 `<span>`，导致 `[文字](URL)` 不显示为可点击链接。改为统一使用 `<Markdown>` 渲染
+- 🐛 修复消息纯文本换行不生效：添加 `remark-breaks` 插件，单回车自动转为 `<br>`
+- 🐛 修复公式/代码块/长链接溢出：消息气泡新增 `overflow-x-auto` 规则覆盖 `.katex-display`/`pre`/`table`/`img`/`a`
 
 ### Backend API
 

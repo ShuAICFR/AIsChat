@@ -582,12 +582,12 @@ export default function AgentDetailPage() {
                     <span className="text-textMuted">{t('agentDetail.forceAlarm')}</span>
                     <button
                       onClick={() => handleUpdateAgentField('force_alarm_on_end', !agent.force_alarm_on_end)}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
                         agent.force_alarm_on_end ? 'bg-mint-400' : 'bg-border'
                       }`}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.force_alarm_on_end ? 'translate-x-5' : 'translate-x-0.5'
+                        agent.force_alarm_on_end ? 'translate-x-[18px]' : 'translate-x-[2px]'
                       }`} />
                     </button>
                   </div>
@@ -615,12 +615,12 @@ export default function AgentDetailPage() {
                     <span className="text-textMuted">{t('agentDetail.allowFriendRequests')}</span>
                     <button
                       onClick={() => handleUpdateAgentField('allow_friend_requests', !agent.allow_friend_requests)}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
                         agent.allow_friend_requests ? 'bg-mint-400' : 'bg-border'
                       }`}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.allow_friend_requests ? 'translate-x-5' : 'translate-x-0.5'
+                        agent.allow_friend_requests ? 'translate-x-[18px]' : 'translate-x-[2px]'
                       }`} />
                     </button>
                   </div>
@@ -629,12 +629,12 @@ export default function AgentDetailPage() {
                     <button
                       onClick={() => handleUpdateAgentField('auto_respond_friend_request', !agent.auto_respond_friend_request)}
                       disabled={!agent.allow_friend_requests}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
                         agent.auto_respond_friend_request ? 'bg-mint-400' : 'bg-border'
                       } ${!agent.allow_friend_requests ? 'opacity-40 cursor-not-allowed' : ''}`}
                     >
                       <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.auto_respond_friend_request ? 'translate-x-5' : 'translate-x-0.5'
+                        agent.auto_respond_friend_request ? 'translate-x-[18px]' : 'translate-x-[2px]'
                       }`} />
                     </button>
                   </div>

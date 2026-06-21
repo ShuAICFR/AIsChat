@@ -180,7 +180,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
           onCreated={(newGroup) => {
             setShowCreateGroup(false)
             setGroups((prev) => [...prev, newGroup])
-            navigate(`/chat/${newGroup.id}`)
+            navigate(`/chat/gm/${newGroup.id}`)
           }}
         />
       )}

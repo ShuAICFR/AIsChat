@@ -69,6 +69,8 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
   // Refs
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const inputRef = useRef(input)
+  inputRef.current = input // 保持同步，供 effect cleanup 闭包读取最新值
   const containerRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
   const bottomSentinelRef = useRef<HTMLDivElement>(null)
@@ -89,7 +91,36 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         localStorage.setItem(key, String(newestIdRef.current))
       }
     }
-  }, [conversationId, conversationType])
+  }, [conversationType, conversationId])
+
+  // 输入框草稿缓存：切换对话时保存旧草稿、恢复新草稿；页面刷新/崩溃后内容不丢
+  useEffect(() => {
+    if (!conversationId) return
+    const draftKey = `draft_${conversationType}_${conversationId}`
+    const draft = localStorage.getItem(draftKey)
+    setInput(draft || '')
+    return () => {
+      if (inputRef.current.trim()) {
+        localStorage.setItem(draftKey, inputRef.current)
+      } else {
+        localStorage.removeItem(draftKey)
+      }
+    }
+  }, [conversationType, conversationId])
+
+  // 输入中自动保存草稿（500ms 防抖，防止崩溃/掉线丢失）
+  useEffect(() => {
+    if (!conversationId) return
+    const draftKey = `draft_${conversationType}_${conversationId}`
+    const timer = setTimeout(() => {
+      if (input.trim()) {
+        localStorage.setItem(draftKey, input)
+      } else {
+        localStorage.removeItem(draftKey)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [input, conversationType, conversationId])
 
   const { lastMessage, connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(conversationType, conversationId)
 
@@ -573,6 +604,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
     sendMessage(input.trim() || '(附件)', undefined, readyAttachments.length > 0 ? readyAttachments : undefined)
     setInput('')
+    localStorage.removeItem(`draft_${conversationType}_${conversationId}`)
     setPendingAttachments([])
     setMentionActive(false)
     setTimeout(() => {

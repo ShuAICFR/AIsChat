@@ -192,7 +192,7 @@ export default function ChatSidebar({
                 if (g.id === activeGroupId && mobileFullscreen) {
                   onMobileBack?.()
                 } else {
-                  navigate(`/chat/${g.id}`)
+                  navigate(`/chat/gm/${g.id}`)
                 }
               }}
               className={`w-full text-left px-3 py-2 text-sm transition-all duration-150 ${

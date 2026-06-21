@@ -1,5 +1,5 @@
-// 外部链接
-export const MANUAL_URL = 'https://github.com/ShuAICFR/AIsChat/blob/main/docs/%E7%94%A8%E6%88%B7%E6%89%8B%E5%86%8C.md'
+// 外部链接（用户手册始终使用本地版本，与部署代码版本一致，不跳转 GitHub）
+export const MANUAL_URL = '/docs/用户手册.md'
 
 // ============================================================
 // AI/用户在线状态颜色（统一数据源，避免散落硬编码）

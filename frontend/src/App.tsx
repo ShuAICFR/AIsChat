@@ -52,8 +52,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/chat" replace /> },
       { path: 'chat', element: <ChatPage /> },
-      { path: 'chat/dm/:sessionId', element: <ChatPage /> },
-      { path: 'chat/:groupId', element: <ChatPage /> },
+      { path: 'chat/gm/:groupId', element: <ChatPage /> },
       { path: 'dm', element: <Navigate to="/chat" replace /> },
       { path: 'dm/:sessionId', element: <DMPage /> },
       { path: 'friends', element: <FriendsPage /> },

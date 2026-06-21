@@ -50,6 +50,7 @@ async def run_migrations():
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
+            await db.commit()
             logger.info("✅ 数据库迁移检查完成")
         except Exception as e:
             await db.rollback()
@@ -765,6 +766,12 @@ async def _migrate_reminder_not_count(db):
     else:
         logger.info("  ⏭ agents.reminder_grace 已存在，跳过")
 
+    # 清理旧列 reminder_not_count（已被 reminder_grace 取代，模型不再引用）
+    if await _column_exists(db, "agents", "reminder_not_count"):
+        logger.info("  🧹 清理废弃列 agents.reminder_not_count")
+        await db.execute(text("ALTER TABLE agents DROP COLUMN reminder_not_count"))
+        logger.info("  ✅ agents.reminder_not_count 已删除")
+
 
 async def _migrate_archive_friend_tables(db):
     """v0.4.0: 归档好友表（已废弃 — 好友机制已恢复，此迁移不再执行）"""
@@ -977,28 +984,34 @@ async def _migrate_message_attachments(db):
 
 
 async def _fix_file_owner_type_check(db):
-    """v0.5.0+: 修复 file_metadata.owner_type CHECK 约束缺少 'human'（消息附件上传需要）"""
+    """v0.5.0+: 修复 file_metadata.owner_type CHECK 约束缺少 'human'（消息附件上传需要）
+
+    数据库中的约束可能有两种命名：SQLAlchemy ORM 显式命名的 ck_file_owner_type，
+    或 init-db.sql 内联 CHECK 由 PG 自动命名的 file_metadata_owner_type_check。
+    """
+    # 查找 file_metadata 表上限制 owner_type 的 CHECK 约束（可能有不同命名）
     result = await db.execute(text("""
-        SELECT pg_get_constraintdef(oid)
+        SELECT conname, pg_get_constraintdef(oid)
         FROM pg_constraint
-        WHERE conname = 'ck_file_owner_type' AND contype = 'c'
+        WHERE conrelid = 'file_metadata'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%owner_type%'
     """))
     row = result.fetchone()
     if row is None:
-        logger.info("  ⏭ ck_file_owner_type 约束不存在，跳过")
+        logger.info("  ⏭ file_metadata.owner_type CHECK 约束不存在，跳过")
         return
-    current_def = row[0]
+    conname, current_def = row
     if "'human'" in current_def:
-        logger.info("  ⏭ ck_file_owner_type 已包含 human，跳过")
+        logger.info(f"  ⏭ {conname} 已包含 human，跳过")
         return
-    logger.info("  🔧 修复 ck_file_owner_type：添加 'human' 到 owner_type 约束")
-    await db.execute(text("ALTER TABLE file_metadata DROP CONSTRAINT ck_file_owner_type"))
+    logger.info(f"  🔧 修复 {conname}：添加 'human' 到 owner_type 约束")
+    await db.execute(text(f"ALTER TABLE file_metadata DROP CONSTRAINT {conname}"))
     await db.execute(text(
         "ALTER TABLE file_metadata ADD CONSTRAINT ck_file_owner_type "
         "CHECK (owner_type IN ('human', 'ai', 'group', 'system'))"
     ))
     await db.flush()
-    logger.info("  ✅ ck_file_owner_type 修复完成")
+    logger.info(f"  ✅ {conname} → ck_file_owner_type 修复完成")
 
 
 async def _fix_column_types(db):

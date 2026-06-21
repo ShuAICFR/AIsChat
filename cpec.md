@@ -653,8 +653,13 @@ CREATE TABLE system_logs (
 #### 文件 / Files
 - `GET /fs/list` → 目录列表 / Directory listing
 - `POST /fs/upload` → 上传 / Upload
+- `POST /fs/upload-attachment` → 上传消息附件 / Upload message attachment
 - `GET /fs/download/{id}` → 下载 / Download
 - `DELETE /fs/delete` → 删除 / Delete
+- `PUT /fs/{id}/collaboration-mode` → 修改协作模式 / Set collaboration mode
+- `POST /fs/{id}/collaborators` → 添加协作者 / Add collaborator
+- `DELETE /fs/{id}/collaborators/{type}/{id}` → 移除协作者 / Remove collaborator
+- `GET /fs/{id}/collaborators` → 查看协作者 / View collaborators
 
 #### 管理员 / Admin
 - `GET /admin/users` → 用户列表 / User list
@@ -663,6 +668,12 @@ CREATE TABLE system_logs (
 - `GET /admin/groups` → 所有群聊 / All groups
 - `PUT /admin/agents/{id}/editable` → 开关 AI 自修改 / Toggle AI self-modification
 - `GET /admin/logs` → 系统日志 / System logs
+
+#### 备份与恢复 / Backup & Restore
+- `GET /admin/backup/download` → 下载数据库备份 (.sql) / Download DB backup
+- `POST /admin/backup/restore` → 上传 .sql 恢复数据库 / Upload .sql to restore DB
+- `GET /admin/backup/full/download` → 下载完整备份 (.tar.gz = 数据库 + 文件) / Download full backup
+- `POST /admin/backup/full/restore` → 上传 .tar.gz 完整恢复 / Upload .tar.gz for full restore
 
 > 所有管理员端点都需要检查当前用户 `role = 'admin'`。
 > All admin endpoints must check that the current user has `role = 'admin'`.

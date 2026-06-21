@@ -521,7 +521,7 @@ async def _tool_call_loop(
 
     loop_idx = 0
     while loop_idx < max_loops + _reminder_extra:
-        # ── v1.1.0: 带分类重试的 LLM 调用 ──
+        # ── v1.0.0: 带分类重试的 LLM 调用 ──
         from app.services.llm_service import RateLimitError, ServerError, KeyFatalError
         from app.services.api_key_concurrency import concurrency_mgr
 

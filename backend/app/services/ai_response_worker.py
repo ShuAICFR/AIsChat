@@ -488,7 +488,7 @@ async def _tool_call_loop(
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
     v1.0.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
-    v1.1.0: stream=True 流式调用 + 工具格式校验 + trigger 字段（user/auto）。
+    v1.0.0: stream=True 流式调用 + 工具格式校验 + trigger 字段（user/auto）。
     """
     if effective_cfg is None:
         effective_cfg = {}
@@ -527,7 +527,7 @@ async def _tool_call_loop(
                 presence_penalty=effective_cfg["presence_penalty"] or 0.5,
                 frequency_penalty=effective_cfg["frequency_penalty"] or 0.5,
                 thinking_enabled=effective_cfg["thinking_enabled"],
-                stream=True,  # v1.1.0: 流式调用
+                stream=True,  # v1.0.0: 流式调用
             )
         except Exception as e:
             logger.error(f"AI {agent.name}({agent.id}) LLM 调用失败: {e}")
@@ -638,7 +638,7 @@ async def _tool_call_loop(
                 arguments = json.loads(arguments_str)
             except json.JSONDecodeError:
                 arguments = {}
-                # v1.1.0: JSON 解析失败时注入具体错误
+                # v1.0.0: JSON 解析失败时注入具体错误
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
@@ -652,7 +652,7 @@ async def _tool_call_loop(
                 })
                 continue
 
-            # v1.1.0: 工具格式校验
+            # v1.0.0: 工具格式校验
             from app.services.tool_registry import validate_tool_call
             is_valid, validate_error = validate_tool_call(tool_name, arguments)
             if not is_valid:
@@ -669,7 +669,7 @@ async def _tool_call_loop(
 
             logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
 
-            # v1.1.0: 消息类工具推送"正在输入中…"状态
+            # v1.0.0: 消息类工具推送"正在输入中…"状态
             _typing_tools = ("send_message", "send_dm")
             if tool_name in _typing_tools and trigger == "user":
                 _typing_data: dict = {
@@ -1184,7 +1184,7 @@ async def _process_alarm_event(db, event: dict):
             effective_cfg=effective_cfg,
             credit_source=credit_source,
             pool_key_id=pool_key_id,
-            trigger="auto",  # v1.1.0: 闹钟不显示"正在思考/输入中"
+            trigger="auto",  # v1.0.0: 闹钟不显示"正在思考/输入中"
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

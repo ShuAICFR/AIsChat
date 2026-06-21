@@ -323,7 +323,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       }
     } else if (lastMessage.type === 'ai_thinking') {
       const d = lastMessage.data
-      // v1.1.0: 仅用户触发的对话显示"思考中"（闹钟等自主行为不显示）
+      // v1.0.0: 仅用户触发的对话显示"思考中"（闹钟等自主行为不显示）
       if (d.trigger === 'auto') return
       const thinkingBelongsToHere =
         (conversationType === 'group' && d.group_id === conversationId) ||
@@ -353,7 +353,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         return next
       })
     } else if (lastMessage.type === 'ai_typing') {
-      // v1.1.0: AI 准备发送消息，"输入中"是"思考"的下一阶段
+      // v1.0.0: AI 准备发送消息，"输入中"是"思考"的下一阶段
       const d = lastMessage.data
       if (d.trigger === 'auto') return
       const typingBelongsToHere =
@@ -716,7 +716,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           />
         ))}
 
-        {/* AI 输入中占位气泡（v1.1.0：流式状态显示） */}
+        {/* AI 输入中占位气泡（v1.0.0：流式状态显示） */}
         {Array.from(typingAgents.entries()).map(([agentId, agentName]) => (
             <MessageBubble
               key={`typing-${agentId}`}

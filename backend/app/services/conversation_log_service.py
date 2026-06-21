@@ -293,7 +293,7 @@ async def get_user_agents_token_summary(
             SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
             SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
             SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
-            COUNT(*) AS total_calls
+            SUM(COALESCE((cl.token_usage->>'api_calls')::int, 0)) AS total_calls
         FROM ai_conversation_logs cl
         JOIN agents ag ON ag.id = cl.agent_id
         WHERE {where_sql}
@@ -330,7 +330,7 @@ async def get_agent_token_daily(
             SUM(COALESCE((token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
             SUM(COALESCE((token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
             SUM(COALESCE((token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
-            COUNT(*) AS request_count
+            SUM(COALESCE((token_usage->>'api_calls')::int, 0)) AS request_count
         FROM ai_conversation_logs
         WHERE {where_sql}
         GROUP BY DATE(created_at)
@@ -366,7 +366,7 @@ async def get_admin_global_token_stats(
             SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
             SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
             SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
-            COUNT(*) AS total_calls,
+            SUM(COALESCE((cl.token_usage->>'api_calls')::int, 0)) AS total_calls,
             COUNT(DISTINCT cl.agent_id) AS unique_agents,
             COUNT(DISTINCT ag.owner_id) AS unique_users
         FROM ai_conversation_logs cl
@@ -420,7 +420,7 @@ async def get_admin_users_token_summary(
             SUM(COALESCE((cl.token_usage->>'completion_tokens')::int, 0)) AS completion_tokens,
             SUM(COALESCE((cl.token_usage->>'reasoning_tokens')::int, 0)) AS reasoning_tokens,
             SUM(COALESCE((cl.token_usage->>'cached_tokens')::int, 0)) AS cached_tokens,
-            COUNT(*) AS total_calls
+            SUM(COALESCE((cl.token_usage->>'api_calls')::int, 0)) AS total_calls
         FROM ai_conversation_logs cl
         JOIN agents ag ON ag.id = cl.agent_id
         JOIN users u ON u.id = ag.owner_id

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
-import { Users, MessageSquare, Menu, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User } from 'lucide-react'
+import { Users, MessageSquare, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 
 interface Friend {
@@ -118,7 +118,6 @@ export default function FriendsPage() {
   const [showSearch, setShowSearch] = useState(false)
   const { user } = useAuth()
   const navigate = useNavigate()
-  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   useEffect(() => {
     loadAll()
@@ -230,10 +229,11 @@ export default function FriendsPage() {
       {/* 头部 */}
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         <button
-          onClick={openDrawer}
-          className="p-1.5 rounded-lg hover:bg-elevated text-textSecondary transition-colors md:hidden"
+          onClick={() => navigate('/me')}
+          className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
+          title={t('nav.me')}
         >
-          <Menu size={18} />
+          <ArrowLeft size={18} />
         </button>
         <h1 className="font-semibold text-textPrimary text-sm flex items-center gap-2">
           <Users size={16} className="text-primary-400 hidden md:inline" />

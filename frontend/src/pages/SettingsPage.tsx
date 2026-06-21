@@ -3,8 +3,8 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useT } from '../i18n/I18nContext'
-import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, Menu } from 'lucide-react'
-import { useNavigate, useBlocker, useOutletContext, useLocation } from 'react-router-dom'
+import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { useNavigate, useBlocker, useLocation } from 'react-router-dom'
 
 // 常用时区列表
 const TIMEZONES = [
@@ -43,7 +43,6 @@ export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
-  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
   const [apiBaseUrl, setApiBaseUrl] = useState('https://api.deepseek.com')
   const [apiKey, setApiKey] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -252,11 +251,11 @@ export default function SettingsPage() {
       {/* 头部 */}
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         <button
-          onClick={openDrawer}
+          onClick={() => navigate('/me')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title={t('common.menu')}
+          title={t('nav.me')}
         >
-          <Menu size={18} />
+          <ArrowLeft size={18} />
         </button>
         <h1 className="font-semibold text-textPrimary text-sm">{t('settings.title')}</h1>
       </div>

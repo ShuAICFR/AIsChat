@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
-import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, Menu } from 'lucide-react'
+import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
 import CreateAgentModal from '../components/CreateAgentModal'
@@ -73,7 +73,6 @@ export default function AgentsPage() {
   const [stateAgent, setStateAgent] = useState<Agent | null>(null)
   const { refreshUser } = useAuth()
   const t = useT()
-  const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
   const loadAgents = async () => {
     try {
@@ -118,11 +117,11 @@ export default function AgentsPage() {
       {/* 头部 */}
       <div className="px-4 h-14 border-b border-border bg-surface flex items-center gap-2 shrink-0">
         <button
-          onClick={openDrawer}
+          onClick={() => navigate('/me')}
           className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
-          title={t('agents.menu')}
+          title={t('nav.me')}
         >
-          <Menu size={18} />
+          <ArrowLeft size={18} />
         </button>
         <h1 className="font-semibold text-textPrimary text-sm">{t('agents.title')}</h1>
         <span className="text-xs text-textMuted hidden sm:inline">{t('agents.subtitle')}</span>

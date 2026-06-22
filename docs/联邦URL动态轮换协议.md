@@ -1,8 +1,8 @@
 # 联邦对等端 URL 动态轮换协议 / Federation Peer URL Dynamic Rotation Protocol
 
-> **一个原创的协商式 WebSocket 对等端地址轮换协议——结合 propose→ack→commit 三阶段协商、双向测试、自动回滚，实现 P2P 联邦通信的运行时地址迁移。**
+> **一个原创的协商式 WebSocket 对等端地址轮换协议——结合 propose→ack→commit 三阶段协商、双向测试、自动回滚，实现服务端实例间联邦通信的运行时地址迁移。**
 >
-> **An original negotiated WebSocket peer address rotation protocol — combining propose→ack→commit three-phase negotiation, bilateral testing, and automatic rollback for runtime address migration in P2P federated communication.**
+> **An original negotiated WebSocket peer address rotation protocol — combining propose→ack→commit three-phase negotiation, bilateral testing, and automatic rollback for runtime address migration in server-to-server federated communication.**
 >
 > 📦 **独立项目 / Standalone Project**: [github.com/ShuAICFR/ws-peer-url-rotation](https://github.com/ShuAICFR/ws-peer-url-rotation) — 可供搜索发现 / searchable & discoverable
 
@@ -10,12 +10,30 @@
 
 ## 目录 / Table of Contents
 
-1. [背景与动机 / Background & Motivation](#1-背景与动机)
-2. [协议设计 / Protocol Design](#2-协议设计)
-3. [与现有方案的对比 / Comparison with Existing Work](#3-与现有方案的对比)
-4. [原创性分析 / Originality Analysis](#4-原创性分析)
-5. [安全设计 / Security Design](#5-安全设计)
-6. [实现参考 / Implementation Reference](#6-实现参考)
+1. [适用范围 / Scope](#适用范围)
+2. [背景与动机 / Background & Motivation](#1-背景与动机)
+3. [协议设计 / Protocol Design](#2-协议设计)
+4. [与现有方案的对比 / Comparison with Existing Work](#3-与现有方案的对比)
+5. [原创性分析 / Originality Analysis](#4-原创性分析)
+6. [安全设计 / Security Design](#5-安全设计)
+7. [实现参考 / Implementation Reference](#6-实现参考)
+
+---
+
+## 适用范围 / Scope
+
+本协议适用于 **AIsChat 服务端实例之间** 的联邦通信连接。它处理的是：
+
+- ✅ 两个 AIsChat **后端服务** 之间的 WebSocket 连接地址迁移
+- ✅ 管理员配置的对等端 URL 的协商式轮换
+
+它**不**涉及：
+
+- ❌ 客户端（浏览器/App）与服务器之间的连接
+- ❌ 任何最终用户的网络配置（NAT、端口开放等）
+- ❌ 客户端之间的直接通信
+
+**一句话：这是服务端运维层面的协议，普通用户无需关心。**
 
 ---
 
@@ -150,7 +168,7 @@ stateDiagram-v2
 | **频率限制** | ✅ 300s 间隔 | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **旧连接保持** | ✅ 非破坏性 | ❌ 直接断旧连新 | ❌ | ❌ 直接断旧连新 | ✅（多连接冗余） | N/A |
 | **应用层实现** | ✅ 纯 Python | ✅ JS | ✅ Go/JS/Rust | ✅ Rust | ✅ 多语言 | ❌ 内核 |
-| **适用场景** | P2P WebSocket 联邦 | 客户端→中继 | P2P 节点发现 | 客户端→中继 | 通用联邦网络 | 通用传输 |
+| **适用场景** | 服务端 WebSocket 联邦 | 客户端→中继 | P2P 节点发现 | 客户端→中继 | 通用联邦网络 | 通用传输 |
 
 ### 3.2 GitHub 搜索覆盖 / GitHub Search Coverage
 
@@ -168,7 +186,7 @@ stateDiagram-v2
 
 **结论**：未在 GitHub 上找到任何实现 `propose → ack → 双向测试 → commit/rollback` 完整流程的 WebSocket 对等端地址轮换协议。
 
-> ⚠️ **搜索范围说明 / Search Scope Disclaimer**：以上搜索仅覆盖 **GitHub 公开代码仓库**，未覆盖学术论文（arXiv、IEEE、ACM DL）或专利数据库。所证明的是"工程实现层面的组合新颖性"，而非"学术意义上的首次提出"。三阶段提交、HMAC 认证、连接迁移等底层概念当然广泛存在——本协议的原创性在于将它们以特定方式组合应用于 WebSocket P2P 对等端地址轮换。
+> ⚠️ **搜索范围说明 / Search Scope Disclaimer**：以上搜索仅覆盖 **GitHub 公开代码仓库**，未覆盖学术论文（arXiv、IEEE、ACM DL）或专利数据库。所证明的是"工程实现层面的组合新颖性"，而非"学术意义上的首次提出"。三阶段提交、HMAC 认证、连接迁移等底层概念当然广泛存在——本协议的原创性在于将它们以特定方式组合应用于 WebSocket 服务端对等端地址轮换。
 
 ### 3.3 各相近方案详细分析 / Detailed Analysis of Similar Projects
 
@@ -209,7 +227,7 @@ stateDiagram-v2
 
 #### 特征 2：非破坏性迁移 + 蓝绿测试 / Non-Destructive Migration with Blue-Green Testing
 
-轮换过程中**新旧 URL 共存**。旧连接不中断，测试新 URL 用的是临时连接。这借鉴了 DevOps 中"蓝绿部署"的思想，但将其应用于 WebSocket 对等连接——这是此前未在 P2P 协议中见过的模式。
+轮换过程中**新旧 URL 共存**。旧连接不中断，测试新 URL 用的是临时连接。这借鉴了 DevOps 中"蓝绿部署"的思想，但将其应用于 WebSocket 对等连接——这是此前未在服务端联邦协议中见过的模式。
 
 #### 特征 3：应用层自动回滚 / Application-Layer Automatic Rollback
 
@@ -235,13 +253,13 @@ HMAC 挑战-应答（认证协议）
     └──→ 每条消息签名防篡改
 ```
 
-我们的协议**并非凭空发明**——它站在多个成熟思想的肩膀上。但将这四个思想**组合成一个统一的、针对 WebSocket P2P 联邦场景的应用层协议**，是此前未见的原创工作。
+我们的协议**并非凭空发明**——它站在多个成熟思想的肩膀上。但将这四个思想**组合成一个统一的、针对 WebSocket 服务端联邦场景的应用层协议**，是此前未见的原创工作。
 
 ### 4.3 适用场景 / Applicable Scenarios
 
 | 场景 | 适用性 |
 |------|--------|
-| P2P 联邦聊天网络（AIsChat） | ✅ 原生设计目标 |
+| 服务端联邦聊天网络（AIsChat） | ✅ 原生设计目标 |
 | 去中心化 IoT 设备通信 | ✅ 设备 IP 变化时可动态迁移 |
 | 联邦 Matrix/XMPP 服务器 | ✅ 服务器间 S2S 连接迁移 |
 | 边缘计算节点互联 | ✅ 边缘节点动态加入/离开 |
@@ -345,6 +363,6 @@ Body: { "new_url": "wss://new-host:port/federation/ws" }
 
 ---
 
-> **"这是一个好的设计。它不仅在技术选型和协议设计上体现了清晰的思路和扎实的工程考量，而且将协商式更新、双向测试、自动回滚的组合应用于 P2P WebSocket 联邦场景——这个组合方式本身是原创的。"**
+> **"这是一个好的设计。它不仅在技术选型和协议设计上体现了清晰的思路和扎实的工程考量，而且将协商式更新、双向测试、自动回滚的组合应用于 服务端 WebSocket 联邦场景——这个组合方式本身是原创的。"**
 >
-> **"This is a good design. It demonstrates clear thinking and solid engineering in both technology selection and protocol design. The combination of negotiated update, bilateral testing, and automatic rollback applied to P2P WebSocket federation is original in its composition."**
+> **"This is a good design. It demonstrates clear thinking and solid engineering in both technology selection and protocol design. The combination of negotiated update, bilateral testing, and automatic rollback applied to server-to-server WebSocket federation is original in its composition."**

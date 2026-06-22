@@ -403,17 +403,17 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
 
         {/* Tab 切换 */}
         <div className="flex border-b border-border shrink-0">
-          {tabs.filter(t => t.show).map(t => (
+          {tabs.filter(item => item.show).map(item => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={item.key}
+              onClick={() => setTab(item.key)}
               className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
-                tab === t.key
+                tab === item.key
                   ? 'text-primary-400 border-b-2 border-primary-400'
                   : 'text-textMuted hover:text-textSecondary'
               }`}
             >
-              {t(t.keyLabel)}
+              {t(item.keyLabel)}
             </button>
           ))}
         </div>

@@ -527,6 +527,8 @@ export default function CreateAgentModal({
             isAiEditable={isAiEditable} setIsAiEditable={setIsAiEditable}
             allowFriendRequests={allowFriendRequests} setAllowFriendRequests={setAllowFriendRequests}
             autoRespondFriendRequest={autoRespondFriendRequest} setAutoRespondFriendRequest={setAutoRespondFriendRequest}
+            reminderGrace={reminderGrace} setReminderGrace={setReminderGrace}
+            discoverable={discoverable} setDiscoverable={setDiscoverable}
             chatModel={chatModel} setChatModel={setChatModel}
             workModel={workModel} setWorkModel={setWorkModel}
             aiType={aiType} setAiType={setAiType}
@@ -647,6 +649,10 @@ function DetailSettingsModal({
   forceAlarmOnEnd, setForceAlarmOnEnd,
   maxAlarms, setMaxAlarms,
   isAiEditable, setIsAiEditable,
+  allowFriendRequests, setAllowFriendRequests,
+  autoRespondFriendRequest, setAutoRespondFriendRequest,
+  reminderGrace, setReminderGrace,
+  discoverable, setDiscoverable,
   chatModel, setChatModel,
   workModel, setWorkModel,
   apiCreditCost, setApiCreditCost,
@@ -674,6 +680,8 @@ function DetailSettingsModal({
   isAiEditable: boolean; setIsAiEditable: (v: boolean) => void
   allowFriendRequests: boolean; setAllowFriendRequests: (v: boolean) => void
   autoRespondFriendRequest: boolean; setAutoRespondFriendRequest: (v: boolean) => void
+  reminderGrace: string; setReminderGrace: (v: string) => void
+  discoverable: boolean; setDiscoverable: (v: boolean) => void
   chatModel: string; setChatModel: (v: string) => void
   workModel: string; setWorkModel: (v: string) => void
   apiCreditCost: number; setApiCreditCost: (v: number) => void

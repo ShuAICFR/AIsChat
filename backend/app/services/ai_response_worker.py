@@ -325,7 +325,7 @@ async def _maybe_trigger_ai_reply(
         logger.info(f"AI {agent.name}({agent_id}) 速率限制，跳过")
         return
 
-    # 5. 获取 API 配置（v0.5.0: 公共辅助函数；v1.0.0: 四层优先链含池 Key）
+    # 5. 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}, "
                 f"credit_source={credit_source}")
@@ -492,8 +492,8 @@ async def _tool_call_loop(
 
     v0.4.0: trigger_user_id 传入工具上下文供 store_memory 做 per-user 隔离。
     effective_cfg 为 get_effective_config 的返回值，提供 per-user 定制的 LLM 参数。
-    v1.0.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
-    v1.0.0: stream=True 流式调用 + 工具格式校验 + trigger 字段（user/auto）。
+    v0.6.0: credit_source + pool_key_id 用于 LLM 调用后额度扣除。
+    v0.6.0: stream=True 流式调用 + 工具格式校验 + trigger 字段（user/auto）。
     """
     if effective_cfg is None:
         effective_cfg = {}
@@ -521,7 +521,7 @@ async def _tool_call_loop(
 
     loop_idx = 0
     while loop_idx < max_loops + _reminder_extra:
-        # ── v1.0.0: 带分类重试的 LLM 调用 ──
+        # ── v0.6.0: 带分类重试的 LLM 调用 ──
         from app.services.llm_service import RateLimitError, ServerError, KeyFatalError
         from app.services.api_key_concurrency import concurrency_mgr
 
@@ -732,7 +732,7 @@ async def _tool_call_loop(
                 arguments = json.loads(arguments_str)
             except json.JSONDecodeError:
                 arguments = {}
-                # v1.0.0: JSON 解析失败时注入具体错误
+                # v0.6.0: JSON 解析失败时注入具体错误
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
@@ -746,7 +746,7 @@ async def _tool_call_loop(
                 })
                 continue
 
-            # v1.0.0: 工具格式校验
+            # v0.6.0: 工具格式校验
             from app.services.tool_registry import validate_tool_call
             is_valid, validate_error = validate_tool_call(tool_name, arguments)
             if not is_valid:
@@ -763,7 +763,7 @@ async def _tool_call_loop(
 
             logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
 
-            # v1.0.0: 消息类工具推送"正在输入中…"状态
+            # v0.6.0: 消息类工具推送"正在输入中…"状态
             _typing_tools = ("send_message", "send_dm")
             if tool_name in _typing_tools and trigger == "user":
                 _typing_data: dict = {
@@ -867,7 +867,7 @@ async def _tool_call_loop(
             await save_current_task(db, agent.id, last_task)
         except Exception:
             pass
-    # v1.0.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
+    # v0.6.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
     if total_usage["api_calls"] > 0 and total_usage["total_tokens"] > 0:
         try:
             from app.services.quota_service import deduct_credit
@@ -921,7 +921,7 @@ async def _trigger_dm_ai_reply(
     from app.services.agent_service import get_effective_config as _get_eff_cfg
     effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
-    # 获取 API 配置（v1.0.0: 四层优先链含池 Key）
+    # 获取 API 配置（v0.6.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 中断标记：如果 AI 之前在忙，记录中断
@@ -1199,7 +1199,7 @@ async def _process_alarm_event(db, event: dict):
         )
         await db.flush()
 
-    # 获取 API 配置（v0.5.0: 公共辅助函数；v1.0.0: 四层优先链含池 Key）
+    # 获取 API 配置（v0.5.0: 公共辅助函数；v0.6.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
 
     # 构建系统提示词（层级化：内核 + 人格 + 协议）
@@ -1299,7 +1299,7 @@ async def _process_alarm_event(db, event: dict):
             effective_cfg=effective_cfg,
             credit_source=credit_source,
             pool_key_id=pool_key_id,
-            trigger="auto",  # v1.0.0: 闹钟不显示"正在思考/输入中"
+            trigger="auto",  # v0.6.0: 闹钟不显示"正在思考/输入中"
         )
     except Exception as e:
         logger.error(f"⏰ 闹钟 #{alarm_id}: AI {agent.name}({agent_id}) 执行失败: {e}", exc_info=True)

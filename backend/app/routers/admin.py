@@ -47,9 +47,9 @@ class GenerateCodeRequest(BaseModel):
     quota_amount: int = Field(..., ge=1, le=100)
     code_type: str = Field(default="ai_quota", pattern="^(ai_quota|api_credit|agent_bundle|file_quota)$")
     expires_in_days: int = Field(..., ge=1, le=365)
-    note: str | None = None              # v1.0.0: 管理员备注（保密）
-    max_usage: int | None = None         # v1.0.0: 单码最大用量
-    is_api_pool: bool = False            # v1.0.0: 是否是 API 池额度
+    note: str | None = None              # v0.6.0: 管理员备注（保密）
+    max_usage: int | None = None         # v0.6.0: 单码最大用量
+    is_api_pool: bool = False            # v0.6.0: 是否是 API 池额度
 
 
 class UpdateUserRoleRequest(BaseModel):
@@ -372,7 +372,7 @@ async def generate_code(
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """生成兑换码（v1.0.0: 支持备注/最大用量/API 池标记）"""
+    """生成兑换码（v0.6.0: 支持备注/最大用量/API 池标记）"""
     code_str = "RC-" + secrets.token_hex(8).upper()
 
     code = RedemptionCode(

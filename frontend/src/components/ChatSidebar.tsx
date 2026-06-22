@@ -14,7 +14,7 @@ interface Group {
   last_message_preview: string | null
   last_message_at: string | null
   dnd_until: string | null
-  member_avatars: string[]  // v1.0.0: 前 4 个成员头像
+  member_avatars: string[]  // v0.6.0: 前 4 个成员头像
   is_federated?: boolean
 }
 

@@ -89,7 +89,7 @@ class Agent(Base):
     # 隐藏 AI 身份（开启后系统提示词不包含"你是 AI"相关表述）
     hide_ai_identity = Column(Boolean, default=False)
 
-    # 好友与社交控制（v1.0.0）
+    # 好友与社交控制（v0.6.0）
     allow_friend_requests = Column(Boolean, default=True, comment="是否允许接收好友申请")
     auto_respond_friend_request = Column(Boolean, default=False, comment="收到好友申请时是否自动触发 API 响应")
     discoverable = Column(Boolean, default=True, comment="是否允许他人发现与查找此 AI")

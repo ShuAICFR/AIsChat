@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     # v0.5.0: 系统监控指标保留天数（默认 30，管理员通过环境变量调整）
     agent_metrics_retention_days: int = int(os.getenv("AGENT_METRICS_RETENTION_DAYS", "30"))
 
-    # v1.0.0: 额度消耗比例（1 credit = N tokens）
+    # v0.6.0: 额度消耗比例（1 credit = N tokens）
     credit_per_10k_tokens: int = int(os.getenv("CREDIT_PER_TOKENS", "10000"))
 
     # OpenCLI 集成

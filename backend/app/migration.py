@@ -38,7 +38,7 @@ async def run_migrations():
             await _migrate_willingness_fields(db)     # v0.4.0 意愿评分字段
             await _migrate_reminder_not_count(db)     # v0.4.1 系统提醒不计入轮次
             await _migrate_agents_user_id(db)
-            await _migrate_friend_controls(db)         # v1.0.0 好友控制字段（必须在 select(Agent) 之前）
+            await _migrate_friend_controls(db)         # v0.6.0 好友控制字段（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -49,13 +49,13 @@ async def run_migrations():
             await _migrate_restore_friend_tables(db)  # v0.4.0+ 恢复好友机制：从 archived 恢复
             await _migrate_file_system(db)             # v0.5.0 文件协作系统
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
-            await _migrate_message_sender_name(db)     # v1.0.0 联邦消息发送者名称
+            await _migrate_message_sender_name(db)     # v0.6.0 联邦消息发送者名称
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
-            await _migrate_system_settings(db)          # v1.0.0 全局系统设置 + 新用户初始化向导
-            await _migrate_api_key_pool_tables(db)    # v1.0.0 API Key 池 + 用户绑定 + 用量日志；v1.0.0 +concurrent_limit
-            await _migrate_platform_credit(db)           # v1.0.0 平台赠送额度
-            await _migrate_redemption_code_details(db)  # v1.0.0 兑换码增强
+            await _migrate_system_settings(db)          # v0.6.0 全局系统设置 + 新用户初始化向导
+            await _migrate_api_key_pool_tables(db)    # v0.6.0 API Key 池 + 用户绑定 + 用量日志；v0.6.0 +concurrent_limit
+            await _migrate_platform_credit(db)           # v0.6.0 平台赠送额度
+            await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -504,7 +504,7 @@ async def _migrate_federation_tables(db):
     else:
         logger.info("  ⏭ federation_peers.url_rotation_count 已存在，跳过")
 
-    # 8. federation_group_shares.conversation_uuid（v1.0.0 联邦对话 UUID 映射）
+    # 8. federation_group_shares.conversation_uuid（v0.6.0 联邦对话 UUID 映射）
     if not await _column_exists(db, "federation_group_shares", "conversation_uuid"):
         logger.info("  🌐 添加 federation_group_shares.conversation_uuid 列")
         await db.execute(text(
@@ -1118,7 +1118,7 @@ async def _migrate_message_attachments(db):
 
 
 async def _migrate_message_sender_name(db):
-    """v1.0.0: 联邦消息发送者名称 — messages 表加 sender_name VARCHAR(100)"""
+    """v0.6.0: 联邦消息发送者名称 — messages 表加 sender_name VARCHAR(100)"""
     logger.info("  👤 添加 messages.sender_name 列（联邦消息发送者名称）...")
 
     if not await _column_exists(db, "messages", "sender_name"):
@@ -1177,7 +1177,7 @@ async def _migrate_agent_metrics(db):
 
 
 async def _migrate_system_settings(db):
-    """v1.0.0: 平台全局系统设置表 + users.setup_completed 列"""
+    """v0.6.0: 平台全局系统设置表 + users.setup_completed 列"""
     logger.info("  ⚙️ 迁移系统设置表...")
     created_any = False
 
@@ -1219,7 +1219,7 @@ async def _migrate_system_settings(db):
 
 
 async def _migrate_api_key_pool_tables(db):
-    """v1.0.0: API Key 池 + 用户绑定 + 用量日志"""
+    """v0.6.0: API Key 池 + 用户绑定 + 用量日志"""
     logger.info("  🔧 迁移 API Key 池系统...")
     created_any = False
 
@@ -1276,7 +1276,7 @@ async def _migrate_api_key_pool_tables(db):
     else:
         logger.info("  ⏭ api_usage_log 已存在，跳过")
 
-    # v1.0.0: api_key_pool.concurrent_limit
+    # v0.6.0: api_key_pool.concurrent_limit
     if not await _column_exists(db, "api_key_pool", "concurrent_limit"):
         await db.execute(text(
             "ALTER TABLE api_key_pool ADD COLUMN concurrent_limit INTEGER"
@@ -1290,7 +1290,7 @@ async def _migrate_api_key_pool_tables(db):
 
 
 async def _migrate_platform_credit(db):
-    """v1.0.0: 平台赠送额度 + system_settings 扩展"""
+    """v0.6.0: 平台赠送额度 + system_settings 扩展"""
     logger.info("  🎁 迁移平台赠送额度系统...")
 
     if not await _column_exists(db, "system_settings", "default_platform_credit"):
@@ -1311,7 +1311,7 @@ async def _migrate_platform_credit(db):
 
 
 async def _migrate_redemption_code_details(db):
-    """v1.0.0: 兑换码增强——备注、最大用量、API 池标记、创建时间"""
+    """v0.6.0: 兑换码增强——备注、最大用量、API 池标记、创建时间"""
     logger.info("  🏷️ 迁移兑换码详细字段...")
     created_any = False
 
@@ -1352,7 +1352,7 @@ async def _migrate_redemption_code_details(db):
 
 
 async def _migrate_friend_controls(db):
-    """v1.0.0: 好友控制字段——是否允许好友申请、是否自动响应"""
+    """v0.6.0: 好友控制字段——是否允许好友申请、是否自动响应"""
     logger.info("  👥 迁移好友控制字段...")
     created_any = False
 

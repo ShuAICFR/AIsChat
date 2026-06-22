@@ -19,7 +19,7 @@ interface User {
   bio: string | null
   setup_completed: boolean
   created_at: string | null
-  assigned_pool_key_name: string | null  // v1.0.0: 绑定的池 Key 名
+  assigned_pool_key_name: string | null  // v0.6.0: 绑定的池 Key 名
 }
 
 interface AuthContextType {

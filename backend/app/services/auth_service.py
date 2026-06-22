@@ -102,7 +102,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
     if user is None:
         raise ValueError("用户不存在")
 
-    # v1.0.0: 查询绑定的池 Key 名
+    # v0.6.0: 查询绑定的池 Key 名
     assigned_pool_key_name = None
     try:
         from app.models.api_key_pool import UserApiAssignment, ApiKeyPool

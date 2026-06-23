@@ -7,6 +7,37 @@
 
 ---
 
+## [v0.7.0] - 2026-06-24
+
+### Added
+
+- 🔗 **联邦 v1.0.0 架构升级**：双层 ID 体系（`instance_subnet_id` UUID + `instance_public_id` ULID），`FederatedEntity` 统一表替代旧的 `FederationGroupShare` + `FederationDMShare`，支持 group/dm/user/agent 四种实体类型。`federated_id` 格式 `{实例代号}:{类型}:{本地ID}`（如 `datongai:g:42`），接收端根据发送 peer 自动拼接前缀。
+- 🔗 **联邦头像同步**：`entity_announce` 消息携带 `avatar_url`，`profile_sync` 机制不再过滤 `avatar_url` 字段，用户/AI 头像上传时自动入队 `PendingProfileUpdate` 推送到联邦对等端。
+- 🔗 **实例代号自动采纳**：握手时对方分配的 `assigned_name` 自动设为本机 `instance_config.display_name`，对方不设代号时显示名称留空也不报错。
+- 🔗 **实例代号唯一性校验**：设置 `display_name` 时检查是否与已有 `FederationPeer.display_name` 冲突，防止多实例代号重复。
+- 🔗 **联邦协议精简**：所有联邦消息只传 `entity_type` + `local_id`（不再传带前缀的 `federated_id`），接收端根据发送 peer 的 `display_name` 自动拼接完整 ID。向下兼容旧格式。
+- 🔗 **per-group 联邦共享控制**：群主和 AI 制作者可按群、按对等端控制联邦共享。三个端点：`GET /groups/{id}/federation/peers`（查看状态）、`POST .../share`（共享）、`POST .../unshare`（取消）。`remote_url` 改为可选（只需一端有公网地址即可建立双向通道）。
+- 📝 **开发者与管理手册**：新增独立文档，含架构速览、部署指南、排错手册、WebSocket 通信专项。管理员面板头部添加「管理手册」链接。
+- 📝 **用户手册精简**：移除管理/部署内容，聚焦终端用户日常使用。由浅入深重写。
+
+### Changed
+
+- 📝 **联邦文档澄清**：明确联邦通信为服务端之间直连（非 P2P），客户端只连自己的实例。
+
+### Fixed
+
+- 🐛 **联邦出站覆盖入站**：出站连接失败（或因入站已通而不需要出站）时错误地将 DB 状态覆写为 `failed`/`disconnected`，掩盖了已成功的入站连接。修复：出站失败后再次检查入站状态，不覆盖已通的连接。
+- 🐛 **联邦重连循环失效**：`_close_peer_connection` 只清理内存状态不更新 DB，导致 DB 仍为 `connected` → 重连循环永远不触发。修复：添加 DB 更新 + `PeerConnection` 新增 `peer_id` 字段。
+- 🐛 **空 URL 自动拼接 `/federation/ws`**：前端 4 处 `onChange` 在 host 为空时仍构造 `wss:///federation/ws`（InvalidURI）。修复：host 为空时整体留空。
+- 🐛 **空 URL 点「连接」报 500**：`connect_to_peer` 对 4 种非错误情况（空 URL / 正在连接中 / 已入站连接）都返回 `False`，router 层一刀切抛 500。修复：router 层分类处理，返回 200 + 具体说明。
+- 🐛 **群联邦共享开关失效**：share/unshare 的 403/400/422 错误码未区分 + `display_name` 为空导致创建失败。修复：错误分类返回 + 管理员豁免 + 前端 `alert()` 显示错误详情。
+- 🐛 **DetailSettingsModal 缺 prop 崩溃**：创建 AI 详细设置弹窗缺少必要 prop 导致 React 崩溃。已修复。
+- 🐛 **管理面板英文 Tab 补齐**：部分管理面板 Tab 在英文界面下仍显示中文标签。已补齐 i18n 翻译。
+- 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 在 minify 后变量名冲突（`t2 is not a function`）。子组件改用自身 `useT()`。
+- 🐛 **preset 键名不匹配**：`preset.digital_lifeName/Desc` 驼峰命名与翻译字典下划线 key 不匹配，导致数字生命档名称/描述不显示。
+
+---
+
 ## [v0.5.0] - 2026-06-21
 
 ### Added
@@ -55,6 +86,10 @@
 - 📖 **用户手册独立页面**：新建 `ManualPage` 组件（`react-markdown` + `remark-gfm` + `@tailwindcss/typography` 渲染），路由 `/manual`。侧边栏改用 `NavLink`（无出站图标），版本与部署代码一致。
 - 🛡️ **外部链接安全弹窗**：新建 `ExternalLinkSafe` 组件。点击外部链接弹出确认弹窗（「即将离开本站 → 目标 URL → 确认前往/取消」），防止无意识跳转。FederationTab 的 GitHub 链接已接入。
 - 📐 **MePage 标题**：添加页面标题 `{t('me.title')}`（"我的"/"Me"），设置入口从三行简化为单行「设置」链接。
+- ⚡ **API Key 池并发管理**：`ApiKeyConcurrencyManager` 单例（纯内存 + `asyncio.Lock`），追踪每个池 Key 的实时飞行中请求数。`acquire()` 检查并发上限（pro=500, flash=2500，可配），超限自动换 Key。`get_least_loaded()` 选负载最低且未冷却的 Key。429 自动 `mark_rate_limited()` 冷却 60s。
+- 🔄 **API 可重试错误分类处理**：`llm_service.py` 中 `chat_completion()` 区分四类错误——429 `RateLimitError`（换 Key 重试）、500/503 `ServerError`（同 Key 等待重试，最多 2 次，间隔递增 2s/3s）、402/401 `KeyFatalError`（通知管理员 + 跳过该 Key 换下一个）、400/422 不重试。`_tool_call_loop` 外层 Key 切换重试（最多换 3 次），内层同 Key 重试。失败不计入 token 消耗。
+- 📊 **管理员 API Key 池仪表板**：`GET /admin/api-key-pool/{id}/stats?days=30` 返回单 Key 统计（总 tokens、请求数、429/500/503 错误次数、日均消耗、按天聚合时序数据）。`GET /admin/api-key-pool/stats/summary` 返回全部 Key 汇总对比。前端 `KeyStatsModal` 含概览卡片 + recharts 折线图（Token 趋势）+ 饼图（pro/flash 分布）+ 错误统计表。
+- 🎁 **平台赠送额度系统**：`system_settings.default_platform_credit` 全局默认值 + `users.platform_gifted_credit` 独立存储（与兑换码额度 `api_credit` 完全分离）。新用户注册自动继承全局默认。管理员修改全局值时计算 delta 批量更新所有用户。扣费优先级：先扣 `platform_gifted_credit`，再扣 `api_credit`。单次超支允许过界（不中断 AI 回复），`api_credit` 变负后前端标红。管理员调低导致的负数前端显示 0。
 
 ### Changed
 

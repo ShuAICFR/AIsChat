@@ -65,6 +65,7 @@ class PeerConnection:
     last_heartbeat: "datetime | None" = None
     pending_outbox: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=OUTBOX_MAX_SIZE))
     handshake_complete: bool = False
+    is_inbound: bool = False  # True = 入站连接（由 federation_ws.py 注册），heartbeat 跳过
     rotation_state: str | None = None
     rotation_id: str | None = None
     new_url: str | None = None
@@ -461,7 +462,7 @@ class FederationManager:
             await asyncio.sleep(HEARTBEAT_INTERVAL)
             now = datetime.now(timezone.utc).replace(tzinfo=None)
             for public_id, conn in list(self.peers.items()):
-                if not conn.handshake_complete or not conn.websocket:
+                if not conn.handshake_complete or not conn.websocket or conn.is_inbound:
                     continue
                 if conn.last_heartbeat:
                     age = (now - conn.last_heartbeat).total_seconds()
@@ -1125,6 +1126,7 @@ class FederationManager:
                     websocket=inbound_ws,
                     handshake_complete=True,
                     remote_url="",
+                    is_inbound=True,
                 )
         if msg_type == "url_rotate_propose":
             await self._handle_url_rotate_propose(public_id, data)

@@ -150,6 +150,7 @@ async def federation_websocket(ws: WebSocket):
                 remote_url="",
                 peer_id=peer.id,
                 display_name=peer.display_name or "",
+                is_inbound=True,
             )
             logger.info(f"🌐 注册入站连接: {peer_public_id}")
 

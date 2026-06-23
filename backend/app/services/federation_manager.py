@@ -54,6 +54,7 @@ class PeerConnection:
     websocket: "websockets.WebSocketClientProtocol | None" = None
     instance_id: str = ""
     public_id: str = ""
+    peer_id: int = 0
     display_name: str = ""
     remote_url: str = ""
     connected_at: "datetime | None" = None
@@ -114,6 +115,7 @@ class FederationManager:
 
         conn = PeerConnection(
             public_id=public_id,
+            peer_id=peer_record.id,
             display_name=peer_record.display_name or "",
             remote_url=url,
         )
@@ -1116,6 +1118,13 @@ class FederationManager:
             except Exception:
                 pass
             conn.websocket = None
+        # 更新 DB 状态为 disconnected，让重连循环能发现
+        if conn.peer_id:
+            try:
+                async with async_session() as db:
+                    await update_peer_connection_state(db, conn.peer_id, "disconnected")
+            except Exception:
+                pass
         logger.info(f"🌐 关闭连接: {public_id}")
 
     async def _flush_outbox(self, public_id: str) -> None:

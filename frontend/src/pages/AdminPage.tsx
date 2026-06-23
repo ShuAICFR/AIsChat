@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings } from 'lucide-react'
-import { MANUAL_URL } from '../constants'
+import { MANUAL_URL, ADMIN_MANUAL_URL } from '../constants'
 import { useT } from '../i18n/I18nContext'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
@@ -108,6 +108,14 @@ export default function AdminPage() {
             >
               <BookOpen size={13} /> {t('nav.manual')}
             </Link>
+            <a
+              href={ADMIN_MANUAL_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors"
+            >
+              <BookOpen size={13} /> {t('nav.adminManual')}
+            </a>
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@ const zh: TranslationDict = {
   'nav.me': '我的',
   'nav.admin': '管理',
   'nav.manual': '使用手册',
+  'nav.adminManual': '管理手册',
 
   // ======================== 侧边栏 / Sidebar ========================
   'sidebar.chat': '聊天',
@@ -1255,6 +1256,7 @@ const en: TranslationDict = {
   'nav.me': 'Me',
   'nav.admin': 'Admin',
   'nav.manual': 'Manual',
+  'nav.adminManual': 'Admin Manual',
 
   // ======================== Sidebar ========================
   'sidebar.chat': 'Chat',

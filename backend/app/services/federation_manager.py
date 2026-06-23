@@ -72,6 +72,34 @@ class PeerConnection:
     last_rotation_at: "datetime | None" = None
 
 
+async def _apply_display_name_update(db, entity_type: str, local_ref_id: str, new_value: str) -> None:
+    """将远程 display_name 变更写入实际实体表"""
+    from sqlalchemy import text
+    try:
+        rid = int(local_ref_id)
+    except (ValueError, TypeError):
+        return
+    if entity_type == "group":
+        await db.execute(text("UPDATE groups SET name = :n WHERE id = :i"), {"n": new_value, "i": rid})
+    elif entity_type == "user":
+        await db.execute(text("UPDATE users SET username = :n WHERE id = :i"), {"n": new_value, "i": rid})
+    elif entity_type == "agent":
+        await db.execute(text("UPDATE agents SET name = :n WHERE id = :i"), {"n": new_value, "i": rid})
+
+
+async def _apply_avatar_update(db, entity_type: str, local_ref_id: str, new_value: str) -> None:
+    """将远程 avatar_url 变更写入实际实体表"""
+    from sqlalchemy import text
+    try:
+        rid = int(local_ref_id)
+    except (ValueError, TypeError):
+        return
+    if entity_type == "user":
+        await db.execute(text("UPDATE users SET avatar_url = :v WHERE id = :i"), {"v": new_value, "i": rid})
+    elif entity_type == "agent":
+        await db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": new_value, "i": rid})
+
+
 class FederationManager:
     """联邦连接管理器（单例）"""
 
@@ -839,7 +867,7 @@ class FederationManager:
             await self._apply_profile_updates(from_public_id, updates)
 
     async def _apply_profile_updates(self, from_public_id: str, updates: list[dict]) -> None:
-        """应用 profile 更新到本地缓存（federated_entities.display_name / avatar_url）"""
+        """应用 profile 更新到本地缓存并同步更新实际实体表"""
         async with async_session() as db:
             peer = await get_peer_by_public_id(db, from_public_id)
             if not peer:
@@ -859,8 +887,11 @@ class FederationManager:
                 if entity:
                     if field == "display_name":
                         entity.display_name = new_value
+                        # 同步更新实际表
+                        await _apply_display_name_update(db, entity_type, entity.local_ref_id, new_value)
                     elif field == "avatar_url":
                         entity.avatar_url = new_value
+                        await _apply_avatar_update(db, entity_type, entity.local_ref_id, new_value)
                     entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             await db.commit()

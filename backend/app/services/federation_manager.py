@@ -82,12 +82,24 @@ class FederationManager:
     async def connect_to_peer(self, peer_record) -> bool:
         """尝试连接到指定对等端。peer_record: FederationPeer ORM 对象"""
         public_id = peer_record.peer_public_id
-        url = peer_record.remote_url
+        url = (peer_record.remote_url or "").strip()
 
         if public_id in self._connecting:
             logger.info(f"🌐 {public_id} 正在连接中，跳过重复请求")
             return False
         self._connecting.add(public_id)
+
+        # 如果 URL 为空，不尝试出站连接（等对方主动连过来）
+        if not url:
+            logger.info(f"🌐 {public_id} remote_url 为空，跳过出站连接（等待对方连入）")
+            self._connecting.discard(public_id)
+            return False
+
+        # 如果已有入站连接，不覆盖
+        if public_id in self.peers and self.peers[public_id].handshake_complete:
+            logger.info(f"🌐 {public_id} 已有入站连接，跳过出站连接")
+            self._connecting.discard(public_id)
+            return False
 
         if public_id in self.peers:
             await self._close_peer_connection(public_id)
@@ -214,7 +226,11 @@ class FederationManager:
             await self._close_peer_connection(public_id)
             try:
                 async with async_session() as db:
-                    await update_peer_connection_state(db, peer_record.id, "failed")
+                    # 如果已有入站连接，不要覆盖为 failed
+                    if public_id in self.peers and self.peers[public_id].handshake_complete:
+                        logger.info(f"🌐 {public_id} 出站连接失败但入站已通，保持 connected")
+                    else:
+                        await update_peer_connection_state(db, peer_record.id, "failed")
             except Exception:
                 pass
             return False

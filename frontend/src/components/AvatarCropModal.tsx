@@ -48,6 +48,7 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
+  const croppedRef = useRef<Area | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
 
   // 加载图片
@@ -60,19 +61,23 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
   })
 
   const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    croppedRef.current = croppedPixels
     setCroppedAreaPixels(croppedPixels)
   }, [])
 
   const handleConfirm = useCallback(async () => {
-    if (!croppedAreaPixels || !imageRef.current) return
+    const crop = croppedRef.current
+    if (!imageRef.current || !crop) {
+      onConfirm(file)  // 裁剪未就绪，直接用原图
+      return
+    }
     try {
-      const blob = await getCroppedImg(imageRef.current, croppedAreaPixels)
+      const blob = await getCroppedImg(imageRef.current, crop)
       onConfirm(blob)
     } catch {
-      // 裁剪失败，直接使用原文件
       onConfirm(file)
     }
-  }, [croppedAreaPixels, file, onConfirm])
+  }, [file, onConfirm])
 
   if (!imageSrc) {
     return (

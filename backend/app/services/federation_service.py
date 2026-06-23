@@ -900,9 +900,6 @@ async def share_group_to_peers(
     if group is None:
         return {"error": True, "message": "群聊不存在"}
 
-    # 构建公开的 federated_id（发给远端的格式，不含 :out: 后缀）
-    public_federated_id = build_federated_id(my_display_name, "g", group_id)
-
     shared = []
     already_shared = []
     not_connected = []
@@ -930,7 +927,7 @@ async def share_group_to_peers(
             continue
 
         # 创建 FederatedEntity（内部 federated_id 加后缀保证唯一性）
-        internal_federated_id = f"{public_federated_id}:out:{peer_id}"
+        internal_federated_id = f"{my_display_name}:g:{group_id}:out:{peer_id}"
         entity = FederatedEntity(
             federated_id=internal_federated_id,
             peer_id=peer_id,
@@ -941,13 +938,13 @@ async def share_group_to_peers(
         )
         db.add(entity)
 
-        # 如果对等端已连接，发送 entity_announce
+        # 如果对等端已连接，发送 entity_announce（只传 entity_type + local_id）
         if peer.connection_state == "connected":
             from app.services.federation_manager import federation_manager
             sent = await federation_manager.announce_entity(
                 peer.peer_public_id,
                 entity_type="group",
-                federated_id=public_federated_id,
+                local_id=str(group_id),
                 display_name=group.name,
                 direction="outgoing",
             )
@@ -966,7 +963,6 @@ async def share_group_to_peers(
         "shared": shared,
         "already_shared": already_shared,
         "not_connected": not_connected,
-        "federated_id": public_federated_id,
     }
 
 
@@ -983,10 +979,6 @@ async def unshare_group_from_peers(
     """
     if not await can_manage_group_federation(db, group_id, user_id):
         return {"error": True, "message": "无权限管理此群的联邦共享设置"}
-
-    my_info = await get_instance_info(db)
-    my_display_name = my_info.get("display_name", "") or ""
-    public_federated_id = build_federated_id(my_display_name, "g", group_id) if my_display_name else ""
 
     unshared = []
     not_found = []
@@ -1015,12 +1007,13 @@ async def unshare_group_from_peers(
         # 删除本地记录
         await db.delete(entity)
 
-        # 如果对等端已连接，发送 entity_unannounce
-        if peer and peer.connection_state == "connected" and public_federated_id:
+        # 如果对等端已连接，发送 entity_unannounce（只传 entity_type + local_id）
+        if peer and peer.connection_state == "connected":
             from app.services.federation_manager import federation_manager
             await federation_manager.unannounce_entity(
                 peer.peer_public_id,
-                public_federated_id,
+                entity_type="group",
+                local_id=str(group_id),
             )
 
         unshared.append(peer_name)

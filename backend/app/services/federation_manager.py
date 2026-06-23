@@ -47,6 +47,10 @@ RECONNECT_MAX = 300
 RECONNECT_MULTIPLIER = 2
 OUTBOX_MAX_SIZE = 1000
 
+def _entity_type_char(entity_type: str) -> str:
+    """将完整实体类型映射为单字符（用于 federated_id 拼接）"""
+    return {"group": "g", "dm": "d", "user": "u", "agent": "a"}.get(entity_type, entity_type[0])
+
 
 @dataclass
 class PeerConnection:
@@ -290,44 +294,29 @@ class FederationManager:
     ) -> None:
         """
         将消息转发给共享此群的所有已连接对等端。
-
-        消息体携带 federated_id 前缀，远端可直接解析归属。
+        只传 entity_type + local_id，远端根据 peer 前缀自动拼接。
         """
-        # 查找该本地群聊关联的联邦对等端
         async with async_session() as db:
             peers_list = await get_federated_peers_for_entity(db, "group", str(group_id))
-            # 获取本实例的 display_name（用于构建 federated_id）
             my_info = await get_instance_info(db)
-            my_display_name = my_info.get("display_name", "") or ""
-            # 获取 peer 的 display_name
             my_public_id = my_info.get("public_id", "")
 
         if not peers_list:
             return
 
-        # 构建 federated group ID
-        federated_group_id = ""
-        if my_display_name:
-            federated_group_id = build_federated_id(my_display_name, "g", group_id)
-
-        # 构建发送者的 federated ID
-        sender_federated_id = ""
         sender_id = message_dict.get("sender_id", 0)
         sender_type = message_dict.get("sender_type", "human")
-        if my_display_name:
-            entity_type = "a" if sender_type == "ai" else "u"
-            sender_federated_id = build_federated_id(my_display_name, entity_type, sender_id)
 
         payload = {
             "type": "forward_message",
             "conversation_type": "group",
-            "federated_group_id": federated_group_id,
-            "federated_sender_id": sender_federated_id,
+            "group_id": group_id,
+            "sender_id": sender_id,
+            "sender_type": sender_type,
             "message": message_dict,
             "source_public_id": my_public_id,
         }
 
-        # 顺带发送 profile 更新
         profile_updates = await self._get_pending_profile_updates()
         if profile_updates:
             payload["profile_updates"] = profile_updates
@@ -347,20 +336,15 @@ class FederationManager:
         async with async_session() as db:
             peers_list = await get_federated_peers_for_entity(db, "dm", session_id)
             my_info = await get_instance_info(db)
-            my_display_name = my_info.get("display_name", "") or ""
             my_public_id = my_info.get("public_id", "")
 
         if not peers_list:
             return
 
-        federated_dm_id = ""
-        if my_display_name:
-            federated_dm_id = build_federated_id(my_display_name, "dm", session_id)
-
         payload = {
             "type": "forward_message",
             "conversation_type": "dm",
-            "federated_session_id": federated_dm_id,
+            "session_id": session_id,
             "message": message_dict,
             "source_public_id": my_public_id,
         }
@@ -380,14 +364,14 @@ class FederationManager:
         self,
         peer_public_id: str,
         entity_type: str,
-        federated_id: str,
+        local_id: str,
         display_name: str = "",
         avatar_url: str = "",
         direction: str = "outgoing",
     ) -> bool:
         """
         向指定已连接对等端发送 entity_announce。
-        远端收到后自动注册到 FederatedEntity 表。
+        只传 entity_type + local_id，远端根据 peer 前缀自动拼接 federated_id。
         返回 True 表示已发送，False 表示对等端未连接。
         """
         conn = self.peers.get(peer_public_id)
@@ -397,12 +381,12 @@ class FederationManager:
             await conn.websocket.send(json.dumps({
                 "type": "entity_announce",
                 "entity_type": entity_type,
-                "federated_id": federated_id,
+                "local_id": local_id,
                 "display_name": display_name,
                 "avatar_url": avatar_url,
                 "direction": direction,
             }))
-            logger.info(f"📢 发送 entity_announce: {federated_id} → {peer_public_id}")
+            logger.info(f"📢 发送 entity_announce: {entity_type}:{local_id} → {peer_public_id}")
             return True
         except Exception as e:
             logger.warning(f"📢 entity_announce 发送失败: {peer_public_id} — {e}")
@@ -411,7 +395,8 @@ class FederationManager:
     async def unannounce_entity(
         self,
         peer_public_id: str,
-        federated_id: str,
+        entity_type: str,
+        local_id: str,
     ) -> bool:
         """
         向指定已连接对等端发送 entity_unannounce，通知远端移除联邦实体。
@@ -423,9 +408,10 @@ class FederationManager:
         try:
             await conn.websocket.send(json.dumps({
                 "type": "entity_unannounce",
-                "federated_id": federated_id,
+                "entity_type": entity_type,
+                "local_id": local_id,
             }))
-            logger.info(f"📢 发送 entity_unannounce: {federated_id} → {peer_public_id}")
+            logger.info(f"📢 发送 entity_unannounce: {entity_type}:{local_id} → {peer_public_id}")
             return True
         except Exception as e:
             logger.warning(f"📢 entity_unannounce 发送失败: {peer_public_id} — {e}")
@@ -632,106 +618,120 @@ class FederationManager:
             await self._apply_profile_updates(from_public_id, profile_updates)
 
         if conversation_type == "group":
-            # 从 federated_group_id 解析
-            federated_group_id = data.get("federated_group_id", "")
-            if federated_group_id:
-                async with async_session() as db:
+            # 新格式：group_id + entity_type，自行拼接 federated_id
+            group_id = data.get("group_id")
+            federated_group_id = data.get("federated_group_id", "")  # 兼容旧格式
+
+            if not group_id and not federated_group_id:
+                return
+
+            async with async_session() as db:
+                entity = None
+                if group_id:
+                    # 新格式：根据 peer 前缀拼接
+                    peer = await get_peer_by_public_id(db, from_public_id)
+                    if peer:
+                        fid = f"{peer.display_name}:g:{group_id}"
+                        entity = await get_federated_entity_by_fid(db, fid)
+                elif federated_group_id:
                     entity = await get_federated_entity_by_fid(db, federated_group_id)
-                    if entity is None:
-                        logger.warning(f"🌐 未知联邦群: {federated_group_id} from {from_public_id}")
-                        await self._send_error(from_public_id, "UNKNOWN_ENTITY", federated_group_id)
-                        return
-                    group_id = int(entity.local_ref_id)
 
-                    message = await handle_remote_message(db, group_id, msg, source_public_id)
-                    await db.commit()
-
-                    from app.services.group_service import message_to_dict
-                    msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"))
-
-                    from app.routers.ws import manager
-                    await manager.broadcast_to_group(
-                        group_id,
-                        {"type": "message", "conversation_type": "group", "data": msg_data},
-                    )
-
-                    if msg.get("sender_type") == "human":
-                        from app.services.ai_response_worker import message_queue
-                        try:
-                            message_queue.put_nowait({
-                                "conversation_type": "group",
-                                "group_id": group_id,
-                                "message_id": message.id,
-                                "content": msg.get("content", ""),
-                                "sender_type": "human",
-                                "sender_id": 0,
-                                "chain_depth": 0,
-                                "source_public_id": source_public_id,
-                            })
-                        except asyncio.QueueFull:
-                            pass
-            else:
-                # 兼容旧格式（无 federated_group_id，后续可移除）
-                group_id = data.get("group_id")
-                if not group_id:
+                if entity is None:
+                    lid = group_id or federated_group_id
+                    logger.warning(f"🌐 未知联邦群: {lid} from {from_public_id}")
                     return
-                async with async_session() as db:
-                    message = await handle_remote_message(db, int(group_id), msg, source_public_id)
-                    await db.commit()
-                    from app.services.group_service import message_to_dict
-                    msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"))
-                    from app.routers.ws import manager
-                    await manager.broadcast_to_group(
-                        int(group_id),
-                        {"type": "message", "conversation_type": "group", "data": msg_data},
-                    )
+                gid = int(entity.local_ref_id)
+
+                message = await handle_remote_message(db, gid, msg, source_public_id)
+                await db.commit()
+
+                from app.services.group_service import message_to_dict
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"))
+
+                from app.routers.ws import manager
+                await manager.broadcast_to_group(
+                    gid,
+                    {"type": "message", "conversation_type": "group", "data": msg_data},
+                )
+
+                if msg.get("sender_type") == "human":
+                    from app.services.ai_response_worker import message_queue
+                    try:
+                        message_queue.put_nowait({
+                            "conversation_type": "group",
+                            "group_id": gid,
+                            "message_id": message.id,
+                            "content": msg.get("content", ""),
+                            "sender_type": "human",
+                            "sender_id": 0,
+                            "chain_depth": 0,
+                            "source_public_id": source_public_id,
+                        })
+                    except asyncio.QueueFull:
+                        pass
 
         elif conversation_type == "dm":
-            federated_session_id = data.get("federated_session_id", "")
-            if federated_session_id:
-                async with async_session() as db:
+            session_id = data.get("session_id", "")
+            federated_session_id = data.get("federated_session_id", "")  # 兼容旧格式
+
+            if not session_id and not federated_session_id:
+                return
+
+            async with async_session() as db:
+                entity = None
+                if session_id:
+                    peer = await get_peer_by_public_id(db, from_public_id)
+                    if peer:
+                        fid = f"{peer.display_name}:d:{session_id}"
+                        entity = await get_federated_entity_by_fid(db, fid)
+                elif federated_session_id:
                     entity = await get_federated_entity_by_fid(db, federated_session_id)
-                    if entity is None:
-                        logger.warning(f"🌐 未知联邦 DM: {federated_session_id} from {from_public_id}")
-                        await self._send_error(from_public_id, "UNKNOWN_ENTITY", federated_session_id)
-                        return
-                    session_id = entity.local_ref_id
 
-                    dm_msg = await persist_remote_dm_message(db, session_id, msg, source_public_id)
-                    await db.commit()
+                if entity is None:
+                    sid = session_id or federated_session_id
+                    logger.warning(f"🌐 未知联邦 DM: {sid} from {from_public_id}")
+                    return
+                sid = entity.local_ref_id
 
-                    from app.routers.ws import manager
-                    dm_data = {
-                        "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
-                        "session_id": session_id,
-                        "sender_id": 0,
-                        "sender_name": msg.get("sender_name", "Remote User"),
-                        "sender_type": msg.get("sender_type", "human"),
-                        "content": msg.get("content", ""),
-                        "reply_to": msg.get("reply_to"),
-                        "source_public_id": source_public_id,
-                        "created_at": str(dm_msg.created_at) if hasattr(dm_msg, 'created_at') else None,
-                        "read_at": None,
-                    }
-                    await manager.broadcast_to_dm(
-                        session_id,
-                        {"type": "message", "conversation_type": "dm", "data": dm_data},
-                    )
+                dm_msg = await persist_remote_dm_message(db, sid, msg, source_public_id)
+                await db.commit()
+
+                from app.routers.ws import manager
+                dm_data = {
+                    "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
+                    "session_id": sid,
+                    "sender_id": 0,
+                    "sender_name": msg.get("sender_name", "Remote User"),
+                    "sender_type": msg.get("sender_type", "human"),
+                    "content": msg.get("content", ""),
+                    "reply_to": msg.get("reply_to"),
+                    "source_public_id": source_public_id,
+                    "created_at": str(dm_msg.created_at) if hasattr(dm_msg, 'created_at') else None,
+                    "read_at": None,
+                }
+                await manager.broadcast_to_dm(
+                    sid,
+                    {"type": "message", "conversation_type": "dm", "data": dm_data},
+                )
 
     async def _handle_entity_announce(self, from_public_id: str, data: dict) -> None:
         """
-        处理入站实体注册通告（v1.0.0 新增）。
+        处理入站实体注册通告。
 
-        远端管理员共享了一个实体给我，我需要记录到 federated_entities。
-        格式: { entity_type, federated_id, display_name, avatar_url, direction }
+        支持两种格式：
+        - 新: { entity_type, local_id, display_name, avatar_url, direction }
+        - 旧: { entity_type, federated_id, ... }   （向下兼容）
         """
         entity_type = data.get("entity_type", "")
-        federated_id = data.get("federated_id", "")
         display_name = data.get("display_name", "")
         avatar_url = data.get("avatar_url", "")
         direction = data.get("direction", "incoming")
 
-        if not entity_type or not federated_id:
+        # 兼容旧格式 federated_id，新格式用 local_id
+        federated_id = data.get("federated_id", "")
+        local_id = data.get("local_id", "")
+
+        if not entity_type or (not federated_id and not local_id):
             return
 
         async with async_session() as db:
@@ -740,10 +740,14 @@ class FederationManager:
                 logger.warning(f"🌐 entity_announce from unknown peer {from_public_id}")
                 return
 
+            # 新格式：根据 peer.display_name + entity_type + local_id 拼接 federated_id
+            if not federated_id and local_id:
+                type_char = _entity_type_char(entity_type)
+                federated_id = f"{peer.display_name}:{type_char}:{local_id}"
+
             # 检查是否已存在
             existing = await get_federated_entity_by_fid(db, federated_id)
             if existing:
-                # 更新 display_name 和 avatar_url（可能已变更）
                 existing.display_name = display_name or existing.display_name
                 existing.avatar_url = avatar_url or existing.avatar_url
                 existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -786,10 +790,23 @@ class FederationManager:
 
     async def _handle_entity_unannounce(self, from_public_id: str, data: dict) -> None:
         """
-        处理入站实体取消通告（v1.0.0）。
-        远端管理员取消共享了一个实体，我需要移除对应的 FederatedEntity 记录。
+        处理入站实体取消通告。
+        支持新旧两种格式：
+        - 新: { entity_type, local_id }
+        - 旧: { federated_id }
         """
         federated_id = data.get("federated_id", "")
+        entity_type = data.get("entity_type", "")
+        local_id = data.get("local_id", "")
+
+        # 新格式：根据 peer 拼接
+        if not federated_id and entity_type and local_id:
+            async with async_session() as db:
+                peer = await get_peer_by_public_id(db, from_public_id)
+                if peer:
+                    type_char = _entity_type_char(entity_type)
+                    federated_id = f"{peer.display_name}:{type_char}:{local_id}"
+
         if not federated_id:
             return
 

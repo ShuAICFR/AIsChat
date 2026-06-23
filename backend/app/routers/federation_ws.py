@@ -189,7 +189,7 @@ async def federation_websocket(ws: WebSocket):
 
 
 async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
-    """处理对等端转发来的消息（v1.0.0: 使用 federated_id 解析）"""
+    """处理对等端转发来的消息"""
     conversation_type = data.get("conversation_type", "group")
     msg = data.get("message", {})
     source_public_id = data.get("source_public_id", from_public_id)
@@ -197,27 +197,39 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
     if not msg:
         return
 
+    # 根据 peer 前缀拼接 federated_id 的辅助函数
+    async def _resolve_entity(entity_type: str, local_id: str | int) -> object | None:
+        async with async_session() as db:
+            from app.services.federation_service import get_peer_by_public_id
+            peer = await get_peer_by_public_id(db, from_public_id)
+            if peer:
+                type_char = {"group": "g", "dm": "d", "user": "u", "agent": "a"}.get(entity_type, entity_type[0])
+                fid = f"{peer.display_name}:{type_char}:{local_id}"
+                return await get_federated_entity_by_fid(db, fid)
+        return None
+
     if conversation_type == "group":
-        federated_group_id = data.get("federated_group_id", "")
-        group_id = None
+        group_id = data.get("group_id")
+        federated_group_id = data.get("federated_group_id", "")  # 兼容旧格式
 
-        if federated_group_id:
-            async with async_session() as db:
-                entity = await get_federated_entity_by_fid(db, federated_group_id)
-                if entity is None:
-                    logger.warning(f"🌐 未知联邦群: {federated_group_id} from {from_public_id}")
-                    return
-                group_id = int(entity.local_ref_id)
-        else:
-            # 兼容旧格式
-            group_id = data.get("group_id")
-
-        if not group_id:
+        if not group_id and not federated_group_id:
             return
+
+        async with async_session() as db:
+            entity = None
+            if group_id:
+                entity = await _resolve_entity("group", group_id)
+            elif federated_group_id:
+                entity = await get_federated_entity_by_fid(db, federated_group_id)
+
+            if entity is None:
+                logger.warning(f"🌐 未知联邦群: {group_id or federated_group_id} from {from_public_id}")
+                return
+            group_id = int(entity.local_ref_id)
 
         try:
             async with async_session() as db:
-                message = await handle_remote_message(db, int(group_id), msg, source_public_id)
+                message = await handle_remote_message(db, group_id, msg, source_public_id)
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
@@ -225,7 +237,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
 
                 from app.routers.ws import manager
                 await manager.broadcast_to_group(
-                    int(group_id),
+                    group_id,
                     {"type": "message", "conversation_type": "group", "data": msg_data},
                 )
 
@@ -234,7 +246,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                     try:
                         message_queue.put_nowait({
                             "conversation_type": "group",
-                            "group_id": int(group_id),
+                            "group_id": group_id,
                             "message_id": message.id,
                             "content": msg.get("content", ""),
                             "sender_type": "human",
@@ -248,16 +260,23 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
             logger.error(f"🌐 处理转发消息失败: {e}", exc_info=True)
 
     elif conversation_type == "dm":
-        federated_session_id = data.get("federated_session_id", "")
-        if federated_session_id:
-            async with async_session() as db:
+        session_id = data.get("session_id", "")
+        federated_session_id = data.get("federated_session_id", "")  # 兼容旧格式
+
+        if not session_id and not federated_session_id:
+            return
+
+        async with async_session() as db:
+            entity = None
+            if session_id:
+                entity = await _resolve_entity("dm", session_id)
+            elif federated_session_id:
                 entity = await get_federated_entity_by_fid(db, federated_session_id)
-                if entity is None:
-                    logger.warning(f"Unknown federated DM: {federated_session_id}")
-                    return
-                session_id = entity.local_ref_id
-        else:
-            session_id = data.get("session_id")
+
+            if entity is None:
+                logger.warning(f"Unknown federated DM: {session_id or federated_session_id}")
+                return
+            session_id = entity.local_ref_id
 
         if not session_id:
             return

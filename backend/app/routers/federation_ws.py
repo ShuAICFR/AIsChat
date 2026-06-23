@@ -153,6 +153,8 @@ async def federation_websocket(ws: WebSocket):
                 is_inbound=True,
             )
             logger.info(f"🌐 注册入站连接: {peer_public_id}")
+            # 分批回放断线期间缓冲的消息
+            await federation_manager._flush_outbox(peer_public_id)
 
         # ── 消息循环 ──
         while True:

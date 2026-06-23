@@ -1163,19 +1163,29 @@ class FederationManager:
         logger.info(f"🌐 关闭连接: {public_id}")
 
     async def _flush_outbox(self, public_id: str) -> None:
+        """重连后分批回放缓冲消息，避免一次推太多卡爆"""
         conn = self.peers.get(public_id)
         if not conn or not conn.websocket or not conn.handshake_complete:
             return
         flushed = 0
+        batch_size = 5  # 每批最多 5 条
         while not conn.pending_outbox.empty():
-            try:
-                payload = conn.pending_outbox.get_nowait()
-                await conn.websocket.send(json.dumps(payload))
-                flushed += 1
-            except asyncio.QueueEmpty:
-                break
-            except Exception:
-                break
+            batch = 0
+            while batch < batch_size and not conn.pending_outbox.empty():
+                try:
+                    payload = conn.pending_outbox.get_nowait()
+                    if conn.is_inbound:
+                        await conn.websocket.send_json(payload)
+                    else:
+                        await conn.websocket.send(json.dumps(payload))
+                    flushed += 1
+                    batch += 1
+                except asyncio.QueueEmpty:
+                    break
+                except Exception:
+                    break
+            if not conn.pending_outbox.empty():
+                await asyncio.sleep(0.5)  # 批次间隔 0.5s
         if flushed:
             logger.info(f"🌐 {public_id} 缓冲重放: {flushed} 条消息")
 

@@ -233,7 +233,20 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
             if peer:
                 type_char = {"group": "g", "dm": "d", "user": "u", "agent": "a"}.get(entity_type, entity_type[0])
                 fid = f"{peer.display_name}:{type_char}:{local_id}"
-                return await get_federated_entity_by_fid(db, fid)
+                entity = await get_federated_entity_by_fid(db, fid)
+                if entity:
+                    return entity
+                # 回退：federated_id 可能因格式变更不匹配，按 entity_type + local_ref_id + peer_id 查找
+                from app.models.federation import FederatedEntity
+                from sqlalchemy import select as sa_select
+                result = await db.execute(
+                    sa_select(FederatedEntity).where(
+                        FederatedEntity.entity_type == entity_type,
+                        FederatedEntity.local_ref_id == str(local_id),
+                        FederatedEntity.peer_id == peer.id,
+                    )
+                )
+                return result.scalar_one_or_none()
         return None
 
     if conversation_type == "group":

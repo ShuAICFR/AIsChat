@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -60,7 +61,7 @@ function fileIconColor(mimeType: string): string {
   return 'text-primary-400'
 }
 
-export default function MessageBubble({
+const MessageBubble = memo(function MessageBubble({
   senderName, senderAvatarUrl, content, isMine, createdAt, state,
   senderType, senderId, thinking, isTyping, sourcePublicId, attachments, onAvatarClick,
 }: MessageBubbleProps) {
@@ -178,4 +179,5 @@ export default function MessageBubble({
       </div>
     </div>
   )
-}
+})
+export default MessageBubble

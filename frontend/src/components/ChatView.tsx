@@ -124,6 +124,11 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
   const { lastMessage, connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(conversationType, conversationId)
 
+  // 稳定引用，配合 MessageBubble 的 React.memo 避免输入时重渲染消息列表
+  const handleAvatarClick = useCallback((type: string, id: number, name: string, state?: string) => {
+    setProfileCard({ type, id, name, state })
+  }, [])
+
   // ============================================================
   // 消息加载器
   // ============================================================
@@ -725,9 +730,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
                 senderId={msg.sender_id}
                 sourcePublicId={msg.source_public_id}
                 attachments={msg.attachments}
-                onAvatarClick={(type, id, name, state) =>
-                  setProfileCard({ type, id, name, state })
-                }
+                onAvatarClick={handleAvatarClick}
               />
             </div>
           ))

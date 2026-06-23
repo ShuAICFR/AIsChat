@@ -281,6 +281,12 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                             await _db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": local_id})
                         await _db.commit()
                     logger.info(f"Downloaded federated avatar: {download_url} -> {fname}")
+                    # 推送头像更新通知，前端收到后更新已渲染消息中的头像 URL
+                    try:
+                        from app.routers.ws import manager as ws_manager
+                        await ws_manager.broadcast_avatar_updated(entity_type, local_id, local_path)
+                    except Exception:
+                        pass
                     return local_path
         except Exception as e:
             logger.warning(f"Failed to download federated avatar: {e}")

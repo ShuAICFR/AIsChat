@@ -123,6 +123,44 @@ async def _apply_avatar_update(db, entity_type: str, local_ref_id: str, new_valu
         await db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": rid})
 
 
+async def _download_federated_avatar(avatar_url: str, entity_type: str, local_id: int, peer) -> None:
+    """后台下载联邦头像（fire-and-forget，供 asyncio.create_task 调用）"""
+    if not avatar_url or not avatar_url.startswith("/") or not peer or not peer.remote_url:
+        return
+    import os, uuid
+    try:
+        base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
+        base = base.replace("/federation/ws", "")
+        download_url = f"{base}{avatar_url}"
+        import httpx
+        async with httpx.AsyncClient(verify=False, timeout=15) as client:
+            resp = await client.get(download_url)
+            if resp.status_code == 200:
+                ext = os.path.splitext(avatar_url)[1] or ".png"
+                fname = f"{entity_type}_{local_id}_{uuid.uuid4().hex[:8]}{ext}"
+                os.makedirs("/app/uploads/avatars", exist_ok=True)
+                fpath = os.path.join("/app/uploads/avatars", fname)
+                with open(fpath, "wb") as f:
+                    f.write(resp.content)
+                local_path = f"/api/fs/download-avatar/{fname}"
+                from sqlalchemy import text
+                async with async_session() as _db:
+                    if entity_type == "user":
+                        await _db.execute(text("UPDATE users SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": local_id})
+                    elif entity_type == "agent":
+                        await _db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": local_id})
+                    await _db.commit()
+                logger.info(f"🖼️ 下载联邦头像: {download_url} → {fname}")
+                # 推送头像更新通知
+                try:
+                    from app.routers.ws import manager as ws_manager
+                    await ws_manager.broadcast_avatar_updated(entity_type, local_id, local_path)
+                except Exception:
+                    pass
+    except Exception as e:
+        logger.warning(f"🖼️ 下载联邦头像失败: {e}")
+
+
 class FederationManager:
     """联邦连接管理器（单例）"""
 
@@ -684,6 +722,7 @@ class FederationManager:
 
             async with async_session() as db:
                 entity = None
+                peer = None
                 if group_id:
                     # 新格式：根据 peer 前缀拼接
                     peer = await get_peer_by_public_id(db, from_public_id)
@@ -692,6 +731,7 @@ class FederationManager:
                         entity = await get_federated_entity_by_fid(db, fid)
                 elif federated_group_id:
                     entity = await get_federated_entity_by_fid(db, federated_group_id)
+                    peer = await get_peer_by_public_id(db, from_public_id)
 
                 if entity is None:
                     lid = group_id or federated_group_id
@@ -703,7 +743,15 @@ class FederationManager:
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
-                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"))
+                original_avatar = msg.get("sender_avatar_url")
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "Remote User"), sender_avatar_url=original_avatar)
+
+                # 后台异步下载头像
+                if original_avatar and peer:
+                    asyncio.create_task(_download_federated_avatar(
+                        original_avatar, msg.get("sender_type", "human"),
+                        msg.get("sender_id", 0), peer,
+                    ))
 
                 from app.routers.ws import manager
                 await manager.broadcast_to_group(
@@ -736,6 +784,7 @@ class FederationManager:
 
             async with async_session() as db:
                 entity = None
+                peer = None
                 if session_id:
                     peer = await get_peer_by_public_id(db, from_public_id)
                     if peer:
@@ -743,6 +792,7 @@ class FederationManager:
                         entity = await get_federated_entity_by_fid(db, fid)
                 elif federated_session_id:
                     entity = await get_federated_entity_by_fid(db, federated_session_id)
+                    peer = await get_peer_by_public_id(db, from_public_id)
 
                 if entity is None:
                     sid = session_id or federated_session_id
@@ -754,12 +804,20 @@ class FederationManager:
                 await db.commit()
 
                 from app.routers.ws import manager
+                sender_avatar_dm = msg.get("sender_avatar_url")
+                # 后台异步下载头像
+                if sender_avatar_dm and peer:
+                    asyncio.create_task(_download_federated_avatar(
+                        sender_avatar_dm, msg.get("sender_type", "human"),
+                        msg.get("sender_id", 0), peer,
+                    ))
                 dm_data = {
                     "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
                     "session_id": sid,
                     "sender_id": 0,
                     "sender_name": msg.get("sender_name", "Remote User"),
                     "sender_type": msg.get("sender_type", "human"),
+                    "sender_avatar_url": sender_avatar_dm,
                     "content": msg.get("content", ""),
                     "reply_to": msg.get("reply_to"),
                     "source_public_id": source_public_id,
@@ -902,6 +960,8 @@ class FederationManager:
                 field = update.get("field", "")
                 new_value = update.get("new_value", "")
 
+                if not entity_type:
+                    continue
                 if field not in ("display_name", "avatar_url"):
                     continue
 

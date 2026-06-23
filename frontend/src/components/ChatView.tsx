@@ -421,6 +421,21 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         reply_to: null,
         created_at: new Date().toISOString(),
       } as Message])
+    } else if (lastMessage.type === 'avatar_updated') {
+      // 头像下载完成后更新已渲染消息气泡中的头像 URL
+      const d = lastMessage as any
+      const etype = d.entity_type
+      const eid = d.entity_id
+      const newUrl = d.avatar_url
+      if (etype && eid && newUrl) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_type === etype && m.sender_id === eid
+              ? { ...m, sender_avatar_url: newUrl }
+              : m,
+          ),
+        )
+      }
     } else if (lastMessage.type === 'dm_notification' || lastMessage.type === 'unread_update') {
       window.dispatchEvent(new CustomEvent('chat-refresh', { detail: lastMessage }))
     }

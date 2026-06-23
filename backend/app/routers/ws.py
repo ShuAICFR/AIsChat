@@ -119,6 +119,34 @@ class ConnectionManager:
                 except Exception as e:
                     logger.warning(f"发送 DM 消息给用户 {uid} 失败: {e}")
 
+    async def broadcast_avatar_updated(
+        self,
+        entity_type: str,
+        entity_id: int,
+        avatar_url: str,
+    ):
+        """头像下载完成后通知所有已连接客户端更新消息气泡中的头像 URL"""
+        event = {
+            "type": "avatar_updated",
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "avatar_url": avatar_url,
+        }
+        # 通知群聊中的客户端
+        for conns in self.group_connections.values():
+            for ws in conns.values():
+                try:
+                    await ws.send_json(event)
+                except Exception:
+                    pass
+        # 通知 DM 中的客户端
+        for conns in self.dm_connections.values():
+            for ws in conns.values():
+                try:
+                    await ws.send_json(event)
+                except Exception:
+                    pass
+
 
 manager = ConnectionManager()
 

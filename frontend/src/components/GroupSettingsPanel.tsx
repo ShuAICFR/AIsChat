@@ -2,45 +2,37 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { getStateDotColor } from '../constants'
-import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Check, Loader2, ArrowLeft } from 'lucide-react'
+import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Loader2, ArrowLeft } from 'lucide-react'
 
-// ── 联邦共享子组件 ──
+// ── 联邦共享状态（v1.0.0: 群主/AI制作者按群控制联邦共享） ──
 
-interface ConnectedPeer {
-  id: number
-  peer_public_id: string
-  display_name: string
-  connection_state: string
-}
-
-interface GroupShare {
-  id: number
+interface FederationPeerStatus {
   peer_id: number
+  display_name: string
   peer_public_id: string
-  peer_display_name: string
-  share_direction: string
+  is_connected: boolean
+  is_shared: boolean
+  federated_id: string
 }
 
 function FederationShareSection({ groupId }: { groupId: number }) {
   const t = useT()
-  const [enabled, setEnabled] = useState(false)
-  const [peers, setPeers] = useState<ConnectedPeer[]>([])
-  const [shares, setShares] = useState<GroupShare[]>([])
+  const [peers, setPeers] = useState<FederationPeerStatus[]>([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [toggling, setToggling] = useState<number | null>(null)
+  const [myDisplayName, setMyDisplayName] = useState('')
 
-  // 加载已连接的 peer 和当前群聊的共享状态
-  const loadData = async () => {
+  const loadPeers = async () => {
     setLoading(true)
     try {
-      const [allPeers, groupShares] = await Promise.all([
-        api.get<ConnectedPeer[]>('/admin/federation/peers'),
-        api.get<GroupShare[]>(`/admin/federation/groups/${groupId}/shares`),
-      ])
-      // 仅显示已连接的对等端
-      setPeers(allPeers.filter(p => p.connection_state === 'connected'))
-      setShares(groupShares)
-      setEnabled(groupShares.length > 0)
+      const data = await api.get<{
+        success: boolean
+        my_display_name: string
+        peers: FederationPeerStatus[]
+      }>(`/groups/${groupId}/federation/peers`)
+      setPeers(data.peers || [])
+      setMyDisplayName(data.my_display_name || '')
     } catch {
       // 静默失败
     } finally {
@@ -49,121 +41,112 @@ function FederationShareSection({ groupId }: { groupId: number }) {
     }
   }
 
-  // 切换某个 peer 的共享状态
-  const togglePeer = async (peerId: number, currentlyShared: boolean) => {
+  // 首次自动加载
+  useEffect(() => {
+    loadPeers()
+  }, [groupId])
+
+  const handleToggle = async (peer: FederationPeerStatus) => {
+    setToggling(peer.peer_id)
     try {
-      if (currentlyShared) {
-        await api.delete(`/admin/federation/groups/${groupId}/shares/${peerId}`)
+      if (peer.is_shared) {
+        await api.post(`/groups/${groupId}/federation/unshare`, { peer_ids: [peer.peer_id] })
       } else {
-        await api.post(`/admin/federation/groups/${groupId}/shares`, {
-          peer_id: peerId,
-          share_direction: 'bidirectional',
-        })
+        await api.post(`/groups/${groupId}/federation/share`, { peer_ids: [peer.peer_id] })
       }
-      // 重新加载
-      const groupShares = await api.get<GroupShare[]>(`/admin/federation/groups/${groupId}/shares`)
-      setShares(groupShares)
-      setEnabled(groupShares.length > 0)
+      // 刷新状态
+      await loadPeers()
     } catch {
       // 静默失败
+    } finally {
+      setToggling(null)
     }
   }
 
-  // 展开/收起
-  if (!loaded) {
-    return (
-      <button
-        onClick={loadData}
-        disabled={loading}
-        className="w-full flex items-center justify-between py-0.5"
-      >
-        <div className="text-left">
-          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
-          <div className="text-xs text-textMuted">{t('groupSettings.clickToLoadPeers')}</div>
-        </div>
-        {loading ? <Loader2 size={16} className="animate-spin text-textMuted" /> : <span className="text-xs text-primary-400">{t('common.load')}</span>}
-      </button>
-    )
-  }
-
-  if (peers.length === 0) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
-            <div className="text-xs text-textMuted">{t('groupSettings.noConnectedPeers')}</div>
-          </div>
-        </div>
-        <p className="text-xs text-textMuted">
-          {t('groupSettings.addPeersHint1')}<strong>{t('groupSettings.addPeersHint2')}</strong>{t('groupSettings.addPeersHint3')}
-        </p>
-      </div>
-    )
-  }
-
-  const sharedPeerIds = new Set(shares.map(s => s.peer_id))
+  const sharedCount = peers.filter(p => p.is_shared).length
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-sm text-textPrimary font-medium flex items-center gap-1"><Globe size={14} className="text-textMuted shrink-0" />{t('groupSettings.federationShare')}</div>
+          <div className="text-sm text-textPrimary font-medium flex items-center gap-1">
+            <Globe size={14} className="text-textMuted shrink-0" />
+            {t('groupSettings.federationShare')}
+          </div>
           <div className="text-xs text-textMuted">
-            {t('groupSettings.sharedTo')}{shares.length}{t('groupSettings.autoForward')}
+            {sharedCount > 0
+              ? `${t('groupSettings.sharedTo')}${sharedCount}${t('groupSettings.autoForward')}`
+              : t('groupSettings.federationShareHint')}
           </div>
         </div>
         <button
-          onClick={loadData}
+          onClick={loadPeers}
           disabled={loading}
           className="text-xs text-textMuted hover:text-textSecondary transition-colors"
-          title={t('common.refresh')}
         >
           {loading ? <Loader2 size={14} className="animate-spin" /> : t('common.refresh')}
         </button>
       </div>
 
-      <div className="space-y-1.5">
-        {peers.map(peer => {
-          const isShared = sharedPeerIds.has(peer.id)
-          return (
-            <label
-              key={peer.id}
-              className={`flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                isShared
-                  ? 'border-primary-500/30 bg-primary-500/5'
-                  : 'border-border bg-canvas hover:border-primary-500/20'
-              }`}
+      {!myDisplayName && loaded && (
+        <div className="bg-amber-400/10 text-amber-400 rounded-lg px-3 py-2 text-xs">
+          {t('groupSettings.federationNoDisplayName')}
+        </div>
+      )}
+
+      {loaded && peers.length === 0 && (
+        <div className="bg-elevated rounded-lg px-3 py-3 text-xs text-textMuted text-center">
+          <p className="font-medium text-textSecondary mb-1">{t('groupSettings.federationNoPeers')}</p>
+          <p>{t('groupSettings.federationNoPeersHint')}</p>
+        </div>
+      )}
+
+      {peers.length > 0 && (
+        <div className="space-y-1">
+          {peers.map(peer => (
+            <div
+              key={peer.peer_id}
+              className="flex items-center justify-between px-3 py-2 rounded-lg bg-elevated hover:bg-canvas transition-colors"
             >
-              <input
-                type="checkbox"
-                checked={isShared}
-                onChange={() => togglePeer(peer.id, isShared)}
-                className="sr-only"
-              />
-              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                isShared
-                  ? 'bg-primary-500 border-primary-500'
-                  : 'border-textMuted'
-              }`}>
-                {isShared && <Check size={12} className="text-white" />}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    peer.is_connected ? 'bg-mint-400' : 'bg-textMuted/40'
+                  }`}
+                />
+                <div className="min-w-0">
+                  <div className="text-sm text-textPrimary truncate">{peer.display_name}</div>
+                  <div className="text-[10px] text-textMuted">
+                    {peer.is_connected
+                      ? t('groupSettings.federationPeerConnected')
+                      : t('groupSettings.federationPeerDisconnected')}
+                  </div>
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-textPrimary font-medium truncate">
-                  {peer.display_name || peer.peer_public_id}
-                </p>
-                <p className="text-[10px] text-textMuted font-mono truncate">
-                  {peer.peer_public_id}
-                </p>
-              </div>
-              <span className="flex items-center gap-1 text-[10px] text-emerald-400 shrink-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                {t('common.connected')}
-              </span>
-            </label>
-          )
-        })}
-      </div>
+              <button
+                onClick={() => handleToggle(peer)}
+                disabled={toggling === peer.peer_id}
+                className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
+                  peer.is_shared ? 'bg-primary-500' : 'bg-border'
+                } ${toggling === peer.peer_id ? 'opacity-50' : ''}`}
+                title={peer.is_shared ? t('groupSettings.federationUnshareFrom') : t('groupSettings.federationShareTo')}
+              >
+                {toggling === peer.peer_id ? (
+                  <div className="absolute top-1 left-1">
+                    <Loader2 size={16} className="animate-spin text-white" />
+                  </div>
+                ) : (
+                  <div
+                    className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                      peer.is_shared ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -186,7 +169,6 @@ interface GroupSettings {
   announcement: string | null
   speak_limit_per_minute: number
   speak_limit_window_seconds: number
-  is_federated: boolean
   my_role: string
 }
 

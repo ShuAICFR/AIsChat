@@ -475,7 +475,7 @@ CREATE TABLE IF NOT EXISTS agent_skills (
 CREATE INDEX IF NOT EXISTS idx_agent_skills_agent ON agent_skills(agent_id);
 
 -- ============================================================
--- 联邦通信表（跨实例直连）
+-- 联邦通信表（v1.0.0 ID前缀替代注册表）
 -- ============================================================
 
 -- 实例身份配置（单例，存本实例的子网ID和公网ID）
@@ -491,10 +491,11 @@ CREATE TABLE IF NOT EXISTS instance_config (
 );
 
 -- 联邦对等端（其他 AIsChat 实例）
+--   display_name 作为实例代号，全局唯一，用于 ID 前缀 + 前端路由
 CREATE TABLE IF NOT EXISTS federation_peers (
     id SERIAL PRIMARY KEY,
     peer_public_id VARCHAR(50) NOT NULL,
-    display_name VARCHAR(100) DEFAULT '',
+    display_name VARCHAR(100) NOT NULL UNIQUE,
     remote_url VARCHAR(500) NOT NULL,
     remote_url_backup VARCHAR(500),
     shared_secret_encrypted TEXT NOT NULL,
@@ -508,34 +509,34 @@ CREATE TABLE IF NOT EXISTS federation_peers (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- 联邦群聊共享（哪个本地群聊与哪个对等端共享）
-CREATE TABLE IF NOT EXISTS federation_group_shares (
+-- 联邦实体注册表（v1.0.0 替代 federation_group_shares + federation_dm_shares）
+--   federated_id = {实例代号}:{类型}:{远端ID}，前缀直接编码归属，无需 conversation_uuid 翻译
+CREATE TABLE IF NOT EXISTS federated_entities (
     id SERIAL PRIMARY KEY,
-    group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    federated_id VARCHAR(200) UNIQUE NOT NULL,
     peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+    entity_type VARCHAR(10) NOT NULL CHECK (entity_type IN ('group', 'dm', 'user', 'agent')),
+    local_ref_id VARCHAR(100) NOT NULL,
+    display_name VARCHAR(200) DEFAULT '',
     is_enabled BOOLEAN DEFAULT TRUE,
-    remote_group_id INT,
-    conversation_uuid VARCHAR(64) NOT NULL,  -- 联邦对话 UUID（conv_ + ULID），两端共用
-    share_direction VARCHAR(20) DEFAULT 'bidirectional'
-        CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
+    direction VARCHAR(20) DEFAULT 'incoming'
+        CHECK (direction IN ('incoming', 'bidirectional', 'outgoing')),
     created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(group_id, peer_id),
-    UNIQUE(peer_id, conversation_uuid)
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(peer_id, entity_type, local_ref_id)
 );
+CREATE INDEX IF NOT EXISTS idx_fed_entity_type_ref ON federated_entities(entity_type, local_ref_id);
 
--- 联邦私信共享（哪个本地 DM 与哪个对等端共享）
-CREATE TABLE IF NOT EXISTS federation_dm_shares (
+-- Profile 同步队列（v1.0.0 改名等变更同步到联邦对等端）
+CREATE TABLE IF NOT EXISTS pending_profile_updates (
     id SERIAL PRIMARY KEY,
-    session_id VARCHAR(64) NOT NULL REFERENCES dm_sessions(session_id) ON DELETE CASCADE,
-    peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
-    is_enabled BOOLEAN DEFAULT TRUE,
-    conversation_uuid VARCHAR(64) NOT NULL,  -- 联邦对话 UUID
-    share_direction VARCHAR(20) DEFAULT 'bidirectional'
-        CHECK (share_direction IN ('outgoing', 'incoming', 'bidirectional')),
-    created_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(session_id, peer_id),
-    UNIQUE(peer_id, conversation_uuid)
+    entity_type VARCHAR(10) NOT NULL,
+    entity_id INT NOT NULL,
+    field VARCHAR(50) NOT NULL,
+    new_value VARCHAR(500) NOT NULL,
+    changed_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_ppu_entity ON pending_profile_updates(entity_type, entity_id);
 
 -- ============================================================
 -- 平台全局系统设置（单行表，id=1）
@@ -544,6 +545,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
     default_language VARCHAR(10) NOT NULL DEFAULT 'en',
     default_platform_credit INTEGER NOT NULL DEFAULT 0,
+    federation_sync_interval_minutes INTEGER NOT NULL DEFAULT 720,
     updated_by INTEGER REFERENCES users(id),
     updated_at TIMESTAMP DEFAULT NOW()
 );

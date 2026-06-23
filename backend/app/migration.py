@@ -56,6 +56,7 @@ async def run_migrations():
             await _migrate_api_key_pool_tables(db)    # v0.6.0 API Key 池 + 用户绑定 + 用量日志；v0.6.0 +concurrent_limit
             await _migrate_platform_credit(db)           # v0.6.0 平台赠送额度
             await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
+            await _migrate_federation_v1(db)             # v1.0.0 联邦 ID 前缀替代注册表
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1407,6 +1408,124 @@ async def _fix_file_owner_type_check(db):
     ))
     await db.flush()
     logger.info(f"  ✅ {conname} → ck_file_owner_type 修复完成")
+
+
+async def _migrate_federation_v1(db):
+    """v1.0.0: 联邦 ID 前缀替代注册表 — DROP 旧表 + CREATE 新表 + 系统设置"""
+    logger.info("  🌐 v1.0.0 联邦架构迁移: ID 前缀替代注册表...")
+    created_any = False
+
+    # 1. DROP 旧共享表（用户已确认重新配置联邦）
+    if await _table_exists(db, "federation_group_shares"):
+        logger.info("  🗑️ 删除 federation_group_shares 表")
+        await db.execute(text("DROP TABLE IF EXISTS federation_group_shares CASCADE"))
+        created_any = True
+    if await _table_exists(db, "federation_dm_shares"):
+        logger.info("  🗑️ 删除 federation_dm_shares 表")
+        await db.execute(text("DROP TABLE IF EXISTS federation_dm_shares CASCADE"))
+        created_any = True
+
+    # 2. DROP groups.is_federated 列
+    if await _column_exists(db, "groups", "is_federated"):
+        logger.info("  🗑️ 删除 groups.is_federated 列")
+        await db.execute(text("ALTER TABLE groups DROP COLUMN is_federated"))
+        created_any = True
+
+    # 3. CREATE federated_entities 表
+    if not await _table_exists(db, "federated_entities"):
+        logger.info("  📦 创建 federated_entities 表")
+        await db.execute(text("""
+            CREATE TABLE federated_entities (
+                id SERIAL PRIMARY KEY,
+                federated_id VARCHAR(200) UNIQUE NOT NULL,
+                peer_id INT NOT NULL REFERENCES federation_peers(id) ON DELETE CASCADE,
+                entity_type VARCHAR(10) NOT NULL CHECK (entity_type IN ('group', 'dm', 'user', 'agent')),
+                local_ref_id VARCHAR(100) NOT NULL,
+                display_name VARCHAR(200) DEFAULT '',
+                is_enabled BOOLEAN DEFAULT TRUE,
+                direction VARCHAR(20) DEFAULT 'incoming'
+                    CHECK (direction IN ('incoming', 'bidirectional', 'outgoing')),
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(peer_id, entity_type, local_ref_id)
+            )
+        """))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_fed_entity_type_ref ON federated_entities(entity_type, local_ref_id)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ federated_entities 表已存在，跳过")
+
+    # 4. CREATE pending_profile_updates 表
+    if not await _table_exists(db, "pending_profile_updates"):
+        logger.info("  📝 创建 pending_profile_updates 表")
+        await db.execute(text("""
+            CREATE TABLE pending_profile_updates (
+                id SERIAL PRIMARY KEY,
+                entity_type VARCHAR(10) NOT NULL,
+                entity_id INT NOT NULL,
+                field VARCHAR(50) NOT NULL,
+                new_value VARCHAR(500) NOT NULL,
+                changed_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_ppu_entity ON pending_profile_updates(entity_type, entity_id)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ pending_profile_updates 表已存在，跳过")
+
+    # 5. display_name UNIQUE 约束（先清空可能存在的重名旧数据，再修改列类型和加约束）
+    if await _column_exists(db, "federation_peers", "display_name"):
+        # 先检查是否已有 UNIQUE 约束
+        result = await db.execute(text("""
+            SELECT 1 FROM information_schema.table_constraints
+            WHERE table_name = 'federation_peers' AND constraint_name = 'uq_peer_display_name'
+        """))
+        if not result.fetchone():
+            # 先清空旧数据中的重名（安全措施：旧数据 display_name 可能为空或重复）
+            await db.execute(text(
+                "UPDATE federation_peers SET display_name = peer_public_id "
+                "WHERE display_name IS NULL OR display_name = ''"
+            ))
+            # 修改列为 NOT NULL
+            await db.execute(text(
+                "ALTER TABLE federation_peers ALTER COLUMN display_name SET NOT NULL"
+            ))
+            # 添加唯一约束
+            try:
+                await db.execute(text(
+                    "ALTER TABLE federation_peers ADD CONSTRAINT uq_peer_display_name UNIQUE(display_name)"
+                ))
+                logger.info("  ✅ federation_peers.display_name UNIQUE 约束添加完成")
+            except Exception as e:
+                # 如果存在重名，用临时修复再重试
+                logger.warning(f"  ⚠️ UNIQUE 约束添加失败: {e}，尝试修复重名...")
+                await db.execute(text(
+                    "UPDATE federation_peers SET display_name = display_name || '_' || id "
+                    "WHERE display_name IN (SELECT display_name FROM federation_peers GROUP BY display_name HAVING COUNT(*) > 1)"
+                ))
+                await db.execute(text(
+                    "ALTER TABLE federation_peers ADD CONSTRAINT uq_peer_display_name UNIQUE(display_name)"
+                ))
+                logger.info("  ✅ federation_peers.display_name UNIQUE 约束添加完成（已修复重名）")
+            created_any = True
+    else:
+        logger.info("  ⏭ federation_peers.display_name 不存在，跳过")
+
+    # 6. system_settings.federation_sync_interval_minutes
+    if not await _column_exists(db, "system_settings", "federation_sync_interval_minutes"):
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN federation_sync_interval_minutes INTEGER NOT NULL DEFAULT 720"
+        ))
+        logger.info("  ✅ system_settings.federation_sync_interval_minutes 列添加完成（默认 720 分钟）")
+        created_any = True
+    else:
+        logger.info("  ⏭ system_settings.federation_sync_interval_minutes 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ 联邦 v1.0.0 迁移完成")
+    else:
+        logger.info("  ⏭ 联邦 v1.0.0 迁移均已完成，跳过")
 
 
 async def _fix_column_types(db):

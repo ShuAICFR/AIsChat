@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI):
         federation_manager,
         federation_heartbeat,
         federation_reconnect,
+        federation_profile_sync,
     )
     async with async_session() as db:
         await initialize_instance(db)
@@ -73,6 +74,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(federation_manager.connect_all_enabled_peers())
     fed_heartbeat_task = asyncio.create_task(federation_heartbeat())
     fed_reconnect_task = asyncio.create_task(federation_reconnect())
+    fed_profile_sync_task = asyncio.create_task(federation_profile_sync())
 
     logger.info("✅ 后台 worker 已全部启动（含联邦通信）")
 

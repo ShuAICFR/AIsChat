@@ -690,7 +690,7 @@ async def build_messages(
         "personality": _build_personality(agent, language, system_prompt_override),
         "protocol": protocol,
         "tools": await _build_tools_segment(db, agent, is_dm),
-        "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm, is_federated=group_obj.is_federated if group_obj else False),
+        "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
         "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key, trigger_user_id),
     }
 

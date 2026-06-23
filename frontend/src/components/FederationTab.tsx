@@ -29,16 +29,18 @@ interface Peer {
   updated_at: string | null
 }
 
-interface GroupShare {
+interface FederatedEntity {
   id: number
-  group_id: number
+  federated_id: string
   peer_id: number
-  peer_public_id: string
   peer_display_name: string
+  entity_type: string
+  local_ref_id: string
+  display_name: string
   is_enabled: boolean
-  remote_group_id: number | null
-  share_direction: string
+  direction: string
   created_at: string | null
+  updated_at: string | null
 }
 
 export default function FederationTab() {
@@ -102,7 +104,7 @@ export default function FederationTab() {
   }
 
   const handleAddPeer = async () => {
-    if (!newPeer.peer_public_id || !newPeer.remote_url || !newPeer.shared_secret) return
+    if (!newPeer.peer_public_id || !newPeer.shared_secret) return
     try {
       await api.post('/admin/federation/peers', newPeer)
       setNewPeer({ display_name: '', peer_public_id: '', remote_url: '', shared_secret: '' })
@@ -365,15 +367,15 @@ export default function FederationTab() {
           <div className="bg-surface border border-border rounded-xl p-6 max-w-md mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
             <h3 className="text-base font-semibold text-textPrimary mb-3">{t('admin.registerNotice')}</h3>
             <div className="text-sm text-textSecondary space-y-2 mb-5">
-              <p>将公网 ID 注册到 GitHub 注册表后：</p>
+              <p>{t('admin.registerNoticeText')}</p>
               <ul className="list-disc pl-5 space-y-1 text-xs">
-                <li>你的 <strong className="text-textPrimary">公网 ID、显示名称、公网 URL</strong> 将公开可见</li>
-                <li>其他 AIsChat 实例可以通过注册表发现并尝试连接你的实例</li>
-                <li>连接请求需要 <strong className="text-textPrimary">双方配置共享密钥</strong> 才能成功握手</li>
-                <li>你可以随时在注册表中 <strong className="text-textPrimary">更新或删除</strong> 自己的条目</li>
-                <li className="text-amber-400">请确保公网 URL 指向的是你自己的实例，不要冒用他人地址</li>
+                <li>{t('admin.registerNoticeItem1')}</li>
+                <li>{t('admin.registerNoticeItem2')}</li>
+                <li>{t('admin.registerNoticeItem3')}</li>
+                <li>{t('admin.registerNoticeItem4')}</li>
+                <li className="text-amber-400">{t('admin.registerNoticeItem5')}</li>
               </ul>
-              <p className="text-xs text-textMuted mt-2">注册前系统会验证你的公网 URL 确实指向运行中的 AIsChat 实例。</p>
+              <p className="text-xs text-textMuted mt-2">{t('admin.registerNoticeVerify')}</p>
             </div>
             {/* Token 输入区：未配置时突出显示，已配置时可折叠更换 */}
             <div className={`mb-4 p-3 rounded-lg ${!instance?.github_token_configured ? 'bg-amber-500/5 border border-amber-500/20' : 'bg-canvas border border-border'}`}>
@@ -488,7 +490,7 @@ export default function FederationTab() {
                     setInstanceForm({ ...instanceForm, public_url: `${proto}://${host}/federation/ws` })
                   }}
                   className="flex-1 px-3 py-1.5 text-sm bg-canvas border border-border border-x-0 text-textPrimary font-mono"
-                  placeholder="aischat.example.com"
+                  placeholder="ip-or-domain:5228"
                 />
                 <span className="inline-flex items-center px-2 text-xs text-textMuted bg-canvas border border-border rounded-r-lg shrink-0 font-mono">
                   /federation/ws
@@ -743,7 +745,7 @@ export default function FederationTab() {
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-textMuted">
-                  {t('admin.peerWsUrl')}
+                  {t('admin.peerWsUrl')} <span className="text-textMuted/60">— {t('admin.optional')}</span>
                 </label>
                 <div className="flex items-stretch mt-1">
                   <select
@@ -768,12 +770,13 @@ export default function FederationTab() {
                       setNewPeer({ ...newPeer, remote_url: `${proto}://${host}/federation/ws` })
                     }}
                     className="flex-1 px-3 py-1.5 text-sm bg-surface border border-border border-x-0 text-textPrimary font-mono"
-                    placeholder="other-aichat.example.com"
+                    placeholder="ip-or-domain:port"
                   />
                   <span className="inline-flex items-center px-2 text-xs text-textMuted bg-surface border border-border rounded-r-lg shrink-0 font-mono">
                     /federation/ws
                   </span>
                 </div>
+                <p className="text-[10px] text-textMuted mt-1">{t('admin.peerUrlOptionalHint')}</p>
               </div>
               <div className="md:col-span-2">
                 <label className="text-xs text-textMuted">{t('admin.sharedSecret')}</label>
@@ -1001,18 +1004,135 @@ export default function FederationTab() {
         )}
       </section>
 
-      {/* 联邦群聊 */}
+      {/* 联邦实体 */}
+      <FederatedEntitiesSection />
+      {/* GitHub 注册说明（可选） */}
       <section className="bg-surface border border-border rounded-xl p-5">
         <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2 mb-4">
-          <Globe size={16} /> {t('admin.federationGroups')}
+          <Globe size={16} /> {t('admin.federationDiscovery')}
         </h2>
-        <p className="text-sm text-textMuted">
-          {t('admin.federationGroupsDesc')}
-        </p>
+        <p className="text-sm text-textMuted">{t('admin.federationDiscoveryDesc')}</p>
         <p className="text-xs text-textMuted mt-2">
-          {t('admin.federationGroupsHint')}
+          {t('admin.federationDiscoveryHint')}
         </p>
       </section>
     </div>
+  )
+}
+
+// ── 联邦实体列表（v1.0.0 新增） ──
+
+function FederatedEntitiesSection() {
+  const t = useT()
+  const [entities, setEntities] = useState<FederatedEntity[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadEntities()
+  }, [])
+
+  const loadEntities = async () => {
+    setLoading(true)
+    try {
+      const data = await api.get<FederatedEntity[]>('/admin/federation/entities')
+      setEntities(data)
+    } catch (_) {
+      // silent
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const toggleEntity = async (entity: FederatedEntity) => {
+    try {
+      await api.put(`/admin/federation/entities/${entity.id}`, {
+        is_enabled: !entity.is_enabled,
+      })
+      await loadEntities()
+    } catch (_) {}
+  }
+
+  const deleteEntity = async (entity: FederatedEntity) => {
+    if (!confirm(t('admin.confirmRemoveEntity'))) return
+    try {
+      await api.delete(`/admin/federation/entities/${entity.id}`)
+      await loadEntities()
+    } catch (_) {}
+  }
+
+  const typeIcon = (entityType: string) => {
+    switch (entityType) {
+      case 'group': return <Globe size={14} />
+      case 'dm': return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      case 'user': return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      case 'agent': return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="9" y2="9.01"/><line x1="15" y1="9" x2="15" y2="9.01"/></svg>
+      default: return <Globe size={14} />
+    }
+  }
+
+  const typeLabel = (entityType: string) => {
+    const map: Record<string, string> = { group: t('common.group'), dm: 'DM', user: t('common.user'), agent: 'AI' }
+    return map[entityType] || entityType
+  }
+
+  if (loading) return <div className="bg-surface border border-border rounded-xl p-5 text-sm text-textMuted">{t('common.loading')}</div>
+
+  return (
+    <section className="bg-surface border border-border rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
+          <Globe size={16} /> {t('admin.federationEntities').replace('{count}', String(entities.length))}
+        </h2>
+        <p className="text-xs text-textMuted">{t('admin.federationEntitiesHint')}</p>
+      </div>
+
+      {entities.length === 0 ? (
+        <p className="text-sm text-textMuted py-4 text-center">{t('admin.noFederatedEntities')}</p>
+      ) : (
+        <div className="space-y-2">
+          {entities.map(entity => (
+            <div key={entity.id} className="flex items-center justify-between p-3 bg-canvas rounded-lg border border-border">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-textMuted shrink-0">{typeIcon(entity.entity_type)}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-textPrimary font-mono truncate">{entity.federated_id}</p>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
+                      {typeLabel(entity.entity_type)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-textMuted">
+                    {entity.peer_display_name} · {entity.display_name || entity.local_ref_id}
+                    {entity.direction === 'bidirectional' && <span className="ml-1 text-emerald-400">⇄</span>}
+                    {entity.direction === 'incoming' && <span className="ml-1 text-amber-400">←</span>}
+                    {entity.direction === 'outgoing' && <span className="ml-1 text-blue-400">→</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => toggleEntity(entity)}
+                  className={`text-xs px-2 py-1 rounded transition-colors ${
+                    entity.is_enabled
+                      ? 'bg-emerald-500/10 text-emerald-400 hover:bg-rose-500/10 hover:text-rose-400'
+                      : 'bg-rose-500/10 text-rose-400 hover:bg-emerald-500/10 hover:text-emerald-400'
+                  }`}
+                  title={entity.is_enabled ? t('admin.disable') : t('admin.enable')}
+                >
+                  {entity.is_enabled ? t('admin.enabled') : t('admin.disabled')}
+                </button>
+                <button
+                  onClick={() => deleteEntity(entity)}
+                  className="p-1.5 text-textMuted hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                  title={t('common.delete')}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

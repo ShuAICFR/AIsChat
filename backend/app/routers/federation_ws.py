@@ -1,7 +1,7 @@
 """
-联邦端点（v0.3.0 跨实例联邦通信）
+联邦端点（v1.0.0 ID前缀替代注册表）
 
-- GET /federation/identity — 公开端点，注册表验证实例真实性
+- GET /federation/identity — 公开端点，实例身份
 - WS /federation/ws   — 实例间 WebSocket 连接
 """
 import json
@@ -16,6 +16,8 @@ from app.services.federation_service import (
     generate_challenge,
     handle_remote_message,
     get_instance_info,
+    get_federated_entity_by_fid,
+    persist_remote_dm_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ router = APIRouter()
 async def federation_identity(db: AsyncSession = Depends(get_db)):
     """
     公开端点，返回本实例的 public_id 和 instance_id。
-    用于注册表验证：第三方请求此端点，比对返回的 public_id 是否与注册声明一致。
+    用于注册表验证（可选）：第三方请求此端点，比对返回的 public_id 是否与注册声明一致。
     无需认证。
     """
     info = await get_instance_info(db)
@@ -44,7 +46,6 @@ async def federation_websocket(ws: WebSocket):
     await ws.accept()
 
     peer_public_id = "unknown"
-    peer_conn = None  # WebSocket 包装
 
     try:
         # ── 阶段 1: 等待 handshake ──
@@ -64,7 +65,6 @@ async def federation_websocket(ws: WebSocket):
         peer_public_id = handshake.get("public_id", "unknown")
         their_challenge = handshake.get("challenge", "")
 
-        # 查找对等端记录并验证
         async with async_session() as db:
             peer = await get_peer_by_public_id(db, peer_public_id)
             if peer is None:
@@ -88,7 +88,7 @@ async def federation_websocket(ws: WebSocket):
 
             secret = await get_decrypted_secret(peer)
 
-        # ── 阶段 2: 发送 handshake_ack（回应对方的挑战，给出我方挑战）──
+        # ── 阶段 2: 发送 handshake_ack ──
         my_challenge = generate_challenge()
         my_public_id, my_instance_id = await _get_my_identity()
         await ws.send_json({
@@ -117,7 +117,6 @@ async def federation_websocket(ws: WebSocket):
             await ws.close()
             return
 
-        # 验证对方对我方挑战的应答
         expected_response = hmac_response(secret, my_challenge)
         if finish.get("response") != expected_response:
             await ws.send_json({
@@ -133,7 +132,6 @@ async def federation_websocket(ws: WebSocket):
         await ws.send_json({"type": "handshake_ok", "instance_id": my_instance_id})
         logger.info(f"🌐 ✅ 接受连接: {peer_public_id}")
 
-        # 更新连接状态
         async with async_session() as db:
             from app.services.federation_service import update_peer_connection_state
             await update_peer_connection_state(db, peer.id, "connected")
@@ -151,18 +149,23 @@ async def federation_websocket(ws: WebSocket):
             if msg_type == "ping":
                 await ws.send_json({"type": "pong"})
             elif msg_type == "pong":
-                pass  # 心跳回复
+                pass
             elif msg_type == "forward_message":
                 await _handle_forwarded_message(peer_public_id, data)
-            elif msg_type == "subscribe":
-                # 远端告知它共享了哪些群，暂时仅记录日志
-                logger.info(f"🌐 {peer_public_id} 订阅群: {data.get('group_id')}")
-            elif msg_type in ("url_rotate_propose", "url_rotate_ack", "url_rotate_commit"):
-                # URL 轮换协议 — 委托给 FederationManager
+            elif msg_type == "entity_announce":
                 from app.services.federation_manager import federation_manager
-                await federation_manager.handle_inbound_rotation_message(
-                    peer_public_id, data, ws
-                )
+                await federation_manager._handle_entity_announce(peer_public_id, data)
+            elif msg_type == "entity_unannounce":
+                from app.services.federation_manager import federation_manager
+                await federation_manager._handle_entity_unannounce(peer_public_id, data)
+            elif msg_type == "profile_sync":
+                from app.services.federation_manager import federation_manager
+                await federation_manager._handle_profile_sync(peer_public_id, data)
+            elif msg_type in ("url_rotate_propose", "url_rotate_ack", "url_rotate_commit"):
+                from app.services.federation_manager import federation_manager
+                await federation_manager.handle_inbound_rotation_message(peer_public_id, data, ws)
+            elif msg_type == "subscribe":
+                logger.info(f"🌐 {peer_public_id} 订阅群: {data.get('group_id')}")
             else:
                 logger.debug(f"🌐 忽略消息类型: {msg_type} from {peer_public_id}")
 
@@ -171,7 +174,6 @@ async def federation_websocket(ws: WebSocket):
     except Exception as e:
         logger.error(f"🌐 {peer_public_id} 连接异常: {e}", exc_info=True)
     finally:
-        # 更新断连状态
         try:
             async with async_session() as db:
                 peer = await get_peer_by_public_id(db, peer_public_id)
@@ -183,49 +185,106 @@ async def federation_websocket(ws: WebSocket):
 
 
 async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
-    """处理对等端转发来的消息"""
-    group_id = data.get("group_id")
+    """处理对等端转发来的消息（v1.0.0: 使用 federated_id 解析）"""
+    conversation_type = data.get("conversation_type", "group")
     msg = data.get("message", {})
     source_public_id = data.get("source_public_id", from_public_id)
 
-    if not group_id or not msg:
+    if not msg:
         return
 
-    try:
-        async with async_session() as db:
-            message = await handle_remote_message(db, group_id, msg, source_public_id)
-            await db.commit()
+    if conversation_type == "group":
+        federated_group_id = data.get("federated_group_id", "")
+        group_id = None
 
-            from app.services.group_service import message_to_dict
-            msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"))
+        if federated_group_id:
+            async with async_session() as db:
+                entity = await get_federated_entity_by_fid(db, federated_group_id)
+                if entity is None:
+                    logger.warning(f"🌐 未知联邦群: {federated_group_id} from {from_public_id}")
+                    return
+                group_id = int(entity.local_ref_id)
+        else:
+            # 兼容旧格式
+            group_id = data.get("group_id")
 
-            from app.routers.ws import manager
-            await manager.broadcast_to_group(
-                group_id,
-                {"type": "message", "conversation_type": "group", "data": msg_data},
-            )
+        if not group_id:
+            return
 
-            if msg.get("sender_type") == "human":
-                from app.services.ai_response_worker import message_queue
-                try:
-                    message_queue.put_nowait({
-                        "conversation_type": "group",
-                        "group_id": group_id,
-                        "message_id": message.id,
-                        "content": msg.get("content", ""),
-                        "sender_type": "human",
-                        "sender_id": 0,
-                        "chain_depth": 0,
-                        "source_public_id": source_public_id,
-                    })
-                except Exception:
-                    pass
-    except Exception as e:
-        logger.error(f"🌐 处理转发消息失败: {e}", exc_info=True)
+        try:
+            async with async_session() as db:
+                message = await handle_remote_message(db, int(group_id), msg, source_public_id)
+                await db.commit()
+
+                from app.services.group_service import message_to_dict
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"))
+
+                from app.routers.ws import manager
+                await manager.broadcast_to_group(
+                    int(group_id),
+                    {"type": "message", "conversation_type": "group", "data": msg_data},
+                )
+
+                if msg.get("sender_type") == "human":
+                    from app.services.ai_response_worker import message_queue
+                    try:
+                        message_queue.put_nowait({
+                            "conversation_type": "group",
+                            "group_id": int(group_id),
+                            "message_id": message.id,
+                            "content": msg.get("content", ""),
+                            "sender_type": "human",
+                            "sender_id": 0,
+                            "chain_depth": 0,
+                            "source_public_id": source_public_id,
+                        })
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.error(f"🌐 处理转发消息失败: {e}", exc_info=True)
+
+    elif conversation_type == "dm":
+        federated_session_id = data.get("federated_session_id", "")
+        if federated_session_id:
+            async with async_session() as db:
+                entity = await get_federated_entity_by_fid(db, federated_session_id)
+                if entity is None:
+                    logger.warning(f"Unknown federated DM: {federated_session_id}")
+                    return
+                session_id = entity.local_ref_id
+        else:
+            session_id = data.get("session_id")
+
+        if not session_id:
+            return
+
+        try:
+            async with async_session() as db:
+                dm_msg = await persist_remote_dm_message(db, str(session_id), msg, source_public_id)
+                await db.commit()
+                from app.routers.ws import manager
+                dm_data = {
+                    "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
+                    "session_id": str(session_id),
+                    "sender_id": 0,
+                    "sender_name": msg.get("sender_name", "远程用户"),
+                    "sender_type": msg.get("sender_type", "human"),
+                    "content": msg.get("content", ""),
+                    "reply_to": msg.get("reply_to"),
+                    "source_public_id": source_public_id,
+                    "created_at": str(dm_msg.created_at) if hasattr(dm_msg, 'created_at') else None,
+                    "read_at": None,
+                }
+                await manager.broadcast_to_dm(
+                    str(session_id),
+                    {"type": "message", "conversation_type": "dm", "data": dm_data},
+                )
+        except Exception as e:
+            logger.error(f"Handle forwarded DM error: {e}")
 
 
 async def _get_my_identity() -> tuple[str, str]:
-    """获取本实例的 public_id 和 instance_id（一次 DB 查询）"""
+    """获取本实例的 public_id 和 instance_id"""
     from app.services.federation_service import get_instance_info
     async with async_session() as db:
         info = await get_instance_info(db)

@@ -1,5 +1,9 @@
 """
-联邦通信 Schema（v0.3.0 跨实例联邦通信）
+联邦通信 Schema（v1.0.0 ID前缀替代注册表）
+
+v0.3.0 → v1.0.0 变更：
+  删除: GroupShareCreate, GroupShareResponse, DMShareCreate, DMShareResponse
+  新增: EntityAnnounce（入站实体注册）, ProfileUpdateItem（改名同步）
 """
 from pydantic import BaseModel, Field
 
@@ -26,10 +30,10 @@ class InstanceConfigUpdate(BaseModel):
 # ── 对等端 ──
 
 class PeerCreate(BaseModel):
-    """添加对等端"""
+    """添加对等端。remote_url 可选：留空则自动从 GitHub 注册表获取对方的公网 URL。"""
     peer_public_id: str = Field(..., min_length=1, max_length=50, description="对方公网 ID")
-    display_name: str = Field(default="", max_length=100)
-    remote_url: str = Field(..., min_length=1, max_length=500, description="ws://host:port/federation/ws")
+    display_name: str = Field(..., min_length=1, max_length=100, description="实例代号（唯一，用作ID前缀）")
+    remote_url: str = Field(default="", max_length=500, description="ws://host:port/federation/ws（选填，留空则从 GitHub 注册表自动获取）")
     shared_secret: str = Field(..., min_length=8, description="共享密钥（明文，服务端加密存储）")
 
 
@@ -50,51 +54,34 @@ class PeerResponse(BaseModel):
     is_enabled: bool
     connection_state: str
     last_connected_at: str | None = None
+    url_rotated_at: str | None = None
+    url_rotation_count: int = 0
+    remote_url_backup: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
 
-# ── 群聊共享 ──
+# ── 联邦实体（替代 GroupShare / DMShare） ──
 
-class GroupShareCreate(BaseModel):
-    """设置群聊联邦共享"""
-    peer_id: int
-    share_direction: str = Field(default="bidirectional", description="outgoing | incoming | bidirectional")
-
-
-class GroupShareResponse(BaseModel):
-    """群聊共享信息"""
+class FederatedEntityResponse(BaseModel):
+    """联邦实体信息"""
     id: int
-    group_id: int
+    federated_id: str
     peer_id: int
-    peer_public_id: str | None = None
-    peer_display_name: str | None = None
+    peer_display_name: str = ""
+    entity_type: str  # group / dm / user / agent
+    local_ref_id: str
+    display_name: str = ""
     is_enabled: bool
-    remote_group_id: int | None = None
-    conversation_uuid: str | None = None
-    share_direction: str
+    direction: str
     created_at: str | None = None
+    updated_at: str | None = None
 
 
-# -- DM 联邦共享 --
-
-class DMShareCreate(BaseModel):
-    """设置私信联邦共享"""
-    peer_id: int
-    share_direction: str = Field(default="bidirectional", description="outgoing | incoming | bidirectional")
-
-
-class DMShareResponse(BaseModel):
-    """私信联邦共享信息"""
-    id: int
-    session_id: str
-    peer_id: int
-    peer_public_id: str | None = None
-    peer_display_name: str | None = None
-    is_enabled: bool
-    conversation_uuid: str | None = None
-    share_direction: str
-    created_at: str | None = None
+class FederatedEntityUpdate(BaseModel):
+    """更新联邦实体（管理员操作）"""
+    is_enabled: bool | None = None
+    direction: str | None = None  # incoming → bidirectional
 
 
 # ── 注册表 ──

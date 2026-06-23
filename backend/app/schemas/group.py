@@ -23,7 +23,6 @@ class GroupUpdateRequest(BaseModel):
     speak_limit_per_minute: int | None = Field(default=None, ge=0, le=30)
     speak_limit_window_seconds: int | None = Field(default=None, ge=30, le=600)
     is_vector_accelerated: bool | None = None
-    is_federated: bool | None = None
 
 
 class GroupResponse(BaseModel):
@@ -33,7 +32,6 @@ class GroupResponse(BaseModel):
     owner_type: str
     owner_id: int
     is_vector_accelerated: bool
-    is_federated: bool = False
     announcement: str | None = None
     speak_limit_per_minute: int = 0
     speak_limit_window_seconds: int = 120
@@ -94,3 +92,28 @@ class UnreadSummaryResponse(BaseModel):
     """未读消息摘要响应"""
     agent_id: int
     groups: list[UnreadSummaryItem]
+
+
+# ── 联邦共享控制（v1.0.0）──
+
+class FederationShareRequest(BaseModel):
+    """群联邦共享/取消共享请求"""
+    peer_ids: list[int] = Field(..., min_length=1, description="对等端 ID 列表")
+
+
+class FederationPeerStatus(BaseModel):
+    """单个对等端的联邦共享状态"""
+    peer_id: int
+    display_name: str
+    peer_public_id: str
+    is_connected: bool
+    is_shared: bool
+    federated_id: str = ""
+
+
+class GroupFederationStatus(BaseModel):
+    """群联邦共享状态响应"""
+    success: bool = True
+    group_id: int
+    my_display_name: str = ""
+    peers: list[FederationPeerStatus] = []

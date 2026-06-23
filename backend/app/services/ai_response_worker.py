@@ -443,7 +443,7 @@ async def _maybe_trigger_ai_reply(
             credit_source=credit_source,
             pool_key_id=pool_key_id,
             trigger="user",
-            is_federated=group.is_federated if group else False,
+            is_federated=False,
         )
     finally:
         await manager.broadcast_to_group(

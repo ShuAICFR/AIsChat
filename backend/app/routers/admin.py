@@ -1160,8 +1160,7 @@ from app.schemas.federation import (
     InstanceConfigUpdate,
     PeerCreate,
     PeerUpdate,
-    GroupShareCreate,
-    DMShareCreate,
+    FederatedEntityUpdate,
 )
 from app.services import federation_service as fed_svc
 
@@ -1378,85 +1377,44 @@ async def rotate_federation_peer_url(
     return {"message": f"已发起 URL 轮换: {peer.peer_public_id} → {body.new_url}"}
 
 
-# ── 群聊共享 ──
+# ── 联邦实体管理（v1.0.0: 替代 share_group / share_dm）──
 
-@router.get("/federation/groups/{group_id}/shares")
-async def list_group_federation_shares(
-    group_id: int,
+@router.get("/federation/entities")
+async def list_federated_entities(
+    peer_id: int | None = None,
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """查看群聊的联邦共享状态"""
-    return await fed_svc.list_group_shares(db, group_id)
+    """列出联邦实体，可选按 peer 过滤"""
+    return await fed_svc.list_federated_entities(db, peer_id=peer_id)
 
 
-@router.post("/federation/groups/{group_id}/shares")
-async def add_group_federation_share(
-    group_id: int,
-    body: GroupShareCreate,
+@router.put("/federation/entities/{entity_id}")
+async def update_federated_entity(
+    entity_id: int,
+    body: FederatedEntityUpdate,
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """设置群聊联邦共享"""
-    result = await fed_svc.share_group(
-        db, group_id, body.peer_id, body.share_direction,
+    """更新联邦实体（启用/禁用、方向切换）"""
+    result = await fed_svc.update_federated_entity(
+        db, entity_id,
+        is_enabled=body.is_enabled,
+        direction=body.direction,
     )
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
 
-@router.delete("/federation/groups/{group_id}/shares/{peer_id}")
-async def delete_group_federation_share(
-    group_id: int,
-    peer_id: int,
+@router.delete("/federation/entities/{entity_id}")
+async def delete_federated_entity(
+    entity_id: int,
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """取消群聊联邦共享"""
-    result = await fed_svc.unshare_group(db, group_id, peer_id)
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail=result["message"])
-    return result
-
-
-# -- 私信联邦共享 --
-
-@router.get("/federation/dm/{session_id}/shares")
-async def list_dm_federation_shares(
-    session_id: str,
-    admin: dict = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """查看私信的联邦共享状态"""
-    return await fed_svc.get_dm_shares_for_session(db, session_id)
-
-
-@router.post("/federation/dm/{session_id}/shares")
-async def add_dm_federation_share(
-    session_id: str,
-    body: DMShareCreate,
-    admin: dict = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """设置私信联邦共享"""
-    result = await fed_svc.share_dm_with_peer(
-        db, session_id, body.peer_id, body.share_direction,
-    )
-    if result.get("error"):
-        raise HTTPException(status_code=400, detail=result["message"])
-    return result
-
-
-@router.delete("/federation/dm/{session_id}/shares/{peer_id}")
-async def delete_dm_federation_share(
-    session_id: str,
-    peer_id: int,
-    admin: dict = Depends(require_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """取消私信联邦共享"""
-    result = await fed_svc.unshare_dm(db, session_id, peer_id)
+    """移除联邦实体"""
+    result = await fed_svc.remove_federated_entity(db, entity_id)
     if result.get("error"):
         raise HTTPException(status_code=400, detail=result["message"])
     return result

@@ -395,11 +395,8 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
 
                         # 联邦通信：异步转发到共享此群的对等端
                         try:
-                            from app.models.group import Group as GroupModel2
-                            gf_result = await db.execute(
-                                select(GroupModel2.is_federated).where(GroupModel2.id == group_id)
-                            )
-                            is_fed = gf_result.scalar_one_or_none()
+                            from app.services.federation_service import is_group_federated as check_grp_fed
+                            is_fed = await check_grp_fed(db, group_id)
                             if is_fed:
                                 from app.services.federation_manager import federation_manager as fed_mgr
                                 asyncio.create_task(

@@ -10,7 +10,7 @@ from sqlalchemy import select, and_, or_, update, func
 from app.models.dm import DMSession, DMMessage
 from app.models.user import User
 from app.models.agent import Agent
-from app.models.federation import FederationDMShare
+from app.models.federation import FederatedEntity
 from app.models.friendship import Friendship
 
 logger = logging.getLogger(__name__)
@@ -135,9 +135,10 @@ async def list_dm_sessions(
 
         # Check if federated
         fed_check = await db.execute(
-            select(FederationDMShare).where(
-                FederationDMShare.session_id == s.session_id,
-                FederationDMShare.is_enabled == True,
+            select(FederatedEntity).where(
+                FederatedEntity.entity_type == "dm",
+                FederatedEntity.local_ref_id == s.session_id,
+                FederatedEntity.is_enabled == True,
             )
         )
         is_federated = fed_check.first() is not None
@@ -194,9 +195,10 @@ async def get_dm_session(
 
     # Check if federated
     fed_check = await db.execute(
-        select(FederationDMShare).where(
-            FederationDMShare.session_id == session_id,
-            FederationDMShare.is_enabled == True,
+        select(FederatedEntity).where(
+            FederatedEntity.entity_type == "dm",
+            FederatedEntity.local_ref_id == session_id,
+            FederatedEntity.is_enabled == True,
         )
     )
     is_federated = fed_check.first() is not None

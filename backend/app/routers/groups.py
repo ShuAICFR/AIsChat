@@ -10,6 +10,7 @@ from app.schemas.group import (
     GroupCreateRequest, GroupInviteRequest, GroupResponse,
     GroupUpdateRequest, AnnouncementRequest, RoleChangeRequest,
     SetDndRequest, UnreadSummaryItem, UnreadSummaryResponse, UnreadResponse,
+    FederationShareRequest, GroupFederationStatus,
 )
 from app.schemas.message import MessageResponse
 from app.services.group_service import (
@@ -110,7 +111,6 @@ async def get_group_detail(
         "owner_type": group.owner_type,
         "owner_id": group.owner_id,
         "is_vector_accelerated": group.is_vector_accelerated,
-        "is_federated": getattr(group, "is_federated", False),
         "created_at": str(group.created_at) if group.created_at else None,
         "member_count": member_count,
         "online_count": online_count,
@@ -292,7 +292,6 @@ async def update_group(
             "owner_type": group.owner_type,
             "owner_id": group.owner_id,
             "is_vector_accelerated": group.is_vector_accelerated,
-            "is_federated": getattr(group, "is_federated", False),
             "announcement": group.announcement,
             "speak_limit_per_minute": group.speak_limit_per_minute or 0,
             "speak_limit_window_seconds": group.speak_limit_window_seconds or 120,
@@ -424,6 +423,65 @@ async def mark_read(
     updated = await update_last_read(db, group_id, "human", current_user["user_id"])
     return {"ok": True, "updated": updated}
     return {"message": "已标记为已读"}
+
+
+# ---------- 联邦共享控制（v1.0.0: 群主/AI制作者按群控制） ----------
+
+@router.get("/groups/{group_id}/federation/peers")
+async def get_federation_peers(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取群联邦共享状态：列出所有对等端及其共享状态。
+    需要群主/AI制作者权限。
+    """
+    from app.services.federation_service import get_group_federation_peers
+    result = await get_group_federation_peers(db, group_id, current_user["user_id"])
+    if result.get("error"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["message"])
+    return result
+
+
+@router.post("/groups/{group_id}/federation/share")
+async def share_group_federation(
+    group_id: int,
+    req: FederationShareRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    将群共享到指定对等端。
+    需要群主/AI制作者权限。
+    """
+    from app.services.federation_service import share_group_to_peers
+    result = await share_group_to_peers(
+        db, group_id, req.peer_ids, current_user["user_id"],
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["message"])
+    return result
+
+
+@router.post("/groups/{group_id}/federation/unshare")
+async def unshare_group_federation(
+    group_id: int,
+    req: FederationShareRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    取消群对指定对等端的联邦共享。
+    需要群主/AI制作者权限。
+    """
+    from app.services.federation_service import unshare_group_from_peers
+    result = await unshare_group_from_peers(
+        db, group_id, req.peer_ids, current_user["user_id"],
+    )
+    if result.get("error"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["message"])
+    return result
 
 
 # ---------- 聊天记录导出 ----------

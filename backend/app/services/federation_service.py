@@ -143,7 +143,16 @@ async def update_instance_info(
         db.add(config)
         await db.flush()
 
-    if display_name is not None:
+    if display_name is not None and display_name.strip():
+        name = display_name.strip()
+        # 唯一性校验：不能与已有 peer 的 display_name 冲突
+        existing = await db.execute(
+            select(FederationPeer).where(FederationPeer.display_name == name)
+        )
+        if existing.scalar_one_or_none():
+            return {"error": True, "message": f"实例代号「{name}」已被对等端占用，请换一个"}
+        config.display_name = name
+    elif display_name is not None:
         config.display_name = display_name
     if public_url is not None:
         config.public_url = public_url

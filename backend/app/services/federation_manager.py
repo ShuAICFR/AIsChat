@@ -108,7 +108,8 @@ async def _apply_avatar_update(db, entity_type: str, local_ref_id: str, new_valu
                 if resp.status_code == 200:
                     import os, uuid
                     fname = f"user_{rid}_{uuid.uuid4().hex[:8]}.png"
-                    fpath = os.path.join("/app/data/attachments", fname)
+                    os.makedirs("/app/uploads/avatars", exist_ok=True)
+                    fpath = os.path.join("/app/uploads/avatars", fname)
                     with open(fpath, "wb") as f:
                         f.write(resp.content)
                     local_path = f"/api/fs/download-avatar/{fname}"

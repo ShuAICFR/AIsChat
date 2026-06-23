@@ -22,7 +22,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 创建数据目录
-RUN mkdir -p /app/data/agents /app/data/groups /app/data/attachments
+RUN mkdir -p /app/data/agents /app/data/groups /app/data/attachments /app/uploads
 
 COPY . .
 

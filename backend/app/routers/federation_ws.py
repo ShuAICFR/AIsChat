@@ -253,6 +253,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
     async def _download_remote_avatar(avatar_url: str, entity_type: str, local_id: int, peer) -> str:
         if not avatar_url or not avatar_url.startswith("/") or not peer or not peer.remote_url:
             return avatar_url
+        import os, uuid
         try:
             base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
             base = base.replace("/federation/ws", "")
@@ -263,7 +264,8 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 if resp.status_code == 200:
                     ext = os.path.splitext(avatar_url)[1] or ".png"
                     fname = f"{entity_type}_{local_id}_{uuid.uuid4().hex[:8]}{ext}"
-                    fpath = os.path.join("/app/data/attachments", fname)
+                    os.makedirs("/app/uploads/avatars", exist_ok=True)
+                    fpath = os.path.join("/app/uploads/avatars", fname)
                     with open(fpath, "wb") as f:
                         f.write(resp.content)
                     local_path = f"/api/fs/download-avatar/{fname}"

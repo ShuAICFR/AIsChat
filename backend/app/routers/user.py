@@ -217,7 +217,7 @@ async def upload_user_avatar(
     # 保存到统一头像目录
     ext = file.filename.split(".")[-1] if file.filename and "." in file.filename else "png"
     filename = f"user_{current_user['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
-    upload_dir = "uploads/avatars"
+    upload_dir = "/app/uploads/avatars"
     os.makedirs(upload_dir, exist_ok=True)
     filepath = os.path.join(upload_dir, filename)
     with open(filepath, "wb") as f:

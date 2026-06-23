@@ -752,7 +752,7 @@ export default function FederationTab() {
                     value={(newPeer.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
                     onChange={e => {
                       const host = newPeer.remote_url.replace(/^wss?:\/\//, '').replace(/\/federation\/ws$/, '')
-                      setNewPeer({ ...newPeer, remote_url: `${e.target.value}://${host}/federation/ws` })
+                      setNewPeer({ ...newPeer, remote_url: host ? `${e.target.value}://${host}/federation/ws` : '' })
                     }}
                     className="w-20 px-2 text-sm bg-surface border border-border rounded-l-lg text-textPrimary shrink-0"
                   >
@@ -766,8 +766,8 @@ export default function FederationTab() {
                     })()}
                     onChange={e => {
                       const proto = (newPeer.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'
-                      const host = e.target.value.replace(/\/$/, '')
-                      setNewPeer({ ...newPeer, remote_url: `${proto}://${host}/federation/ws` })
+                      const host = e.target.value.trim().replace(/\/$/, '')
+                      setNewPeer({ ...newPeer, remote_url: host ? `${proto}://${host}/federation/ws` : '' })
                     }}
                     className="flex-1 px-3 py-1.5 text-sm bg-surface border border-border border-x-0 text-textPrimary font-mono"
                     placeholder="ip-or-domain:port"
@@ -893,7 +893,7 @@ export default function FederationTab() {
                           value={(editPeerForm.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'}
                           onChange={e => {
                             const host = editPeerForm.remote_url.replace(/^wss?:\/\//, '').replace(/\/federation\/ws$/, '')
-                            setEditPeerForm({ ...editPeerForm, remote_url: `${e.target.value}://${host}/federation/ws` })
+                            setEditPeerForm({ ...editPeerForm, remote_url: host ? `${e.target.value}://${host}/federation/ws` : '' })
                           }}
                           className="w-16 px-1.5 text-xs bg-surface border border-border rounded-l text-textPrimary shrink-0"
                         >
@@ -907,8 +907,8 @@ export default function FederationTab() {
                           })()}
                           onChange={e => {
                             const proto = (editPeerForm.remote_url.match(/^(wss?):\/\//)?.[1]) || 'wss'
-                            const host = e.target.value.replace(/\/$/, '')
-                            setEditPeerForm({ ...editPeerForm, remote_url: `${proto}://${host}/federation/ws` })
+                            const host = e.target.value.trim().replace(/\/$/, '')
+                            setEditPeerForm({ ...editPeerForm, remote_url: host ? `${proto}://${host}/federation/ws` : '' })
                           }}
                           className="flex-1 px-2 py-1 text-xs bg-surface border border-border border-x-0 text-textPrimary font-mono"
                           placeholder="aischat.datongai.top:5228"

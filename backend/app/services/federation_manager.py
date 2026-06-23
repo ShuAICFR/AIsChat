@@ -423,7 +423,12 @@ class FederationManager:
         conn = self.peers.get(public_id)
         if conn and conn.handshake_complete and conn.websocket:
             try:
-                await conn.websocket.send(json.dumps(payload))
+                if conn.is_inbound:
+                    # Starlette WebSocket（入站连接）
+                    await conn.websocket.send_json(payload)
+                else:
+                    # websockets 库（出站连接）
+                    await conn.websocket.send(json.dumps(payload))
                 return
             except Exception:
                 pass

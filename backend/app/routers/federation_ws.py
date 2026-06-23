@@ -174,6 +174,11 @@ async def federation_websocket(ws: WebSocket):
                     conn.last_heartbeat = dt.now(timezone.utc).replace(tzinfo=None)
             elif msg_type == "forward_message":
                 await _handle_forwarded_message(peer_public_id, data)
+                # 处理随消息 piggyback 的 profile_updates
+                profile_updates = data.get("profile_updates")
+                if profile_updates:
+                    from app.services.federation_manager import federation_manager
+                    await federation_manager._apply_profile_updates(peer_public_id, profile_updates)
             elif msg_type == "entity_announce":
                 from app.services.federation_manager import federation_manager
                 await federation_manager._handle_entity_announce(peer_public_id, data)

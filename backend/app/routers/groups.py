@@ -460,7 +460,10 @@ async def share_group_federation(
         db, group_id, req.peer_ids, current_user["user_id"],
     )
     if result.get("error"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["message"])
+        msg = result["message"]
+        if "无权限" in msg:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     return result
 
 
@@ -480,7 +483,10 @@ async def unshare_group_federation(
         db, group_id, req.peer_ids, current_user["user_id"],
     )
     if result.get("error"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=result["message"])
+        msg = result["message"]
+        if "无权限" in msg:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
     return result
 
 

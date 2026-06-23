@@ -54,10 +54,10 @@ function FederationShareSection({ groupId }: { groupId: number }) {
       } else {
         await api.post(`/groups/${groupId}/federation/share`, { peer_ids: [peer.peer_id] })
       }
-      // 刷新状态
       await loadPeers()
-    } catch {
-      // 静默失败
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || (peer.is_shared ? '取消共享失败' : '共享失败')
+      alert(msg)
     } finally {
       setToggling(null)
     }

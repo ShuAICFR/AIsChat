@@ -776,6 +776,13 @@ async def can_manage_group_federation(db: AsyncSession, group_id: int, user_id: 
     """检查用户是否有权管理群联邦共享设置"""
     from app.models.group import Group, GroupMember
     from app.models.agent import Agent
+    from app.models.user import User
+
+    # 情况0: 系统管理员始终有权
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one_or_none()
+    if user and user.role == "admin":
+        return True
 
     # 查群信息
     result = await db.execute(select(Group).where(Group.id == group_id))

@@ -90,11 +90,15 @@ async def federation_websocket(ws: WebSocket):
 
         # ── 阶段 2: 发送 handshake_ack ──
         my_challenge = generate_challenge()
-        my_public_id, my_instance_id = await _get_my_identity()
+        my_public_id, my_instance_id, my_display_name = await _get_my_identity_full()
+        # 告诉对方我们给它起的名（对方可以用这个做实例代号）
+        their_assigned_name = peer.display_name or ""
         await ws.send_json({
             "type": "handshake_ack",
             "public_id": my_public_id,
             "instance_id": my_instance_id,
+            "display_name": my_display_name,
+            "assigned_name": their_assigned_name,
             "response": hmac_response(secret, their_challenge),
             "challenge": my_challenge,
         })
@@ -283,9 +287,13 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
             logger.error(f"Handle forwarded DM error: {e}")
 
 
-async def _get_my_identity() -> tuple[str, str]:
-    """获取本实例的 public_id 和 instance_id"""
+async def _get_my_identity_full() -> tuple[str, str, str]:
+    """获取本实例的 public_id、instance_id 和 display_name"""
     from app.services.federation_service import get_instance_info
     async with async_session() as db:
         info = await get_instance_info(db)
-        return (info.get("public_id", "") or "", info.get("instance_id", "") or "")
+        return (
+            info.get("public_id", "") or "",
+            info.get("instance_id", "") or "",
+            info.get("display_name", "") or "",
+        )

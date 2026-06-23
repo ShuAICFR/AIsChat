@@ -169,6 +169,17 @@ class FederationManager:
                 await self._close_peer_connection(public_id)
                 return False
 
+            # 如果对方给我们起了名，且我们自己还没设实例代号，自动采纳
+            assigned_name = ack.get("assigned_name", "")
+            if assigned_name:
+                async with async_session() as db:
+                    from app.services.federation_service import get_instance_info, update_instance_info
+                    info = await get_instance_info(db)
+                    my_current_name = (info.get("display_name") or "").strip()
+                    if not my_current_name:
+                        await update_instance_info(db, display_name=assigned_name)
+                        logger.info(f"🌐 自动采纳对方分配的实例代号: {assigned_name}")
+
             their_challenge = ack.get("challenge", "")
             finish_msg = {
                 "type": "handshake_finish",

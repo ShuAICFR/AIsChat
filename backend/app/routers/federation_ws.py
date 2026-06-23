@@ -309,8 +309,15 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
-                sender_avatar = await _download_remote_avatar(msg.get("sender_avatar_url"), msg.get("sender_type", "human"), msg.get("sender_id", 0), peer_for_avatar)
-                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=sender_avatar)
+                # 先用原始头像 URL 立即广播，头像下载放到后台不阻塞消息
+                original_avatar = msg.get("sender_avatar_url")
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=original_avatar)
+                # 后台异步下载头像（不影响消息即时送达）
+                import asyncio
+                asyncio.create_task(_download_remote_avatar(
+                    msg.get("sender_avatar_url"), msg.get("sender_type", "human"),
+                    msg.get("sender_id", 0), peer_for_avatar,
+                ))
 
                 from app.routers.ws import manager
                 await manager.broadcast_to_group(
@@ -364,7 +371,13 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 dm_msg = await persist_remote_dm_message(db, str(session_id), msg, source_public_id)
                 await db.commit()
                 from app.routers.ws import manager
-                sender_avatar_dm = await _download_remote_avatar(msg.get("sender_avatar_url"), msg.get("sender_type", "human"), msg.get("sender_id", 0), peer_for_dm_avatar)
+                # 先广播再后台下载头像
+                sender_avatar_dm = msg.get("sender_avatar_url")
+                import asyncio
+                asyncio.create_task(_download_remote_avatar(
+                    msg.get("sender_avatar_url"), msg.get("sender_type", "human"),
+                    msg.get("sender_id", 0), peer_for_dm_avatar,
+                ))
                 dm_data = {
                     "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
                     "session_id": str(session_id),

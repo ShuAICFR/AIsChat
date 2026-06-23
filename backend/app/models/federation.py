@@ -7,7 +7,7 @@ v0.3.0 → v1.0.0 变更：
   display_name 新增唯一约束（作为实例代号）
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, ForeignKey, func,
+    Column, Integer, String, Boolean, DateTime, ForeignKey, func, Text,
     CheckConstraint, UniqueConstraint, Index,
 )
 from app.database import Base
@@ -68,6 +68,7 @@ class FederatedEntity(Base):
     entity_type = Column(String(10), nullable=False)  # group / dm / user / agent
     local_ref_id = Column(String(100), nullable=False)  # 映射到的本地 ID（群ID/DM session_id）
     display_name = Column(String(200), default="")       # 缓存的远端显示名（profile sync 更新）
+    avatar_url = Column(Text, default="")                 # 缓存的远端头像 URL（profile sync 更新）
     is_enabled = Column(Boolean, default=True)
     direction = Column(String(20), default="incoming")   # incoming / bidirectional
     created_at = Column(DateTime, server_default=func.now())

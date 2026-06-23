@@ -369,6 +369,7 @@ class FederationManager:
         entity_type: str,
         federated_id: str,
         display_name: str = "",
+        avatar_url: str = "",
         direction: str = "outgoing",
     ) -> bool:
         """
@@ -385,6 +386,7 @@ class FederationManager:
                 "entity_type": entity_type,
                 "federated_id": federated_id,
                 "display_name": display_name,
+                "avatar_url": avatar_url,
                 "direction": direction,
             }))
             logger.info(f"📢 发送 entity_announce: {federated_id} → {peer_public_id}")
@@ -708,11 +710,12 @@ class FederationManager:
         处理入站实体注册通告（v1.0.0 新增）。
 
         远端管理员共享了一个实体给我，我需要记录到 federated_entities。
-        格式: { entity_type, federated_id, display_name, direction }
+        格式: { entity_type, federated_id, display_name, avatar_url, direction }
         """
         entity_type = data.get("entity_type", "")
         federated_id = data.get("federated_id", "")
         display_name = data.get("display_name", "")
+        avatar_url = data.get("avatar_url", "")
         direction = data.get("direction", "incoming")
 
         if not entity_type or not federated_id:
@@ -727,7 +730,12 @@ class FederationManager:
             # 检查是否已存在
             existing = await get_federated_entity_by_fid(db, federated_id)
             if existing:
-                logger.info(f"🌐 联邦实体已存在: {federated_id}")
+                # 更新 display_name 和 avatar_url（可能已变更）
+                existing.display_name = display_name or existing.display_name
+                existing.avatar_url = avatar_url or existing.avatar_url
+                existing.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                await db.commit()
+                logger.info(f"🌐 联邦实体已存在，更新缓存: {federated_id}")
                 return
 
             # 解析 federated_id 获取 local_ref_id
@@ -743,6 +751,7 @@ class FederationManager:
                 entity_type=entity_type,
                 local_ref_id=remote_local_id,
                 display_name=display_name,
+                avatar_url=avatar_url,
                 direction=direction,
             )
             db.add(entity)
@@ -794,26 +803,28 @@ class FederationManager:
             await self._apply_profile_updates(from_public_id, updates)
 
     async def _apply_profile_updates(self, from_public_id: str, updates: list[dict]) -> None:
-        """应用 profile 更新到本地缓存（federated_entities.display_name）"""
+        """应用 profile 更新到本地缓存（federated_entities.display_name / avatar_url）"""
         async with async_session() as db:
+            peer = await get_peer_by_public_id(db, from_public_id)
+            if not peer:
+                return
+
             for update in updates:
                 entity_type = update.get("entity_type", "")
                 entity_id = update.get("entity_id", 0)
                 field = update.get("field", "")
                 new_value = update.get("new_value", "")
 
-                if field != "display_name":
-                    continue
-
-                # 获取对等端的 display_name 以构建 federated_id
-                peer = await get_peer_by_public_id(db, from_public_id)
-                if not peer:
+                if field not in ("display_name", "avatar_url"):
                     continue
 
                 federated_id = f"{peer.display_name}:{entity_type[0]}:{entity_id}"
                 entity = await get_federated_entity_by_fid(db, federated_id)
                 if entity:
-                    entity.display_name = new_value
+                    if field == "display_name":
+                        entity.display_name = new_value
+                    elif field == "avatar_url":
+                        entity.avatar_url = new_value
                     entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             await db.commit()

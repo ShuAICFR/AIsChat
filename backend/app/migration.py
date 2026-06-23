@@ -1455,6 +1455,13 @@ async def _migrate_federation_v1(db):
     else:
         logger.info("  ⏭ federated_entities 表已存在，跳过")
 
+    if not await _column_exists(db, "federated_entities", "avatar_url"):
+        logger.info("  🖼️ 添加 federated_entities.avatar_url 列")
+        await db.execute(text("ALTER TABLE federated_entities ADD COLUMN avatar_url TEXT DEFAULT ''"))
+        created_any = True
+    else:
+        logger.info("  ⏭ federated_entities.avatar_url 已存在，跳过")
+
     # 4. CREATE pending_profile_updates 表
     if not await _table_exists(db, "pending_profile_updates"):
         logger.info("  📝 创建 pending_profile_updates 表")

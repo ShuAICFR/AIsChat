@@ -518,6 +518,7 @@ CREATE TABLE IF NOT EXISTS federated_entities (
     entity_type VARCHAR(10) NOT NULL CHECK (entity_type IN ('group', 'dm', 'user', 'agent')),
     local_ref_id VARCHAR(100) NOT NULL,
     display_name VARCHAR(200) DEFAULT '',
+    avatar_url TEXT DEFAULT '',
     is_enabled BOOLEAN DEFAULT TRUE,
     direction VARCHAR(20) DEFAULT 'incoming'
         CHECK (direction IN ('incoming', 'bidirectional', 'outgoing')),

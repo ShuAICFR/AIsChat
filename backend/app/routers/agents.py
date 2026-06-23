@@ -506,6 +506,13 @@ async def upload_agent_avatar(
     agent.avatar_url = avatar_url
     await db.flush()
 
+    # 入队联邦 profile 同步
+    try:
+        from app.services.federation_service import enqueue_profile_update
+        await enqueue_profile_update(db, "agent", agent_id, "avatar_url", avatar_url)
+    except Exception:
+        pass
+
     return {"agent_id": agent_id, "avatar_url": avatar_url}
 
 

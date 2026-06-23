@@ -1323,7 +1323,15 @@ async def connect_federation_peer(
     if peer is None:
         raise HTTPException(status_code=404, detail="对等端不存在")
 
+    # 空 URL → 无需出站连接（等待对方主动连入）
+    if not (peer.remote_url or "").strip():
+        return {"message": f"{peer.peer_public_id} 未配置远端地址，无需出站连接（等待对方连入）"}
+    # 已连接 → 无需重复
     from app.services.federation_manager import federation_manager
+    if peer.peer_public_id in federation_manager.peers and \
+       federation_manager.peers[peer.peer_public_id].handshake_complete:
+        return {"message": f"{peer.peer_public_id} 已连接（入站连接）"}
+
     success = await federation_manager.connect_to_peer(peer)
     if not success:
         error_msg = federation_manager.get_last_error(peer.peer_public_id) or "连接失败"

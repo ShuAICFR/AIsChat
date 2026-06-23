@@ -140,6 +140,19 @@ async def federation_websocket(ws: WebSocket):
             from app.services.federation_service import update_peer_connection_state
             await update_peer_connection_state(db, peer.id, "connected")
 
+        # 注册入站连接到 federation_manager.peers，使 _send_or_buffer 能回传消息
+        from app.services.federation_manager import federation_manager, PeerConnection
+        if peer_public_id not in federation_manager.peers:
+            federation_manager.peers[peer_public_id] = PeerConnection(
+                public_id=peer_public_id,
+                websocket=ws,
+                handshake_complete=True,
+                remote_url="",
+                peer_id=peer.id,
+                display_name=peer.display_name or "",
+            )
+            logger.info(f"🌐 注册入站连接: {peer_public_id}")
+
         # ── 消息循环 ──
         while True:
             raw = await ws.receive_text()
@@ -178,6 +191,9 @@ async def federation_websocket(ws: WebSocket):
     except Exception as e:
         logger.error(f"🌐 {peer_public_id} 连接异常: {e}", exc_info=True)
     finally:
+        # 清理入站连接（从 federation_manager.peers 中移除）
+        from app.services.federation_manager import federation_manager
+        federation_manager.peers.pop(peer_public_id, None)
         try:
             async with async_session() as db:
                 peer = await get_peer_by_public_id(db, peer_public_id)

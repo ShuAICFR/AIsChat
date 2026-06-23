@@ -167,7 +167,7 @@ async def chat_completion(
             "usage": {...}
         }
     """
-    import _time
+    import time as _time
     from app.services.metrics_collector import metrics
     t0 = _time.monotonic()
     try:

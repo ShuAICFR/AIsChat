@@ -2154,7 +2154,7 @@ async def dispatch_tool_call(
         logger.warning(f"未知工具调用: {tool_name}")
         return build_tool_error(ToolErrorCode.UNKNOWN_TOOL, f"未知工具: {tool_name}")
 
-    import _time
+    import time as _time
     from app.services.metrics_collector import metrics
     t0 = _time.monotonic()
     try:

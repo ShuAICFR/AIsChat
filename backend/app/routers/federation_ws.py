@@ -274,7 +274,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
-                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"))
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=msg.get("sender_avatar_url"))
 
                 from app.routers.ws import manager
                 await manager.broadcast_to_group(

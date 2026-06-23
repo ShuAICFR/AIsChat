@@ -249,12 +249,36 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 return result.scalar_one_or_none()
         return None
 
-    # 把发送端的相对头像路径转为绝对 URL（接收端本地没有该文件，需直连发送端获取）
-    def _absolute_avatar_url(avatar_url: str, peer) -> str:
-        if avatar_url and avatar_url.startswith("/") and peer and peer.remote_url:
+    # 从发送端下载头像到本地，返回本地路径（避免浏览器跨域/证书问题）
+    async def _download_remote_avatar(avatar_url: str, entity_type: str, local_id: int, peer) -> str:
+        if not avatar_url or not avatar_url.startswith("/") or not peer or not peer.remote_url:
+            return avatar_url
+        try:
             base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
             base = base.replace("/federation/ws", "")
-            return f"{base}{avatar_url}"
+            download_url = f"{base}{avatar_url}"
+            import httpx
+            async with httpx.AsyncClient(verify=False, timeout=15) as client:
+                resp = await client.get(download_url)
+                if resp.status_code == 200:
+                    ext = os.path.splitext(avatar_url)[1] or ".png"
+                    fname = f"{entity_type}_{local_id}_{uuid.uuid4().hex[:8]}{ext}"
+                    fpath = os.path.join("/app/data/attachments", fname)
+                    with open(fpath, "wb") as f:
+                        f.write(resp.content)
+                    local_path = f"/api/fs/download-avatar/{fname}"
+                    # 更新本地实体表
+                    from sqlalchemy import text
+                    async with async_session() as _db:
+                        if entity_type == "user":
+                            await _db.execute(text("UPDATE users SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": local_id})
+                        elif entity_type == "agent":
+                            await _db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": local_id})
+                        await _db.commit()
+                    logger.info(f"Downloaded federated avatar: {download_url} -> {fname}")
+                    return local_path
+        except Exception as e:
+            logger.warning(f"Failed to download federated avatar: {e}")
         return avatar_url
 
     if conversation_type == "group":
@@ -283,7 +307,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
-                sender_avatar = _absolute_avatar_url(msg.get("sender_avatar_url"), peer_for_avatar)
+                sender_avatar = await _download_remote_avatar(msg.get("sender_avatar_url"), msg.get("sender_type", "human"), msg.get("sender_id", 0), peer_for_avatar)
                 msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=sender_avatar)
 
                 from app.routers.ws import manager
@@ -338,7 +362,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 dm_msg = await persist_remote_dm_message(db, str(session_id), msg, source_public_id)
                 await db.commit()
                 from app.routers.ws import manager
-                sender_avatar_dm = _absolute_avatar_url(msg.get("sender_avatar_url"), peer_for_dm_avatar)
+                sender_avatar_dm = await _download_remote_avatar(msg.get("sender_avatar_url"), msg.get("sender_type", "human"), msg.get("sender_id", 0), peer_for_dm_avatar)
                 dm_data = {
                     "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
                     "session_id": str(session_id),

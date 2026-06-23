@@ -87,17 +87,39 @@ async def _apply_display_name_update(db, entity_type: str, local_ref_id: str, ne
         await db.execute(text("UPDATE agents SET name = :n WHERE id = :i"), {"n": new_value, "i": rid})
 
 
-async def _apply_avatar_update(db, entity_type: str, local_ref_id: str, new_value: str) -> None:
-    """将远程 avatar_url 变更写入实际实体表"""
+async def _apply_avatar_update(db, entity_type: str, local_ref_id: str, new_value: str, peer=None) -> None:
+    """将远程 avatar_url 变更写入实际实体表，并下载头像文件到本地"""
     from sqlalchemy import text
     try:
         rid = int(local_ref_id)
     except (ValueError, TypeError):
         return
+
+    local_path = new_value
+    # 如果是相对路径，尝试从远端下载头像文件
+    if new_value and new_value.startswith("/") and peer and peer.remote_url:
+        try:
+            base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
+            base = base.replace("/federation/ws", "")
+            download_url = f"{base}{new_value}"
+            import httpx
+            async with httpx.AsyncClient(verify=False, timeout=15) as client:
+                resp = await client.get(download_url)
+                if resp.status_code == 200:
+                    import os, uuid
+                    fname = f"user_{rid}_{uuid.uuid4().hex[:8]}.png"
+                    fpath = os.path.join("/app/data/attachments", fname)
+                    with open(fpath, "wb") as f:
+                        f.write(resp.content)
+                    local_path = f"/api/fs/download-avatar/{fname}"
+                    logger.info(f"🖼️ 下载远端头像: {download_url} → {fname}")
+        except Exception as e:
+            logger.warning(f"🖼️ 下载远端头像失败: {e}")
+
     if entity_type == "user":
-        await db.execute(text("UPDATE users SET avatar_url = :v WHERE id = :i"), {"v": new_value, "i": rid})
+        await db.execute(text("UPDATE users SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": rid})
     elif entity_type == "agent":
-        await db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": new_value, "i": rid})
+        await db.execute(text("UPDATE agents SET avatar_url = :v WHERE id = :i"), {"v": local_path, "i": rid})
 
 
 class FederationManager:
@@ -887,11 +909,10 @@ class FederationManager:
                 if entity:
                     if field == "display_name":
                         entity.display_name = new_value
-                        # 同步更新实际表
                         await _apply_display_name_update(db, entity_type, entity.local_ref_id, new_value)
                     elif field == "avatar_url":
                         entity.avatar_url = new_value
-                        await _apply_avatar_update(db, entity_type, entity.local_ref_id, new_value)
+                        await _apply_avatar_update(db, entity_type, entity.local_ref_id, new_value, peer)
                     entity.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             await db.commit()

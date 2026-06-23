@@ -31,6 +31,9 @@ data/
 # Logs
 *.log
 
+# 上传文件（头像等，运行时数据）
+backend/uploads/
+
 # OS
 .DS_Store
 Thumbs.db

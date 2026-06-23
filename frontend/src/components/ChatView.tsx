@@ -747,9 +747,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
             senderType="ai"
             senderId={agentId}
             thinking={true}
-            onAvatarClick={(type, id, name, state) =>
-              setProfileCard({ type, id, name, state })
-            }
+            onAvatarClick={handleAvatarClick}
           />
         ))}
 
@@ -764,9 +762,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               senderType="ai"
               senderId={agentId}
               isTyping={true}
-              onAvatarClick={(type, id, name, state) =>
-                setProfileCard({ type, id, name, state })
-              }
+              onAvatarClick={handleAvatarClick}
             />
           ))}
 

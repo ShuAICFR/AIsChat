@@ -4,8 +4,11 @@
 - GET /federation/identity — 公开端点，实例身份
 - WS /federation/ws   — 实例间 WebSocket 连接
 """
+import asyncio
 import json
 import logging
+import os
+import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import async_session, get_db
@@ -225,8 +228,8 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
     if not msg:
         return
 
-    # 根据 peer 前缀拼接 federated_id 的辅助函数
-    async def _resolve_entity(entity_type: str, local_id: str | int) -> object | None:
+    # 根据 peer 前缀拼接 federated_id 的辅助函数，同时返回 peer 避免外部重复查询
+    async def _resolve_entity(entity_type: str, local_id: str | int) -> tuple[object | None, object | None]:
         async with async_session() as db:
             from app.services.federation_service import get_peer_by_public_id
             peer = await get_peer_by_public_id(db, from_public_id)
@@ -235,7 +238,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 fid = f"{peer.display_name}:{type_char}:{local_id}"
                 entity = await get_federated_entity_by_fid(db, fid)
                 if entity:
-                    return entity
+                    return entity, peer
                 # 回退：federated_id 可能因格式变更不匹配，按 entity_type + local_ref_id + peer_id 查找
                 from app.models.federation import FederatedEntity
                 from sqlalchemy import select as sa_select
@@ -246,14 +249,14 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                         FederatedEntity.peer_id == peer.id,
                     )
                 )
-                return result.scalar_one_or_none()
-        return None
+                entity = result.scalar_one_or_none()
+                return entity, peer if entity else None
+        return None, None
 
     # 从发送端下载头像到本地，返回本地路径（避免浏览器跨域/证书问题）
     async def _download_remote_avatar(avatar_url: str, entity_type: str, local_id: int, peer) -> str:
         if not avatar_url or not avatar_url.startswith("/") or not peer or not peer.remote_url:
             return avatar_url
-        import os, uuid
         try:
             base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
             base = base.replace("/federation/ws", "")
@@ -292,16 +295,17 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
 
         async with async_session() as db:
             entity = None
+            peer_for_avatar = None
             if group_id:
-                entity = await _resolve_entity("group", group_id)
+                entity, peer_for_avatar = await _resolve_entity("group", group_id)
             elif federated_group_id:
                 entity = await get_federated_entity_by_fid(db, federated_group_id)
+                peer_for_avatar = await get_peer_by_public_id(db, from_public_id)
 
             if entity is None:
                 logger.warning(f"🌐 未知联邦群: {group_id or federated_group_id} from {from_public_id}")
                 return
             group_id = int(entity.local_ref_id)
-            peer_for_avatar = await get_peer_by_public_id(db, from_public_id)
 
         try:
             async with async_session() as db:
@@ -313,7 +317,6 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 original_avatar = msg.get("sender_avatar_url")
                 msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=original_avatar)
                 # 后台异步下载头像（不影响消息即时送达）
-                import asyncio
                 asyncio.create_task(_download_remote_avatar(
                     msg.get("sender_avatar_url"), msg.get("sender_type", "human"),
                     msg.get("sender_id", 0), peer_for_avatar,
@@ -352,16 +355,17 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
 
         async with async_session() as db:
             entity = None
+            peer_for_dm_avatar = None
             if session_id:
-                entity = await _resolve_entity("dm", session_id)
+                entity, peer_for_dm_avatar = await _resolve_entity("dm", session_id)
             elif federated_session_id:
                 entity = await get_federated_entity_by_fid(db, federated_session_id)
+                peer_for_dm_avatar = await get_peer_by_public_id(db, from_public_id)
 
             if entity is None:
                 logger.warning(f"Unknown federated DM: {session_id or federated_session_id}")
                 return
             session_id = entity.local_ref_id
-            peer_for_dm_avatar = await get_peer_by_public_id(db, from_public_id)
 
         if not session_id:
             return
@@ -373,7 +377,6 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 from app.routers.ws import manager
                 # 先广播再后台下载头像
                 sender_avatar_dm = msg.get("sender_avatar_url")
-                import asyncio
                 asyncio.create_task(_download_remote_avatar(
                     msg.get("sender_avatar_url"), msg.get("sender_type", "human"),
                     msg.get("sender_id", 0), peer_for_dm_avatar,

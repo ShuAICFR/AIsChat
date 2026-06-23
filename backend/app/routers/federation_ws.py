@@ -166,7 +166,11 @@ async def federation_websocket(ws: WebSocket):
             if msg_type == "ping":
                 await ws.send_json({"type": "pong"})
             elif msg_type == "pong":
-                pass
+                # 更新入站连接的 last_heartbeat，防止心跳超时断连
+                conn = federation_manager.peers.get(peer_public_id)
+                if conn:
+                    from datetime import datetime as dt, timezone
+                    conn.last_heartbeat = dt.now(timezone.utc).replace(tzinfo=None)
             elif msg_type == "forward_message":
                 await _handle_forwarded_message(peer_public_id, data)
             elif msg_type == "entity_announce":

@@ -249,6 +249,14 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 return result.scalar_one_or_none()
         return None
 
+    # 把发送端的相对头像路径转为绝对 URL（接收端本地没有该文件，需直连发送端获取）
+    def _absolute_avatar_url(avatar_url: str, peer) -> str:
+        if avatar_url and avatar_url.startswith("/") and peer and peer.remote_url:
+            base = peer.remote_url.replace("wss://", "https://").replace("ws://", "http://")
+            base = base.replace("/federation/ws", "")
+            return f"{base}{avatar_url}"
+        return avatar_url
+
     if conversation_type == "group":
         group_id = data.get("group_id")
         federated_group_id = data.get("federated_group_id", "")  # 兼容旧格式
@@ -267,6 +275,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 logger.warning(f"🌐 未知联邦群: {group_id or federated_group_id} from {from_public_id}")
                 return
             group_id = int(entity.local_ref_id)
+            peer_for_avatar = await get_peer_by_public_id(db, from_public_id)
 
         try:
             async with async_session() as db:
@@ -274,7 +283,8 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 await db.commit()
 
                 from app.services.group_service import message_to_dict
-                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=msg.get("sender_avatar_url"))
+                sender_avatar = _absolute_avatar_url(msg.get("sender_avatar_url"), peer_for_avatar)
+                msg_data = message_to_dict(message, sender_name=msg.get("sender_name", "远程用户"), sender_avatar_url=sender_avatar)
 
                 from app.routers.ws import manager
                 await manager.broadcast_to_group(
@@ -318,6 +328,7 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 logger.warning(f"Unknown federated DM: {session_id or federated_session_id}")
                 return
             session_id = entity.local_ref_id
+            peer_for_dm_avatar = await get_peer_by_public_id(db, from_public_id)
 
         if not session_id:
             return
@@ -327,12 +338,14 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 dm_msg = await persist_remote_dm_message(db, str(session_id), msg, source_public_id)
                 await db.commit()
                 from app.routers.ws import manager
+                sender_avatar_dm = _absolute_avatar_url(msg.get("sender_avatar_url"), peer_for_dm_avatar)
                 dm_data = {
                     "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
                     "session_id": str(session_id),
                     "sender_id": 0,
                     "sender_name": msg.get("sender_name", "远程用户"),
                     "sender_type": msg.get("sender_type", "human"),
+                    "sender_avatar_url": sender_avatar_dm,
                     "content": msg.get("content", ""),
                     "reply_to": msg.get("reply_to"),
                     "source_public_id": source_public_id,
@@ -345,7 +358,6 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                 )
         except Exception as e:
             logger.error(f"Handle forwarded DM error: {e}")
-
 
 async def _get_my_identity_full() -> tuple[str, str, str]:
     """获取本实例的 public_id、instance_id 和 display_name"""

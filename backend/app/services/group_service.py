@@ -714,7 +714,7 @@ async def update_group_settings(
     # 联邦同步：群名称变更时入队 profile 更新
     if "name" in updates:
         from app.services.federation_service import enqueue_profile_update
-        await enqueue_profile_update(db, "group", group_id, "display_name")
+        await enqueue_profile_update(db, "group", group_id, "display_name", updates["name"])
     logger.info(f"群聊 {group_id} 设置已更新: {list(updates.keys())}")
     return group
 

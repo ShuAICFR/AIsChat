@@ -85,7 +85,7 @@ export default function MePage() {
   const totalCalls = usage.reduce((s, u) => s + (u.total_calls || 0), 0)
   const totalReasoning = usage.reduce((s, u) => s + (u.reasoning_tokens || 0), 0)
   const totalCached = usage.reduce((s, u) => s + (u.cached_tokens || 0), 0)
-  const cacheRate = totalTokens + totalCached > 0 ? Math.round(totalCached / (totalTokens + totalCached) * 100) : 0
+  const cacheRate = totalTokens > 0 ? Math.round(totalCached / totalTokens * 100) : 0
 
   // 上线天数
   const daysSince = user?.created_at

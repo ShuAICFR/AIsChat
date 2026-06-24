@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { Bot, Plus, Edit3, History, Power, Download, Upload, X, RotateCcw, Eye, EyeOff, ArrowLeft, Menu } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
 import CreateAgentModal from '../components/CreateAgentModal'
 import { STATE_BADGE_COLORS, AI_TYPE_LABEL } from '../constants'
@@ -589,15 +590,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                     <span className="text-xs text-textSecondary">{t('agents.thinkingModeLabel')}</span>
                     <p className="text-[10px] text-textMuted mt-0.5">{t('agents.thinkingModeDesc')}</p>
                   </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={thinkingEnabled}
-                      onChange={(e) => setThinkingEnabled(e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="relative w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-                  </label>
+                  <Toggle checked={thinkingEnabled} onChange={setThinkingEnabled} />
                 </div>
               )}
               {/* AI 身份隐藏 */}
@@ -607,13 +600,7 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
                   <p className="text-[10px] text-textMuted mt-0.5">{t('agents.hideAiDesc')}</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hideAiIdentity}
-                    onChange={(e) => setHideAiIdentity(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:bg-primary-500 peer-focus:ring-2 peer-focus:ring-primary-500/30 after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                  <Toggle checked={hideAiIdentity} onChange={setHideAiIdentity} />
                 </label>
               </div>
               {/* 延迟回复 */}

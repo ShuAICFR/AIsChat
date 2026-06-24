@@ -462,6 +462,16 @@ def resolve_model(agent) -> str:
 # 系统提示词段 builder（每个段独立构建，便于缓存优化）
 # ============================================================
 
+async def _load_prompt_overrides(db) -> dict:
+    """加载管理员在系统设置中自定义的系统提示词覆盖值"""
+    try:
+        from app.services.system_settings_service import get_settings
+        s = await get_settings(db)
+        return (s.get("system_prompt_overrides") or {}) if s else {}
+    except Exception:
+        return {}
+
+
 def _build_personality(agent, language: str = "zh", system_prompt_override: str | None = None) -> str:
     """personality 段：AI 当前人格（Agent 可修改，独立缓存）
 
@@ -680,15 +690,18 @@ async def build_messages(
     except Exception:
         pass
 
+    # ── 加载管理员自定义的系统提示词覆盖 ──
+    overrides = await _load_prompt_overrides(db)
+
     # ── 按 config_profile 选择行为协议（层级化加载）──
     profile = getattr(agent, 'config_profile', 'chat') or 'chat'
     protocol = PROTOCOL_BY_PROFILE.get(profile, PROTOCOL_CHAT)
 
-    # ── 构建六段 ──
+    # ── 构建六段（应用管理员覆盖）──
     segments = {
-        "core_identity": CORE_IDENTITY,
+        "core_identity": overrides.get("core_identity") or CORE_IDENTITY,
         "personality": _build_personality(agent, language, system_prompt_override),
-        "protocol": protocol,
+        "protocol": overrides.get(f"protocol_{profile}") or protocol,
         "tools": await _build_tools_segment(db, agent, is_dm),
         "current_context": await _build_current_context(db, agent, group_id, group_name, is_dm),
         "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key, trigger_user_id),
@@ -818,11 +831,14 @@ async def build_dm_messages(
     except Exception:
         pass
 
-    # ── 构建六段（DM 使用精简协议）──
+    # ── 加载管理员自定义的系统提示词覆盖 ──
+    overrides = await _load_prompt_overrides(db)
+
+    # ── 构建六段（DM 使用精简协议，应用管理员覆盖）──
     segments = {
-        "core_identity": CORE_IDENTITY,
+        "core_identity": overrides.get("core_identity") or CORE_IDENTITY,
         "personality": _build_personality(agent, language, system_prompt_override),
-        "protocol": DM_PROTOCOL,
+        "protocol": overrides.get("dm_protocol") or DM_PROTOCOL,
         "tools": await _build_tools_segment(db, agent, is_dm=True),
         "current_context": dm_context,
         "injected_skills": await _build_injected_skills(

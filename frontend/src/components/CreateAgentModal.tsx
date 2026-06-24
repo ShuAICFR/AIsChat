@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import { Bot, X, ChevronRight, Settings, ArrowLeft, Ticket, Key, Loader2, RotateCw, MessageSquare, Microscope, Globe, Battery, Scale, Lock, Landmark, Theater, FlaskConical, Leaf, Flame, Shield, User, RefreshCw } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
+import Toggle from './Toggle'
 
 // ── 类型 ──
 
@@ -1057,16 +1058,7 @@ function ToggleField({
         <span className="text-xs text-textSecondary">{label}</span>
         {desc && <p className="text-[10px] text-textMuted mt-0.5">{desc}</p>}
       </div>
-      <button
-        onClick={() => setValue(!value)}
-        className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-          value ? 'bg-mint-400' : 'bg-border'
-        }`}
-      >
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-          value ? 'translate-x-5' : 'translate-x-0.5'
-        }`} />
-      </button>
+      <Toggle checked={value} onChange={setValue} />
     </div>
   )
 }

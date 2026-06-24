@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { FileText, Settings, Bot, Eye, ChevronDown, ChevronUp, Loader2, Save, Sliders, X } from 'lucide-react'
+import Toggle from './Toggle'
 
 interface GlobalConfig {
   max_conversation_logs: number
@@ -199,32 +200,14 @@ export default function ConversationLogTab() {
               </div>
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-textSecondary">{t('admin.convlogDefaultAccess')}</label>
-                <button
-                  onClick={() => setConfig({ ...config, default_user_log_access: !config.default_user_log_access })}
-                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-                    config.default_user_log_access ? 'bg-mint-400' : 'bg-border'
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    config.default_user_log_access ? 'translate-x-5' : 'translate-x-0.5'
-                  }`} />
-                </button>
+                <Toggle checked={config.default_user_log_access} onChange={(v) => setConfig({ ...config, default_user_log_access: v })} />
               </div>
               <div className="flex items-center justify-between">
                 <div>
                   <label className="text-xs font-medium text-textSecondary">{t('admin.convlogDefaultDelay')}</label>
                   <p className="text-[10px] text-textMuted mt-0.5">{t('admin.convlogDefaultDelayDesc')}</p>
                 </div>
-                <button
-                  onClick={() => setConfig({ ...config, default_delay_reply_enabled: !config.default_delay_reply_enabled })}
-                  className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
-                    config.default_delay_reply_enabled ? 'bg-mint-400' : 'bg-border'
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    config.default_delay_reply_enabled ? 'translate-x-5' : 'translate-x-0.5'
-                  }`} />
-                </button>
+                <Toggle checked={config.default_delay_reply_enabled} onChange={(v) => setConfig({ ...config, default_delay_reply_enabled: v })} />
               </div>
               <button
                 onClick={saveConfig}
@@ -292,16 +275,16 @@ export default function ConversationLogTab() {
                       else if (agentAccess === true) setAgentAccess(false)
                       else setAgentAccess(null)
                     }}
-                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ml-3 ${
+                    className={`relative w-12 h-6 rounded-full transition-colors flex-shrink-0 ml-3 ${
                       agentAccess === true ? 'bg-mint-400' :
                       agentAccess === false ? 'bg-rose-400' :
                       'bg-border'
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                      agentAccess === true ? 'translate-x-5' :
+                    <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
+                      agentAccess === true ? 'translate-x-6' :
                       agentAccess === false ? 'translate-x-0.5' :
-                      'translate-x-2.5 opacity-50'
+                      'translate-x-[14px] opacity-50'
                     }`} />
                   </button>
                 </div>

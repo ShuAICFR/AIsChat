@@ -920,6 +920,141 @@ async def update_system_settings(
 
 
 # ============================================================
+# 系统提示词管理
+# ============================================================
+
+class SystemPromptUpdateBody(BaseModel):
+    overrides: dict | None = None  # {"core_identity": "...", "protocol_chat": "...", ...}
+
+
+@router.get("/system-prompt")
+async def get_system_prompt(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取系统提示词的当前覆盖值及默认值（供管理员查看/编辑）"""
+    from app.services.llm_service import (
+        CORE_IDENTITY, PROTOCOL_CHAT, PROTOCOL_IMMERSIVE,
+        PROTOCOL_DIGITAL_LIFE, DM_PROTOCOL, SEGMENT_ORDER,
+    )
+    from app.services.system_settings_service import get_settings
+
+    s = await get_settings(db)
+    overrides = s.get("system_prompt_overrides") or {}
+
+    return {
+        "segments": [
+            {
+                "key": "core_identity",
+                "label": "核心身份（Core Identity）",
+                "description": "工具调用规则、批量发送规则、深度推理指令",
+                "current": overrides.get("core_identity") or CORE_IDENTITY,
+                "default": CORE_IDENTITY,
+                "is_overridden": "core_identity" in overrides,
+            },
+            {
+                "key": "personality",
+                "label": "人格（Personality）",
+                "description": "每个 AI 的 current_system_prompt，由 AI 创建者设置，管理员不可覆盖",
+                "current": "（每个 AI 独立设置）",
+                "default": "（每个 AI 独立设置）",
+                "is_overridden": False,
+                "readonly": True,
+            },
+            {
+                "key": "protocol_chat",
+                "label": "聊天协议（Protocol: Chat）",
+                "description": "聊天模式行为协议",
+                "current": overrides.get("protocol_chat") or PROTOCOL_CHAT,
+                "default": PROTOCOL_CHAT,
+                "is_overridden": "protocol_chat" in overrides,
+            },
+            {
+                "key": "protocol_immersive",
+                "label": "沉浸协议（Protocol: Immersive）",
+                "description": "沉浸模式行为协议",
+                "current": overrides.get("protocol_immersive") or PROTOCOL_IMMERSIVE,
+                "default": PROTOCOL_IMMERSIVE,
+                "is_overridden": "protocol_immersive" in overrides,
+            },
+            {
+                "key": "protocol_digital_life",
+                "label": "数字生命协议（Protocol: Digital Life）",
+                "description": "数字生命模式行为协议",
+                "current": overrides.get("protocol_digital_life") or PROTOCOL_DIGITAL_LIFE,
+                "default": PROTOCOL_DIGITAL_LIFE,
+                "is_overridden": "protocol_digital_life" in overrides,
+            },
+            {
+                "key": "dm_protocol",
+                "label": "私信协议（DM Protocol）",
+                "description": "私信对话行为协议",
+                "current": overrides.get("dm_protocol") or DM_PROTOCOL,
+                "default": DM_PROTOCOL,
+                "is_overridden": "dm_protocol" in overrides,
+            },
+            {
+                "key": "tools",
+                "label": "工具清单（Tools）",
+                "description": "由 AI 状态和深度推理模式动态生成，不可覆盖",
+                "current": "（动态生成，见工具注册表）",
+                "default": "（动态生成）",
+                "is_overridden": False,
+                "readonly": True,
+            },
+            {
+                "key": "current_context",
+                "label": "当前上下文（Current Context）",
+                "description": "时间、群名、群 ID、DM 状态等动态注入",
+                "current": "（每次请求动态生成）",
+                "default": "（每次请求动态生成）",
+                "is_overridden": False,
+                "readonly": True,
+            },
+            {
+                "key": "injected_skills",
+                "label": "注入技能（Injected Skills）",
+                "description": "记忆注入 + Skill 引擎注入，动态生成",
+                "current": "（每次请求动态生成）",
+                "default": "（每次请求动态生成）",
+                "is_overridden": False,
+                "readonly": True,
+            },
+        ],
+        "segment_order": list(SEGMENT_ORDER),
+    }
+
+
+@router.put("/system-prompt")
+async def update_system_prompt(
+    body: SystemPromptUpdateBody,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新系统提示词覆盖值（可覆盖的段：core_identity, protocol_*）"""
+    from app.services.system_settings_service import get_or_create_settings, update_settings
+
+    allowed_keys = {"core_identity", "protocol_chat", "protocol_immersive", "protocol_digital_life", "dm_protocol"}
+    overrides = body.overrides or {}
+
+    # 仅允许白名单中的 key
+    filtered = {k: v for k, v in overrides.items() if k in allowed_keys and v}
+
+    s = await get_or_create_settings(db)
+    existing = (s.system_prompt_overrides or {}).copy() if s.system_prompt_overrides else {}
+    existing.update(filtered)
+    s.system_prompt_overrides = existing
+    await db.flush()
+
+    await _log_admin_action(
+        db, admin["user_id"], "update_system_prompt", "system", 1,
+        {"updated_keys": list(filtered.keys())},
+    )
+
+    return {"message": "系统提示词已更新", "overrides": existing}
+
+
+# ============================================================
 # OpenCLI 权限管理
 # ============================================================
 

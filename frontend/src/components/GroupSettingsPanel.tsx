@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { getStateDotColor } from '../constants'
 import { X, Bell, BellOff, LogOut, UserX, Shield, ShieldOff, UserPlus, Volume2, VolumeX, Download, Clock, Globe, Loader2, ArrowLeft } from 'lucide-react'
+import Toggle from './Toggle'
 
 // ── 联邦共享状态（v1.0.0: 群主/AI制作者按群控制联邦共享） ──
 
@@ -123,26 +124,13 @@ function FederationShareSection({ groupId }: { groupId: number }) {
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => handleToggle(peer)}
-                disabled={toggling === peer.peer_id}
-                className={`w-11 h-6 rounded-full transition-colors relative shrink-0 ${
-                  peer.is_shared ? 'bg-primary-500' : 'bg-border'
-                } ${toggling === peer.peer_id ? 'opacity-50' : ''}`}
-                title={peer.is_shared ? t('groupSettings.federationUnshareFrom') : t('groupSettings.federationShareTo')}
-              >
-                {toggling === peer.peer_id ? (
-                  <div className="absolute top-1 left-1">
-                    <Loader2 size={16} className="animate-spin text-white" />
-                  </div>
-                ) : (
-                  <div
-                    className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                      peer.is_shared ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                )}
-              </button>
+              {toggling === peer.peer_id ? (
+                <div className="w-12 h-6 flex items-center justify-center">
+                  <Loader2 size={16} className="animate-spin text-textMuted" />
+                </div>
+              ) : (
+                <Toggle checked={peer.is_shared} onChange={() => handleToggle(peer)} />
+              )}
             </div>
           ))}
         </div>
@@ -549,20 +537,7 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                       {isAiOwned ? t('groupSettings.vectorAccelAiOwned') : t('groupSettings.vectorAccelHybridSearch')}
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      const next = !vectorAccel
-                      setVectorAccel(next)
-                      saveSettings({ is_vector_accelerated: next })
-                    }}
-                    className={`w-11 h-6 rounded-full transition-colors relative ${
-                      vectorAccel ? 'bg-primary-500' : 'bg-border'
-                    }`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                      vectorAccel ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
+                  <Toggle checked={vectorAccel} onChange={(next) => { setVectorAccel(next); saveSettings({ is_vector_accelerated: next }) }} />
                 </div>
               )}
 

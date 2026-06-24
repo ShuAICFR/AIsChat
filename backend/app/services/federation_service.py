@@ -1047,6 +1047,7 @@ async def handle_remote_message(
         content=msg_dict.get("content", ""),
         reply_to=msg_dict.get("reply_to"),
         source_public_id=source_public_id,
+        sender_avatar_url=msg_dict.get("sender_avatar_url", ""),
     )
     remote_time = msg_dict.get("created_at")
     if remote_time:

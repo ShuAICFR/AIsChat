@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowLeft, Loader2, BookOpen } from 'lucide-react'
 import MermaidBlock from '../components/MermaidBlock'
+
+/** 手册配置：路径 → { 文档路径, 标题 } */
+const MANUAL_CONFIG: Record<string, { docPath: string; title: string }> = {
+  '/manual': { docPath: '/docs/用户手册.md', title: '用户手册 / User Manual' },
+  '/manual/admin': { docPath: '/docs/管理与开发者手册.md', title: '管理与开发者手册 / Admin & Developer Manual' },
+}
 
 /** 自定义 code 渲染：mermaid 代码块用 MermaidBlock，其余默认 */
 function CodeRenderer({ className, children, inline, ...props }: any) {
@@ -30,19 +36,22 @@ export default function ManualPage() {
   const [content, setContent] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  const config = MANUAL_CONFIG[location.pathname] || MANUAL_CONFIG['/manual']
 
   useEffect(() => {
-    fetch('/docs/用户手册.md')
+    fetch(config.docPath)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.text()
       })
       .then(text => {
         setContent(text)
-        document.title = '用户手册 / User Manual - AIsChat'
+        document.title = `${config.title} - AIsChat`
       })
       .catch(err => setError(err.message))
-  }, [])
+  }, [config.docPath, config.title])
 
   return (
     <div className="max-w-4xl mx-auto p-4 md:p-6 pb-24 md:pb-6">
@@ -56,7 +65,7 @@ export default function ManualPage() {
           <ArrowLeft size={20} />
         </button>
         <BookOpen size={20} className="text-primary-400" />
-        <h1 className="text-lg font-bold text-textPrimary">用户手册 / User Manual</h1>
+        <h1 className="text-lg font-bold text-textPrimary">{config.title}</h1>
       </div>
 
       {/* 内容区 */}
@@ -65,7 +74,7 @@ export default function ManualPage() {
           <p className="text-rose-400 font-medium">加载失败</p>
           <p className="text-textMuted text-sm mt-1">{error}</p>
           <button
-            onClick={() => window.open('/docs/用户手册.md', '_blank')}
+            onClick={() => window.open(config.docPath, '_blank')}
             className="mt-4 text-sm text-primary-400 hover:text-primary-500 transition-colors"
           >
             尝试直接打开文件 →

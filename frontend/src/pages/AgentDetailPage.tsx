@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { STATE_BADGE_COLORS } from '../constants'
+import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
@@ -580,16 +581,7 @@ export default function AgentDetailPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-textMuted">{t('agentDetail.forceAlarm')}</span>
-                    <button
-                      onClick={() => handleUpdateAgentField('force_alarm_on_end', !agent.force_alarm_on_end)}
-                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
-                        agent.force_alarm_on_end ? 'bg-mint-400' : 'bg-border'
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.force_alarm_on_end ? 'translate-x-[18px]' : 'translate-x-[2px]'
-                      }`} />
-                    </button>
+                    <Toggle checked={agent.force_alarm_on_end} onChange={(v) => handleUpdateAgentField('force_alarm_on_end', v)} />
                   </div>
                   <div>
                     <span className="text-textMuted">{t('agentDetail.maxAlarms')}</span>
@@ -613,30 +605,11 @@ export default function AgentDetailPage() {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-textMuted">{t('agentDetail.allowFriendRequests')}</span>
-                    <button
-                      onClick={() => handleUpdateAgentField('allow_friend_requests', !agent.allow_friend_requests)}
-                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
-                        agent.allow_friend_requests ? 'bg-mint-400' : 'bg-border'
-                      }`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.allow_friend_requests ? 'translate-x-[18px]' : 'translate-x-[2px]'
-                      }`} />
-                    </button>
+                    <Toggle checked={agent.allow_friend_requests} onChange={(v) => handleUpdateAgentField('allow_friend_requests', v)} />
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-textMuted">{t('agentDetail.autoRespondRequests')}</span>
-                    <button
-                      onClick={() => handleUpdateAgentField('auto_respond_friend_request', !agent.auto_respond_friend_request)}
-                      disabled={!agent.allow_friend_requests}
-                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
-                        agent.auto_respond_friend_request ? 'bg-mint-400' : 'bg-border'
-                      } ${!agent.allow_friend_requests ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    >
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                        agent.auto_respond_friend_request ? 'translate-x-[18px]' : 'translate-x-[2px]'
-                      }`} />
-                    </button>
+                    <Toggle checked={agent.auto_respond_friend_request} onChange={(v) => handleUpdateAgentField('auto_respond_friend_request', v)} disabled={!agent.allow_friend_requests} />
                   </div>
                 </div>
               </div>

@@ -3,6 +3,7 @@ import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useT } from '../i18n/I18nContext'
+import Toggle from '../components/Toggle'
 import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useNavigate, useBlocker, useLocation } from 'react-router-dom'
 
@@ -551,15 +552,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="flex items-center gap-3">
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoDefault}
-                  onChange={(e) => setAutoDefault(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-border peer-focus:ring-2 peer-focus:ring-primary-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-primary-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all" />
-              </label>
+              <Toggle checked={autoDefault} onChange={setAutoDefault} />
               <span className="text-sm text-textSecondary">{t('settings.autoApproveDefault')}</span>
             </div>
           </div>
@@ -579,26 +572,7 @@ export default function SettingsPage() {
                 {theme === 'dark' ? t('settings.darkModeDesc') : t('settings.lightModeDesc')}
               </p>
             </div>
-            <button
-              onClick={toggleTheme}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
-                theme === 'dark'
-                  ? 'bg-primary-600'
-                  : 'bg-[#CBD5E1]'
-              }`}
-            >
-              <span
-                className={`inline-flex items-center justify-center h-6 w-6 rounded-full bg-white shadow-md transition-transform ${
-                  theme === 'dark' ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              >
-                {theme === 'dark' ? (
-                  <Moon size={12} className="text-primary-500" />
-                ) : (
-                  <Sun size={12} className="text-accent-500" />
-                )}
-              </span>
-            </button>
+            <Toggle checked={theme === 'dark'} onChange={() => toggleTheme()} />
           </div>
         </div>
 
@@ -616,20 +590,7 @@ export default function SettingsPage() {
                 {t('settings.notificationsDetailDesc')}
               </p>
             </div>
-            <button
-              onClick={() => handleNotificationToggle(!notifications)}
-              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors flex-shrink-0 ml-4 ${
-                notifications
-                  ? 'bg-primary-600'
-                  : 'bg-[#CBD5E1]'
-              }`}
-            >
-              <span
-                className={`inline-block h-6 w-6 rounded-full bg-white shadow-md transition-transform ${
-                  notifications ? 'translate-x-7' : 'translate-x-1'
-                }`}
-              />
-            </button>
+            <Toggle checked={notifications} onChange={() => handleNotificationToggle(!notifications)} />
           </div>
         </div>
 

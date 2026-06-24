@@ -1,7 +1,7 @@
-// 用户手册（内部路由，React 页面渲染而非直接打开 .md 文件）
+// 用户手册（内部路由，React 页面渲染）
 export const MANUAL_URL = '/manual'
-// 管理与开发者手册（直接打开 .md 文件）
-export const ADMIN_MANUAL_URL = '/docs/管理与开发者手册.md'
+// 管理与开发者手册（统一使用 ManualPage 渲染）
+export const ADMIN_MANUAL_URL = '/manual/admin'
 
 // ============================================================
 // AI/用户在线状态颜色（统一数据源，避免散落硬编码）

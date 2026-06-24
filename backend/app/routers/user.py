@@ -249,6 +249,7 @@ async def get_user_storage(
 ):
     """获取用户存储概览（所有 AI 的文件总和 + 进度条数据）"""
     import os
+    from app.config import settings
     from sqlalchemy import select
     from app.models.agent import Agent
     from app.models.file import FileMetadata as FM
@@ -268,8 +269,8 @@ async def get_user_storage(
         agent_used = 0
         agent_files = 0
 
-        # 工作区文件
-        workspace_dir = f"uploads/workspace/{agent.id}"
+        # 工作区文件（使用绝对路径，指向 agent 数据目录）
+        workspace_dir = os.path.join(settings.data_dir, "agents", str(agent.id))
         if os.path.exists(workspace_dir):
             for dirpath, _dirnames, filenames in os.walk(workspace_dir):
                 for fn in filenames:

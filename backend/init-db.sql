@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     reply_to INT,
     source_public_id VARCHAR(50),
+    sender_avatar_url TEXT DEFAULT '',
     attachments JSONB,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -547,6 +548,7 @@ CREATE TABLE IF NOT EXISTS system_settings (
     default_language VARCHAR(10) NOT NULL DEFAULT 'en',
     default_platform_credit INTEGER NOT NULL DEFAULT 0,
     federation_sync_interval_minutes INTEGER NOT NULL DEFAULT 720,
+    system_prompt_overrides JSONB,
     updated_by INTEGER REFERENCES users(id),
     updated_at TIMESTAMP DEFAULT NOW()
 );

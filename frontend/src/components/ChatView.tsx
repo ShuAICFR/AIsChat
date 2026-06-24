@@ -398,12 +398,16 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         (conversationType === 'group' && d.group_id === conversationId) ||
         (conversationType === 'dm' && d.session_id === conversationId)
       if (!typingBelongsToHere) return
-      // 清除"思考中"（进入"输入中"阶段）
-      setThinkingAgents((prev) => {
-        const next = new Map(prev)
-        next.delete(d.agent_id)
-        return next
-      })
+      // 清除"思考中"（进入"输入中"阶段），但保证最小显示时长（1.5s）
+      const clearThinking = () => {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(d.agent_id)
+          return next
+        })
+      }
+      // 延迟清除 thinking，确保用户能看到"思考中"
+      setTimeout(clearThinking, 1500)
       setTypingAgents((prev) => {
         const next = new Map(prev)
         next.set(d.agent_id, d.agent_name)
@@ -751,8 +755,10 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           ))
         )}
 
-        {/* AI 思考中占位气泡 */}
-        {Array.from(thinkingAgents.entries()).map(([agentId, agentName]) => (
+        {/* AI 思考中占位气泡（不显示同时在打字中的 agent） */}
+        {Array.from(thinkingAgents.entries())
+          .filter(([agentId]) => !typingAgents.has(agentId))
+          .map(([agentId, agentName]) => (
           <MessageBubble
             key={`thinking-${agentId}`}
             senderName={agentName}

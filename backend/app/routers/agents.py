@@ -526,13 +526,14 @@ async def get_agent_storage(
 ):
     """查看 AI 的文件空间占用（工作区 + 附件 + 数据库文件元数据）"""
     import os
+    from app.config import settings
     from app.models.file import FileMetadata as FM
     from sqlalchemy import select, func as sqlfunc
 
     agent = await _require_agent_owner(agent_id, current_user, db)
 
-    # 1. 扫描工作区目录
-    workspace_dir = f"uploads/workspace/{agent_id}"
+    # 1. 扫描工作区目录（使用绝对路径，指向 agent 数据目录）
+    workspace_dir = os.path.join(settings.data_dir, "agents", str(agent_id))
     total_size = 0
     file_count = 0
     files = []

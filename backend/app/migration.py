@@ -50,6 +50,8 @@ async def run_migrations():
             await _migrate_file_system(db)             # v0.5.0 文件协作系统
             await _migrate_message_attachments(db)     # v0.5.0 消息附件
             await _migrate_message_sender_name(db)     # v0.6.0 联邦消息发送者名称
+            await _migrate_sender_avatar_url(db)       # v0.8.0 联邦消息头像持久化
+            await _migrate_prompt_overrides(db)        # v0.8.0 系统提示词覆盖
             await _migrate_memory_archive_columns(db)  # v0.5.0 记忆延迟归档
             await _migrate_agent_metrics(db)           # v0.5.0 系统监控指标
             await _migrate_system_settings(db)          # v0.6.0 全局系统设置 + 新用户初始化向导
@@ -1130,6 +1132,34 @@ async def _migrate_message_sender_name(db):
         logger.info("  ✅ messages.sender_name 迁移完成")
     else:
         logger.info("  ⏭ messages.sender_name 已存在，跳过")
+
+
+async def _migrate_sender_avatar_url(db):
+    """v0.8.0: 联邦消息头像持久化 — messages 表加 sender_avatar_url TEXT"""
+    logger.info("  🖼️ 添加 messages.sender_avatar_url 列（联邦消息头像持久化）...")
+
+    if not await _column_exists(db, "messages", "sender_avatar_url"):
+        await db.execute(text(
+            "ALTER TABLE messages ADD COLUMN sender_avatar_url TEXT DEFAULT ''"
+        ))
+        await db.flush()
+        logger.info("  ✅ messages.sender_avatar_url 迁移完成")
+    else:
+        logger.info("  ⏭ messages.sender_avatar_url 已存在，跳过")
+
+
+async def _migrate_prompt_overrides(db):
+    """v0.8.0: 系统提示词覆盖 — system_settings 表加 system_prompt_overrides JSONB"""
+    logger.info("  📝 添加 system_settings.system_prompt_overrides 列...")
+
+    if not await _column_exists(db, "system_settings", "system_prompt_overrides"):
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN system_prompt_overrides JSONB"
+        ))
+        await db.flush()
+        logger.info("  ✅ system_settings.system_prompt_overrides 迁移完成")
+    else:
+        logger.info("  ⏭ system_settings.system_prompt_overrides 已存在，跳过")
 
 
 async def _migrate_memory_archive_columns(db):

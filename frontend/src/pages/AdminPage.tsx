@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings } from 'lucide-react'
+import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Database, Globe, BookOpen, ScrollText, ArrowLeft, BarChart3, ChevronRight, Key, Settings, Layers } from 'lucide-react'
 import { MANUAL_URL, ADMIN_MANUAL_URL } from '../constants'
+import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
 import SystemMetricsTab from '../components/SystemMetricsTab'
 import ApiKeyPoolTab from '../components/ApiKeyPoolTab'
+import SystemPromptTab from '../components/SystemPromptTab'
 
-type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool' | 'system'
+type Tab = 'overview' | 'users' | 'agents' | 'groups' | 'codes' | 'logs' | 'opencli' | 'backup' | 'federation' | 'convlog' | 'usage' | 'metrics' | 'apipool' | 'system' | 'prompt'
 type TabCategory = string
 
 const renderContent = (activeTab: Tab) => {
@@ -29,6 +31,7 @@ const renderContent = (activeTab: Tab) => {
     case 'metrics': return <SystemMetricsTab />
     case 'apipool': return <ApiKeyPoolTab />
     case 'system': return <SystemSettingsTab />
+    case 'prompt': return <SystemPromptTab />
     default: return <OverviewTab />
   }
 }
@@ -51,6 +54,7 @@ export default function AdminPage() {
     { key: 'metrics', label: t('admin.systemMetrics'), icon: Activity, desc: t('admin.systemMetrics'), category: t('admin.categorySystem') },
     { key: 'apipool', label: t('admin.apikeyPool'), icon: Key, desc: t('admin.apikeyPool'), category: t('admin.categoryOps') },
     { key: 'system', label: t('admin.system'), icon: Settings, desc: t('admin.system'), category: t('admin.categorySystem') },
+    { key: 'prompt', label: '系统提示词', icon: Layers, desc: '查看和自定义发给 AI 的系统提示词段', category: t('admin.categorySystem') },
   ]
   const initialTab = (searchParams.get('tab') as Tab) || 'overview'
   const [activeTab, setActiveTab] = useState<Tab>(initialTab)
@@ -108,14 +112,12 @@ export default function AdminPage() {
             >
               <BookOpen size={13} /> {t('nav.manual')}
             </Link>
-            <a
-              href={ADMIN_MANUAL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to={ADMIN_MANUAL_URL}
               className="inline-flex items-center gap-1 text-amber-400 hover:text-amber-500 dark:hover:text-amber-300 transition-colors"
             >
               <BookOpen size={13} /> {t('nav.adminManual')}
-            </a>
+            </Link>
           </div>
         )}
       </div>
@@ -941,13 +943,7 @@ function OpenCLIConfigSection() {
       <h3 className="font-semibold text-textPrimary mb-4">{t('admin.globalConfig')}</h3>
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-textPrimary">{t('admin.enableOpenCLI')}</label>
-          <button
-            onClick={() => setEnabled(!enabled)}
-            className={`w-12 h-6 rounded-full transition-colors ${enabled ? 'bg-mint-400' : 'bg-border'}`}
-          >
-            <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
-          </button>
+          <Toggle checked={enabled} onChange={setEnabled} label={t('admin.enableOpenCLI')} />
         </div>
         <div>
           <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.rateLimit')}</label>

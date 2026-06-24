@@ -5,8 +5,8 @@ import { useT, useLang } from '../i18n/I18nContext'
 import { useIsDark } from '../hooks/useIsDark'
 import { fmtTokenNum } from '../utils/format'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer
+  BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, ComposedChart, Line
 } from 'recharts'
 import { ArrowLeft, Loader2, BarChart3, Activity, FileText, Cpu } from 'lucide-react'
 
@@ -64,7 +64,14 @@ export default function UsagePage() {
     if (!selectedAgent) return
     setChartLoading(true)
     api.get<DailyPoint[]>(`/conversation-log/usage/agents/${selectedAgent}/daily?days=${days}`)
-      .then(r => setDailyData(Array.isArray(r) ? r : []))
+      .then(r => {
+        const arr = Array.isArray(r) ? r : []
+        // 给每个数据点追加缓存命中率
+        setDailyData(arr.map(d => ({
+          ...d,
+          cacheRate: d.total_tokens > 0 ? Math.round((d.cached_tokens || 0) / d.total_tokens * 100) : 0,
+        })))
+      })
       .catch(() => {})
       .finally(() => setChartLoading(false))
   }, [selectedAgent, days])
@@ -74,7 +81,7 @@ export default function UsagePage() {
   const totalCalls = overview.reduce((s, a) => s + (a.total_calls || 0), 0)
   const totalReasoning = overview.reduce((s, a) => s + (a.reasoning_tokens || 0), 0)
   const totalCached = overview.reduce((s, a) => s + (a.cached_tokens || 0), 0)
-  const cacheRate = totalTokens + totalCached > 0 ? Math.round(totalCached / (totalTokens + totalCached) * 100) : 0
+  const cacheRate = totalTokens > 0 ? Math.round(totalCached / totalTokens * 100) : 0
 
   // 图表颜色
   const colors = isDark ? {
@@ -82,15 +89,19 @@ export default function UsagePage() {
     completion: '#34D399',
     reasoning: '#FBBF24',
     cached: '#22D3EE',
+    accent: '#F472B6',
     grid: '#374151',
     text: '#9CA3AF',
+    textMuted: '#6B7280',
   } : {
     prompt: '#7C3AED',
     completion: '#10B981',
     reasoning: '#F59E0B',
     cached: '#06B6D4',
+    accent: '#EC4899',
     grid: '#E5E7EB',
     text: '#6B7280',
+    textMuted: '#9CA3AF',
   }
 
   // 格式化
@@ -200,15 +211,15 @@ export default function UsagePage() {
                         color: isDark ? '#F9FAFB' : '#111827',
                       }}
                       formatter={(value: number, name: string) => [fmtTokenNum(value, lang),
-                        name === 'prompt_tokens' ? 'Prompt' :
-                        name === 'completion_tokens' ? 'Completion' :
+                        name === 'prompt_tokens' ? t('usage.promptLegend') :
+                        name === 'completion_tokens' ? t('usage.completionLegend') :
                         name === 'reasoning_tokens' ? t('usage.thinkingLegend') : t('usage.cacheLegend')
                       ]}
                     />
                     <Legend
                       formatter={(v: string) =>
-                        v === 'prompt_tokens' ? 'Prompt' :
-                        v === 'completion_tokens' ? 'Completion' :
+                        v === 'prompt_tokens' ? t('usage.promptLegend') :
+                        v === 'completion_tokens' ? t('usage.completionLegend') :
                         v === 'reasoning_tokens' ? t('usage.thinkingLegend') : t('usage.cacheLegend')
                       }
                     />
@@ -217,6 +228,49 @@ export default function UsagePage() {
                     <Bar dataKey="reasoning_tokens" stackId="a" fill={colors.reasoning} name="reasoning_tokens" />
                     <Bar dataKey="cached_tokens" stackId="a" fill={colors.cached} name="cached_tokens" />
                   </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* 时间轴平滑曲线图 - 总 Token 趋势 + 缓存命中率 */}
+            {!chartLoading && dailyData.length > 0 && (
+              <div className="h-64 md:h-72 mt-6">
+                <h4 className="text-xs font-medium text-textSecondary mb-3 flex items-center gap-2">
+                  <Activity size={14} className="text-accent-400" />
+                  {t('usage.dailyTrend')}
+                </h4>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={dailyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11, fill: colors.text }}
+                      tickFormatter={v => v.slice(5)}
+                    />
+                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: colors.text }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: colors.textMuted }} unit="%" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+                        border: `1px solid ${colors.grid}`,
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        color: isDark ? '#F9FAFB' : '#111827',
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'cacheRate') return [`${value}%`, t('usage.cacheHitRate')]
+                        return [fmtTokenNum(value, lang), name === 'total_tokens' ? t('usage.tableHeaderTokens') : name]
+                      }}
+                    />
+                    <Legend
+                      formatter={(v: string) =>
+                        v === 'total_tokens' ? t('usage.tableHeaderTokens') :
+                        v === 'cacheRate' ? t('usage.cacheHitRate') : v
+                      }
+                    />
+                    <Area yAxisId="left" type="monotone" dataKey="total_tokens" stroke={colors.accent} fill={colors.accent} fillOpacity={0.1} strokeWidth={2} name="total_tokens" />
+                    <Line yAxisId="right" type="monotone" dataKey="cacheRate" stroke={colors.cached} strokeWidth={2} dot={{ r: 3 }} name="cacheRate" />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             )}

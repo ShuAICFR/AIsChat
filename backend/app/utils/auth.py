@@ -6,7 +6,7 @@
 from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from jose import JWTError, jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.config import settings
 
@@ -57,18 +57,26 @@ def decode_access_token(token: str) -> dict | None:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token: str | None = Query(None, description="JWT 令牌（URL 参数兼容，用于 img/link 场景）"),
 ) -> dict:
     """
     FastAPI 依赖：从 JWT 中获取当前用户信息。
+    支持 Authorization: Bearer <token> 头部或 ?token=<token> 查询参数。
     返回 {"user_id": int, "username": str, "role": str}
     """
-    if credentials is None:
+    raw = None
+    if credentials is not None:
+        raw = credentials.credentials
+    elif token:
+        raw = token
+
+    if raw is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="缺少认证令牌",
         )
 
-    payload = decode_access_token(credentials.credentials)
+    payload = decode_access_token(raw)
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

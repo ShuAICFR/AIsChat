@@ -154,25 +154,45 @@ const MessageBubble = memo(function MessageBubble({
           {/* 附件列表 */}
           {attachments && attachments.length > 0 && (
             <div className={`mt-2 pt-2 border-t flex flex-wrap gap-1.5 ${isMine ? 'border-white/20' : 'border-border'}`}>
-              {attachments.map((att) => (
-                <a
-                  key={att.file_id}
-                  href={`/api/fs/download/${att.file_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
-                    isMine
-                      ? 'bg-white/10 hover:bg-white/20 text-white/90'
-                      : 'bg-canvas hover:bg-elevated text-textSecondary hover:text-textPrimary border border-border'
-                  }`}
-                  title={`${att.name} (${formatFileSize(att.size)})`}
-                >
-                  <FileIcon size={12} className={fileIconColor(att.mime_type)} />
-                  <span className="max-w-[100px] truncate">{att.name}</span>
-                  <span className="text-[10px] opacity-60">{formatFileSize(att.size)}</span>
-                  <Download size={11} className="opacity-60" />
-                </a>
-              ))}
+              {attachments.map((att) => {
+                const token = localStorage.getItem('access_token')
+                const dlUrl = `/api/fs/download/${att.file_id}?token=${token || ''}`
+
+                // 图片类型：前端直接渲染
+                if (att.mime_type?.startsWith('image/')) {
+                  return (
+                    <a key={att.file_id} href={dlUrl} target="_blank" rel="noopener noreferrer" className="block max-w-full">
+                      <img
+                        src={dlUrl}
+                        alt={att.name}
+                        className="max-w-[280px] max-h-[200px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity border border-white/10"
+                        title={att.name}
+                      />
+                    </a>
+                  )
+                }
+
+                // 其他文件：下载链接
+                return (
+                  <a
+                    key={att.file_id}
+                    href={dlUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                      isMine
+                        ? 'bg-white/10 hover:bg-white/20 text-white/90'
+                        : 'bg-canvas hover:bg-elevated text-textSecondary hover:text-textPrimary border border-border'
+                    }`}
+                    title={`${att.name} (${formatFileSize(att.size)})`}
+                  >
+                    <FileIcon size={12} className={fileIconColor(att.mime_type)} />
+                    <span className="max-w-[100px] truncate">{att.name}</span>
+                    <span className="text-[10px] opacity-60">{formatFileSize(att.size)}</span>
+                    <Download size={11} className="opacity-60" />
+                  </a>
+                )
+              })}
             </div>
           )}
         </div>

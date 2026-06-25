@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ${HOST_DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
       - ./backend/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ai_chat"]
@@ -31,8 +31,8 @@ services:
       DATABASE_URL_SYNC: postgresql://ai_chat:${DB_PASSWORD}@postgres:5432/ai_group_chat
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     volumes:
-      - ${HOST_DATA_DIR:-./data}:/app/data
-      - ${HOST_DATA_DIR:-./data}/uploads:/app/uploads
+      - ${DATA_DIR:-./data}:/app/data
+      - ${DATA_DIR:-./data}/uploads:/app/uploads
       - ./backend:/app
     depends_on:
       postgres:

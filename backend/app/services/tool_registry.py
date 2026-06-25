@@ -775,6 +775,34 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # ── 结束回复轮次 ──
+    {
+        "type": "function",
+        "segment": "self_management",
+        "function": {
+            "name": "end_turn",
+            "description": (
+                "结束当前回复轮次。当你决定不再继续对话时调用此工具——"
+                "例如用户让你停下、你不确定该说什么、或已完成任务无需再回复时。"
+                "如果想结束并同时切换状态，可设置 set_state。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "结束本轮的原因（如\"用户让我停下\"）",
+                    },
+                    "set_state": {
+                        "type": "string",
+                        "enum": ["active", "offline"],
+                        "description": "结束后的状态。默认不改变当前状态，若用户要求停下可设为 offline。",
+                    },
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # 从 TOOL_DEFINITIONS 自动推导 SKILL_SEGMENTS（单一数据源，避免三方维护）
@@ -805,6 +833,7 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
         "file_read", "file_write", "file_list", "file_delete", "file_share",
+        "end_turn",
     ],
     "dnd": [
         "switch_state", "recall_memory", "view_unread", "toggle_thinking",
@@ -812,11 +841,13 @@ STATE_TOOL_WHITELIST: dict[str, list[str]] = {
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "cross_post", "check_workspace", "clear_current_task", "manage_workspace",
         "file_read", "file_write", "file_list", "file_delete", "file_share",
+        "end_turn",
     ],
     "offline": [
         "switch_state", "list_available_skills",
         "set_alarm", "cancel_alarm", "update_alarm", "list_alarms",
         "check_workspace", "clear_current_task", "manage_workspace",
+        "end_turn",
     ],
     "blocked": [],
 }
@@ -2088,6 +2119,37 @@ async def _handle_file_share(
         return {"error": True, "message": f"分享文件失败: {str(e)}"}
 
 
+async def _handle_end_turn(
+    db: AsyncSession, agent_id: int, group_id: int,
+    arguments: dict, context: dict,
+) -> dict:
+    """end_turn 工具：AI 主动结束当前回复轮次"""
+    reason = arguments.get("reason")
+    set_state = arguments.get("set_state")
+
+    new_state = None
+    if set_state and set_state in ("active", "offline"):
+        try:
+            from app.services.agent_service import switch_agent_state
+            await switch_agent_state(
+                db, agent_id=agent_id,
+                target_state=set_state,
+                duration_hours=None,
+                reason=f"end_turn: {reason}" if reason else "end_turn",
+            )
+            await db.commit()
+            new_state = set_state
+        except ValueError as e:
+            return {"error": True, "message": f"切换状态失败: {e}"}
+
+    return {
+        "success": True,
+        "end_turn": True,
+        "message": f"已结束本轮回复{f'并切换为{new_state}' if new_state else ''}{f'（{reason}）' if reason else ''}",
+        "new_state": new_state,
+    }
+
+
 # Handler 注册表
 TOOL_HANDLERS: dict[str, callable] = {
     "send_message": _handle_send_message,
@@ -2117,6 +2179,7 @@ TOOL_HANDLERS: dict[str, callable] = {
     "file_list": _handle_file_list,
     "file_delete": _handle_file_delete,
     "file_share": _handle_file_share,
+    "end_turn": _handle_end_turn,
 }
 
 

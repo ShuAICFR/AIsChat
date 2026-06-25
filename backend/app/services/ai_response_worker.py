@@ -652,7 +652,7 @@ async def _tool_call_loop(
         elif reminder_grace == 'once':
             reminder_max = 1  # 最多额外 1 次
         else:  # 'every_time'
-            reminder_max = 3  # 最多额外 3 次提醒机会（防止绕过 max_loops 无限循环）
+            reminder_max = 10  # 有 end_turn 兜底，可放宽额外机会
         if content and not tool_calls and _reminder_extra < reminder_max:
             logger.info(
                 f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"
@@ -687,6 +687,7 @@ async def _tool_call_loop(
                         "括号表情可以写在 send_message 的 content 里发出去，"
                         "但不能只返回括号文字而不调工具。"
                         "请现在就调用 send_message 或你需要的其他工具。"
+                        "如果你决定不再继续回复，请调用 end_turn 工具来结束本轮。"
                     ),
                 }, ensure_ascii=False),
             })
@@ -827,6 +828,18 @@ async def _tool_call_loop(
                 "tool_call_id": tc_id,
                 "content": json.dumps(result, ensure_ascii=False),
             })
+
+            # end_turn: AI 主动结束本轮回复，立即退出
+            if isinstance(result, dict) and result.get("end_turn"):
+                logger.info(f"AI {agent.name}({agent.id}) 调用 end_turn 结束本轮"
+                            f"（new_state={result.get('new_state')}）")
+                await _save_conversation_log_safe(
+                    db, agent, messages, conversation_type,
+                    group_id, session_id,
+                    has_output=True, model=model,
+                    token_usage=total_usage,
+                )
+                return
 
         # ── 闹钟模式：第一轮工具执行完后注入收尾提醒 ──
         if conversation_type == "alarm":

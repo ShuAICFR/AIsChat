@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS file_metadata (
 CREATE TABLE IF NOT EXISTS file_references (
     id SERIAL PRIMARY KEY,
     file_id INT NOT NULL REFERENCES file_metadata(id) ON DELETE CASCADE,
-    referrer_type VARCHAR(10) NOT NULL CHECK (referrer_type IN ('ai', 'message', 'group')),
+    referrer_type VARCHAR(10) NOT NULL CHECK (referrer_type IN ('human', 'ai', 'message', 'group')),
     referrer_id INT NOT NULL,
     ref_type VARCHAR(20) DEFAULT 'read' CHECK (ref_type IN ('read', 'write', 'import', 'share')),
     created_at TIMESTAMP DEFAULT NOW()

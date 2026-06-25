@@ -61,6 +61,7 @@ async def run_migrations():
             await _migrate_federation_v1(db)             # v1.0.0 联邦 ID 前缀替代注册表
             await _migrate_agent_collaborators(db)       # v0.7.0 AI 合作者系统
             await _migrate_prompt_order(db)               # v0.7.0 系统提示词顺序可编辑
+            await _fix_file_refs_referrer_type(db)      # v0.7.0+ 修复 file_references.referrer_type 缺 human
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1600,6 +1601,35 @@ async def _migrate_prompt_order(db):
     ))
     await db.flush()
     logger.info("  ✅ system_settings.system_prompt_order 列添加完成")
+
+
+async def _fix_file_refs_referrer_type(db):
+    """v0.7.0+: 修复 file_references.referrer_type CHECK 约束缺少 'human'（用户下载附件需要）
+
+    数据库中的约束可能有两种命名：init-db.sql 内联 CHECK 由 PG 自动命名。
+    """
+    result = await db.execute(text("""
+        SELECT conname, pg_get_constraintdef(oid)
+        FROM pg_constraint
+        WHERE conrelid = 'file_references'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%referrer_type%'
+    """))
+    row = result.fetchone()
+    if row is None:
+        logger.info("  ⏭ file_references.referrer_type CHECK 约束不存在，跳过")
+        return
+    conname, current_def = row
+    if "'human'" in current_def:
+        logger.info(f"  ⏭ {conname} 已包含 human，跳过")
+        return
+    logger.info(f"  🔧 修复 {conname}：添加 'human' 到 referrer_type 约束")
+    await db.execute(text(f"ALTER TABLE file_references DROP CONSTRAINT {conname}"))
+    await db.execute(text(
+        "ALTER TABLE file_references ADD CONSTRAINT ck_ref_referrer_type "
+        "CHECK (referrer_type IN ('human', 'ai', 'message', 'group'))"
+    ))
+    await db.flush()
+    logger.info("  ✅ file_references.referrer_type 约束已修复（添加 human）")
 
 
 async def _fix_column_types(db):

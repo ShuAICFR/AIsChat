@@ -56,7 +56,7 @@ class FileReference(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "referrer_type IN ('ai', 'message', 'group')",
+            "referrer_type IN ('human', 'ai', 'message', 'group')",
             name="ck_ref_referrer_type",
         ),
         CheckConstraint(

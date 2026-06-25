@@ -4,11 +4,11 @@
  */
 export function fmtTokenNum(n: number, lang?: string): string {
   if (lang === 'en') {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+    if (n >= 1_000) return `${(n / 1_000).toFixed(2)}K`
     return (n || 0).toLocaleString()
   }
-  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(1)}亿`
-  if (n >= 10_000) return `${(n / 10_000).toFixed(1)}万`
+  if (n >= 100_000_000) return `${(n / 100_000_000).toFixed(2)}亿`
+  if (n >= 10_000) return `${(n / 10_000).toFixed(2)}万`
   return (n || 0).toLocaleString()
 }

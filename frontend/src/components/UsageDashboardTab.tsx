@@ -274,7 +274,7 @@ export default function UsageDashboardTab() {
                         }}
                         formatter={(value: number) => [fmtTokenNum(value), '']}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ fontSize: '11px', flexWrap: 'wrap' }} />
                       <Bar dataKey="prompt_tokens" stackId="a" fill={colors.prompt} name="Prompt" />
                       <Bar dataKey="completion_tokens" stackId="a" fill={colors.completion} name="Completion" />
                       <Bar dataKey="reasoning_tokens" stackId="a" fill={colors.reasoning} name={t('admin.thinking')} />

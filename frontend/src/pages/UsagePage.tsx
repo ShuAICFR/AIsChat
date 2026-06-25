@@ -221,6 +221,7 @@ export default function UsagePage() {
                       ]}
                     />
                     <Legend
+                      wrapperStyle={{ fontSize: '11px', flexWrap: 'wrap' }}
                       formatter={(v: string) =>
                         v === 'prompt_tokens' ? t('usage.promptLegend') :
                         v === 'completion_tokens' ? t('usage.completionLegend') :
@@ -272,6 +273,7 @@ export default function UsagePage() {
                       }}
                     />
                     <Legend
+                      wrapperStyle={{ fontSize: '11px', flexWrap: 'wrap' }}
                       formatter={(v: string) =>
                         v === 'total_tokens' ? t('usage.tableHeaderTokens') :
                         v === 'cacheRate' ? t('usage.cacheHitRate') : v
@@ -294,16 +296,16 @@ export default function UsagePage() {
             <h3 className="text-sm font-semibold text-textPrimary">{t('usage.agentDetailTableTitle')}</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="w-full text-xs whitespace-nowrap">
               <thead className="bg-canvas">
                 <tr className="text-textMuted">
-                  <th className="text-left py-2 px-4 font-medium">{t('usage.tableHeaderAI')}</th>
-                  <th className="text-left py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderModel')}</th>
-                  <th className="text-right py-2 px-4 font-medium">{t('usage.tableHeaderTokens')}</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderPrompt')}</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderCompletion')}</th>
-                  <th className="text-right py-2 px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderReasoning')}</th>
-                  <th className="text-right py-2 px-4 font-medium">{t('usage.tableHeaderCalls')}</th>
+                  <th className="text-left py-2 px-2 md:px-4 font-medium">{t('usage.tableHeaderAI')}</th>
+                  <th className="text-left py-2 px-2 md:px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderModel')}</th>
+                  <th className="text-right py-2 px-2 md:px-4 font-medium">{t('usage.tableHeaderTokens')}</th>
+                  <th className="text-right py-2 px-2 md:px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderPrompt')}</th>
+                  <th className="text-right py-2 px-2 md:px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderCompletion')}</th>
+                  <th className="text-right py-2 px-2 md:px-4 font-medium hidden md:table-cell">{t('usage.tableHeaderReasoning')}</th>
+                  <th className="text-right py-2 px-2 md:px-4 font-medium">{t('usage.tableHeaderCalls')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -313,13 +315,13 @@ export default function UsagePage() {
                     className={`hover:bg-elevated cursor-pointer transition-colors ${selectedAgent === a.agent_id ? 'bg-primary-500/5' : ''}`}
                     onClick={() => setSelectedAgent(a.agent_id)}
                   >
-                    <td className="py-2.5 px-4 text-textPrimary font-medium">{a.agent_name}</td>
-                    <td className="py-2.5 px-4 text-textMuted hidden md:table-cell">{a.model || '-'}</td>
-                    <td className="py-2.5 px-4 text-right text-textPrimary font-mono">{fmtTokenNum(a.total_tokens, lang)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.prompt_tokens, lang)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.completion_tokens, lang)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.reasoning_tokens, lang)}</td>
-                    <td className="py-2.5 px-4 text-right text-textMuted">{a.total_calls}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-textPrimary font-medium">{a.agent_name}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-textMuted hidden md:table-cell">{a.model || '-'}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-right text-textPrimary font-mono">{fmtTokenNum(a.total_tokens, lang)}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.prompt_tokens, lang)}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.completion_tokens, lang)}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-right text-textMuted font-mono hidden md:table-cell">{fmtTokenNum(a.reasoning_tokens, lang)}</td>
+                    <td className="py-2.5 px-2 md:px-4 text-right text-textMuted">{a.total_calls}</td>
                   </tr>
                 ))}
               </tbody>

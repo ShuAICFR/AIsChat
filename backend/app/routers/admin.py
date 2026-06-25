@@ -1806,3 +1806,80 @@ async def get_system_metrics(
         "hours": hours,
         "retention_days": settings.agent_metrics_retention_days,
     }
+
+
+# ────────────────────────────────────────────
+# Part B: 工具与技能管理（插件架构 + 全透明面板）
+# ────────────────────────────────────────────
+
+@router.get("/tools")
+async def admin_get_tools(
+    admin: dict = Depends(require_admin),
+):
+    """
+    获取所有工具信息（管理面板「工具注册表」用）
+    返回工具列表 + 技能段 + 总数
+    """
+    from app.tools.base import ToolRegistry
+    return ToolRegistry.get_tools_info()
+
+
+@router.get("/skills/agents/{agent_id}")
+async def admin_get_agent_skills(
+    agent_id: int,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取某个 AI 的所有思维技能（管理面板「AI 技能管理」用）
+    """
+    from app.models.agent import Agent
+    from app.services.skill_service import list_skills
+
+    # 验证 AI 存在
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if agent is None:
+        raise HTTPException(status_code=404, detail="AI 代理不存在")
+
+    skills = await list_skills(db, agent_id)
+    return {
+        "agent_id": agent_id,
+        "agent_name": agent.name,
+        "skills": skills,
+        "count": len(skills),
+    }
+
+
+class AgentSkillUpdate(BaseModel):
+    """管理面板修改 AI 技能"""
+    is_enabled: bool | None = Field(None, description="是否启用")
+    name: str | None = Field(None, description="技能名称")
+    config: dict | None = Field(None, description="技能配置")
+    priority: int | None = Field(None, description="优先级")
+
+
+@router.put("/skills/agents/{agent_id}/{skill_id}")
+async def admin_update_agent_skill(
+    agent_id: int,
+    skill_id: int,
+    body: AgentSkillUpdate,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    管理员修改某个 AI 的技能（启用/禁用/修改配置）
+    """
+    from app.services.skill_service import update_skill, toggle_skill
+
+    # 如果仅修改启用状态，用 toggle
+    if len(body.model_dump(exclude_none=True)) == 1 and body.is_enabled is not None:
+        return await toggle_skill(db, agent_id, skill_id, body.is_enabled)
+
+    return await update_skill(
+        db, agent_id, skill_id,
+        name=body.name,
+        config=body.config,
+        is_enabled=body.is_enabled,
+        priority=body.priority,
+    )

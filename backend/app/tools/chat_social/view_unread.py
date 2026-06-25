@@ -1,0 +1,62 @@
+"""
+view_unread 工具 — AI 查看未读消息和所在群聊
+"""
+import logging
+from sqlalchemy import select as sa_select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.tools.base import ToolPlugin, ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class ViewUnread(ToolPlugin):
+    name = "view_unread"
+    description = "查看你所在的所有群聊及其未读消息。即使某个群没有未读消息，你也能看到它的存在。这样你就不会误以为自己不在任何群聊里。"
+    segment = "chat_social"
+    parameters = {}
+    required = []
+    states = ["active", "dnd"]
+
+    async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
+                      arguments: dict, context: dict) -> dict:
+        from app.services.group_service import check_unread
+        from app.models.group import GroupMember, Group
+
+        member_result = await db.execute(
+            sa_select(GroupMember).where(
+                GroupMember.member_type == "ai",
+                GroupMember.member_id == agent_id,
+            )
+        )
+        memberships = member_result.scalars().all()
+
+        if not memberships:
+            return {"groups": [], "message": "你不在任何群聊中"}
+
+        group_ids = [m.group_id for m in memberships]
+        group_result = await db.execute(
+            sa_select(Group).where(Group.id.in_(group_ids))
+        )
+        group_map = {g.id: g.name for g in group_result.scalars().all()}
+
+        unread_summaries = await check_unread(db, agent_id)
+        unread_map = {s["group_id"]: s for s in unread_summaries}
+
+        groups = []
+        for gid in group_ids:
+            if gid in unread_map:
+                groups.append(unread_map[gid])
+            else:
+                groups.append({
+                    "group_id": gid,
+                    "group_name": group_map.get(gid, f"群聊#{gid}"),
+                    "unread_count": 0,
+                    "last_message_preview": None,
+                    "last_message_at": None,
+                })
+
+        groups.sort(key=lambda g: g.get("unread_count", 0), reverse=True)
+        return {"groups": groups}
+
+
+ToolRegistry.register(ViewUnread)

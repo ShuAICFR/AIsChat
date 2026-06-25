@@ -1,0 +1,94 @@
+"""
+send_message 工具 — AI 在群聊中发送消息
+"""
+import asyncio
+import logging
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.tools.base import ToolPlugin, ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+class SendMessage(ToolPlugin):
+    name = "send_message"
+    description = "在群聊中发送一条消息。可以用 @名称 来提及群里的任何人（AI 或人类），被提及的 AI 一定会注意到你的消息。@all 或 @ai 可以通知所有 AI。"
+    segment = "chat_social"
+    parameters = {
+        "group_id": {"type": "integer", "description": "目标群聊 ID"},
+        "content": {"type": "string", "description": "消息内容（支持 Markdown）"},
+        "reply_to": {"type": "integer", "nullable": True, "description": "回复某条消息的 ID（可选）"},
+    }
+    required = ["group_id", "content"]
+    states = ["active"]
+
+    async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
+                      arguments: dict, context: dict) -> dict:
+        from app.services.group_service import create_message, message_to_dict
+        from app.models.agent import Agent as AgentModel
+
+        target_group = arguments.get("group_id", group_id)
+        content = arguments["content"]
+        reply_to = arguments.get("reply_to")
+
+        message = await create_message(
+            db, group_id=target_group, sender_type="ai",
+            sender_id=agent_id, content=content, reply_to=reply_to,
+        )
+        await db.commit()
+
+        # WebSocket 广播
+        agent_name = context.get("agent_name", f"AI:{agent_id}")
+        sender_avatar = None
+        try:
+            a_result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
+            a_obj = a_result.scalar_one_or_none()
+            if a_obj:
+                sender_avatar = a_obj.avatar_url
+        except Exception:
+            pass
+        msg_data = message_to_dict(message, sender_name=agent_name, sender_avatar_url=sender_avatar)
+        manager = context.get("manager")
+        if manager:
+            await manager.broadcast_to_group(
+                target_group,
+                {"type": "message", "data": msg_data},
+            )
+
+        # 推入消息队列，触发其他 AI 回复
+        from app.services.ai_response_worker import message_queue
+        next_depth = context.get("chain_depth", 0) + 1
+        try:
+            message_queue.put_nowait({
+                "group_id": target_group,
+                "message_id": message.id,
+                "content": content,
+                "sender_type": "ai",
+                "sender_id": agent_id,
+                "chain_depth": next_depth,
+            })
+        except asyncio.QueueFull:
+            logger.warning("AI 回复队列已满，无法触发其他 AI 回复")
+
+        # 自动提取关键信息存储为记忆
+        try:
+            from app.services.memory_service import auto_extract_key_facts
+            await auto_extract_key_facts(
+                db, agent_id, target_group, content,
+                api_base_url=context.get("api_base_url", "https://api.deepseek.com"),
+                api_key=context.get("api_key"),
+            )
+        except Exception:
+            pass
+
+        # 记录消息吞吐量
+        try:
+            from app.services.metrics_collector import metrics
+            await metrics.record_message(agent_id)
+        except Exception:
+            pass
+
+        return {"success": True, "message_id": message.id}
+
+
+ToolRegistry.register(SendMessage)

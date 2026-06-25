@@ -19,10 +19,16 @@
 - 🔗 **per-group 联邦共享控制**：群主和 AI 制作者可按群、按对等端控制联邦共享。三个端点：`GET /groups/{id}/federation/peers`（查看状态）、`POST .../share`（共享）、`POST .../unshare`（取消）。`remote_url` 改为可选（只需一端有公网地址即可建立双向通道）。
 - 📝 **开发者与管理手册**：新增独立文档，含架构速览、部署指南、排错手册、WebSocket 通信专项。管理员面板头部添加「管理手册」链接。
 - 📝 **用户手册精简**：移除管理/部署内容，聚焦终端用户日常使用。由浅入深重写。
+- 🎛️ **系统提示词管理**：管理员可在管理面板查看和编辑发给 AI 的 6 段系统提示词（core_identity / personality / protocol / tools / current_context / injected_skills）。支持行内编辑、预览拼接全文、恢复默认。后端 `system_prompt_overrides` JSONB 存储覆盖值，`_load_prompt_overrides` 在构建提示词时注入。
+- 🖼️ **联邦头像持久化**：`messages` 表新增 `sender_avatar_url` 列，联邦消息落库时保存头像 URL。历史消息 REST API 加载时优先读 DB 中的 `sender_avatar_url`，避免联邦对等端离线后头像裂图。WebSocket `avatar_updated` 广播修复已渲染的消息头像。
+- 📄 **手册双路由**：`/manual`（用户手册）和 `/manual/admin`（管理与开发者手册）使用统一的 `ManualPage` 组件渲染，管理员面板手册链接改为 `<Link to>` 内部导航。
+- 📊 **用量图表增强**：UsagePage 新增 `ComposedChart` 时间轴曲线图（Area 总 Token + Line 缓存命中率右轴），按日期展示趋势。图表术语 "Prompt"/"Completion" 已 i18n 化。
+- 🔘 **Toggle 开关统一**：新建 `components/Toggle.tsx`，所有 18 个开关/滑块统一为 `bg-mint-400` 轨道 + 白色圆点的单一风格。覆盖 AdminPage、AgentsPage、AgentDetailPage、SettingsPage、GroupSettingsPanel、ConversationLogTab、CreateAgentModal。
 
 ### Changed
 
 - 📝 **联邦文档澄清**：明确联邦通信为服务端之间直连（非 P2P），客户端只连自己的实例。
+- 💭 **「思考中」状态显示**：返回 token 时显示「思考中」，调用 `send_message` 才切换到「打字中」。思考中最小显示 1.5s 避免闪烁。
 
 ### Fixed
 
@@ -35,25 +41,6 @@
 - 🐛 **管理面板英文 Tab 补齐**：部分管理面板 Tab 在英文界面下仍显示中文标签。已补齐 i18n 翻译。
 - 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 在 minify 后变量名冲突（`t2 is not a function`）。子组件改用自身 `useT()`。
 - 🐛 **preset 键名不匹配**：`preset.digital_lifeName/Desc` 驼峰命名与翻译字典下划线 key 不匹配，导致数字生命档名称/描述不显示。
-
----
-
-## v0.7.0 补充更新 — 2026-06-25
-
-### Added
-
-- 🎛️ **系统提示词管理**：管理员可在管理面板查看和编辑发给 AI 的 6 段系统提示词（core_identity / personality / protocol / tools / current_context / injected_skills）。支持行内编辑、预览拼接全文、恢复默认。后端 `system_prompt_overrides` JSONB 存储覆盖值，`_load_prompt_overrides` 在构建提示词时注入。
-- 🖼️ **联邦头像持久化**：`messages` 表新增 `sender_avatar_url` 列，联邦消息落库时保存头像 URL。历史消息 REST API 加载时优先读 DB 中的 `sender_avatar_url`，避免联邦对等端离线后头像裂图。WebSocket `avatar_updated` 广播修复已渲染的消息头像。
-- 📄 **手册双路由**：`/manual`（用户手册）和 `/manual/admin`（管理与开发者手册）使用统一的 `ManualPage` 组件渲染，管理员面板手册链接改为 `<Link to>` 内部导航。
-- 📊 **用量图表增强**：UsagePage 新增 `ComposedChart` 时间轴曲线图（Area 总 Token + Line 缓存命中率右轴），按日期展示趋势。图表术语 "Prompt"/"Completion" 已 i18n 化。
-- 🔘 **Toggle 开关统一**：新建 `components/Toggle.tsx`，所有 18 个开关/滑块统一为 `bg-mint-400` 轨道 + 白色圆点的单一风格。覆盖 AdminPage、AgentsPage、AgentDetailPage、SettingsPage、GroupSettingsPanel、ConversationLogTab、CreateAgentModal。
-
-### Changed
-
-- 💭 **「思考中」状态显示**：返回 token 时显示「思考中」，调用 `send_message` 才切换到「打字中」。思考中最小显示 1.5s 避免闪烁。
-
-### Fixed
-
 - 🐛 **缓存命中率公式修正**：`cached/(cached+total)` → `cached/total`。修复 UsagePage 和 MePage 两处。
 - 🐛 **存储空间显示 0KB**：`data_dir` 路径修正，个人和 AI 的存储空间计算正确指向 `agents/{id}` 目录。
 - 🐛 **用户手册内链 404**：`./管理与开发者手册.md` 相对路径改为绝对路径 `/docs/管理与开发者手册.md`。

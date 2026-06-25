@@ -152,3 +152,20 @@ class AgentConfigHistory(Base):
     frequency_penalty = Column(Float)
 
     created_at = Column(DateTime, server_default=func.now())
+
+
+class AgentCollaborator(Base):
+    """AI 合作者（创建者可添加其他用户共同管理此 AI）"""
+    __tablename__ = "agent_collaborators"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    can_edit = Column(Boolean, default=True)
+    can_delete = Column(Boolean, default=False)
+    can_manage_collaborators = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("agent_id", "user_id", name="uq_agent_collaborator"),
+    )

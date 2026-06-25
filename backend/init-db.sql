@@ -241,6 +241,20 @@ CREATE TABLE IF NOT EXISTS file_collaborators (
 );
 
 -- ============================================================
+-- AI 合作者（agent 创建者可添加其他用户共同管理）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_collaborators (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    can_edit BOOLEAN DEFAULT TRUE,
+    can_delete BOOLEAN DEFAULT FALSE,
+    can_manage_collaborators BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(agent_id, user_id)
+);
+
+-- ============================================================
 -- 兑换码
 -- ============================================================
 CREATE TABLE IF NOT EXISTS redemption_codes (

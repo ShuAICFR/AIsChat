@@ -6,7 +6,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update
 from app.models.user import User
-from app.models.agent import Agent, AgentConfigHistory, AgentUserConfig
+from app.models.agent import Agent, AgentConfigHistory, AgentUserConfig, AgentCollaborator
 from app.models.memory import RoughMemory, DetailMemory
 from app.config import settings
 from app.utils.text import extract_mentions
@@ -387,11 +387,27 @@ async def get_agent(db: AsyncSession, agent_id: int, owner_id: int | None = None
 
 
 async def list_agents(db: AsyncSession, owner_id: int) -> list[Agent]:
-    """列出用户的所有 Agent"""
-    result = await db.execute(
-        select(Agent).where(Agent.owner_id == owner_id).order_by(Agent.created_at.desc())
+    """列出用户的所有 Agent（拥有的 + 参与合作的）"""
+    # 用户拥有的 AI
+    owned_result = await db.execute(
+        select(Agent).where(Agent.owner_id == owner_id)
     )
-    return list(result.scalars().all())
+    owned = list(owned_result.scalars().all())
+    owned_ids = {a.id for a in owned}
+
+    # 用户作为合作者的 AI
+    collab_result = await db.execute(
+        select(Agent).join(
+            AgentCollaborator, AgentCollaborator.agent_id == Agent.id
+        ).where(
+            AgentCollaborator.user_id == owner_id
+        )
+    )
+    collab_agents = [a for a in collab_result.scalars().all() if a.id not in owned_ids]
+
+    all_agents = owned + collab_agents
+    all_agents.sort(key=lambda a: a.created_at or a.id, reverse=True)
+    return all_agents
 
 
 async def get_effective_config(
@@ -492,9 +508,11 @@ async def delete_agent(
     if agent is None:
         raise ValueError("AI 代理不存在")
 
-    # 权限检查
+    # 权限检查：owner 或 can_delete 合作者
     if not is_admin and agent.owner_id != operator_id:
-        raise ValueError("无权删除此 AI")
+        collab = await _get_collaborator(db, agent_id, operator_id)
+        if collab is None or not collab.can_delete:
+            raise ValueError("无权删除此 AI")
 
     returned_credit = agent.api_credit_cost
     owner_id = agent.owner_id
@@ -551,10 +569,12 @@ async def update_agent_config(
 
     ai_type = agent.ai_type or "resonance"
 
-    # 权限检查
+    # 权限检查：owner 或 can_edit 合作者
     if not is_admin:
         if agent.owner_id != operator_id:
-            raise ValueError("无权修改此 AI 配置")
+            collab = await _get_collaborator(db, agent_id, operator_id)
+            if collab is None or not collab.can_edit:
+                raise ValueError("无权修改此 AI 配置")
         if not agent.is_ai_editable:
             raise ValueError("此 AI 不允许自修改配置")
 
@@ -1296,4 +1316,95 @@ def agent_to_dict(agent: Agent) -> dict:
         "avatar_url": agent.avatar_url,
         "api_token": agent.api_token,
         "created_at": str(agent.created_at) if agent.created_at else None,
+    }
+
+
+# ── 合作者 CRUD ──────────────────────────────────────────────
+
+async def _get_collaborator(db: AsyncSession, agent_id: int, user_id: int) -> AgentCollaborator | None:
+    """获取用户在指定 AI 上的合作者记录"""
+    result = await db.execute(
+        select(AgentCollaborator).where(
+            AgentCollaborator.agent_id == agent_id,
+            AgentCollaborator.user_id == user_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def add_collaborator(
+    db: AsyncSession,
+    agent_id: int,
+    user_id: int,
+    can_edit: bool = True,
+    can_delete: bool = False,
+    can_manage_collaborators: bool = False,
+) -> AgentCollaborator:
+    """添加合作者（仅 owner 或 can_manage_collaborators 者可操作）"""
+    existing = await _get_collaborator(db, agent_id, user_id)
+    if existing:
+        raise ValueError("该用户已是此 AI 的合作者")
+    collab = AgentCollaborator(
+        agent_id=agent_id,
+        user_id=user_id,
+        can_edit=can_edit,
+        can_delete=can_delete,
+        can_manage_collaborators=can_manage_collaborators,
+    )
+    db.add(collab)
+    await db.flush()
+    await db.refresh(collab)
+    return collab
+
+
+async def remove_collaborator(db: AsyncSession, agent_id: int, user_id: int):
+    """移除合作者"""
+    collab = await _get_collaborator(db, agent_id, user_id)
+    if collab is None:
+        raise ValueError("该用户不是此 AI 的合作者")
+    await db.delete(collab)
+    await db.flush()
+
+
+async def update_collaborator(
+    db: AsyncSession,
+    agent_id: int,
+    user_id: int,
+    can_edit: bool | None = None,
+    can_delete: bool | None = None,
+    can_manage_collaborators: bool | None = None,
+) -> AgentCollaborator:
+    """更新合作者权限"""
+    collab = await _get_collaborator(db, agent_id, user_id)
+    if collab is None:
+        raise ValueError("该用户不是此 AI 的合作者")
+    if can_edit is not None:
+        collab.can_edit = can_edit
+    if can_delete is not None:
+        collab.can_delete = can_delete
+    if can_manage_collaborators is not None:
+        collab.can_manage_collaborators = can_manage_collaborators
+    await db.flush()
+    await db.refresh(collab)
+    return collab
+
+
+async def list_collaborators(db: AsyncSession, agent_id: int) -> list[AgentCollaborator]:
+    """列出 AI 的所有合作者"""
+    result = await db.execute(
+        select(AgentCollaborator).where(AgentCollaborator.agent_id == agent_id)
+        .order_by(AgentCollaborator.created_at)
+    )
+    return list(result.scalars().all())
+
+
+def collaborator_to_dict(c: AgentCollaborator) -> dict:
+    return {
+        "id": c.id,
+        "agent_id": c.agent_id,
+        "user_id": c.user_id,
+        "can_edit": c.can_edit,
+        "can_delete": c.can_delete,
+        "can_manage_collaborators": c.can_manage_collaborators,
+        "created_at": str(c.created_at) if c.created_at else None,
     }

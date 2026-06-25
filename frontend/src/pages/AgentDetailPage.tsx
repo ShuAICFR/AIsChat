@@ -94,7 +94,7 @@ export default function AgentDetailPage() {
 
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace' | 'logs'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace' | 'logs' | 'collaborators'>('info')
 
   // Delete
   const [showDelete, setShowDelete] = useState(false)
@@ -139,12 +139,67 @@ export default function AgentDetailPage() {
   const [workspace, setWorkspace] = useState<WorkspaceFiles>({ todo: '', plan: '', journal: '' })
   const [wsActive, setWsActive] = useState<'todo' | 'plan' | 'journal'>('todo')
 
+  // Collaborators
+  interface Collaborator {
+    id: number; agent_id: number; user_id: number; username?: string; avatar_url?: string | null
+    can_edit: boolean; can_delete: boolean; can_manage_collaborators: boolean
+    created_at: string | null
+  }
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([])
+  const [isOwner, setIsOwner] = useState(false)
+  const [collabSearch, setCollabSearch] = useState('')
+  const [collabSearchResults, setCollabSearchResults] = useState<Array<{id:number;username:string;avatar_url:string|null}>>([])
+  const [addingCollab, setAddingCollab] = useState(false)
+  const [newCollabPerms, setNewCollabPerms] = useState({ can_edit: true, can_delete: false, can_manage_collaborators: false })
+
   const loadWorkspace = useCallback(async () => {
     try {
       const data = await api.get<WorkspaceFiles>(`/agents/${agentId}/workspace`)
       setWorkspace(data)
     } catch { /* ignore */ }
   }, [agentId])
+
+  const loadCollaborators = useCallback(async () => {
+    try {
+      const data = await api.get<{ collaborators: Collaborator[]; is_owner: boolean }>(`/agents/${agentId}/collaborators`)
+      setCollaborators(data.collaborators || [])
+      setIsOwner(data.is_owner)
+    } catch { /* ignore */ }
+  }, [agentId])
+
+  const searchUsers = useCallback(async (q: string) => {
+    if (q.length < 1) { setCollabSearchResults([]); return }
+    try {
+      const data = await api.get<{ users: Array<{id:number;username:string;avatar_url:string|null}> }>(`/user/search?q=${encodeURIComponent(q)}`)
+      setCollabSearchResults(data.users || [])
+    } catch { setCollabSearchResults([]) }
+  }, [])
+
+  const handleAddCollaborator = async (userId: number) => {
+    setAddingCollab(true)
+    try {
+      await api.post(`/agents/${agentId}/collaborators`, { user_id: userId, ...newCollabPerms })
+      setCollabSearch(''); setCollabSearchResults([])
+      setNewCollabPerms({ can_edit: true, can_delete: false, can_manage_collaborators: false })
+      await loadCollaborators()
+    } catch (e: any) { alert(e?.detail || e?.message || '添加失败') }
+    finally { setAddingCollab(false) }
+  }
+
+  const handleRemoveCollaborator = async (userId: number) => {
+    if (!confirm('确认移除该合作者？')) return
+    try {
+      await api.del(`/agents/${agentId}/collaborators/${userId}`)
+      await loadCollaborators()
+    } catch (e: any) { alert(e?.detail || e?.message || '移除失败') }
+  }
+
+  const handleUpdateCollaborator = async (userId: number, perms: Partial<typeof newCollabPerms>) => {
+    try {
+      await api.put(`/agents/${agentId}/collaborators/${userId}`, perms)
+      await loadCollaborators()
+    } catch (e: any) { alert(e?.detail || e?.message || '更新失败') }
+  }
 
   const loadAgent = useCallback(async () => {
     try {
@@ -229,7 +284,8 @@ export default function AgentDetailPage() {
     if (activeTab === 'logs') loadLogs()
     if (activeTab === 'memories') loadMemories(1)
     if (activeTab === 'workspace') loadWorkspace()
-  }, [activeTab, loadStorage, loadLogs, loadMemories, loadWorkspace])
+    if (activeTab === 'collaborators') loadCollaborators()
+  }, [activeTab, loadStorage, loadLogs, loadMemories, loadWorkspace, loadCollaborators])
 
   // Delete handler
   const handleDelete = async () => {
@@ -438,7 +494,7 @@ export default function AgentDetailPage() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-4 border-b border-border overflow-x-auto">
-          {(['info', 'memories', 'storage', 'workspace', 'logs'] as const).map((tab) => (
+          {(['info', 'memories', 'storage', 'workspace', 'logs', 'collaborators'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -448,7 +504,7 @@ export default function AgentDetailPage() {
                   : 'border-transparent text-textMuted hover:text-textSecondary'
               }`}
             >
-              {tab === 'info' ? t('agentDetail.tabInfo') : tab === 'memories' ? t('agentDetail.tabMemories') : tab === 'storage' ? t('agentDetail.tabStorage') : tab === 'workspace' ? t('agentDetail.tabWorkspace') : t('agentDetail.tabLogs')}
+              {tab === 'info' ? t('agentDetail.tabInfo') : tab === 'memories' ? t('agentDetail.tabMemories') : tab === 'storage' ? t('agentDetail.tabStorage') : tab === 'workspace' ? t('agentDetail.tabWorkspace') : tab === 'logs' ? t('agentDetail.tabLogs') : t('agentDetail.tabCollaborators')}
             </button>
           ))}
         </div>
@@ -893,6 +949,129 @@ export default function AgentDetailPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'collaborators' && (
+          <div className="space-y-4">
+            {/* 非 owner 的合作者提示 */}
+            {!isOwner && agent && user && agent.owner_id !== user.id && (
+              <div className="bg-primary-500/10 border border-primary-500/20 rounded-xl p-3 text-sm text-primary-500">
+                {t('agentDetail.collaboratorNote')}
+              </div>
+            )}
+
+            {/* Owner: 添加合作者 */}
+            {isOwner && (
+              <div className="bg-surface rounded-xl border border-border p-4">
+                <h3 className="font-medium text-textPrimary text-sm mb-3">{t('agentDetail.addCollaborator')}</h3>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={collabSearch}
+                    onChange={e => { setCollabSearch(e.target.value); searchUsers(e.target.value) }}
+                    placeholder={t('agentDetail.searchUserPlaceholder')}
+                    className="flex-1 px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  />
+                </div>
+                {/* 权限勾选 */}
+                <div className="flex flex-wrap gap-3 mb-3">
+                  <label className="flex items-center gap-1.5 text-xs text-textSecondary">
+                    <input type="checkbox" checked={newCollabPerms.can_edit}
+                      onChange={e => setNewCollabPerms(p => ({ ...p, can_edit: e.target.checked }))}
+                      className="rounded" />
+                    {t('agentDetail.permEdit')}
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-textSecondary">
+                    <input type="checkbox" checked={newCollabPerms.can_delete}
+                      onChange={e => setNewCollabPerms(p => ({ ...p, can_delete: e.target.checked }))}
+                      className="rounded" />
+                    {t('agentDetail.permDelete')}
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-textSecondary">
+                    <input type="checkbox" checked={newCollabPerms.can_manage_collaborators}
+                      onChange={e => setNewCollabPerms(p => ({ ...p, can_manage_collaborators: e.target.checked }))}
+                      className="rounded" />
+                    {t('agentDetail.permManageCollaborators')}
+                  </label>
+                </div>
+                {/* 搜索结果 */}
+                {collabSearchResults.length > 0 && (
+                  <div className="space-y-1 max-h-48 overflow-y-auto">
+                    {collabSearchResults.map(u => (
+                      <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-canvas border border-border/60">
+                        <div className="flex items-center gap-2">
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-elevated flex items-center justify-center text-xs text-textMuted">?</div>
+                          )}
+                          <span className="text-sm text-textPrimary">{u.username}</span>
+                        </div>
+                        <button
+                          onClick={() => handleAddCollaborator(u.id)}
+                          disabled={addingCollab}
+                          className="px-3 py-1 rounded-lg bg-mint-400 text-white text-xs hover:bg-mint-500 disabled:opacity-40 transition-colors"
+                        >
+                          {addingCollab ? '...' : t('agentDetail.addCollaboratorBtn')}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 合作者列表 */}
+            {collaborators.length > 0 && (
+              <div className="bg-surface rounded-xl border border-border p-4">
+                <h3 className="font-medium text-textPrimary text-sm mb-3">{t('agentDetail.collaboratorList')} ({collaborators.length})</h3>
+                <div className="space-y-2">
+                  {collaborators.map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-canvas border border-border/60">
+                      <div className="flex items-center gap-2">
+                        {c.avatar_url ? (
+                          <img src={c.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-primary-500/10 flex items-center justify-center text-xs text-primary-400 font-medium">
+                            {(c.username || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-sm text-textPrimary">{c.username || `ID:${c.user_id}`}</span>
+                          <div className="flex gap-1 mt-0.5">
+                            {c.can_edit && <span className="text-[10px] px-1.5 py-0.5 rounded bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('agentDetail.permEdit')}</span>}
+                            {c.can_delete && <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-400/10 text-rose-400 border border-rose-400/20">{t('agentDetail.permDelete')}</span>}
+                            {c.can_manage_collaborators && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/10 text-accent-400 border border-amber-400/20">{t('agentDetail.permManageCollaborators')}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {isOwner && (
+                        <div className="flex items-center gap-1.5">
+                          <Toggle checked={c.can_edit} onChange={v => handleUpdateCollaborator(c.user_id, { can_edit: v })} />
+                          <Toggle checked={c.can_delete} onChange={v => handleUpdateCollaborator(c.user_id, { can_delete: v })} />
+                          <Toggle checked={c.can_manage_collaborators} onChange={v => handleUpdateCollaborator(c.user_id, { can_manage_collaborators: v })} />
+                          <button
+                            onClick={() => handleRemoveCollaborator(c.user_id)}
+                            className="ml-1 p-1 rounded text-textMuted hover:text-rose-400 transition-colors"
+                            title={t('agentDetail.removeCollaborator')}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 空状态 */}
+            {collaborators.length === 0 && isOwner && (
+              <div className="text-center py-8 text-textMuted text-sm">
+                {t('agentDetail.noCollaborators')}
               </div>
             )}
           </div>

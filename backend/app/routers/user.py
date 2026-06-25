@@ -9,6 +9,8 @@ from app.database import get_db
 from app.services.auth_service import update_user_settings
 from app.utils.auth import get_current_user
 from app.schemas.auth import UserInfoResponse
+from app.models.user import User
+from sqlalchemy import select
 
 router = APIRouter(prefix="/user", tags=["用户设置"])
 
@@ -308,4 +310,33 @@ async def get_user_storage(
         "quota_bytes": quota_bytes,
         "usage_percent": round(total_used / quota_bytes * 100, 1) if quota_bytes > 0 else 0,
         "per_agent": per_agent,
+    }
+
+
+@router.get("/search")
+async def search_users(
+    q: str = "",
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """搜索用户（按用户名模糊匹配，用于合作者添加等场景）"""
+    if len(q) < 1:
+        return {"users": []}
+    result = await db.execute(
+        select(User).where(
+            User.username.ilike(f"%{q}%"),
+            User.type == "human",
+            User.id != current_user["user_id"],
+        ).limit(10)
+    )
+    users = result.scalars().all()
+    return {
+        "users": [
+            {
+                "id": u.id,
+                "username": u.username,
+                "avatar_url": getattr(u, "avatar_url", None),
+            }
+            for u in users
+        ]
     }

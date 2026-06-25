@@ -41,6 +41,12 @@ from app.services.agent_service import (
     agent_to_dict,
     CONFIG_PROFILES,
     apply_config_profile,
+    _get_collaborator,
+    add_collaborator,
+    remove_collaborator,
+    update_collaborator,
+    list_collaborators,
+    collaborator_to_dict,
 )
 from app.services import workspace_service
 from app.utils.auth import get_current_user
@@ -77,18 +83,30 @@ async def get_available_models(
     }
 
 
-async def _require_agent_owner(
+async def _require_agent_access(
     agent_id: int,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """依赖注入：获取 Agent 并校验所有权（管理员可绕过）"""
+    """依赖注入：获取 Agent 并校验访问权限（owner / 合作者，管理员可绕过）"""
     agent = await get_agent(db, agent_id)
     if agent is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI 代理不存在")
-    if agent.owner_id != current_user["user_id"] and current_user["role"] != "admin":
+    if agent.owner_id == current_user["user_id"] or current_user["role"] == "admin":
+        return agent
+    # 检查合作者
+    collab = await _get_collaborator(db, agent_id, current_user["user_id"])
+    if collab is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问")
+    agent._collaborator = collab
     return agent
+
+
+def _require_collab_permission(agent, permission: str):
+    """检查合作者是否有特定权限（仅对非 owner 非 admin 的合作者生效）"""
+    collab = getattr(agent, "_collaborator", None)
+    if collab is not None and not getattr(collab, permission, False):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"需要 '{permission}' 权限")
 
 
 async def _get_user_api_key(db: AsyncSession, user_id: int) -> str | None:
@@ -190,7 +208,7 @@ async def get_agent_detail(
     db: AsyncSession = Depends(get_db),
 ):
     """获取 AI 详情"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     return agent_to_dict(agent)
 
 
@@ -264,7 +282,7 @@ async def config_history(
     db: AsyncSession = Depends(get_db),
 ):
     """获取 AI 配置历史"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     history = await get_config_history(db, agent_id)
     return [
         {
@@ -290,7 +308,7 @@ async def get_unread_summary(
     db: AsyncSession = Depends(get_db),
 ):
     """获取 AI 的各群聊未读消息摘要"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     summaries = await check_unread(db, agent_id)
     return {"agent_id": agent_id, "groups": summaries}
 
@@ -302,7 +320,7 @@ async def pause_agent_notifications(
     db: AsyncSession = Depends(get_db),
 ):
     """暂停 AI 的通知（任务期间暂存消息）"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     try:
         await pause_notifications(db, agent_id)
         return {"message": "通知已暂停", "agent_id": agent_id}
@@ -317,7 +335,7 @@ async def resume_agent_notifications(
     db: AsyncSession = Depends(get_db),
 ):
     """恢复 AI 的通知，返回暂停期间的暂存消息"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     try:
         _, pending = await resume_and_fetch(db, agent_id)
         return {
@@ -339,7 +357,7 @@ async def export_soul(
     db: AsyncSession = Depends(get_db),
 ):
     """导出 AI 灵魂档案（配置 + 历史 + 记忆 + 好友）"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     try:
         data = await export_agent_soul(db, agent_id)
     except ValueError as e:
@@ -433,6 +451,136 @@ async def delete_agent(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# ---------- 合作者管理 ----------
+
+@router.get("/{agent_id}/collaborators")
+async def get_collaborators(
+    agent_id: int,
+    agent: any = Depends(_require_agent_access),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """查看 AI 的合作者列表"""
+    collabs = await list_collaborators(db, agent_id)
+    is_owner = agent.owner_id == current_user["user_id"] or current_user["role"] == "admin"
+    # 批量查询用户信息
+    user_ids = [c.user_id for c in collabs]
+    user_map = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in users_result.scalars().all():
+            user_map[u.id] = u
+    result = []
+    for c in collabs:
+        d = collaborator_to_dict(c)
+        u = user_map.get(c.user_id)
+        d["username"] = u.username if u else None
+        d["avatar_url"] = getattr(u, "avatar_url", None) if u else None
+        result.append(d)
+    return {
+        "collaborators": result,
+        "is_owner": is_owner,
+    }
+
+
+@router.post("/{agent_id}/collaborators")
+async def add_agent_collaborator(
+    agent_id: int,
+    req: dict,
+    agent: any = Depends(_require_agent_access),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加合作者（仅 owner 或 can_manage_collaborators 者可操作）"""
+    # 权限检查
+    is_owner = agent.owner_id == current_user["user_id"] or current_user["role"] == "admin"
+    if not is_owner:
+        collab = await _get_collaborator(db, agent_id, current_user["user_id"])
+        if collab is None or not collab.can_manage_collaborators:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理合作者")
+
+    # 支持 username 或 user_id 两种方式定位用户
+    target_user_id = req.get("user_id")
+    username = req.get("username", "").strip()
+    if target_user_id:
+        user_result = await db.execute(select(User).where(User.id == target_user_id))
+        user = user_result.scalar_one_or_none()
+    elif username:
+        user_result = await db.execute(select(User).where(User.username == username))
+        user = user_result.scalar_one_or_none()
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请提供用户名或用户 ID")
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if user.id == agent.owner_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="创建者无需添加为合作者")
+
+    try:
+        collab = await add_collaborator(
+            db,
+            agent_id=agent_id,
+            user_id=user.id,
+            can_edit=req.get("can_edit", True),
+            can_delete=req.get("can_delete", False),
+            can_manage_collaborators=req.get("can_manage_collaborators", False),
+        )
+        return collaborator_to_dict(collab)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put("/{agent_id}/collaborators/{user_id}")
+async def update_agent_collaborator(
+    agent_id: int,
+    user_id: int,
+    req: dict,
+    agent: any = Depends(_require_agent_access),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新合作者权限（仅 owner 或 can_manage_collaborators 者可操作）"""
+    is_owner = agent.owner_id == current_user["user_id"] or current_user["role"] == "admin"
+    if not is_owner:
+        collab = await _get_collaborator(db, agent_id, current_user["user_id"])
+        if collab is None or not collab.can_manage_collaborators:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理合作者")
+
+    try:
+        collab = await update_collaborator(
+            db,
+            agent_id=agent_id,
+            user_id=user_id,
+            can_edit=req.get("can_edit"),
+            can_delete=req.get("can_delete"),
+            can_manage_collaborators=req.get("can_manage_collaborators"),
+        )
+        return collaborator_to_dict(collab)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/{agent_id}/collaborators/{user_id}")
+async def remove_agent_collaborator(
+    agent_id: int,
+    user_id: int,
+    agent: any = Depends(_require_agent_access),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """移除合作者（仅 owner 或 can_manage_collaborators 者可操作）"""
+    is_owner = agent.owner_id == current_user["user_id"] or current_user["role"] == "admin"
+    if not is_owner:
+        collab = await _get_collaborator(db, agent_id, current_user["user_id"])
+        if collab is None or not collab.can_manage_collaborators:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理合作者")
+
+    try:
+        await remove_collaborator(db, agent_id, user_id)
+        return {"message": "已移除合作者"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 # ---------- API Token ----------
 
 @router.post("/{agent_id}/token")
@@ -443,7 +591,7 @@ async def generate_agent_token(
 ):
     """为 AI 生成/刷新外部 API Token"""
     import secrets
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     token = "at-" + secrets.token_hex(24)
     agent.api_token = token
     await db.flush()
@@ -457,7 +605,7 @@ async def get_agent_token(
     db: AsyncSession = Depends(get_db),
 ):
     """获取 AI 当前的 API Token（脱敏）"""
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
     token = agent.api_token
     if token:
         masked = token[:8] + "..." + token[-4:] if len(token) > 12 else token[:4] + "***"
@@ -480,7 +628,7 @@ async def upload_agent_avatar(
     import uuid
     from app.config import settings
 
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
 
     # 验证文件类型
     allowed_types = {"image/jpeg", "image/png", "image/gif", "image/webp"}
@@ -530,7 +678,7 @@ async def get_agent_storage(
     from app.models.file import FileMetadata as FM
     from sqlalchemy import select, func as sqlfunc
 
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
 
     # 1. 扫描工作区目录（使用绝对路径，指向 agent 数据目录）
     workspace_dir = os.path.join(settings.data_dir, "agents", str(agent_id))
@@ -592,7 +740,7 @@ async def get_agent_memories(
     """查看 AI 的所有记忆条目"""
     from app.models.memory import RoughMemory, DetailMemory
 
-    agent = await _require_agent_owner(agent_id, current_user, db)
+    agent = await _require_agent_access(agent_id, current_user, db)
 
     # 总数
     total_result = await db.execute(
@@ -715,7 +863,7 @@ async def list_config_presets():
 async def preview_preset_change(
     agent_id: int,
     profile: str,
-    agent: any = Depends(_require_agent_owner),
+    agent: any = Depends(_require_agent_access),
     db: AsyncSession = Depends(get_db),
 ):
     """预览切换预设后的变更（不实际应用）"""
@@ -735,7 +883,7 @@ async def preview_preset_change(
 async def apply_preset(
     agent_id: int,
     req: ApplyPresetRequest,
-    agent: any = Depends(_require_agent_owner),
+    agent: any = Depends(_require_agent_access),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -757,7 +905,7 @@ async def apply_preset(
 @router.get("/{agent_id}/workspace", response_model=WorkspaceResponse)
 async def get_workspace(
     agent_id: int,
-    agent: any = Depends(_require_agent_owner),
+    agent: any = Depends(_require_agent_access),
     db: AsyncSession = Depends(get_db),
 ):
     """获取 AI 的工作区文件（TODO / PLAN / JOURNAL）"""
@@ -769,7 +917,7 @@ async def get_workspace(
 async def update_workspace(
     agent_id: int,
     req: WorkspaceFileUpdate,
-    agent: any = Depends(_require_agent_owner),
+    agent: any = Depends(_require_agent_access),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

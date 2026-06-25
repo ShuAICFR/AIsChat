@@ -59,6 +59,7 @@ async def run_migrations():
             await _migrate_platform_credit(db)           # v0.6.0 平台赠送额度
             await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
             await _migrate_federation_v1(db)             # v1.0.0 联邦 ID 前缀替代注册表
+            await _migrate_agent_collaborators(db)       # v0.7.0 AI 合作者系统
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1563,6 +1564,28 @@ async def _migrate_federation_v1(db):
         logger.info("  ✅ 联邦 v1.0.0 迁移完成")
     else:
         logger.info("  ⏭ 联邦 v1.0.0 迁移均已完成，跳过")
+
+
+async def _migrate_agent_collaborators(db):
+    """v0.7.0 AI 合作者系统 — 新建 agent_collaborators 表"""
+    if await _table_exists(db, "agent_collaborators"):
+        logger.info("  ⏭ agent_collaborators 已存在，跳过")
+        return
+    logger.info("  🤝 创建 agent_collaborators 表")
+    await db.execute(text("""
+        CREATE TABLE agent_collaborators (
+            id SERIAL PRIMARY KEY,
+            agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            can_edit BOOLEAN DEFAULT TRUE,
+            can_delete BOOLEAN DEFAULT FALSE,
+            can_manage_collaborators BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(agent_id, user_id)
+        )
+    """))
+    await db.flush()
+    logger.info("  ✅ agent_collaborators 表创建完成")
 
 
 async def _fix_column_types(db):

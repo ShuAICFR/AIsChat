@@ -652,7 +652,7 @@ async def _tool_call_loop(
         elif reminder_grace == 'once':
             reminder_max = 1  # 最多额外 1 次
         else:  # 'every_time'
-            reminder_max = 999  # 每次都给（实际有 max_loops 兜底）
+            reminder_max = 3  # 最多额外 3 次提醒机会（防止绕过 max_loops 无限循环）
         if content and not tool_calls and _reminder_extra < reminder_max:
             logger.info(
                 f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"

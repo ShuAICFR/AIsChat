@@ -67,8 +67,8 @@ class Settings(BaseSettings):
         """检查某个 API base URL 是否支持 thinking/reasoning 参数"""
         return "deepseek.com" in base_url
 
-    # 文件存储
-    data_dir: str = os.getenv("DATA_DIR", "/app/data")
+    # 文件存储（容器内路径始终为 /app/data，docker-compose 通过 DATA_DIR 控制宿主机位置）
+    data_dir: str = "/app/data"
 
     # 头像
     avatar_max_size_mb: int = int(os.getenv("AVATAR_MAX_SIZE_MB", "2"))

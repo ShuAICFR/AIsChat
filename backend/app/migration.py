@@ -60,6 +60,7 @@ async def run_migrations():
             await _migrate_redemption_code_details(db)  # v0.6.0 兑换码增强
             await _migrate_federation_v1(db)             # v1.0.0 联邦 ID 前缀替代注册表
             await _migrate_agent_collaborators(db)       # v0.7.0 AI 合作者系统
+            await _migrate_prompt_order(db)               # v0.7.0 系统提示词顺序可编辑
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
@@ -1586,6 +1587,19 @@ async def _migrate_agent_collaborators(db):
     """))
     await db.flush()
     logger.info("  ✅ agent_collaborators 表创建完成")
+
+
+async def _migrate_prompt_order(db):
+    """v0.7.0 系统提示词段顺序可自定义"""
+    if await _column_exists(db, "system_settings", "system_prompt_order"):
+        logger.info("  ⏭ system_settings.system_prompt_order 已存在，跳过")
+        return
+    logger.info("  📋 添加 system_settings.system_prompt_order 列")
+    await db.execute(text(
+        "ALTER TABLE system_settings ADD COLUMN system_prompt_order JSONB"
+    ))
+    await db.flush()
+    logger.info("  ✅ system_settings.system_prompt_order 列添加完成")
 
 
 async def _fix_column_types(db):

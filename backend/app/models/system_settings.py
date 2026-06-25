@@ -16,6 +16,7 @@ class SystemSettings(Base):
     federation_sync_interval_minutes = Column(Integer, default=720, comment="联邦 profile 同步间隔（分钟），默认 720（12小时）")
 
     system_prompt_overrides = Column(JSONB, nullable=True, comment="系统提示词覆盖（管理员自定义 core_identity/protocols 等段）")
+    system_prompt_order = Column(JSONB, nullable=True, comment="系统提示词段拼接顺序（NULL=使用代码默认 SEGMENT_ORDER）")
 
     updated_by = Column(Integer, ForeignKey("users.id"))
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

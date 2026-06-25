@@ -30,6 +30,9 @@ async def get_settings(db: AsyncSession) -> dict:
         "id": row.id,
         "default_language": row.default_language,
         "default_platform_credit": row.default_platform_credit or 0,
+        "system_prompt_overrides": row.system_prompt_overrides,
+        "system_prompt_order": row.system_prompt_order,
+        "federation_sync_interval_minutes": row.federation_sync_interval_minutes,
         "updated_by": row.updated_by,
         "updated_at": str(row.updated_at) if row.updated_at else None,
     }

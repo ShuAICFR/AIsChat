@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
-import { Save, RotateCcw, Eye, Edit3, ChevronDown, ChevronUp, Loader2, Layers, ArrowRight } from 'lucide-react'
+import { Save, RotateCcw, Eye, Edit3, ChevronDown, ChevronUp, Loader2, Layers, ArrowRight, ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Segment {
   key: string
@@ -238,26 +238,69 @@ export default function SystemPromptTab() {
         ))}
       </div>
 
-      {/* 组装顺序 */}
+      {/* 组装顺序（可编辑） */}
       <div className="bg-surface border border-border rounded-xl p-4">
-        <h4 className="text-xs font-medium text-textSecondary mb-3 flex items-center gap-2">
-          <Layers size={13} className="text-primary-400" />
-          组装顺序（SEGMENT_ORDER）
-        </h4>
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-xs font-medium text-textSecondary flex items-center gap-2">
+            <Layers size={13} className="text-primary-400" />
+            组装顺序（可拖拽调整）
+          </h4>
+          <button
+            onClick={async () => {
+              setSaving(true); setMessage(null)
+              try {
+                await api.put('/admin/system-prompt', { segment_order: order })
+                setMessage('顺序已保存')
+              } catch { setMessage('保存顺序失败') }
+              finally { setSaving(false) }
+            }}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mint-400 text-white hover:bg-mint-500 disabled:opacity-40 text-xs font-medium transition-colors"
+          >
+            {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            保存顺序
+          </button>
+        </div>
+        <div className="space-y-1.5">
           {order.map((k, i) => {
             const seg = segments.find(s => s.key === k)
+            const moveUp = () => {
+              if (i === 0) return
+              const next = [...order];
+              [next[i - 1], next[i]] = [next[i], next[i - 1]]
+              setOrder(next)
+            }
+            const moveDown = () => {
+              if (i === order.length - 1) return
+              const next = [...order];
+              [next[i], next[i + 1]] = [next[i + 1], next[i]]
+              setOrder(next)
+            }
             return (
-              <span key={k} className="flex items-center gap-1">
-                {i > 0 && <ArrowRight size={10} className="text-textMuted" />}
-                <span className="text-xs px-2 py-1 rounded-md bg-canvas border border-border text-textSecondary font-mono">
-                  {seg?.label || k}
+              <div key={k} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-canvas border border-border/60">
+                <span className="text-[10px] w-5 h-5 rounded-full bg-elevated border border-border flex items-center justify-center text-textMuted font-mono shrink-0">
+                  {i + 1}
                 </span>
-              </span>
+                <span className="text-xs text-textPrimary flex-1">{seg?.label || k}</span>
+                <button
+                  onClick={moveUp} disabled={i === 0}
+                  className="p-1 rounded hover:bg-elevated text-textMuted hover:text-textPrimary disabled:opacity-20 transition-colors"
+                  title="上移"
+                >
+                  <ArrowUp size={14} />
+                </button>
+                <button
+                  onClick={moveDown} disabled={i === order.length - 1}
+                  className="p-1 rounded hover:bg-elevated text-textMuted hover:text-textPrimary disabled:opacity-20 transition-colors"
+                  title="下移"
+                >
+                  <ArrowDown size={14} />
+                </button>
+              </div>
             )
           })}
         </div>
-        <p className="text-[10px] text-textMuted mt-2">顺序不可修改（由代码中的 SEGMENT_ORDER 定义），仅作参考。</p>
+        <p className="text-[10px] text-textMuted mt-2">点击 ↑↓ 调整段的拼接顺序，点「保存顺序」持久化到数据库。</p>
       </div>
     </div>
   )

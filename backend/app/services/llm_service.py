@@ -472,6 +472,21 @@ async def _load_prompt_overrides(db) -> dict:
         return {}
 
 
+async def _get_segment_order(db) -> list[str]:
+    """获取系统提示词段拼接顺序（优先 DB 配置，fallback 代码默认）"""
+    try:
+        from app.services.system_settings_service import get_settings
+        s = await get_settings(db)
+        order = s.get("system_prompt_order") if s else None
+        if order and isinstance(order, list) and len(order) == len(SEGMENT_ORDER):
+            # 验证所有 key 合法
+            if set(order) == set(SEGMENT_ORDER):
+                return order
+    except Exception:
+        pass
+    return list(SEGMENT_ORDER)
+
+
 def _build_personality(agent, language: str = "zh", system_prompt_override: str | None = None) -> str:
     """personality 段：AI 当前人格（Agent 可修改，独立缓存）
 
@@ -707,8 +722,9 @@ async def build_messages(
         "injected_skills": await _build_injected_skills(db, agent, group_id, query_text, api_base_url, api_key, trigger_user_id),
     }
 
+    order = await _get_segment_order(db)
     system_prompt = "\n\n".join(
-        segments[k] for k in SEGMENT_ORDER if segments.get(k)
+        segments[k] for k in order if segments.get(k)
     )
 
     # ✨ 工作区任务（追加到 current_context 之后）
@@ -850,8 +866,9 @@ async def build_dm_messages(
         ),
     }
 
+    order = await _get_segment_order(db)
     system_prompt = "\n\n".join(
-        segments[k] for k in SEGMENT_ORDER if segments.get(k)
+        segments[k] for k in order if segments.get(k)
     )
 
     # ✨ 工作区任务

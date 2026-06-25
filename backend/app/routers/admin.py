@@ -925,6 +925,7 @@ async def update_system_settings(
 
 class SystemPromptUpdateBody(BaseModel):
     overrides: dict | None = None  # {"core_identity": "...", "protocol_chat": "...", ...}
+    segment_order: list[str] | None = None  # 段拼接顺序，如 ["core_identity","personality",...]
 
 
 @router.get("/system-prompt")
@@ -941,6 +942,9 @@ async def get_system_prompt(
 
     s = await get_settings(db)
     overrides = s.get("system_prompt_overrides") or {}
+    order = s.get("system_prompt_order") if s else None
+    if not order or not isinstance(order, list):
+        order = list(SEGMENT_ORDER)
 
     return {
         "segments": [
@@ -1021,7 +1025,7 @@ async def get_system_prompt(
                 "readonly": True,
             },
         ],
-        "segment_order": list(SEGMENT_ORDER),
+        "segment_order": list(order),
     }
 
 
@@ -1032,7 +1036,7 @@ async def update_system_prompt(
     db: AsyncSession = Depends(get_db),
 ):
     """更新系统提示词覆盖值（可覆盖的段：core_identity, protocol_*）"""
-    from app.services.system_settings_service import get_or_create_settings, update_settings
+    from app.services.system_settings_service import _get_or_create
 
     allowed_keys = {"core_identity", "protocol_chat", "protocol_immersive", "protocol_digital_life", "dm_protocol"}
     overrides = body.overrides or {}
@@ -1040,18 +1044,32 @@ async def update_system_prompt(
     # 仅允许白名单中的 key
     filtered = {k: v for k, v in overrides.items() if k in allowed_keys and v}
 
-    s = await get_or_create_settings(db)
+    s = await _get_or_create(db)
     existing = (s.system_prompt_overrides or {}).copy() if s.system_prompt_overrides else {}
     existing.update(filtered)
     s.system_prompt_overrides = existing
+
+    # 保存段顺序（如果提供）
+    order_updated = False
+    if body.segment_order is not None and len(body.segment_order) > 0:
+        s.system_prompt_order = body.segment_order
+        order_updated = True
+
     await db.flush()
+
+    log_detail = {"updated_keys": list(filtered.keys())}
+    if order_updated:
+        log_detail["order_updated"] = True
 
     await _log_admin_action(
         db, admin["user_id"], "update_system_prompt", "system", 1,
-        {"updated_keys": list(filtered.keys())},
+        log_detail,
     )
 
-    return {"message": "系统提示词已更新", "overrides": existing}
+    result = {"message": "系统提示词已更新", "overrides": existing}
+    if order_updated:
+        result["segment_order"] = body.segment_order
+    return result
 
 
 # ============================================================

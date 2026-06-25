@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useIsDark } from '../hooks/useIsDark'
-import { useT } from '../i18n/I18nContext'
+import { useT, useLang } from '../i18n/I18nContext'
 import { fmtTokenNum } from '../utils/format'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -45,6 +45,7 @@ interface DailyPoint {
 
 export default function UsageDashboardTab() {
   const t = useT()
+  const lang = useLang()
   const [days, setDays] = useState(30)
   const [global, setGlobal] = useState<GlobalStats | null>(null)
   const [userRows, setUserRows] = useState<UserAgentRow[]>([])
@@ -176,10 +177,14 @@ export default function UsageDashboardTab() {
               <h3 className="text-sm font-semibold text-textPrimary mb-4">{t('admin.dailyTokenConsumption')}</h3>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                  <AreaChart data={dailyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                     <XAxis dataKey="date" tick={{ fontSize: 11, fill: colors.text }} tickFormatter={v => v.slice(5)} />
-                    <YAxis tick={{ fontSize: 11, fill: colors.text }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: colors.text }}
+                      tickFormatter={v => fmtTokenNum(v, lang)}
+                      width={55}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
@@ -252,10 +257,14 @@ export default function UsageDashboardTab() {
               ) : agentDaily.length > 0 ? (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={agentDaily} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                    <BarChart data={agentDaily} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                       <XAxis dataKey="date" tick={{ fontSize: 11, fill: colors.text }} tickFormatter={v => v.slice(5)} />
-                      <YAxis tick={{ fontSize: 11, fill: colors.text }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: colors.text }}
+                        tickFormatter={v => fmtTokenNum(v, lang)}
+                        width={55}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: isDark ? '#1F2937' : '#FFFFFF',

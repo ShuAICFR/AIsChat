@@ -194,14 +194,18 @@ export default function UsagePage() {
             ) : (
               <div className="h-72 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                  <BarChart data={dailyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 11, fill: colors.text }}
                       tickFormatter={v => v.slice(5)} // MM-DD
                     />
-                    <YAxis tick={{ fontSize: 11, fill: colors.text }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: colors.text }}
+                      tickFormatter={v => fmtTokenNum(v, lang)}
+                      width={55}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
@@ -240,14 +244,19 @@ export default function UsagePage() {
                   {t('usage.dailyTrend')}
                 </h4>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={dailyData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                  <ComposedChart data={dailyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                     <XAxis
                       dataKey="date"
                       tick={{ fontSize: 11, fill: colors.text }}
                       tickFormatter={v => v.slice(5)}
                     />
-                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: colors.text }} />
+                    <YAxis
+                      yAxisId="left"
+                      tick={{ fontSize: 11, fill: colors.text }}
+                      tickFormatter={v => fmtTokenNum(v, lang)}
+                      width={55}
+                    />
                     <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: colors.textMuted }} unit="%" />
                     <Tooltip
                       contentStyle={{

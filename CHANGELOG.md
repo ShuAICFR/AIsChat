@@ -38,6 +38,28 @@
 
 ---
 
+## [v0.8.0] - 2026-06-25
+
+### Added
+
+- 🎛️ **系统提示词管理**：管理员可在管理面板查看和编辑发给 AI 的 6 段系统提示词（core_identity / personality / protocol / tools / current_context / injected_skills）。支持行内编辑、预览拼接全文、恢复默认。后端 `system_prompt_overrides` JSONB 存储覆盖值，`_load_prompt_overrides` 在构建提示词时注入。
+- 🖼️ **联邦头像持久化**：`messages` 表新增 `sender_avatar_url` 列，联邦消息落库时保存头像 URL。历史消息 REST API 加载时优先读 DB 中的 `sender_avatar_url`，避免联邦对等端离线后头像裂图。WebSocket `avatar_updated` 广播修复已渲染的消息头像。
+- 📄 **手册双路由**：`/manual`（用户手册）和 `/manual/admin`（管理与开发者手册）使用统一的 `ManualPage` 组件渲染，管理员面板手册链接改为 `<Link to>` 内部导航。
+- 📊 **用量图表增强**：UsagePage 新增 `ComposedChart` 时间轴曲线图（Area 总 Token + Line 缓存命中率右轴），按日期展示趋势。图表术语 "Prompt"/"Completion" 已 i18n 化。
+- 🔘 **Toggle 开关统一**：新建 `components/Toggle.tsx`，所有 18 个开关/滑块统一为 `bg-mint-400` 轨道 + 白色圆点的单一风格。覆盖 AdminPage、AgentsPage、AgentDetailPage、SettingsPage、GroupSettingsPanel、ConversationLogTab、CreateAgentModal。
+
+### Changed
+
+- 💭 **「思考中」状态显示**：返回 token 时显示「思考中」，调用 `send_message` 才切换到「打字中」。思考中最小显示 1.5s 避免闪烁。
+
+### Fixed
+
+- 🐛 **缓存命中率公式修正**：`cached/(cached+total)` → `cached/total`。修复 UsagePage 和 MePage 两处。
+- 🐛 **存储空间显示 0KB**：`data_dir` 路径修正，个人和 AI 的存储空间计算正确指向 `agents/{id}` 目录。
+- 🐛 **用户手册内链 404**：`./管理与开发者手册.md` 相对路径改为绝对路径 `/docs/管理与开发者手册.md`。
+
+---
+
 ## [v0.5.0] - 2026-06-21
 
 ### Added

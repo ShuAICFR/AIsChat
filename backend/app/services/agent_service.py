@@ -569,14 +569,19 @@ async def update_agent_config(
 
     ai_type = agent.ai_type or "resonance"
 
-    # 权限检查：owner 或 can_edit 合作者
+    # 权限检查：owner / 合作者 / AI 自修改
     if not is_admin:
-        if agent.owner_id != operator_id:
-            collab = await _get_collaborator(db, agent_id, operator_id)
-            if collab is None or not collab.can_edit:
-                raise ValueError("无权修改此 AI 配置")
-        if not agent.is_ai_editable:
-            raise ValueError("此 AI 不允许自修改配置")
+        is_self = (operator_id == agent_id)  # AI 自己在改自己（update_self_config 工具）
+        if is_self:
+            # AI 自修改：只检查 is_ai_editable 开关
+            if not agent.is_ai_editable:
+                raise ValueError("此 AI 不允许自修改配置")
+        else:
+            # 人类操作：必须为 owner 或 can_edit 合作者
+            if agent.owner_id != operator_id:
+                collab = await _get_collaborator(db, agent_id, operator_id)
+                if collab is None or not collab.can_edit:
+                    raise ValueError("无权修改此 AI 配置")
 
     # 通用/半通用 AI 的 per-user 覆盖字段
     per_user_overridable = {

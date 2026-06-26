@@ -47,6 +47,30 @@
 
 ---
 
+## [v0.8.0] - 2026-06-26
+
+### Added
+
+- 🧩 **工具系统插件化重构**：28 个工具从 `tool_registry.py`（~2300 行）迁移到 `backend/app/tools/<segment>/*.py` 独立文件。`ToolPlugin` 基类 + `ToolRegistry` 单例支持自动注册。新增工具只需创建文件并调用 `ToolRegistry.register()`，PR 即文件。
+- 🎛️ **管理面板「工具与技能」Tab**：两个子页签——「工具注册表」按段/状态筛选查看全部 28 个工具及参数 Schema；「AI 技能管理」下拉选 AI → 查看/启用/禁用所有思维技能（delay_reply / inject_prompt 等）。3 个新管理 API：`GET /admin/tools`、`GET /admin/skills/agents/{id}`、`PUT /admin/skills/agents/{id}/{skill_id}`。
+- ⏹️ **`end_turn` 工具**：AI 可主动结束回复轮次。`system_reminder` 提示「如需结束请调用 end_turn」。支持 `set_state` 参数在结束时切换在线状态。所有状态（active/dnd/offline）均可用。
+- 🤝 **AI 合作者系统**：创建者可添加其他用户为合作者，自由选择编辑 / 删除 / 管理合作者三项权限。
+- 📝 **系统提示词段顺序可编辑**：DB 持久化存储顺序，前后端上下箭头调整，`get_settings` 补齐遗漏字段。
+
+### Changed
+
+- 🔧 **`system_reminder` 精简**：`every_time` 上限从 999 降至 3，配合 `end_turn` 工具优雅退出，防止绕过 `max_tool_rounds` 无限循环。
+- 🎨 **Toggle 开关统一**：18 个开关/滑块统一为 `bg-mint-400` + 白色圆点单一风格。
+
+### Fixed
+
+- 🐛 **`data_dir` 路径修正**：`config.data_dir` 改为 `@property` 返回固定值 `/app/data`，防止 pydantic-settings 自动覆盖为宿主机路径导致上传文件写到挂载卷外、容器重建后丢失。兼容所有部署环境（本地/Docker/NAS）。
+- 🐛 **附件下载 500**：`file_references.referrer_type` CHECK 约束缺少 `'human'`，用户下载自己上传的文件时报 500。已在模型、`init-db.sql`、migration 三处修复。
+- 🐛 **用量图表修复**：Legend 溢出 `flexWrap` 换行、表头 `whitespace-nowrap` 截断、Y 轴标签三级分档 `tickFormatter`。
+- 🐛 **ToolsSkillsTab 加载失败**：`api.get` 返回直接 JSON（非 `{data:...}` 包装），修正 `r.data.xxx` → `r.xxx`。
+
+---
+
 ## [v0.5.0] - 2026-06-21
 
 ### Added

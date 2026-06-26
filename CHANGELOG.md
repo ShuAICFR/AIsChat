@@ -56,6 +56,7 @@
 - ⏹️ **`end_turn` 工具**：AI 可主动结束回复轮次。`system_reminder` 提示「如需结束请调用 end_turn」。支持 `set_state` 参数在结束时切换在线状态。所有状态（active/dnd/offline）均可用。
 - 🤝 **AI 合作者系统**：创建者可添加其他用户为合作者，自由选择编辑 / 删除 / 管理合作者三项权限。
 - 📝 **系统提示词段顺序可编辑**：DB 持久化存储顺序，前后端上下箭头调整，`get_settings` 补齐遗漏字段。
+- 🖼️ **AI 图片识别**：用户发送图片时，`build_messages` / `build_dm_messages` 自动将图片 base64 编码注入到消息的 `image_data` 字段（≤4MB），DeepSeek V4 Pro 多模态模型可直接理解图片内容。群聊和 DM 均支持。
 
 ### Changed
 
@@ -68,6 +69,10 @@
 - 🐛 **附件下载 500**：`file_references.referrer_type` CHECK 约束缺少 `'human'`，用户下载自己上传的文件时报 500。已在模型、`init-db.sql`、migration 三处修复。
 - 🐛 **用量图表修复**：Legend 溢出 `flexWrap` 换行、表头 `whitespace-nowrap` 截断、Y 轴标签三级分档 `tickFormatter`。
 - 🐛 **ToolsSkillsTab 加载失败**：`api.get` 返回直接 JSON（非 `{data:...}` 包装），修正 `r.data.xxx` → `r.xxx`。
+- 🐛 **AI 自修改权限拒绝**：AI 调用 `update_self_config` 时 `operator_id`（agent_id）与 `owner_id`（user_id）永远不匹配，始终被拒绝。修复：检测 `operator_id == agent_id` → 跳过 owner/collaborator 检查，仅检查 `is_ai_editable` 开关。
+- 🐛 **好友申请/自动回应开关无效**：后端 `update_agent_config` 接收了 `allow_friend_requests`、`auto_respond_friend_request`、`is_ai_editable` 字段但未处理，前端开关点了无反应。修复：显式赋值到 ORM 对象。
+- 🐛 **AI 编辑弹窗设置过少**：编辑 AI 弹窗缺少工具调用轮次、闹钟上限、强制闹钟、允许自修改 4 个设置项。前端 `EditAgentModal` 已补全。
+- 🐛 **合作者开关无文本标签**：合作者列表三个 Toggle（编辑/删除/管理合作者）无文字说明。已加标签。
 
 ---
 

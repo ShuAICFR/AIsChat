@@ -69,8 +69,8 @@ function ToolRegistryTab() {
   const [filterState, setFilterState] = useState('all')
 
   useEffect(() => {
-    api.get('/admin/tools')
-      .then(r => { setData(r.data); setLoading(false) })
+    api.get<ToolsResponse>('/admin/tools')
+      .then(r => { setData(r); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
@@ -179,9 +179,9 @@ function SkillManagementTab() {
 
   // 加载 AI 列表
   useEffect(() => {
-    api.get('/admin/agents')
+    api.get<{agents: {id:number; name:string}[]}>('/admin/agents')
       .then(r => {
-        const list = (r.data?.agents || []).map((a: { id: number; name: string }) => ({ id: a.id, name: a.name }))
+        const list = (r.agents || []).map(a => ({ id: a.id, name: a.name }))
         setAgents(list)
         setLoadingAgents(false)
         if (list.length > 0) setSelectedAgent(list[0].id)
@@ -193,9 +193,9 @@ function SkillManagementTab() {
   useEffect(() => {
     if (!selectedAgent) { setSkills([]); return }
     setLoadingSkills(true)
-    api.get(`/admin/skills/agents/${selectedAgent}`)
+    api.get<{skills: SkillInfo[]}>(`/admin/skills/agents/${selectedAgent}`)
       .then(r => {
-        setSkills(r.data?.skills || [])
+        setSkills(r.skills || [])
         setLoadingSkills(false)
       })
       .catch(() => {

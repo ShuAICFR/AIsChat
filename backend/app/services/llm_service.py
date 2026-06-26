@@ -3,8 +3,10 @@ LLM 调用抽象层
 提供通用的聊天补全（支持工具调用）、模型解析、消息构建
 """
 import json
+import base64
 import logging
 import httpx
+import os as _os
 from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -627,6 +629,93 @@ async def _build_injected_skills(
     return "\n\n".join(parts) if parts else ""
 
 
+async def _inject_image_data(
+    messages: list[dict],
+    recent_orm_messages: list,
+    data_dir: str,
+) -> list[dict]:
+    """
+    为最后一条含图片附件的人类消息注入 image_data（base64）。
+    只处理最近一条用户消息中的第一张图片，避免 token 爆炸。
+
+    返回修改后的 messages（原地修改 + 返回）。
+    """
+    if not messages or not recent_orm_messages:
+        return messages
+
+    # 构建 orm 消息的索引：content → orm 对象
+    orm_by_content: dict[str, any] = {}
+    for orm_m in recent_orm_messages:
+        if orm_m.content and orm_m.sender_type == "human":
+            orm_by_content[orm_m.content] = orm_m
+
+    # 从 messages 末尾向前找最后一条 user 消息
+    for i in range(len(messages) - 1, -1, -1):
+        msg = messages[i]
+        if msg.get("role") != "user":
+            continue
+        content = msg.get("content", "")
+        # 从 content 中提取纯文本（消息格式为 "名字(ID:x): 内容" 或 "名字: 内容"）
+        # 尝试匹配 orm 消息
+        attached_orm = None
+        for orm_content, orm_obj in orm_by_content.items():
+            if content.endswith(orm_content) or orm_content in content:
+                attached_orm = orm_obj
+                break
+        if attached_orm is None:
+            continue
+
+        # 检查附件
+        attachments = getattr(attached_orm, "attachments", None)
+        if not attachments:
+            continue
+
+        # 解析 JSON（DM 消息可能是字符串）
+        if isinstance(attachments, str):
+            try:
+                attachments = json.loads(attachments)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        if not isinstance(attachments, list) or len(attachments) == 0:
+            continue
+
+        # 找第一张图片
+        image_att = None
+        for att in attachments:
+            mime = att.get("mime_type", "")
+            if mime.startswith("image/"):
+                image_att = att
+                break
+        if image_att is None:
+            continue
+
+        # 读取并编码
+        file_path = image_att.get("path", "")
+        physical_path = _os.path.join(data_dir, file_path)
+        if not _os.path.isfile(physical_path):
+            logger.warning(f"图片文件不存在: {physical_path}")
+            continue
+
+        try:
+            file_size = _os.path.getsize(physical_path)
+            if file_size > 4 * 1024 * 1024:
+                logger.warning(f"图片过大 ({file_size} bytes)，跳过: {physical_path}")
+                continue
+            with open(physical_path, "rb") as f:
+                image_base64 = base64.b64encode(f.read()).decode("utf-8")
+            msg["image_data"] = image_base64
+            logger.info(
+                f"🖼️ 已注入图片: {_os.path.basename(file_path)} "
+                f"({file_size // 1024}KB) → 消息 {i}"
+            )
+            break  # 只处理一条消息
+        except Exception as e:
+            logger.warning(f"读取图片失败: {physical_path}: {e}")
+            continue
+
+    return messages
+
+
 async def build_messages(
     db: AsyncSession,
     agent,
@@ -771,6 +860,9 @@ async def build_messages(
                 "content": prefix + content,
             })
 
+        # 🖼️ 为最后一条用户消息注入图片附件（DeepSeek V4 Pro 多模态）
+        await _inject_image_data(messages, recent_messages, settings.data_dir)
+
     return messages
 
 
@@ -901,5 +993,8 @@ async def build_dm_messages(
             "role": role,
             "content": f"{sender_name}: {m.content}",
         })
+
+    # 🖼️ 为最后一条用户消息注入图片附件
+    await _inject_image_data(messages, dm_messages, settings.data_dir)
 
     return messages

@@ -707,6 +707,16 @@ async def update_agent_config(
     if "discoverable" in updates:
         agent.discoverable = updates["discoverable"]
 
+    # is_ai_editable 允许 AI 自修改
+    if "is_ai_editable" in updates:
+        agent.is_ai_editable = updates["is_ai_editable"]
+
+    # 好友申请开关
+    if "allow_friend_requests" in updates:
+        agent.allow_friend_requests = updates["allow_friend_requests"]
+    if "auto_respond_friend_request" in updates:
+        agent.auto_respond_friend_request = updates["auto_respond_friend_request"]
+
     # config_profile（手动编辑参数时自动回退到 custom）
     if "config_profile" in updates and updates["config_profile"] is not None:
         agent.config_profile = updates["config_profile"]

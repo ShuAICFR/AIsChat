@@ -626,6 +626,55 @@ function EditAgentModal({ agent, onClose, onUpdated }: {
           </div>
         </div>
 
+        {/* ── 工具调用 & 闹钟 ── */}
+        <div className="bg-canvas rounded-xl p-4 border border-border mb-4">
+          <h3 className="text-sm font-semibold text-textSecondary mb-3">{t('agentDetail.toolCallsAndAlarms')}</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <span className="text-xs text-textMuted">{t('agentDetail.maxToolRounds')}（1-20）</span>
+              <span className="inline-flex items-center gap-1 ml-1">
+                <button onClick={() => setMaxToolRounds(Math.max(1, maxToolRounds - 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">−</button>
+                <span className="text-textPrimary font-mono w-5 text-center text-xs">{maxToolRounds}</span>
+                <button onClick={() => setMaxToolRounds(Math.min(20, maxToolRounds + 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">+</button>
+              </span>
+            </div>
+            <div>
+              <span className="text-xs text-textMuted">{t('agentDetail.alarmMaxRounds')}（1-30）</span>
+              <span className="inline-flex items-center gap-1 ml-1">
+                <button onClick={() => setAlarmMaxToolRounds(Math.max(1, alarmMaxToolRounds - 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">−</button>
+                <span className="text-textPrimary font-mono w-5 text-center text-xs">{alarmMaxToolRounds}</span>
+                <button onClick={() => setAlarmMaxToolRounds(Math.min(30, alarmMaxToolRounds + 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">+</button>
+              </span>
+            </div>
+            <div>
+              <span className="text-xs text-textMuted">{t('agentDetail.maxAlarms')}（1-50）</span>
+              <span className="inline-flex items-center gap-1 ml-1">
+                <button onClick={() => setMaxAlarms(Math.max(1, maxAlarms - 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">−</button>
+                <span className="text-textPrimary font-mono w-5 text-center text-xs">{maxAlarms}</span>
+                <button onClick={() => setMaxAlarms(Math.min(50, maxAlarms + 1))}
+                  className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs">+</button>
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-textSecondary">{t('agentDetail.forceAlarm')}</span>
+              <Toggle checked={forceAlarmOnEnd} onChange={setForceAlarmOnEnd} />
+            </div>
+          </div>
+          {/* 自修改开关 */}
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
+            <div>
+              <span className="text-xs text-textSecondary">{t('agents.selfEditable')}</span>
+              <p className="text-[10px] text-textMuted mt-0.5">{t('agents.selfEditableDesc')}</p>
+            </div>
+            <Toggle checked={isAiEditable} onChange={setIsAiEditable} />
+          </div>
+        </div>
+
         {/* 独立 API 配置 */}
         <div className="bg-canvas rounded-xl p-4 border border-border mb-4">
           <h3 className="text-sm font-semibold text-textSecondary mb-3">{t('agents.independentApi')}</h3>

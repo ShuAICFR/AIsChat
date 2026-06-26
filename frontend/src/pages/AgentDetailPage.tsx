@@ -1049,10 +1049,19 @@ export default function AgentDetailPage() {
                         </div>
                       </div>
                       {isOwner && (
-                        <div className="flex items-center gap-1.5">
-                          <Toggle checked={c.can_edit} onChange={v => handleUpdateCollaborator(c.user_id, { can_edit: v })} />
-                          <Toggle checked={c.can_delete} onChange={v => handleUpdateCollaborator(c.user_id, { can_delete: v })} />
-                          <Toggle checked={c.can_manage_collaborators} onChange={v => handleUpdateCollaborator(c.user_id, { can_manage_collaborators: v })} />
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-textMuted">{t('agentDetail.permEdit')}</span>
+                            <Toggle checked={c.can_edit} onChange={v => handleUpdateCollaborator(c.user_id, { can_edit: v })} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-textMuted">{t('agentDetail.permDelete')}</span>
+                            <Toggle checked={c.can_delete} onChange={v => handleUpdateCollaborator(c.user_id, { can_delete: v })} />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-textMuted">{t('agentDetail.permManageCollaborators')}</span>
+                            <Toggle checked={c.can_manage_collaborators} onChange={v => handleUpdateCollaborator(c.user_id, { can_manage_collaborators: v })} />
+                          </div>
                           <button
                             onClick={() => handleRemoveCollaborator(c.user_id)}
                             className="ml-1 p-1 rounded text-textMuted hover:text-rose-400 transition-colors"

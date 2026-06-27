@@ -114,10 +114,10 @@ async def _send_system_error(
             db.add(dm_session)
             await db.flush()
 
-        # 直接写入 DM 消息
+        # 直接写入 DM 消息（sender_id 用 AI 的 user_id，满足 FK 约束）
         dm_msg = DMMessage(
             session_id=dm_sid,
-            sender_id=0,
+            sender_id=agent.user_id,
             content=content,
         )
         db.add(dm_msg)
@@ -133,8 +133,8 @@ async def _send_system_error(
                     "id": dm_msg.id,
                     "session_id": dm_sid,
                     "sender_type": "system",
-                    "sender_id": 0,
-                    "sender_name": "系统",
+                    "sender_id": agent.user_id,
+                    "sender_name": "系统通知",
                     "content": content,
                     "reply_to": None,
                     "created_at": dm_msg.created_at.isoformat() if dm_msg.created_at else None,

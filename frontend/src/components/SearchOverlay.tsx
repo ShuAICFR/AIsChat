@@ -137,7 +137,7 @@ export default function SearchOverlay() {
                 {item.avatar_url ? (
                   <img src={item.avatar_url} alt={item.name} className="w-8 h-8 rounded-full object-cover shrink-0 bg-elevated" />
                 ) : (
-                  <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
+                  <div className={`w-8 h-8 rounded-full bg-gradient-to-b flex items-center justify-center text-xs font-bold shrink-0 ${
                     item.type === 'human'
                       ? 'from-primary-500 to-primary-700 text-white'
                       : 'from-teal-400 to-teal-600 text-white'

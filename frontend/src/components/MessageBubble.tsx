@@ -81,7 +81,7 @@ const MessageBubble = memo(function MessageBubble({
     ? 'from-rose-400 to-rose-600'
     : isMine ? 'from-primary-500 to-primary-700' : 'from-teal-400 to-teal-600'
   const avatarGradientOpacity = senderAvatarUrl ? '/30' : ''
-  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : senderType === 'system' ? 'shadow-rose-400/25' : 'shadow-teal-400/20'
+  const avatarGradientShadow = isMine ? 'shadow-primary-500/15' : senderType === 'system' ? 'shadow-rose-400/15' : 'shadow-teal-400/10'
 
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
@@ -98,7 +98,7 @@ const MessageBubble = memo(function MessageBubble({
               onAvatarClick(senderType, senderId, senderName, state)
             }
           }}
-          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold ${senderType !== 'system' ? 'cursor-pointer hover:scale-105 transition-transform' : ''} shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
+          className={`relative w-9 h-9 rounded-full bg-gradient-to-b flex items-center justify-center text-xs font-bold ${senderType !== 'system' ? 'cursor-pointer hover:scale-105 transition-transform' : ''} shadow ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
           title={senderType === 'system' ? '系统通知' : thinking ? t('chat.thinking') : isTyping ? t('chat.typing') : t('chat.viewProfile').replace('{name}', senderName)}
         >
           {senderType === 'system' ? (

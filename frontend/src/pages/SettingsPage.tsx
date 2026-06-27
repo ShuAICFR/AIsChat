@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useT } from '../i18n/I18nContext'
 import Toggle from '../components/Toggle'
-import { Key, Zap, Save, Clock, Palette, Sun, Moon, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { useResizableSidebar } from '../hooks/useResizableSidebar'
+import { Key, Zap, Save, Clock, Palette, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
 import { useNavigate, useBlocker, useLocation } from 'react-router-dom'
 
 // 常用时区列表
@@ -39,6 +40,24 @@ const CHAT_STYLES = [
   { value: 'compact', key: 'settings.compactMode', descKey: 'settings.compactModeDesc' },
 ]
 
+/** 侧边栏导航项（含分类） */
+interface NavSection {
+  id: string
+  icon: React.ElementType
+  labelKey: string
+  category: string
+}
+const NAV_SECTIONS: NavSection[] = [
+  { id: 'quota',       icon: Zap,     labelKey: 'settings.quotaTitle',      category: 'settings.catAccount' },
+  { id: 'api',         icon: Key,     labelKey: 'settings.apiConfigTitle',   category: 'settings.catApi' },
+  { id: 'timezone',    icon: Clock,   labelKey: 'settings.timezone',         category: 'settings.catPrefs' },
+  { id: 'language',    icon: Globe,   labelKey: 'settings.language',         category: 'settings.catPrefs' },
+  { id: 'chatstyle',   icon: Layout,  labelKey: 'settings.chatStyle',        category: 'settings.catPrefs' },
+  { id: 'strategy',    icon: Zap,     labelKey: 'settings.strategy',         category: 'settings.catBehavior' },
+  { id: 'appearance',  icon: Palette, labelKey: 'settings.appearance',       category: 'settings.appearance' },
+  { id: 'notifications', icon: Bell,  labelKey: 'settings.notifications',   category: 'settings.appearance' },
+]
+
 export default function SettingsPage() {
   const t = useT()
   const { user, refreshUser } = useAuth()
@@ -70,13 +89,46 @@ export default function SettingsPage() {
   const [redeemMsg, setRedeemMsg] = useState('')
   const [showAgentApi, setShowAgentApi] = useState(false)
 
+  // ── 可拖拽侧边栏 ──
+  const { sidebarWidth, handleResizeStart } = useResizableSidebar('settings_sidebar_width')
+
+  // ── 滚动监听：高亮当前可见 section ──
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [activeSection, setActiveSection] = useState('quota')
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el) return
+    const ids = NAV_SECTIONS.map(s => `settings-${s.id}`)
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // 找第一个可见的 section
+        const visible = entries.filter(e => e.isIntersecting).sort((a, b) => {
+          const aEl = a.target as HTMLElement
+          const bEl = b.target as HTMLElement
+          return aEl.offsetTop - bEl.offsetTop
+        })
+        if (visible.length > 0) {
+          const id = visible[0].target.id.replace('settings-', '')
+          setActiveSection(id)
+        }
+      },
+      { root: el, rootMargin: '-60px 0px -60% 0px', threshold: 0 }
+    )
+    const targets: Element[] = []
+    ids.forEach(id => {
+      const t = document.getElementById(id)
+      if (t) { observer.observe(t); targets.push(t) }
+    })
+    return () => targets.forEach(t => observer.unobserve(t))
+  }, [])
+
   // ── 未保存修改检测 ──
   const [savedValues, setSavedValues] = useState<{
     apiBaseUrl: string; autoTimeout: number; autoDefault: boolean
     timezone: string; language: string; chatStyle: string
   } | null>(null)
 
-  // 判断是否有未保存修改（apiKey 非空才算修改）
   const hasUnsavedChanges = savedValues !== null && (
     apiBaseUrl !== savedValues.apiBaseUrl ||
     autoTimeout !== savedValues.autoTimeout ||
@@ -84,16 +136,14 @@ export default function SettingsPage() {
     timezone !== savedValues.timezone ||
     language !== savedValues.language ||
     chatStyle !== savedValues.chatStyle ||
-    apiKey.trim() !== ''  // 有输入即视为修改
+    apiKey.trim() !== ''
   )
 
-  // 导航拦截
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
   )
 
-  // 浏览器关闭/刷新拦截
   useEffect(() => {
     if (!hasUnsavedChanges) return
     const handler = (e: BeforeUnloadEvent) => {
@@ -104,7 +154,6 @@ export default function SettingsPage() {
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
 
-  // 通知开关立即生效，不需点保存
   const handleNotificationToggle = (enabled: boolean) => {
     setNotifications(enabled)
     localStorage.setItem('notifications_enabled', enabled ? 'true' : 'false')
@@ -125,7 +174,6 @@ export default function SettingsPage() {
         if (data.timezone) setTimezone(tz)
         if (data.language) setLanguage(lang)
         if (data.ui_prefs?.chat_style) setChatStyle(style)
-        // 保存快照用于未保存修改检测
         setSavedValues({
           apiBaseUrl: apiUrl,
           autoTimeout: to,
@@ -135,19 +183,17 @@ export default function SettingsPage() {
           chatStyle: style,
         })
       }).catch(console.error)
-      // 加载我的 AI 列表（用于单 AI API 配置）
       api.get<any[]>('/agents').then(list => {
         setAgents(list || [])
       }).catch(() => {})
     }
   }, [user])
 
-  // Hash 导航：从 /settings#api 自动滚动到对应区块
+  // Hash 导航
   const location = useLocation()
   useEffect(() => {
     const hash = location.hash?.replace('#', '')
     if (hash) {
-      // 延迟等 DOM 渲染完成
       const timer = setTimeout(() => {
         document.getElementById(`settings-${hash}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 200)
@@ -187,7 +233,6 @@ export default function SettingsPage() {
       })
       setApiKey('')
       setMessage(t('settings.saveSuccess'))
-      // 更新快照以清除"未保存"状态
       setSavedValues({
         apiBaseUrl: apiBaseUrl || '',
         autoTimeout,
@@ -197,7 +242,6 @@ export default function SettingsPage() {
         chatStyle,
       })
       refreshUser()
-      // 刷新 AI 列表以更新独立 API 状态
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
     } catch (err: any) {
       setMessage(err.message || t('error.saveFailed'))
@@ -215,7 +259,6 @@ export default function SettingsPage() {
       })
       setEditingAgentId(null)
       setAgentApiKey('')
-      // 刷新列表
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
     } catch (err: any) {
       alert(err.message || t('error.saveFailed'))
@@ -247,6 +290,356 @@ export default function SettingsPage() {
     }
   }
 
+  /** 点击侧边栏 → 滚动到对应 section */
+  const scrollToSection = (id: string) => {
+    document.getElementById(`settings-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // ── 保存按钮（页脚固定） ──
+  const saveFooter = (
+    <div className="mt-4">
+      {message && (
+        <div className={`text-sm px-3 py-2 rounded-xl mb-4 ${
+          message.includes('失败') || message.includes('错误')
+            ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+            : 'bg-mint-400/10 border border-mint-400/20 text-mint-400'
+        }`}>
+          {message}
+        </div>
+      )}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
+      >
+        <Save size={16} />
+        {saving ? t('settings.saving') : t('settings.save')}
+      </button>
+      <p className="text-xs text-textMuted mt-2">{t('settings.saveHint')}</p>
+    </div>
+  )
+
+  // ── 所有 section 内容 ──
+  const sections = (
+    <div className="space-y-4">
+      {/* 额度 */}
+      <div id="settings-quota" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.quotaTitle')}</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="bg-canvas rounded-xl p-4 border border-border">
+            <p className="text-xs text-textMuted mb-1">{t('settings.aiQuota')}</p>
+            <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
+            <p className="text-[10px] text-textMuted mt-1">{t('settings.aiQuotaHint')}</p>
+          </div>
+          <div className="bg-canvas rounded-xl p-4 border border-border">
+            <p className="text-xs text-textMuted mb-1">{t('settings.apiCredit')}</p>
+            <p className="text-2xl font-bold text-textPrimary">{user?.api_credit ?? 0}</p>
+            <p className="text-[10px] text-textMuted mt-1">{t('settings.apiCreditHint')}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
+            <input
+              type="text"
+              value={redeemCode}
+              onChange={(e) => setRedeemCode(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              placeholder={t('me.redeemPlaceholder')}
+            />
+          </div>
+          <button
+            onClick={handleRedeem}
+            disabled={redeeming || !redeemCode.trim()}
+            className="flex items-center gap-1 px-4 py-2 rounded-xl bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
+          >
+            {redeeming ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {t('me.redeem')}
+          </button>
+        </div>
+        {redeemMsg && (
+          <p className={`text-xs mt-2 ${redeemMsg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>
+            {redeemMsg}
+          </p>
+        )}
+      </div>
+
+      {/* API 提供商配置 */}
+      <div id="settings-api" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <Key size={18} className="text-primary-400 shrink-0" />
+          <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">{t('settings.apiConfigTitle')}</h2>
+          <span className="text-[10px] text-textMuted ml-auto">{t('settings.apiConfigHint')}</span>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.baseUrl')}</label>
+            <input
+              type="text"
+              value={apiBaseUrl}
+              onChange={(e) => setApiBaseUrl(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              placeholder={t('settings.baseUrlPlaceholder')}
+            />
+            <p className="text-[10px] text-textMuted mt-1">{t('settings.baseUrlDesc')}</p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.apiKey')}</label>
+            <div className="relative">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                placeholder={user?.has_api_key ? t('settings.apiKeyPlaceholderSet') : t('settings.apiKeyPlaceholder')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-textSecondary"
+              >
+                {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between mt-1.5">
+              <p className="text-xs text-textMuted">
+                {user?.has_api_key
+                  ? <><CheckCircle size={12} className="inline text-mint-400 mr-1" />{t('settings.apiKeySet')}</>
+                  : <><AlertTriangle size={12} className="inline text-accent-400 mr-1" />{t('settings.apiKeyNotSet')}</>}
+              </p>
+              <button
+                onClick={handleTestConnection}
+                disabled={testing}
+                className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 disabled:opacity-50 transition-colors"
+              >
+                {testing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : testResult === 'success' ? (
+                  <CheckCircle size={12} className="text-mint-400" />
+                ) : testResult === 'fail' ? (
+                  <XCircle size={12} className="text-rose-400" />
+                ) : null}
+                {testing ? t('settings.testing') : testResult === 'success' ? t('settings.testSuccess') : testResult === 'fail' ? t('settings.testFailed') : t('settings.testConnection')}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 单 AI API 配置 */}
+        <div className="mt-4 pt-4 border-t border-border">
+          <button
+            onClick={() => setShowAgentApi(!showAgentApi)}
+            className="flex items-center gap-2 w-full text-left hover:bg-canvas/50 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+          >
+            {showAgentApi ? <ChevronDown size={16} className="text-textMuted" /> : <ChevronRight size={16} className="text-textMuted" />}
+            <Bot size={16} className="text-primary-400" />
+            <span className="text-sm font-medium text-textPrimary">{t('settings.perAgentTitle')}</span>
+            <span className="text-[10px] text-textMuted">{t('settings.perAgentHint')}</span>
+          </button>
+
+          {showAgentApi && (
+            <div className="mt-3">
+              {agents.length === 0 ? (
+                <p className="text-xs text-textMuted py-4 text-center">{t('settings.noAgentsForApi')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {agents.map((agent: any) => (
+                    <div key={agent.id} className="bg-canvas rounded-xl border border-border p-3">
+                      {editingAgentId === agent.id ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-textPrimary">{agent.name}</span>
+                            <button onClick={() => setEditingAgentId(null)} className="text-textMuted hover:text-textSecondary">
+                              <X size={14} />
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={agentApiBaseUrl}
+                            onChange={(e) => setAgentApiBaseUrl(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                            placeholder={t('settings.agentBaseUrlPlaceholder')}
+                          />
+                          <input
+                            type="password"
+                            value={agentApiKey}
+                            onChange={(e) => setAgentApiKey(e.target.value)}
+                            className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                            placeholder={t('settings.agentApiKeyPlaceholder')}
+                          />
+                          <button
+                            onClick={() => handleSaveAgentApi(agent.id)}
+                            disabled={agentApiSaving}
+                            className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
+                          >
+                            {agentApiSaving ? t('settings.agentApiSaving') : t('common.save')}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-textPrimary">{agent.name}</span>
+                            {agent.api_base_url ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
+                                {t('settings.independentApiBadge')}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
+                                {t('settings.inheritGlobalBadge')}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => startEditAgentApi(agent)}
+                            className="text-textMuted hover:text-textSecondary transition-colors"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 时区设置 */}
+      <div id="settings-timezone" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.timezone')}</h2>
+        </div>
+        <p className="text-xs text-textMuted mb-3">{t('settings.timezoneDesc')}</p>
+        <select
+          value={timezone}
+          onChange={(e) => setTimezone(e.target.value)}
+          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+        >
+          {TIMEZONES.map((tz) => (
+            <option key={tz} value={tz}>{tz}</option>
+          ))}
+        </select>
+        <p className="text-xs text-textMuted mt-2">
+          {t('settings.currentTimestamp')} {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
+        </p>
+      </div>
+
+      {/* 语言设置 */}
+      <div id="settings-language" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Globe size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.language')}</h2>
+        </div>
+        <p className="text-xs text-textMuted mb-3">{t('settings.languageDesc')}</p>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value)}
+          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{t(l.key)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 聊天样式 */}
+      <div id="settings-chatstyle" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Layout size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.chatStyle')}</h2>
+        </div>
+        <p className="text-xs text-textMuted mb-3">{t('settings.chatStyleDesc')}</p>
+        <div className="flex gap-3">
+          {CHAT_STYLES.map((s) => (
+            <button
+              key={s.value}
+              onClick={() => setChatStyle(s.value)}
+              className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left ${
+                chatStyle === s.value
+                  ? 'border-primary-500 bg-primary-500/10 text-primary-400'
+                  : 'border-border bg-canvas text-textSecondary hover:border-primary-500/30'
+              }`}
+            >
+              <div className="font-medium">{t(s.key)}</div>
+              <div className="text-[10px] mt-0.5 opacity-70">{t(s.descKey)}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 策略模式 */}
+      <div id="settings-strategy" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Zap size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.strategy')}</h2>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium mb-1.5 text-textSecondary">
+              {t('settings.autoApproveTimeout')} {autoTimeout}
+            </label>
+            <input
+              type="range"
+              min="10"
+              max="300"
+              step="10"
+              value={autoTimeout}
+              onChange={(e) => setAutoTimeout(parseInt(e.target.value))}
+              className="w-full accent-primary-500"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <Toggle checked={autoDefault} onChange={setAutoDefault} />
+            <span className="text-sm text-textSecondary">{t('settings.autoApproveDefault')}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 外观主题 */}
+      <div id="settings-appearance" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Palette size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.appearance')}</h2>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-textPrimary">{t('settings.darkMode')}</p>
+            <p className="text-xs text-textMuted mt-0.5">
+              {theme === 'dark' ? t('settings.darkModeDesc') : t('settings.lightModeDesc')}
+            </p>
+          </div>
+          <Toggle checked={theme === 'dark'} onChange={() => toggleTheme()} />
+        </div>
+      </div>
+
+      {/* 桌面通知 */}
+      <div id="settings-notifications" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Bell size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('settings.notifications')}</h2>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-textPrimary">{t('settings.notificationsLabel')}</p>
+            <p className="text-xs text-textMuted mt-0.5">{t('settings.notificationsDetailDesc')}</p>
+          </div>
+          <Toggle checked={notifications} onChange={() => handleNotificationToggle(!notifications)} />
+        </div>
+      </div>
+
+      {saveFooter}
+    </div>
+  )
+
   return (
     <div className="h-full flex flex-col bg-canvas">
       {/* 头部 */}
@@ -261,361 +654,81 @@ export default function SettingsPage() {
         <h1 className="font-semibold text-textPrimary text-sm">{t('settings.title')}</h1>
       </div>
 
-      {/* 内容 */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="max-w-2xl mx-auto">
-
-        {/* 移动端管理员快捷入口 */}
-        {user?.role === 'admin' && (
-          <button
-            onClick={() => navigate('/admin')}
-            className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 rounded-xl bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-sm font-medium transition-colors"
-          >
-            <Shield size={16} />
-            {t('settings.adminButton')}
-          </button>
-        )}
-
-        {/* 额度 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.quotaTitle')}</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="bg-canvas rounded-xl p-4 border border-border">
-              <p className="text-xs text-textMuted mb-1">{t('settings.aiQuota')}</p>
-              <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
-              <p className="text-[10px] text-textMuted mt-1">{t('settings.aiQuotaHint')}</p>
-            </div>
-            <div className="bg-canvas rounded-xl p-4 border border-border">
-              <p className="text-xs text-textMuted mb-1">{t('settings.apiCredit')}</p>
-              <p className="text-2xl font-bold text-textPrimary">{user?.api_credit ?? 0}</p>
-              <p className="text-[10px] text-textMuted mt-1">{t('settings.apiCreditHint')}</p>
-            </div>
-          </div>
-          {/* 兑换码 */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1 relative">
-              <Ticket size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted" />
-              <input
-                type="text"
-                value={redeemCode}
-                onChange={(e) => setRedeemCode(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder={t('me.redeemPlaceholder')}
-              />
-            </div>
-            <button
-              onClick={handleRedeem}
-              disabled={redeeming || !redeemCode.trim()}
-              className="flex items-center gap-1 px-4 py-2 rounded-xl bg-primary-500 text-white text-sm font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors shrink-0"
-            >
-              {redeeming ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-              {t('me.redeem')}
-            </button>
-          </div>
-          {redeemMsg && (
-            <p className={`text-xs mt-2 ${redeemMsg.includes('失败') ? 'text-rose-400' : 'text-mint-400'}`}>
-              {redeemMsg}
-            </p>
-          )}
-        </div>
-
-        {/* API 提供商配置 */}
-        <div id="settings-api" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Key size={18} className="text-primary-400 shrink-0" />
-            <h2 className="font-semibold text-textPrimary whitespace-nowrap shrink-0">{t('settings.apiConfigTitle')}</h2>
-            <span className="text-[10px] text-textMuted ml-auto">{t('settings.apiConfigHint')}</span>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.baseUrl')}</label>
-              <input
-                type="text"
-                value={apiBaseUrl}
-                onChange={(e) => setApiBaseUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                placeholder={t('settings.baseUrlPlaceholder')}
-              />
-              <p className="text-[10px] text-textMuted mt-1">{t('settings.baseUrlDesc')}</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.apiKey')}</label>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full px-3.5 py-2.5 pr-10 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                  placeholder={user?.has_api_key ? t('settings.apiKeyPlaceholderSet') : t('settings.apiKeyPlaceholder')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-textMuted hover:text-textSecondary"
-                >
-                  {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              <div className="flex items-center justify-between mt-1.5">
-                <p className="text-xs text-textMuted">
-                  {user?.has_api_key
-                    ? <><CheckCircle size={12} className="inline text-mint-400 mr-1" />{t('settings.apiKeySet')}</>
-                    : <><AlertTriangle size={12} className="inline text-accent-400 mr-1" />{t('settings.apiKeyNotSet')}</>}
-                </p>
-                <button
-                  onClick={handleTestConnection}
-                  disabled={testing}
-                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 disabled:opacity-50 transition-colors"
-                >
-                  {testing ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : testResult === 'success' ? (
-                    <CheckCircle size={12} className="text-mint-400" />
-                  ) : testResult === 'fail' ? (
-                    <XCircle size={12} className="text-rose-400" />
-                  ) : null}
-                  {testing ? t('settings.testing') : testResult === 'success' ? t('settings.testSuccess') : testResult === 'fail' ? t('settings.testFailed') : t('settings.testConnection')}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* 单 AI API 配置（可折叠） */}
-          <div className="mt-4 pt-4 border-t border-border">
-            <button
-              onClick={() => setShowAgentApi(!showAgentApi)}
-              className="flex items-center gap-2 w-full text-left hover:bg-canvas/50 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
-            >
-              {showAgentApi ? <ChevronDown size={16} className="text-textMuted" /> : <ChevronRight size={16} className="text-textMuted" />}
-              <Bot size={16} className="text-primary-400" />
-              <span className="text-sm font-medium text-textPrimary">{t('settings.perAgentTitle')}</span>
-              <span className="text-[10px] text-textMuted">{t('settings.perAgentHint')}</span>
-            </button>
-
-            {showAgentApi && (
-              <div className="mt-3">
-                {agents.length === 0 ? (
-                  <p className="text-xs text-textMuted py-4 text-center">{t('settings.noAgentsForApi')}</p>
-                ) : (
-                  <div className="space-y-2">
-                    {agents.map((agent: any) => (
-                      <div key={agent.id} className="bg-canvas rounded-xl border border-border p-3">
-                        {editingAgentId === agent.id ? (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-textPrimary">{agent.name}</span>
-                              <button onClick={() => setEditingAgentId(null)} className="text-textMuted hover:text-textSecondary">
-                                <X size={14} />
-                              </button>
-                            </div>
-                            <input
-                              type="text"
-                              value={agentApiBaseUrl}
-                              onChange={(e) => setAgentApiBaseUrl(e.target.value)}
-                              className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                              placeholder={t('settings.agentBaseUrlPlaceholder')}
-                            />
-                            <input
-                              type="password"
-                              value={agentApiKey}
-                              onChange={(e) => setAgentApiKey(e.target.value)}
-                              className="w-full px-3 py-1.5 rounded-lg border border-border bg-surface text-xs text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-1 focus:ring-primary-500/50"
-                              placeholder={t('settings.agentApiKeyPlaceholder')}
-                            />
-                            <button
-                              onClick={() => handleSaveAgentApi(agent.id)}
-                              disabled={agentApiSaving}
-                              className="w-full py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-40 transition-colors"
-                            >
-                              {agentApiSaving ? t('settings.agentApiSaving') : t('common.save')}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="text-sm text-textPrimary">{agent.name}</span>
-                              {agent.api_base_url ? (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-500/10 text-primary-400">
-                                  {t('settings.independentApiBadge')}
-                                </span>
-                              ) : (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-border/30 text-textMuted">
-                                  {t('settings.inheritGlobalBadge')}
-                                </span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => startEditAgentApi(agent)}
-                              className="text-textMuted hover:text-textSecondary transition-colors"
-                            >
-                              <Pencil size={13} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 时区设置 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Clock size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.timezone')}</h2>
-          </div>
-          <p className="text-xs text-textMuted mb-3">{t('settings.timezoneDesc')}</p>
-          <select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-          >
-            {TIMEZONES.map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </select>
-          <p className="text-xs text-textMuted mt-2">
-            {t('settings.currentTimestamp')} {new Date().toLocaleString('zh-CN', { timeZone: timezone })}
-          </p>
-        </div>
-
-        {/* 语言设置 */}
-        <div id="settings-language" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
-          <div className="flex items-center gap-2 mb-4">
-            <Globe size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.language')}</h2>
-          </div>
-          <p className="text-xs text-textMuted mb-3">{t('settings.languageDesc')}</p>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{t(l.key)}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* 聊天样式 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Layout size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.chatStyle')}</h2>
-          </div>
-          <p className="text-xs text-textMuted mb-3">{t('settings.chatStyleDesc')}</p>
-          <div className="flex gap-3">
-            {CHAT_STYLES.map((s) => (
+      {/* ── 主体：桌面端侧边栏 + 内容，移动端纯内容 ── */}
+      <div className="flex-1 flex min-h-0">
+        {/* 桌面端侧边栏导航（可拖拽宽度） */}
+        <div className="hidden md:flex shrink-0 relative border-r border-border bg-surface">
+          <div className="overflow-y-auto py-1" style={{ width: sidebarWidth - 1 }}>
+            {/* 管理员快捷入口 */}
+            {user?.role === 'admin' && (
               <button
-                key={s.value}
-                onClick={() => setChatStyle(s.value)}
-                className={`flex-1 px-4 py-3 rounded-xl border text-sm font-medium transition-all text-left ${
-                  chatStyle === s.value
-                    ? 'border-primary-500 bg-primary-500/10 text-primary-400'
-                    : 'border-border bg-canvas text-textSecondary hover:border-primary-500/30'
-                }`}
+                onClick={() => navigate('/admin')}
+                className="w-full flex items-center gap-2 mx-2 px-2 py-1.5 mb-1 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-[13px] font-medium transition-colors"
+                style={{ width: sidebarWidth - 17 }}
               >
-                <div className="font-medium">{t(s.key)}</div>
-                <div className="text-[10px] mt-0.5 opacity-70">{t(s.descKey)}</div>
+                <Shield size={14} />
+                {t('settings.adminButton')}
               </button>
-            ))}
+            )}
+
+            <nav>
+              {/* 按分类分组 */}
+              {(() => {
+                const categories = [...new Set(NAV_SECTIONS.map(s => s.category))]
+                return categories.map(cat => {
+                  const items = NAV_SECTIONS.filter(s => s.category === cat)
+                  return (
+                    <div key={cat}>
+                      <div className="px-3 h-7 border-b border-border font-medium text-[11px] text-textMuted uppercase tracking-wider flex items-center shrink-0">
+                        {t(cat)}
+                      </div>
+                      <div className="py-0.5">
+                        {items.map(({ id, icon: Icon, labelKey }) => (
+                          <button
+                            key={id}
+                            onClick={() => scrollToSection(id)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors text-left ${
+                              activeSection === id
+                                ? 'bg-primary-500/10 text-primary-600 dark:text-primary-400 font-medium border-r-2 border-primary-400'
+                                : 'text-textSecondary hover:text-textPrimary hover:bg-elevated border-r-2 border-transparent'
+                            }`}
+                          >
+                            <Icon size={14} className="shrink-0 opacity-70" />
+                            <span className="truncate">{t(labelKey)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
+            </nav>
           </div>
+
+          {/* 拖拽手柄 */}
+          <div
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary-400/30 active:bg-primary-400/50 transition-colors z-10"
+            onMouseDown={handleResizeStart}
+          />
         </div>
 
-        {/* 策略模式 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.strategy')}</h2>
-          </div>
+        {/* 内容区域 */}
+        <div ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="max-w-2xl mx-auto">
+            {/* 移动端管理员快捷入口 */}
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="md:hidden w-full flex items-center justify-center gap-2 px-4 py-3 mb-4 rounded-xl bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-sm font-medium transition-colors"
+              >
+                <Shield size={16} />
+                {t('settings.adminButton')}
+              </button>
+            )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-textSecondary">
-                {t('settings.autoApproveTimeout')} {autoTimeout}
-              </label>
-              <input
-                type="range"
-                min="10"
-                max="300"
-                step="10"
-                value={autoTimeout}
-                onChange={(e) => setAutoTimeout(parseInt(e.target.value))}
-                className="w-full accent-primary-500"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Toggle checked={autoDefault} onChange={setAutoDefault} />
-              <span className="text-sm text-textSecondary">{t('settings.autoApproveDefault')}</span>
-            </div>
+            {sections}
           </div>
         </div>
-
-        {/* 外观主题 */}
-        <div id="settings-appearance" className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4 scroll-mt-16">
-          <div className="flex items-center gap-2 mb-4">
-            <Palette size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.appearance')}</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-textPrimary">{t('settings.darkMode')}</p>
-              <p className="text-xs text-textMuted mt-0.5">
-                {theme === 'dark' ? t('settings.darkModeDesc') : t('settings.lightModeDesc')}
-              </p>
-            </div>
-            <Toggle checked={theme === 'dark'} onChange={() => toggleTheme()} />
-          </div>
-        </div>
-
-        {/* 桌面通知 */}
-        <div className="bg-surface rounded-xl border border-border p-3 md:p-6 mb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <Bell size={18} className="text-primary-400" />
-            <h2 className="font-semibold text-textPrimary">{t('settings.notifications')}</h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint-400/10 text-mint-400 border border-mint-400/20">{t('settings.instantApplyBadge')}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-textPrimary">{t('settings.notificationsLabel')}</p>
-              <p className="text-xs text-textMuted mt-0.5">
-                {t('settings.notificationsDetailDesc')}
-              </p>
-            </div>
-            <Toggle checked={notifications} onChange={() => handleNotificationToggle(!notifications)} />
-          </div>
-        </div>
-
-        {/* 保存按钮 */}
-        {message && (
-          <div className={`text-sm px-3 py-2 rounded-xl mb-4 ${
-            message.includes('失败') || message.includes('错误')
-              ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
-              : 'bg-mint-400/10 border border-mint-400/20 text-mint-400'
-          }`}>
-            {message}
-          </div>
-        )}
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 text-sm font-medium transition-all shadow-lg shadow-primary-500/20"
-        >
-          <Save size={16} />
-          {saving ? t('settings.saving') : t('settings.save')}
-        </button>
-        <p className="text-xs text-textMuted mt-2">
-          {t('settings.saveHint')}
-        </p>
       </div>
 
       {/* ── 未保存修改离开确认弹窗 ── */}
@@ -628,9 +741,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-textPrimary">{t('settings.unsavedTitle')}</h3>
-                <p className="text-sm text-textSecondary mt-1">
-                  {t('settings.unsavedDesc')}
-                </p>
+                <p className="text-sm text-textSecondary mt-1">{t('settings.unsavedDesc')}</p>
               </div>
             </div>
             <div className="flex gap-3 mt-5">
@@ -650,7 +761,6 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-      </div>
     </div>
   )
 }

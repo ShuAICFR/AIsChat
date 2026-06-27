@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
@@ -7,6 +7,7 @@ import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
 import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User, Globe } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
+import { useResizableSidebar } from '../hooks/useResizableSidebar'
 
 interface Group {
   id: number
@@ -33,10 +34,6 @@ interface ChatAreaProps {
   dmSessionId: string | null
 }
 
-const SIDEBAR_MIN = 200
-const SIDEBAR_MAX = 500
-const SIDEBAR_DEFAULT = 320
-
 export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const t = useT()
   const [groups, setGroups] = useState<Group[]>([])
@@ -46,42 +43,8 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
-  // 侧栏可拖拽宽度
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem('chat_sidebar_width')
-    return saved ? Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Number(saved))) : SIDEBAR_DEFAULT
-  })
-  const resizing = useRef(false)
+  const { sidebarWidth, handleResizeStart } = useResizableSidebar('chat_sidebar_width')
   const sidebarRef = useRef<HTMLDivElement>(null)
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    resizing.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [])
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!resizing.current) return
-      const w = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, e.clientX))
-      setSidebarWidth(w)
-      localStorage.setItem('chat_sidebar_width', String(w))
-    }
-    const onUp = () => {
-      if (resizing.current) {
-        resizing.current = false
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-  }, [])
 
   // 加载群聊列表
   useEffect(() => {

@@ -133,15 +133,15 @@ export default function AdminPage() {
             const catTabs = tabs.filter(t => t.category === cat)
             return (
               <div key={cat}>
-                <div className="px-3 h-10 border-b border-border font-medium text-xs text-textMuted uppercase tracking-wider flex items-center shrink-0">
+                <div className="px-3 h-8 border-b border-border font-medium text-[11px] text-textMuted uppercase tracking-wider flex items-center shrink-0">
                   {cat}
                 </div>
-                <div className="py-1">
+                <div className="py-0.5">
                   {catTabs.map(tab => (
                     <button
                       key={tab.key}
                       onClick={() => switchTab(tab.key)}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left ${
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors text-left ${
                         activeTab === tab.key
                           ? 'bg-primary-500/10 text-primary-600 dark:text-primary-300 border-r-2 border-primary-400'
                           : 'text-textSecondary hover:bg-elevated hover:text-textPrimary border-r-2 border-transparent'

@@ -63,6 +63,10 @@
 - 🎛️ **记忆配置三参数**：Agent 表新增 `memory_load_mode`（index_only / index_plus_recent / index_plus_semantic）、`memory_recent_count`（0-50）、`memory_shared_scope`（private_only / private_plus_shared_by_user / private_plus_shared_all）。三档 config_profile 各有默认值（chat=仅索引、immersive=索引+最近3篇、digital_life=索引+语义），memory_shared_scope 由 ai_type 决定（general=仅私有、semi_general=按用户共享、resonance=全共享）。所有参数在创建/详情页可手动覆盖。
 - 🖥️ **前端「文件记忆」高级设置**：创建 AI 详细设置弹窗和 Agent 详情页均新增「文件记忆」分区，含加载模式下拉、最近篇数加减、共享范围下拉。预设值随 config_profile 自动填充。中英文 17 个翻译 key 已添加。
 - 📖 **认知架构设计文档**：新建 `docs/AI认知架构三空间模型.md`，含三空间模型、JSON intent 协议流程（Mermaid 图）、文件记忆设计、九宫格配置矩阵、六段提示词布局、API 变更清单。
+- 📏 **可拖拽侧边栏 Hook**：新建 `frontend/src/hooks/useResizableSidebar.ts`。200-500px 范围拖拽，localStorage 持久化宽度。ChatArea、SettingsPage 均复用同一 Hook。
+- 🏷️ **设置页面桌面端分类导航**：5 个分组（账户/API/偏好/行为/外观），IntersectionObserver 滚动高亮。侧边栏支持拖拽调整宽度。
+- 🛡️ **系统用户与错误通知**：迁移创建 `id=0` 的 system 用户，API 报错时通过 DM 通知 AI 持有者。系统消息玫瑰色气泡 + ShieldAlert 图标，引导用户配置全局 API Key。
+- 🎨 **管理面板桌面端竖标签布局**：左侧 `w-56` 侧边栏按分类分组（核心管理/运维分析/系统配置），右侧内容区独立滚动。
 
 ### Changed
 
@@ -72,6 +76,9 @@
 - 🔧 **沙箱错误消息增强**：路径穿越错误消息现在告知 AI 其文件空间根目录位置（`/app/data/agents/{id}/`），帮助 AI 自我纠正。
 - 🔧 **前端代码质量优化**：`ChatView.tsx` 提取 `isMessageForThisConversation`/`removeFromMap`/`addToMap` 三个模块级 helper，消除 7 处重复的 Map 操作和 3 处重复的 `belongsToHere` 检查。`ChatSidebar.tsx` 用 useRef 持有活跃对话 ID 避免事件监听器随对话切换而重建，500ms debounce 防 chat-refresh 请求风暴。所有硬编码 `'chat-refresh'` 字符串替换为 `CHAT_REFRESH_EVENT` 常量。
 - 🔧 **序列化器共享**：`federation_ws.py` 的 DM 消息字典构建改用共享的 `serialize_message()`，消除重复代码。
+- 🎨 **头像渐变重设计**：降低饱和度改用 teal 色系，镜像渐变方向（自己↗、他人↘），轻阴影替代球状效果。系统消息头像 rose 色 + Shield 图标。
+- 📐 **管理/设置侧边栏间距收紧**：导航项 `py-1.5`、`text-[13px]`，分类标题 `h-8`、`text-[11px]`，纯文字紧凑风格。
+- 🧹 **翻译键去重清理**：删除 5 组 10 个从未引用的重复废键（`continueEditing2`/`saveButton`/`perAgentConfig`/`agentApiSave`/`instantApply`），保留语义正确的在用键。
 
 ### Fixed
 
@@ -88,6 +95,10 @@
 - 🐛 **Storage 空间显示 0 B / 0 文件**：两个独立 bug——DB 查询 `FM.owner_id == ag.user_id` 应为 `FM.owner_id == agent_id`；物理扫描 `data_dir/agents/{agent_id}/` 路径错误（文件存于 `data_dir/` 扁平目录）。已修正为纯 DB 查询。
 - 🐛 **useWebSocket 死代码**：移除 `unreadSummary` 状态、`setUnreadSummary` 处理器、`clearSummary` 回调及其返回导出（~15 行），无任何组件消费。
 - 🐛 **message_serializer 冗余代码**：移除未使用的 `import logging`、`created_at` 从 `getattr` 改为直接属性访问、补充 `sender_avatar_url` 优先级注释。
+- 🐛 **`/user/stats` 500 错误**：`from app.models.friend import Friend` 模块不存在。修正为 `app.models.friendship.Friendship`，移除不存在的 `status` 过滤。
+- 🐛 **系统错误通知不触发**：sender FK 约束失败、DM session partner 错误、username 伪装风险三连修。最终方案：硬编码 `SYSTEM_USER_ID=0` + migration 确保 id=0 存在 + `setval` 保留序列。
+- 🐛 **Markdown inline code 溢出**：所有 code 被 `break-all` 影响。修复：块级 code 用 `whitespace-pre overflow-x-auto`，inline code 不加溢出控制。补充日夜模式文字颜色和 `[&_.katex]:text-inherit`。
+- 🐛 **Markdown 链接白色不可见**：浅色模式下链接无颜色。补 `[&_a]:text-primary-500 dark:[&_a]:text-primary-400 [&_a]:underline`。
 
 ---
 

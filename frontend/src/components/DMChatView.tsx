@@ -55,7 +55,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         </button>
 
         {/* 对方头像 */}
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-b flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${
+        <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${
           partner?.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-teal-400 to-teal-600'
         }`}>
           {partner?.avatar_url ? (

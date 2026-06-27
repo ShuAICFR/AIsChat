@@ -97,7 +97,7 @@
 - 🐛 **message_serializer 冗余代码**：移除未使用的 `import logging`、`created_at` 从 `getattr` 改为直接属性访问、补充 `sender_avatar_url` 优先级注释。
 - 🐛 **`/user/stats` 500 错误**：`from app.models.friend import Friend` 模块不存在。修正为 `app.models.friendship.Friendship`，移除不存在的 `status` 过滤。
 - 🐛 **系统错误通知不触发**：sender FK 约束失败、DM session partner 错误、username 伪装风险三连修。最终方案：硬编码 `SYSTEM_USER_ID=0` + migration 确保 id=0 存在 + `setval` 保留序列。
-- 🐛 **Markdown inline code 溢出**：所有 code 被 `break-all` 影响。修复：块级 code 用 `whitespace-pre overflow-x-auto`，inline code 不加溢出控制。补充日夜模式文字颜色和 `[&_.katex]:text-inherit`。
+- 🐛 **Markdown inline code/数学溢出**：块级 code 用 `whitespace-pre overflow-x-auto` 横向滚动；inline code 加 `break-all` 防长 token 溢出；行内 KaTeX 加 `max-w-full overflow-x-auto` 防长公式溢出。补充日夜模式文字颜色和 `[&_.katex]:text-inherit`。
 - 🐛 **Markdown 链接白色不可见**：浅色模式下链接无颜色。补 `[&_a]:text-primary-500 dark:[&_a]:text-primary-400 [&_a]:underline`。
 
 ---

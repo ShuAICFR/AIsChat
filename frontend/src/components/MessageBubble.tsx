@@ -21,8 +21,8 @@ function ChatCodeRenderer({ className, children, inline, ...props }: any) {
   }
 
   if (inline) {
-    // 行内代码：不做溢出控制，自然换行
-    return <code className={`bg-black/5 dark:bg-white/10 rounded px-1 py-0.5 text-[0.85em] ${className || ''}`}>{children}</code>
+    // 行内代码：允许断词换行（长 token 无空格时也能折行），但不阻止跟随文本自然流排
+    return <code className={`bg-black/5 dark:bg-white/10 rounded px-1 py-0.5 text-[0.85em] break-all ${className || ''}`}>{children}</code>
   }
   // 块级代码（```）：横向滚动，不换行
   return (

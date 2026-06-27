@@ -7,10 +7,11 @@ import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
-  Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot,
+  Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot, Settings,
   ScrollText, Loader2,
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'
+import AgentSettingsModal from '../components/AgentSettingsModal'
 
 interface Agent {
   id: number
@@ -45,6 +46,9 @@ interface Agent {
   has_api_key: boolean
   avatar_url: string | null
   api_token: string | null
+  is_ai_editable: boolean
+  reminder_grace: string
+  discoverable: boolean
   memory_load_mode: string
   memory_recent_count: number
   memory_shared_scope: string
@@ -98,6 +102,10 @@ export default function AgentDetailPage() {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'info' | 'memories' | 'storage' | 'workspace' | 'logs' | 'collaborators'>('info')
+  const [showFullSettings, setShowFullSettings] = useState(false)
+  const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([])
+  const [defaultModels, setDefaultModels] = useState({ chat_model: '', work_model: '' })
+  const [thinkingSupported, setThinkingSupported] = useState(true)
 
   // Delete
   const [showDelete, setShowDelete] = useState(false)
@@ -280,6 +288,14 @@ export default function AgentDetailPage() {
   useEffect(() => {
     loadAgent()
     loadToken()
+    // 加载模型选项（供完整设置弹窗使用）
+    api.get<{ models: { value: string; label: string }[]; defaults: { chat_model: string; work_model: string }; thinking_supported: boolean }>('/agents/models')
+      .then(data => {
+        setModelOptions(data.models || [])
+        setDefaultModels(data.defaults || { chat_model: '', work_model: '' })
+        setThinkingSupported(data.thinking_supported !== false)
+      })
+      .catch(() => {})
   }, [loadAgent, loadToken])
 
   useEffect(() => {
@@ -515,6 +531,16 @@ export default function AgentDetailPage() {
         {/* Tab Content */}
         {activeTab === 'info' && (
           <div className="space-y-4">
+            {/* 完整设置入口 */}
+            <button
+              onClick={() => setShowFullSettings(true)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-primary-400/50 bg-primary-500/5 hover:bg-primary-500/10 text-primary-400 hover:text-primary-300 text-sm font-medium transition-colors"
+            >
+              <Settings size={16} />
+              {t('agentDetail.fullSettings')}
+              <span className="text-textMuted text-xs font-normal">— {t('agentDetail.fullSettingsDesc')}</span>
+            </button>
+
             {/* Quick Edit Prompt */}
             <div className="bg-surface rounded-xl border border-border p-4">
               <div className="flex items-center justify-between mb-3">
@@ -1253,6 +1279,19 @@ export default function AgentDetailPage() {
           file={cropFile}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {/* 完整设置弹窗 */}
+      {agent && (
+        <AgentSettingsModal
+          agent={agent}
+          modelOptions={modelOptions}
+          defaults={defaultModels}
+          thinkingSupported={thinkingSupported}
+          isOpen={showFullSettings}
+          onClose={() => setShowFullSettings(false)}
+          onSaved={() => loadAgent()}
         />
       )}
     </div>

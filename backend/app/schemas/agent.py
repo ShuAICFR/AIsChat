@@ -120,6 +120,9 @@ class AgentResponse(BaseModel):
     memory_recent_count: int = 0
     memory_shared_scope: str = "private_only"
     avatar_url: str | None = None
+    is_ai_editable: bool = True
+    reminder_grace: str = "every_time"
+    discoverable: bool = True
     created_at: str | None
 
 

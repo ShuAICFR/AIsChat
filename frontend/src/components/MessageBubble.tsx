@@ -11,7 +11,7 @@ import { formatMessageTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
 import MermaidBlock from './MermaidBlock'
 
-/** 聊天消息中的 code 渲染：mermaid → MermaidBlock(compact)，其余默认 */
+/** 聊天消息中的 code 渲染：只对 block code/mermaid 做溢出控制，inline code 不干预 */
 function ChatCodeRenderer({ className, children, inline, ...props }: any) {
   const match = /language-(\w+)/.exec(className || '')
   const code = String(children).replace(/\n$/, '')
@@ -21,11 +21,12 @@ function ChatCodeRenderer({ className, children, inline, ...props }: any) {
   }
 
   if (inline) {
-    return <code className={className}>{children}</code>
+    // 行内代码：不做溢出控制，自然换行
+    return <code className={`bg-black/5 dark:bg-white/10 rounded px-1 py-0.5 text-[0.85em] ${className || ''}`}>{children}</code>
   }
-  // block <code> 替代 <pre>，避免 react-markdown 嵌套在 <p> 中导致 HTML 规范错误
+  // 块级代码（```）：横向滚动，不换行
   return (
-    <code className={`block overflow-x-auto whitespace-pre-wrap rounded-xl bg-elevated border border-border p-4 text-xs ${className || ''}`}>
+    <code className={`block overflow-x-auto whitespace-pre rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 p-4 text-xs text-textPrimary ${className || ''}`}>
       {children}
     </code>
   )
@@ -74,7 +75,7 @@ const MessageBubble = memo(function MessageBubble({
   const bubbleBg = isMine
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
     : senderType === 'system'
-      ? 'bg-rose-50 text-rose-900 rounded-2xl rounded-tl-md border border-rose-200'
+      ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-900 dark:text-rose-300 rounded-2xl rounded-tl-md border border-rose-200 dark:border-rose-800'
       : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
 
   const avatarGradientBase = senderType === 'system'
@@ -141,11 +142,11 @@ const MessageBubble = memo(function MessageBubble({
         </div>
         <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}
           [&_.katex-display]:overflow-x-auto [&_.katex-display]:-mx-1 [&_.katex-display]:px-1
+          [&_.katex]:text-inherit
           [&_pre]:overflow-x-auto [&_pre]:-mx-1 [&_pre]:px-1
           [&_table]:overflow-x-auto [&_table]:block
           [&_img]:max-w-full [&_img]:rounded-lg
           [&_a]:break-all
-          [&_code]:break-all [&_pre>code]:break-normal
         `}>
           {isTyping ? (
             <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />

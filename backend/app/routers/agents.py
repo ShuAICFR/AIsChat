@@ -172,6 +172,10 @@ async def create_new_agent(
             reminder_grace=req.reminder_grace,
             allow_friend_requests=req.allow_friend_requests,
             auto_respond_friend_request=req.auto_respond_friend_request,
+            discoverable=req.discoverable,
+            memory_load_mode=req.memory_load_mode,
+            memory_recent_count=req.memory_recent_count,
+            memory_shared_scope=req.memory_shared_scope,
         )
         return agent_to_dict(agent)
     except ValueError as e:
@@ -680,37 +684,29 @@ async def get_agent_storage(
 
     agent = await _require_agent_access(agent_id, current_user, db)
 
-    # 1. 扫描工作区目录（使用绝对路径，指向 agent 数据目录）
-    workspace_dir = os.path.join(settings.data_dir, "agents", str(agent_id))
-    total_size = 0
-    file_count = 0
-    files = []
-    if os.path.exists(workspace_dir):
-        for dirpath, dirnames, filenames in os.walk(workspace_dir):
-            for fn in filenames:
-                fp = os.path.join(dirpath, fn)
-                size = os.path.getsize(fp)
-                total_size += size
-                file_count += 1
-                files.append({
-                    "path": fp.replace("\\", "/"),
-                    "size": size,
-                    "name": fn,
-                })
+    # 查询该 AI 的文件（FileMetadata 中 owner_type="ai" 且 owner_id=agent_id）
+    db_result = await db.execute(
+        select(sqlfunc.sum(FM.size), sqlfunc.count(FM.id))
+        .where(FM.owner_type == "ai", FM.owner_id == agent_id)
+    )
+    db_sum, db_count = db_result.one()
+    total_size = db_sum or 0
+    file_count = db_count or 0
 
-    # 2. 查 file_metadata 表中该 AI 的文件（agent.user_id 对应的 owner 记录 + ai 类型）
-    from app.models.agent import Agent as AgentModel
-    ag = await db.get(AgentModel, agent_id)
-    if ag and ag.user_id:
-        db_result = await db.execute(
-            select(sqlfunc.sum(FM.size), sqlfunc.count(FM.id))
-            .where(FM.owner_type == "ai", FM.owner_id == ag.user_id)
-        )
-        db_sum, db_count = db_result.one()
-        if db_sum:
-            total_size += db_sum
-        if db_count:
-            file_count += db_count
+    # 获取文件列表（从 DB，按大小降序）
+    files = []
+    file_list_result = await db.execute(
+        select(FM)
+        .where(FM.owner_type == "ai", FM.owner_id == agent_id)
+        .order_by(FM.size.desc())
+        .limit(50)
+    )
+    for f in file_list_result.scalars().all():
+        files.append({
+            "path": f.path,
+            "size": f.size or 0,
+            "name": f.path.rsplit("/", 1)[-1] if "/" in f.path else f.path,
+        })
 
     # 3. 配额（默认每 AI 100MB）
     quota_mb = int(os.getenv("STORAGE_QUOTA_PER_AI_MB", "100"))

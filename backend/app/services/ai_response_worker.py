@@ -642,7 +642,39 @@ async def _tool_call_loop(
             for k in ("prompt_tokens", "completion_tokens", "total_tokens", "reasoning_tokens", "cached_tokens"):
                 total_usage[k] += usage.get(k, 0)
 
-        # ── 提醒：有文字但没有工具调用 ──
+        # ── 解析 JSON intent（轻量方案：提示词引导 + 后端解析，不用 response_format）──
+        # AI 的 content 应为 {"intent": "tool_calls"|"end_turn"|"no_action"}
+        # 解析成功 → 按意图分发；解析失败 → 走下方 system_reminder 兜底
+        parsed_intent = None
+        if content:
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict) and "intent" in parsed:
+                    parsed_intent = parsed["intent"]
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        # ── end_turn / no_action：AI 明确表示本轮结束 ──
+        # 不走 system_reminder，直接干净退出（省一轮 API 调用）
+        if parsed_intent in ("end_turn", "no_action") and not tool_calls:
+            logger.info(
+                f"AI {agent.name}({agent.id}) intent={parsed_intent}，本轮结束"
+            )
+            if last_task:
+                try:
+                    from app.services.workspace_service import save_current_task
+                    await save_current_task(db, agent.id, last_task)
+                except Exception:
+                    pass
+            await _save_conversation_log_safe(
+                db, agent, messages, conversation_type,
+                group_id, session_id,
+                has_output=bool(content), model=model,
+                token_usage=total_usage,
+            )
+            return
+
+        # ── 提醒：有文字但没有工具调用（兜底机制，仅 JSON 解析失败或 intent 异常时触发）──
         # 文字不会自动发送。括号表情写在 send_message 的内容里完全OK，
         # 但必须通过工具调用来发送。这里提醒 AI 补上工具调用。
         # agent.reminder_grace: every_time(每次都不计) | once(仅一次) | off(计入配额)
@@ -655,7 +687,8 @@ async def _tool_call_loop(
             reminder_max = 10  # 有 end_turn 兜底，可放宽额外机会
         if content and not tool_calls and _reminder_extra < reminder_max:
             logger.info(
-                f"AI {agent.name}({agent.id}) 返回了文字但无工具调用，"
+                f"AI {agent.name}({agent.id}) 返回了文字但无工具调用"
+                f"（intent={parsed_intent or '解析失败'}），"
                 f"注入提醒: {content[:80]}"
             )
             # 构造虚拟 tool_calls 以满足 OpenAI API 格式要求

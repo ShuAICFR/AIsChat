@@ -32,6 +32,9 @@ CONFIG_PROFILES = {
         "is_ai_editable": False,
         "hide_ai_identity": True,
         "reminder_grace": "every_time",
+        # v0.7.0: 文件记忆
+        "memory_load_mode": "index_only",
+        "memory_recent_count": 0,
     },
     "immersive": {
         "name": "深度沉浸档",
@@ -50,6 +53,9 @@ CONFIG_PROFILES = {
         "is_ai_editable": True,
         "hide_ai_identity": False,
         "reminder_grace": "every_time",
+        # v0.7.0: 文件记忆
+        "memory_load_mode": "index_plus_recent",
+        "memory_recent_count": 3,
     },
     "digital_life": {
         "name": "数字生命档",
@@ -68,6 +74,9 @@ CONFIG_PROFILES = {
         "is_ai_editable": True,
         "hide_ai_identity": False,
         "reminder_not_count": True,
+        # v0.7.0: 文件记忆
+        "memory_load_mode": "index_plus_semantic",
+        "memory_recent_count": 5,
     },
 }
 
@@ -79,9 +88,14 @@ _PRESET_ORDER = {"custom": 0, "chat": 1, "immersive": 2, "digital_life": 3}
 _STRONG_NUMERIC_PARAMS = [
     "temperature", "top_p", "presence_penalty", "frequency_penalty",
     "max_tool_rounds", "alarm_max_tool_rounds", "max_alarms",
+    "memory_recent_count",
 ]
 _STRONG_BOOL_PARAMS = [
     "thinking_enabled", "force_alarm_on_end", "is_ai_editable",
+]
+# 字符串枚举参数：切换预设时直接覆盖（不合并）
+_STRONG_STRING_PARAMS = [
+    "memory_load_mode", "memory_shared_scope",
 ]
 # 无关参数：切换预设时永远不改
 _INDEPENDENT_PARAMS = [
@@ -157,6 +171,15 @@ def _merge_preset_values(
             if merged[key] != cur:
                 changed.append(key)
 
+    for key in _STRONG_STRING_PARAMS:
+        if key not in preset_values:
+            continue
+        cur = current_values.get(key)
+        pre = preset_values[key]
+        if cur != pre:
+            merged[key] = pre
+            changed.append(key)
+
     return merged, changed
 
 
@@ -197,6 +220,9 @@ async def apply_config_profile(
         "force_alarm_on_end": agent.force_alarm_on_end,
         "max_alarms": agent.max_alarms,
         "is_ai_editable": agent.is_ai_editable,
+        "memory_recent_count": agent.memory_recent_count,
+        "memory_load_mode": agent.memory_load_mode,
+        "memory_shared_scope": agent.memory_shared_scope,
         "reminder_grace": agent.reminder_grace,
     }
 
@@ -278,6 +304,9 @@ async def create_agent(
     allow_friend_requests: bool = True,
     auto_respond_friend_request: bool = False,
     discoverable: bool = True,
+    memory_load_mode: str = "index_only",
+    memory_recent_count: int = 0,
+    memory_shared_scope: str = "private_only",
 ) -> Agent:
     """
     创建 AI 代理。
@@ -351,10 +380,17 @@ async def create_agent(
         allow_friend_requests=allow_friend_requests,
         auto_respond_friend_request=auto_respond_friend_request,
         discoverable=discoverable,
+        memory_load_mode=memory_load_mode,
+        memory_recent_count=memory_recent_count,
+        memory_shared_scope=memory_shared_scope,
     )
     db.add(agent)
     await db.flush()
     await db.refresh(agent)
+
+    # v0.7.0: 初始化文件系统记忆目录
+    from app.services.memory_index import init_memory_directories
+    await init_memory_directories(agent.id, ai_type=ai_type)
 
     # 自动将创建者添加为 AI 的好友（双向）
     from app.models.friendship import Friendship
@@ -710,6 +746,14 @@ async def update_agent_config(
     # is_ai_editable 允许 AI 自修改
     if "is_ai_editable" in updates:
         agent.is_ai_editable = updates["is_ai_editable"]
+
+    # v0.7.0: 文件系统记忆配置
+    if "memory_load_mode" in updates and updates["memory_load_mode"] is not None:
+        agent.memory_load_mode = updates["memory_load_mode"]
+    if "memory_recent_count" in updates and updates["memory_recent_count"] is not None:
+        agent.memory_recent_count = updates["memory_recent_count"]
+    if "memory_shared_scope" in updates and updates["memory_shared_scope"] is not None:
+        agent.memory_shared_scope = updates["memory_shared_scope"]
 
     # 好友申请开关
     if "allow_friend_requests" in updates:
@@ -1331,6 +1375,10 @@ def agent_to_dict(agent: Agent) -> dict:
         "avatar_url": agent.avatar_url,
         "api_token": agent.api_token,
         "created_at": str(agent.created_at) if agent.created_at else None,
+        # v0.7.0: 文件系统记忆配置
+        "memory_load_mode": agent.memory_load_mode or "index_only",
+        "memory_recent_count": agent.memory_recent_count if agent.memory_recent_count is not None else 0,
+        "memory_shared_scope": agent.memory_shared_scope or "private_only",
     }
 
 

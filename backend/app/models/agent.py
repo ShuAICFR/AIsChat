@@ -97,6 +97,14 @@ class Agent(Base):
     # AI 类型 (v0.4.0): general(通用) | semi_general(半通用) | resonance(共振, 默认)
     ai_type = Column(String(20), default="resonance")
 
+    # ── 文件系统记忆配置 (v0.7.0) ──
+    # 记忆加载模式: index_only(仅索引) | index_plus_recent(索引+最近N篇内容) | index_plus_semantic(索引+语义检索)
+    memory_load_mode = Column(String(30), default="index_only")
+    # index_plus_recent 模式下加载最近 N 个文件的完整内容
+    memory_recent_count = Column(Integer, default=0)
+    # 共享记忆范围: private_only | private_plus_shared_by_user | private_plus_shared_all
+    memory_shared_scope = Column(String(30), default="private_only")
+
     # 最近意愿评分和原因 (v0.4.0)
     last_willingness_score = Column(Integer, nullable=True)
     last_willingness_reason = Column(Text, nullable=True)

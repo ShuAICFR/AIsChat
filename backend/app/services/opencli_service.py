@@ -177,7 +177,11 @@ def _resolve_agent_path(agent_id: int, file_path: str) -> Path:
         workspace_resolved = workspace.resolve()
         # 确保解析后的路径仍在 workspace 下
         if not str(resolved).startswith(str(workspace_resolved) + os.sep) and resolved != workspace_resolved:
-            raise ValueError(f"路径穿越被阻止: '{file_path}' 试图访问沙箱外路径")
+            raise ValueError(
+                f"路径穿越被阻止: '{file_path}' 试图访问沙箱外路径。"
+                f"你的文件空间根目录是 /app/data/agents/{agent_id}/，"
+                f"所有文件操作只能在此目录内进行。"
+            )
         return resolved
     except (ValueError, OSError) as e:
         if "路径穿越" in str(e):

@@ -38,3 +38,17 @@ export const AI_TYPE_LABEL: Record<string, { key: string; cls: string }> = {
   general: { key: 'aiType.general', cls: 'bg-primary-500/10 text-primary-400' },
   semi_general: { key: 'aiType.semiGeneral', cls: 'bg-amber-500/10 text-amber-400' },
 }
+
+// ============================================================
+// chat-refresh 事件（ChatView ↔ ChatSidebar 兄弟通信）
+// ============================================================
+
+export const CHAT_REFRESH_EVENT = 'chat-refresh'
+
+export type ChatRefreshEventType = 'message_sent' | 'unread_update' | 'dm_notification'
+
+export interface ChatRefreshDetail {
+  type: ChatRefreshEventType
+  conversation_type?: 'group' | 'dm'
+  conversation_id?: number | string
+}

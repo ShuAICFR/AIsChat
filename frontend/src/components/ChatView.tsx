@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
 import ProfileCard from './ProfileCard'
 import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon, Bot, User } from 'lucide-react'
-import { getStateDotColor } from '../constants'
+import { getStateDotColor, CHAT_REFRESH_EVENT } from '../constants'
 import { useT } from '../i18n/I18nContext'
 
 interface Message {
@@ -30,6 +30,43 @@ interface ChatViewProps {
 }
 
 const PAGE_SIZE = 20
+
+// ── 模块级工具函数 ──
+
+/** 检查 WebSocket 消息是否属于当前对话 */
+function isMessageForThisConversation(
+  data: { group_id?: number; session_id?: string },
+  convType: 'group' | 'dm',
+  convId: number | string,
+): boolean {
+  return (convType === 'group' && (data as any).group_id === convId) ||
+         (convType === 'dm' && (data as any).session_id === convId)
+}
+
+/** 从 Map state setter 中移除指定 id */
+function removeFromMap<K, V>(
+  setter: React.Dispatch<React.SetStateAction<Map<K, V>>>,
+  id: K,
+) {
+  setter((prev) => {
+    const next = new Map(prev)
+    next.delete(id)
+    return next
+  })
+}
+
+/** 向 Map state setter 中添加指定键值对 */
+function addToMap<K, V>(
+  setter: React.Dispatch<React.SetStateAction<Map<K, V>>>,
+  id: K,
+  value: V,
+) {
+  setter((prev) => {
+    const next = new Map(prev)
+    next.set(id, value)
+    return next
+  })
+}
 
 export default function ChatView({ conversationType, conversationId }: ChatViewProps) {
   const t = useT()
@@ -136,72 +173,32 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         setTimeout(() => scrollToBottom(true), 50)
       }
       // 新消息到达 → 通知侧栏刷新排序和未读
-      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: {
+      window.dispatchEvent(new CustomEvent(CHAT_REFRESH_EVENT, { detail: {
         type: 'unread_update',
         conversation_type: conversationType,
         conversation_id: conversationId,
       } }))
       if (m.sender_type === 'ai' && m.sender_id) {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(m.sender_id)
-          return next
-        })
-        setTypingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(m.sender_id)
-          return next
-        })
+        removeFromMap(setThinkingAgents, m.sender_id)
+        removeFromMap(setTypingAgents, m.sender_id)
       }
     } else if (msg.type === 'ai_thinking') {
       const d = msg.data
       if (d.trigger === 'auto') return
-      const thinkingBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!thinkingBelongsToHere) return
-      setThinkingAgents((prev) => {
-        const next = new Map(prev)
-        next.set(d.agent_id, d.agent_name)
-        return next
-      })
+      if (!isMessageForThisConversation(d, conversationType, conversationId)) return
+      addToMap(setThinkingAgents, d.agent_id, d.agent_name)
     } else if (msg.type === 'ai_thinking_end') {
       const d = msg.data
       if (d.trigger === 'auto') return
-      const endBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!endBelongsToHere) return
-      setThinkingAgents((prev) => {
-        const next = new Map(prev)
-        next.delete(d.agent_id)
-        return next
-      })
-      setTypingAgents((prev) => {
-        const next = new Map(prev)
-        next.delete(d.agent_id)
-        return next
-      })
+      if (!isMessageForThisConversation(d, conversationType, conversationId)) return
+      removeFromMap(setThinkingAgents, d.agent_id)
+      removeFromMap(setTypingAgents, d.agent_id)
     } else if (msg.type === 'ai_typing') {
       const d = msg.data
       if (d.trigger === 'auto') return
-      const typingBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!typingBelongsToHere) return
-      const clearThinking = () => {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(d.agent_id)
-          return next
-        })
-      }
-      setTimeout(clearThinking, 1500)
-      setTypingAgents((prev) => {
-        const next = new Map(prev)
-        next.set(d.agent_id, d.agent_name)
-        return next
-      })
+      if (!isMessageForThisConversation(d, conversationType, conversationId)) return
+      setTimeout(() => removeFromMap(setThinkingAgents, d.agent_id), 1500)
+      addToMap(setTypingAgents, d.agent_id, d.agent_name)
     } else if (msg.type === 'announcement') {
       const d = msg.data
       if (d.group_id !== conversationId) return
@@ -229,7 +226,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         )
       }
     } else if (msg.type === 'dm_notification' || msg.type === 'unread_update') {
-      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: msg }))
+      window.dispatchEvent(new CustomEvent(CHAT_REFRESH_EVENT, { detail: msg }))
     }
   }, [conversationType, conversationId, t])
 
@@ -393,7 +390,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         if (conversationType === 'group') {
           api.post(`/groups/${conversationId}/read`)
             .then(() => {
-              window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'unread_update' } }))
+              window.dispatchEvent(new CustomEvent(CHAT_REFRESH_EVENT, { detail: { type: 'unread_update' } }))
             })
             .catch(() => {})
           const membersData = await api.get(`/groups/${conversationId}/members`)
@@ -402,7 +399,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         await loadMessages({ mode: 'initial' })
         // DM 消息加载同时标记已读，触发 sidebar 刷新未读计数
         if (conversationType === 'dm') {
-          window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'unread_update' } }))
+          window.dispatchEvent(new CustomEvent(CHAT_REFRESH_EVENT, { detail: { type: 'unread_update' } }))
         }
       } catch (err) {
         console.error('初始化失败:', err)
@@ -629,7 +626,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     localStorage.removeItem(`draft_${conversationType}_${conversationId}`)
     setPendingAttachments([])
     setMentionActive(false)
-    window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'message_sent' } }))
+    window.dispatchEvent(new CustomEvent(CHAT_REFRESH_EVENT, { detail: { type: 'message_sent' } }))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

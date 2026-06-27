@@ -12,6 +12,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../api/client'
+import { CHAT_REFRESH_EVENT } from '../constants'
 
 const STORAGE_KEY = 'notifications_enabled'
 const BASE_TITLE = 'AIsChat'
@@ -141,8 +142,8 @@ export function useDesktopNotification() {
         updateUnread()
       }
     }
-    window.addEventListener('chat-refresh', handler)
-    return () => window.removeEventListener('chat-refresh', handler)
+    window.addEventListener(CHAT_REFRESH_EVENT, handler)
+    return () => window.removeEventListener(CHAT_REFRESH_EVENT, handler)
   }, [updateUnread])
 
   // enabled 变化时刷新标题

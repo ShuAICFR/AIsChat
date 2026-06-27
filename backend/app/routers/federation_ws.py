@@ -387,19 +387,17 @@ async def _handle_forwarded_message(from_public_id: str, data: dict) -> None:
                     msg.get("sender_avatar_url"), msg.get("sender_type", "human"),
                     msg.get("sender_id", 0), peer_for_dm_avatar,
                 ))
-                dm_data = {
-                    "id": dm_msg.id if hasattr(dm_msg, 'id') else None,
-                    "session_id": str(session_id),
-                    "sender_id": 0,
-                    "sender_name": msg.get("sender_name", "远程用户"),
-                    "sender_type": msg.get("sender_type", "human"),
-                    "sender_avatar_url": sender_avatar_dm,
-                    "content": msg.get("content", ""),
-                    "reply_to": msg.get("reply_to"),
-                    "source_public_id": source_public_id,
-                    "created_at": str(dm_msg.created_at) if hasattr(dm_msg, 'created_at') else None,
-                    "read_at": None,
-                }
+                from app.utils.message_serializer import serialize_message
+                dm_data = serialize_message(
+                    dm_msg,
+                    sender_name=msg.get("sender_name", "远程用户"),
+                    sender_type=msg.get("sender_type", "human"),
+                    sender_avatar_url=sender_avatar_dm,
+                    conversation_key='session_id',
+                    include_read_at=True,
+                )
+                # 联邦消息的 sender_id 固定为 0（远端用户），覆盖 serialize_message 的 ORM 默认值
+                dm_data["sender_id"] = 0
                 await manager.broadcast_to_dm(
                     str(session_id),
                     {"type": "message", "conversation_type": "dm", "data": dm_data},

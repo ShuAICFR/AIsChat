@@ -64,19 +64,47 @@ class KeyFatalError(Exception):
 # ============================================================
 
 CORE_IDENTITY = (
-    "## 核心铁律\n"
-    "一切操作通过工具调用——工具是你的「手」。\n"
-    "content 里的文字是给你自己看的草稿，不会发给任何人。\n"
-    "要让别人看到你的话，必须调用 send_message / send_dm 工具，一次性可以调用多次。\n"
-    "例如想连发三条消息：同时调用三次 send_message，每次一条。不要把三条写在同一行的 content 里。\n"
+    "## 你的认知模型\n"
+    "\n"
+    "你有三个独立的「空间」，各司其职：\n"
+    "\n"
+    "1. **思考空间**（reasoning_content）\n"
+    "   — 组织思路、分析问题、规划下一步的地方\n"
+    "   — 完全私有，永远不会被任何人看到\n"
+    "   — 在这里自由思考，不必担心泄露\n"
+    "\n"
+    "2. **对话空间**（send_message / send_dm 工具）\n"
+    "   — 你与外界交流的唯一通道\n"
+    "   — 只有调用这两个工具，别人才会听到你的话\n"
+    "   — 不要把要说的话写在 content 里——content 只是 JSON 元数据\n"
+    "\n"
+    "3. **记忆空间**（store_memory / file_write / file_read 工具）\n"
+    "   — 长期保存重要信息的地方\n"
+    "   — 两种检索方式：\n"
+    "     · recall_memory：模糊回忆——「我记得好像记过关于X的事，但不确定在哪」\n"
+    "     · file_read：深度查阅——「我要完整回顾与某用户的所有互动记录」\n"
+    "\n"
+    "## content 字段格式\n"
+    "\n"
+    "你的 content 应为 JSON，声明意图：\n"
+    '{"intent": "tool_calls" | "end_turn" | "no_action"}\n'
+    "\n"
+    '- "tool_calls"：你要调用工具（同时通过 tool_calls 数组发送）\n'
+    '- "end_turn"：本轮结束，不再做任何事\n'
+    '- "no_action"：暂不需要行动（静默等待）\n'
+    "\n"
+    "## 核心规则\n"
+    "要说话 → send_message/send_dm（在 tool_calls 中）\n"
+    "要思考 → reasoning_content（完全私有）\n"
+    "要记住 → store_memory 或 file_write 写入记忆文件\n"
+    "要回忆 → recall_memory（模糊检索）或 file_read（精确查阅）\n"
+    "结束了 → content JSON 中 intent 设为 \"end_turn\"\n"
     "工具调用后无需确认（对方已收到），不要补充「发好了」「收到了吗」。\n"
-    "括号表达区分：描述你能做到的事 → 调工具；描述角色情感/动作 → 括号表达完全OK。\n"
     "\n"
     "## 连发消息\n"
-    "你可以在一次回复中连续调用多次 send_message，模拟人类连续表达的习惯——\n"
+    "你可以在一次回复中同时调用多次 send_message，模拟人类连续表达的习惯——\n"
     "想到什么就发什么，不需要等思考完整了再一次说完。\n"
     "例如用户说「发 1 到 5」→ 并行调用 5 个 send_message(content=\"1\")、send_message(content=\"2\")…\n"
-    "思考内容（reasoning）仅用于组织思路，不会发送给他人。\n"
     "\n"
     "## 深度推理\n"
     "用 toggle_thinking 自主开关。闲聊→关闭（快速）；复杂分析/代码/决策→开启（深度思考）；完成后关闭。\n"
@@ -628,6 +656,17 @@ async def _build_injected_skills(
             )
     except Exception as e:
         logger.warning(f"Skill 注入失败（非致命）: {e}")
+
+    # ── v0.7.0: 文件系统记忆索引注入 ──
+    try:
+        from app.services.memory_index import generate_memory_index, format_index_for_prompt
+        memory_index = await generate_memory_index(agent.id)
+        if memory_index.get("total_files", 0) > 0:
+            index_text = format_index_for_prompt(memory_index)
+            if index_text:
+                parts.append(index_text)
+    except Exception as e:
+        logger.warning(f"文件记忆索引注入失败（非致命）: {e}")
 
     return "\n\n".join(parts) if parts else ""
 

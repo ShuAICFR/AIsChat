@@ -45,6 +45,9 @@ interface Agent {
   has_api_key: boolean
   avatar_url: string | null
   api_token: string | null
+  memory_load_mode: string
+  memory_recent_count: number
+  memory_shared_scope: string
   created_at: string
 }
 
@@ -652,6 +655,50 @@ export default function AgentDetailPage() {
                         className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
                       >+</button>
                     </span>
+                  </div>
+                </div>
+              </div>
+              {/* 文件记忆 */}
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <h4 className="text-xs font-medium text-textSecondary mb-3">{t('agentDetail.fileMemory')}</h4>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-textMuted">{t('agentDetail.memoryLoadMode')}</span>
+                    <select
+                      value={agent.memory_load_mode || 'index_only'}
+                      onChange={(e) => handleUpdateAgentField('memory_load_mode', e.target.value)}
+                      className="text-xs px-2 py-0.5 rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50 ml-1"
+                    >
+                      <option value="index_only">{t('agentDetail.memoryModeIndexOnly')}</option>
+                      <option value="index_plus_recent">{t('agentDetail.memoryModeIndexRecent')}</option>
+                      <option value="index_plus_semantic">{t('agentDetail.memoryModeIndexSemantic')}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span className="text-textMuted">{t('agentDetail.memoryRecentCount')}</span>
+                    <span className="inline-flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => handleUpdateAgentField('memory_recent_count', Math.max(0, (agent.memory_recent_count || 0) - 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >−</button>
+                      <span className="text-textPrimary font-mono w-5 text-center">{agent.memory_recent_count || 0}</span>
+                      <button
+                        onClick={() => handleUpdateAgentField('memory_recent_count', Math.min(50, (agent.memory_recent_count || 0) + 1))}
+                        className="w-5 h-5 rounded bg-canvas border border-border text-textMuted hover:text-textPrimary text-xs"
+                      >+</button>
+                    </span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-textMuted">{t('agentDetail.memorySharedScope')}</span>
+                    <select
+                      value={agent.memory_shared_scope || 'private_only'}
+                      onChange={(e) => handleUpdateAgentField('memory_shared_scope', e.target.value)}
+                      className="text-xs px-2 py-0.5 rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50 ml-1"
+                    >
+                      <option value="private_only">{t('agentDetail.sharedScopePrivate')}</option>
+                      <option value="private_plus_shared_by_user">{t('agentDetail.sharedScopeByUser')}</option>
+                      <option value="private_plus_shared_all">{t('agentDetail.sharedScopeAll')}</option>
+                    </select>
                   </div>
                 </div>
               </div>

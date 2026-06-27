@@ -39,15 +39,6 @@ export function useWebSocket(
   const [connected, setConnected] = useState(false)
   const [reconnecting, setReconnecting] = useState(false)
   const [errors, setErrors] = useState<WsError[]>([])
-  const [unreadSummary, setUnreadSummary] = useState<{
-    groups: Array<{
-      group_id: number
-      group_name: string
-      unread_count: number
-      last_message_preview: string
-      last_message_at: string | null
-    }>
-  } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
 
   // 消息回调 ref — 由消费者设置，WebSocket onmessage 时调用
@@ -105,11 +96,6 @@ export function useWebSocket(
           setTimeout(() => {
             setErrors((prev) => prev.filter((e) => e.timestamp !== wsError.timestamp))
           }, 5000)
-        }
-
-        // 未读摘要（sidebar 用）
-        if (msg.type === 'unread_summary') {
-          setUnreadSummary(msg.data)
         }
 
         // 分发给消费者回调（ChatView 注册）
@@ -259,7 +245,6 @@ export function useWebSocket(
   }, [conversationType, conversationId])
 
   const clearErrors = useCallback(() => setErrors([]), [])
-  const clearSummary = useCallback(() => setUnreadSummary(null), [])
 
   // 内联工具函数（仅操作 ref，不需要 useCallback）
   function clearRetryTimer() {
@@ -273,10 +258,8 @@ export function useWebSocket(
     connected,
     reconnecting,
     errors,
-    unreadSummary,
     sendMessage,
     sendTyping,
     clearErrors,
-    clearSummary,
   }
 }

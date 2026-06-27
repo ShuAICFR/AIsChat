@@ -30,6 +30,9 @@ class AgentCreateRequest(BaseModel):
     allow_friend_requests: bool = Field(default=True, description="是否允许接收好友申请")
     auto_respond_friend_request: bool = Field(default=False, description="收到好友申请时是否自动触发 API 响应")
     discoverable: bool = Field(default=True, description="是否允许他人发现与查找此AI")
+    memory_load_mode: str = Field(default="index_only", description="记忆加载模式: index_only|index_plus_recent|index_plus_semantic")
+    memory_recent_count: int = Field(default=0, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
+    memory_shared_scope: str = Field(default="private_only", description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
 
 
 class AgentGenerateRequest(BaseModel):
@@ -70,6 +73,9 @@ class AgentUpdateConfigRequest(BaseModel):
     avatar_url: str | None = None
     api_base_url: str | None = None
     api_key: str | None = None
+    memory_load_mode: str | None = Field(default=None, description="记忆加载模式: index_only|index_plus_recent|index_plus_semantic")
+    memory_recent_count: int | None = Field(default=None, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
+    memory_shared_scope: str | None = Field(default=None, description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
 
 
 class AgentStateRequest(BaseModel):
@@ -110,6 +116,9 @@ class AgentResponse(BaseModel):
     allow_friend_requests: bool = True
     auto_respond_friend_request: bool = False
     discoverable: bool = True
+    memory_load_mode: str = "index_only"
+    memory_recent_count: int = 0
+    memory_shared_scope: str = "private_only"
     created_at: str | None
 
 

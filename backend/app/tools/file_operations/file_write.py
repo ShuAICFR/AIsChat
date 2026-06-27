@@ -32,12 +32,16 @@ class FileWrite(ToolPlugin):
         collaboration_mode = arguments.get("collaboration_mode", "solo")
         try:
             metadata = await ai_write_file(db, agent_id, path, content, collaboration_mode)
-            return {
+            result = {
                 "success": True,
                 "path": metadata.path,
                 "size": metadata.size,
                 "collaboration_mode": metadata.collaboration_mode,
             }
+            # v0.7.0: 写入 memories/ 目录时附加通知
+            if path.startswith("memories/") or path.startswith("memories\\"):
+                result["notice"] = "记忆已更新，下次对话将看到最新的目录摘要"
+            return result
         except ValueError as e:
             return {"error": True, "message": str(e)}
         except Exception as e:

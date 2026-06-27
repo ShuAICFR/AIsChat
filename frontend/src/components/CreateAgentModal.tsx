@@ -26,6 +26,8 @@ interface PresetData {
   is_ai_editable: boolean
   hide_ai_identity: boolean
   reminder_grace: string
+  memory_load_mode: string
+  memory_recent_count: number
 }
 
 interface SubOption {
@@ -53,6 +55,8 @@ const PRESETS: Record<string, PresetData> = {
     is_ai_editable: false,
     hide_ai_identity: true,
     reminder_grace: 'every_time',
+    memory_load_mode: 'index_only',
+    memory_recent_count: 0,
   },
   immersive: {
     key: 'immersive',
@@ -68,6 +72,8 @@ const PRESETS: Record<string, PresetData> = {
     is_ai_editable: true,
     hide_ai_identity: false,
     reminder_grace: 'every_time',
+    memory_load_mode: 'index_plus_recent',
+    memory_recent_count: 3,
   },
   digital_life: {
     key: 'digital_life',
@@ -83,6 +89,8 @@ const PRESETS: Record<string, PresetData> = {
     is_ai_editable: true,
     hide_ai_identity: false,
     reminder_grace: 'every_time',
+    memory_load_mode: 'index_plus_semantic',
+    memory_recent_count: 5,
   },
 }
 
@@ -225,6 +233,9 @@ export default function CreateAgentModal({
   const [aiType, setAiType] = useState('resonance')  // v0.4.0
   const [apiBaseUrl, setApiBaseUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [memoryLoadMode, setMemoryLoadMode] = useState('index_only')
+  const [memoryRecentCount, setMemoryRecentCount] = useState(0)
+  const [memorySharedScope, setMemorySharedScope] = useState('private_only')
 
   // 弹窗状态
   const [showDetailSettings, setShowDetailSettings] = useState(false)
@@ -290,6 +301,8 @@ export default function CreateAgentModal({
     setIsAiEditable(preset.is_ai_editable)
     setHideAiIdentity(preset.hide_ai_identity)
     setReminderGrace(preset.reminder_grace || 'every_time')
+    setMemoryLoadMode(preset.memory_load_mode || 'index_only')
+    setMemoryRecentCount(preset.memory_recent_count ?? 0)
     setConfigProfile(presetKey)
 
     // 子选项覆盖
@@ -352,6 +365,9 @@ export default function CreateAgentModal({
         discoverable,
         api_credit_cost: apiCreditCost,
         ai_type: aiType,
+        memory_load_mode: memoryLoadMode,
+        memory_recent_count: memoryRecentCount,
+        memory_shared_scope: memorySharedScope,
       })
       // 如果填写了独立 API 配置，创建后立即设置
       if (apiBaseUrl.trim() || apiKey.trim()) {
@@ -536,6 +552,9 @@ export default function CreateAgentModal({
             apiCreditCost={apiCreditCost} setApiCreditCost={setApiCreditCost}
             apiBaseUrl={apiBaseUrl} setApiBaseUrl={setApiBaseUrl}
             apiKey={apiKey} setApiKey={setApiKey}
+            memoryLoadMode={memoryLoadMode} setMemoryLoadMode={setMemoryLoadMode}
+            memoryRecentCount={memoryRecentCount} setMemoryRecentCount={setMemoryRecentCount}
+            memorySharedScope={memorySharedScope} setMemorySharedScope={setMemorySharedScope}
             modelOptions={modelOptions}
             defaults={defaults}
             thinkingSupported={thinkingSupported}
@@ -660,6 +679,9 @@ function DetailSettingsModal({
   aiType, setAiType,
   apiBaseUrl, setApiBaseUrl,
   apiKey, setApiKey,
+  memoryLoadMode, setMemoryLoadMode,
+  memoryRecentCount, setMemoryRecentCount,
+  memorySharedScope, setMemorySharedScope,
   modelOptions,
   defaults,
   thinkingSupported,
@@ -689,6 +711,9 @@ function DetailSettingsModal({
   aiType: string; setAiType: (v: string) => void
   apiBaseUrl: string; setApiBaseUrl: (v: string) => void
   apiKey: string; setApiKey: (v: string) => void
+  memoryLoadMode: string; setMemoryLoadMode: (v: string) => void
+  memoryRecentCount: number; setMemoryRecentCount: (v: number) => void
+  memorySharedScope: string; setMemorySharedScope: (v: string) => void
   modelOptions: ModelOption[]
   defaults: { chat_model: string; work_model: string }
   thinkingSupported: boolean
@@ -833,6 +858,39 @@ function DetailSettingsModal({
           <Section title={t('modal.detailSettingsAlarm')} desc={t('modal.detailSettingsAlarmDesc')}>
             <ToggleField label={t('modal.detailSettingsForceAlarm')} value={forceAlarmOnEnd} setValue={setForceAlarmOnEnd} desc={t('modal.detailSettingsForceAlarmDesc')} />
             <NumberField label={t('modal.detailSettingsMaxAlarms')} value={maxAlarms} setValue={setMaxAlarms} min={1} max={50} desc={t('modal.detailSettingsMaxAlarmsDesc')} />
+          </Section>
+
+          {/* ── 文件记忆 ── */}
+          <Section title={t('modal.detailSettingsFileMemory')} desc={t('modal.detailSettingsFileMemoryDesc')}>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsMemoryLoadMode')}</label>
+              <select
+                value={memoryLoadMode}
+                onChange={(e) => setMemoryLoadMode(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="index_only">{t('modal.detailSettingsMemoryLoadModeIndexOnly')}</option>
+                <option value="index_plus_recent">{t('modal.detailSettingsMemoryLoadModeIndexRecent')}</option>
+                <option value="index_plus_semantic">{t('modal.detailSettingsMemoryLoadModeIndexSemantic')}</option>
+              </select>
+              <p className="text-[10px] text-textMuted mt-1">{t('modal.detailSettingsMemoryLoadModeDesc')}</p>
+            </div>
+            {memoryLoadMode === 'index_plus_recent' && (
+              <NumberField label={t('modal.detailSettingsMemoryRecentCount')} value={memoryRecentCount} setValue={setMemoryRecentCount} min={0} max={50} desc={t('modal.detailSettingsMemoryRecentCountDesc')} />
+            )}
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsMemorySharedScope')}</label>
+              <select
+                value={memorySharedScope}
+                onChange={(e) => setMemorySharedScope(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="private_only">{t('modal.detailSettingsMemorySharedScopePrivate')}</option>
+                <option value="private_plus_shared_by_user">{t('modal.detailSettingsMemorySharedScopeByUser')}</option>
+                <option value="private_plus_shared_all">{t('modal.detailSettingsMemorySharedScopeAll')}</option>
+              </select>
+              <p className="text-[10px] text-textMuted mt-1">{t('modal.detailSettingsMemorySharedScopeDesc')}</p>
+            </div>
           </Section>
 
           {/* ── AI 类型 ── */}

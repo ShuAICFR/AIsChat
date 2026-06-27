@@ -271,18 +271,9 @@ async def get_user_storage(
         agent_used = 0
         agent_files = 0
 
-        # 工作区文件（使用绝对路径，指向 agent 数据目录）
-        workspace_dir = os.path.join(settings.data_dir, "agents", str(agent.id))
-        if os.path.exists(workspace_dir):
-            for dirpath, _dirnames, filenames in os.walk(workspace_dir):
-                for fn in filenames:
-                    fp = os.path.join(dirpath, fn)
-                    agent_used += os.path.getsize(fp)
-                    agent_files += 1
-
-        # 数据库记录的文件
+        # 数据库记录的文件（FileMetadata 中 owner_type="ai" 且 owner_id=agent_id）
         db_result = await db.execute(
-            select(FM).where(FM.owner_type == "ai", FM.owner_id == agent.user_id)
+            select(FM).where(FM.owner_type == "ai", FM.owner_id == agent.id)
         )
         for fm in db_result.scalars():
             agent_used += fm.size or 0

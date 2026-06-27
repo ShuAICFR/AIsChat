@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS agents (
     allow_friend_requests BOOLEAN DEFAULT TRUE,
     auto_respond_friend_request BOOLEAN DEFAULT FALSE,
     user_id INT REFERENCES users(id),
+    -- v0.7.0: 文件系统记忆配置
+    memory_load_mode VARCHAR(30) DEFAULT 'index_only',
+    memory_recent_count INT DEFAULT 0,
+    memory_shared_scope VARCHAR(30) DEFAULT 'private_only',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -586,6 +590,36 @@ DO $$ BEGIN
         WHERE table_name = 'agents' AND column_name = 'discoverable'
     ) THEN
         ALTER TABLE agents ADD COLUMN discoverable BOOLEAN NOT NULL DEFAULT TRUE;
+    END IF;
+END $$;
+
+-- agents.memory_load_mode（v0.7.0: 文件系统记忆配置）
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agents' AND column_name = 'memory_load_mode'
+    ) THEN
+        ALTER TABLE agents ADD COLUMN memory_load_mode VARCHAR(30) NOT NULL DEFAULT 'index_only';
+    END IF;
+END $$;
+
+-- agents.memory_recent_count
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agents' AND column_name = 'memory_recent_count'
+    ) THEN
+        ALTER TABLE agents ADD COLUMN memory_recent_count INT NOT NULL DEFAULT 0;
+    END IF;
+END $$;
+
+-- agents.memory_shared_scope
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'agents' AND column_name = 'memory_shared_scope'
+    ) THEN
+        ALTER TABLE agents ADD COLUMN memory_shared_scope VARCHAR(30) NOT NULL DEFAULT 'private_only';
     END IF;
 END $$;
 

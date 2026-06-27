@@ -4,9 +4,6 @@
 消除 dm_service 和 group_service 中的重复序列化逻辑。
 """
 import json
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def serialize_message(message, *,
@@ -34,7 +31,9 @@ def serialize_message(message, *,
     # sender_type: 参数优先于 ORM 字段（DMMessage 无此字段，靠调用方传入）
     effective_type = sender_type or getattr(message, 'sender_type', None)
 
-    # sender_avatar_url: ORM 优先于参数，空值统一归一到 None
+    # sender_avatar_url: ORM 优先于参数（Message 模型 ORM 存储联邦权威值），空值统一归一到 None
+    # 注意：与 sender_name/type 的参数优先策略不同——avatar 在联邦场景下由 _download_remote_avatar
+    # 后台下载后写入 DB，DB 值比消息中的临时 URL 更权威。
     effective_avatar = getattr(message, 'sender_avatar_url', None) or sender_avatar_url or None
 
     # attachments: JSONB 自动反序列化，Text 列需手动 json.loads
@@ -58,7 +57,7 @@ def serialize_message(message, *,
         "reply_to": getattr(message, 'reply_to', None),
         "source_public_id": getattr(message, 'source_public_id', None),
         "attachments": attachments,
-        "created_at": str(message.created_at) if getattr(message, 'created_at', None) else None,
+        "created_at": str(message.created_at) if message.created_at else None,
     }
 
     if include_read_at:

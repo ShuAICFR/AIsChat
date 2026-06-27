@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Plus, BellOff, Menu, UserPlus, Users, Bot, Globe } from 'lucide-react'
-import { getStateDotColor } from '../constants'
+import { getStateDotColor, CHAT_REFRESH_EVENT } from '../constants'
 import { formatRelativeTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
 
@@ -72,42 +72,36 @@ export default function ChatSidebar({
     return () => clearTimeout(timer)
   }, [activeGroupId, activeSessionId])
 
-  // chat-refresh 事件
+  // 用 ref 持有最新 active ID，避免 chat-refresh 事件监听器随对话切换而重建
+  const activeGroupIdRef = useRef(activeGroupId)
+  activeGroupIdRef.current = activeGroupId
+  const activeSessionIdRef = useRef(activeSessionId)
+  activeSessionIdRef.current = activeSessionId
+
+  // 去抖 ref：防止高频 chat-refresh 导致请求风暴
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reloadDebounced = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      loadGroups()
+      loadDMSessions()
+    }, 500)
+  }
+
+  // chat-refresh 事件 — 监听器只注册一次（[] 依赖），通过 ref 读取最新 ID
   useEffect(() => {
     const handler = (e: CustomEvent) => {
       const t = e.detail?.type
       if (t === 'dm_notification' || t === 'unread_update' || t === 'message_sent') {
-        if (t === 'message_sent') {
-          // 乐观更新：立即将当前活跃对话移到列表顶部
-          const now = new Date().toISOString()
-          setGroups(prev => {
-            const idx = prev.findIndex(g => g.id === activeGroupId)
-            if (idx >= 0) {
-              const updated = [...prev]
-              const [item] = updated.splice(idx, 1)
-              updated.unshift({ ...item, last_message_at: now, last_message_preview: item.last_message_preview })
-              return updated
-            }
-            return prev
-          })
-          setDmSessions(prev => {
-            const idx = prev.findIndex(s => s.session_id === activeSessionId)
-            if (idx >= 0) {
-              const updated = [...prev]
-              const [item] = updated.splice(idx, 1)
-              updated.unshift({ ...item, last_message_at: now, last_message_preview: item.last_message_preview })
-              return updated
-            }
-            return prev
-          })
-        }
-        loadGroups()
-        loadDMSessions()
+        reloadDebounced()
       }
     }
-    window.addEventListener('chat-refresh', handler as EventListener)
-    return () => window.removeEventListener('chat-refresh', handler as EventListener)
-  }, [activeGroupId, activeSessionId])
+    window.addEventListener(CHAT_REFRESH_EVENT, handler as EventListener)
+    return () => {
+      window.removeEventListener(CHAT_REFRESH_EVENT, handler as EventListener)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   // 排序：按 last_message_at 降序（最新在前），无时间戳的排末尾
   const sortByTime = (a: any, b: any) => {

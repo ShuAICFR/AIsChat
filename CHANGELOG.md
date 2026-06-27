@@ -47,7 +47,7 @@
 
 ---
 
-## [v0.8.0] - 2026-06-26
+## [v0.8.0] - 2026-06-27
 
 ### Added
 
@@ -57,11 +57,21 @@
 - 🤝 **AI 合作者系统**：创建者可添加其他用户为合作者，自由选择编辑 / 删除 / 管理合作者三项权限。
 - 📝 **系统提示词段顺序可编辑**：DB 持久化存储顺序，前后端上下箭头调整，`get_settings` 补齐遗漏字段。
 - 🖼️ **AI 图片识别**：用户发送图片时，`build_messages` / `build_dm_messages` 自动将图片 base64 编码注入到消息的 `image_data` 字段（≤4MB），DeepSeek V4 Pro 多模态模型可直接理解图片内容。群聊和 DM 均支持。
+- 🧠 **三空间认知模型**：将 AI 的思维分为三个独立空间——**思考空间**（reasoning_content，完全私有）、**对话空间**（send_message/send_dm，唯一交流通道）、**记忆空间**（store_memory/file_write/file_read，长期存储）。`CORE_IDENTITY` 系统提示词重写，AI 清楚知道"想"和"说"的边界。
+- 📋 **JSON intent 轻量协议**：AI 的 `content` 字段设为 JSON 格式 `{"intent": "tool_calls"|"end_turn"|"no_action"}`。后端解析意图分发——`end_turn`/`no_action` 直接干净退出，不走 system_reminder，省一轮 API 调用。不依赖 `response_format` 强约束，跨平台兼容（DeepSeek/Anthropic/Gemini/Bedrock）。
+- 📂 **文件系统记忆系统**：新建 `backend/app/services/memory_index.py`。AI 可在 `data/agents/{id}/memories/` 下用 `.md` 文件管理长期记忆。目录结构含 `private/`（所有 AI）、`shared/`（半通用+共振）、`cross/`（共振专属 symlink）。对话开始时自动扫描目录生成索引并注入系统提示词，AI 可看到自己的记忆目录树。`file_write` 写入 `memories/` 时自动返回"记忆已更新"通知。与现有向量记忆（`store_memory`/`recall_memory`）共存——模糊回忆用向量检索，深度查阅用 `file_read`。
+- 🎛️ **记忆配置三参数**：Agent 表新增 `memory_load_mode`（index_only / index_plus_recent / index_plus_semantic）、`memory_recent_count`（0-50）、`memory_shared_scope`（private_only / private_plus_shared_by_user / private_plus_shared_all）。三档 config_profile 各有默认值（chat=仅索引、immersive=索引+最近3篇、digital_life=索引+语义），memory_shared_scope 由 ai_type 决定（general=仅私有、semi_general=按用户共享、resonance=全共享）。所有参数在创建/详情页可手动覆盖。
+- 🖥️ **前端「文件记忆」高级设置**：创建 AI 详细设置弹窗和 Agent 详情页均新增「文件记忆」分区，含加载模式下拉、最近篇数加减、共享范围下拉。预设值随 config_profile 自动填充。中英文 17 个翻译 key 已添加。
+- 📖 **认知架构设计文档**：新建 `docs/AI认知架构三空间模型.md`，含三空间模型、JSON intent 协议流程（Mermaid 图）、文件记忆设计、九宫格配置矩阵、六段提示词布局、API 变更清单。
 
 ### Changed
 
 - 🔧 **`system_reminder` 精简**：`every_time` 上限从 999 降至 3，配合 `end_turn` 工具优雅退出，防止绕过 `max_tool_rounds` 无限循环。
 - 🎨 **Toggle 开关统一**：18 个开关/滑块统一为 `bg-mint-400` + 白色圆点单一风格。
+- 🔧 **system_reminder 降级为兜底**：原逻辑"有文字无 tool_calls → 必定触发提醒"。新逻辑插入 JSON intent 解析——AI 正确返回 `end_turn`/`no_action` 时直接退出，不触发 system_reminder。system_reminder 仅在 JSON 解析失败或无 intent 字段时作为兜底。正常情况下省一轮 API 调用。
+- 🔧 **沙箱错误消息增强**：路径穿越错误消息现在告知 AI 其文件空间根目录位置（`/app/data/agents/{id}/`），帮助 AI 自我纠正。
+- 🔧 **前端代码质量优化**：`ChatView.tsx` 提取 `isMessageForThisConversation`/`removeFromMap`/`addToMap` 三个模块级 helper，消除 7 处重复的 Map 操作和 3 处重复的 `belongsToHere` 检查。`ChatSidebar.tsx` 用 useRef 持有活跃对话 ID 避免事件监听器随对话切换而重建，500ms debounce 防 chat-refresh 请求风暴。所有硬编码 `'chat-refresh'` 字符串替换为 `CHAT_REFRESH_EVENT` 常量。
+- 🔧 **序列化器共享**：`federation_ws.py` 的 DM 消息字典构建改用共享的 `serialize_message()`，消除重复代码。
 
 ### Fixed
 
@@ -73,6 +83,11 @@
 - 🐛 **好友申请/自动回应开关无效**：后端 `update_agent_config` 接收了 `allow_friend_requests`、`auto_respond_friend_request`、`is_ai_editable` 字段但未处理，前端开关点了无反应。修复：显式赋值到 ORM 对象。
 - 🐛 **AI 编辑弹窗设置过少**：编辑 AI 弹窗缺少工具调用轮次、闹钟上限、强制闹钟、允许自修改 4 个设置项。前端 `EditAgentModal` 已补全。
 - 🐛 **合作者开关无文本标签**：合作者列表三个 Toggle（编辑/删除/管理合作者）无文字说明。已加标签。
+- 🐛 **聊天列表排序乱跳、消息不置顶、未读残留**：新消息到达时列表重新排序导致当前选中项被挤走、最新消息不出现在顶部、标记已读后未读计数未清零。修复了排序逻辑和刷新时机。
+- 🐛 **ChatSidebar chat-refresh 请求风暴**：高频 WebSocket 消息触发大量 `loadGroups()` + `loadDMSessions()` API 请求。修复：useRef 持有活跃对话 ID，事件监听器只注册一次（`[]` 依赖），500ms debounce 防抖。
+- 🐛 **Storage 空间显示 0 B / 0 文件**：两个独立 bug——DB 查询 `FM.owner_id == ag.user_id` 应为 `FM.owner_id == agent_id`；物理扫描 `data_dir/agents/{agent_id}/` 路径错误（文件存于 `data_dir/` 扁平目录）。已修正为纯 DB 查询。
+- 🐛 **useWebSocket 死代码**：移除 `unreadSummary` 状态、`setUnreadSummary` 处理器、`clearSummary` 回调及其返回导出（~15 行），无任何组件消费。
+- 🐛 **message_serializer 冗余代码**：移除未使用的 `import logging`、`created_at` 从 `getattr` 改为直接属性访问、补充 `sender_avatar_url` 优先级注释。
 
 ---
 

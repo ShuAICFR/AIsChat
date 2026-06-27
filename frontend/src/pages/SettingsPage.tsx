@@ -90,7 +90,8 @@ export default function SettingsPage() {
   const [showAgentApi, setShowAgentApi] = useState(false)
 
   // ── 可拖拽侧边栏 ──
-  const { sidebarWidth, handleResizeStart } = useResizableSidebar('settings_sidebar_width')
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const { sidebarWidth, handleResizeStart } = useResizableSidebar('settings_sidebar_width', sidebarRef)
 
   // ── 滚动监听：高亮当前可见 section ──
   const contentRef = useRef<HTMLDivElement>(null)
@@ -657,7 +658,7 @@ export default function SettingsPage() {
       {/* ── 主体：桌面端侧边栏 + 内容，移动端纯内容 ── */}
       <div className="flex-1 flex min-h-0">
         {/* 桌面端侧边栏导航（可拖拽宽度） */}
-        <div className="hidden md:flex shrink-0 relative border-r border-border bg-surface" style={{ width: sidebarWidth }}>
+        <div ref={sidebarRef} className="hidden md:flex shrink-0 relative border-r border-border bg-surface" style={{ width: sidebarWidth }}>
           <div className="overflow-y-auto py-1 w-full">
             {/* 管理员快捷入口 */}
             {user?.role === 'admin' && (

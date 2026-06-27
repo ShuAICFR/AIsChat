@@ -43,8 +43,8 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
-  const { sidebarWidth, handleResizeStart } = useResizableSidebar('chat_sidebar_width')
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const { sidebarWidth, handleResizeStart } = useResizableSidebar('chat_sidebar_width', sidebarRef)
 
   // 加载群聊列表
   useEffect(() => {

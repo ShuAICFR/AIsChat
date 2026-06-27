@@ -142,7 +142,7 @@ const MessageBubble = memo(function MessageBubble({
         </div>
         <div className={`px-4 py-2.5 text-sm leading-relaxed break-words ${bubbleBg} ${thinking || isTyping ? 'opacity-70' : ''}
           [&_.katex-display]:overflow-x-auto [&_.katex-display]:-mx-1 [&_.katex-display]:px-1
-          [&_.katex]:text-inherit
+          [&_.katex]:text-inherit [&_.katex]:max-w-full [&_.katex]:overflow-x-auto [&_.katex]:inline-block
           [&_pre]:overflow-x-auto [&_pre]:-mx-1 [&_pre]:px-1
           [&_table]:overflow-x-auto [&_table]:block
           [&_img]:max-w-full [&_img]:rounded-lg

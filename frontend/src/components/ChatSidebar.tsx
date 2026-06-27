@@ -149,9 +149,7 @@ export default function ChatSidebar({
   const nothingSelected = !activeGroupId && !activeSessionId
 
   return (
-    <div className={`${
-      mobileFullscreen ? 'w-full md:w-56' : 'w-56'
-    } bg-surface border-r border-border shrink-0 flex-col flex h-full ${
+    <div className={`w-full bg-surface border-r border-border shrink-0 flex-col flex h-full ${
       hideOnMobile && !nothingSelected ? 'hidden' : 'flex'
     } md:flex`}>
       {/* 标题 */}

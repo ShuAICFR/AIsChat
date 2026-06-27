@@ -271,7 +271,7 @@ async def send_dm_message(
     attachments: list[dict] | None = None,
 ) -> dict:
     """发送私信消息（可指定 created_at 用于注入历史消息）"""
-    if not content.strip():
+    if not content.strip() and not attachments:
         raise ValueError("消息内容不能为空")
 
     result = await db.execute(

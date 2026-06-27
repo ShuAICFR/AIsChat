@@ -125,26 +125,41 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* 桌面端 Tab 导航 */}
-      <div className="hidden md:flex gap-0 bg-surface border-b border-border px-4 md:px-6 overflow-x-auto shrink-0">
-        {tabs.map((tab, i) => (
-          <span key={tab.key} className="flex items-center">
-            {i > 0 && tabs[i - 1].category !== tab.category && (
-              <span className="w-px h-5 bg-border mx-1 shrink-0" />
-            )}
-            <button
-              onClick={() => switchTab(tab.key)}
-              className={`flex items-center gap-1.5 px-2.5 md:px-4 py-2 md:py-2.5 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === tab.key
-                  ? 'border-primary-400 text-primary-600 dark:text-primary-300'
-                  : 'border-transparent text-textMuted hover:text-textSecondary'
-              }`}
-            >
-              <tab.icon size={16} />
-              {tab.label}
-            </button>
-          </span>
-        ))}
+      {/* 桌面端：左侧竖标签 + 右侧内容 */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
+        {/* 左侧标签栏 */}
+        <div className="w-56 border-r border-border bg-surface flex flex-col shrink-0">
+          {([t('admin.categoryCore'), t('admin.categoryOps'), t('admin.categorySystem')]).map(cat => {
+            const catTabs = tabs.filter(t => t.category === cat)
+            return (
+              <div key={cat}>
+                <div className="px-3 h-10 border-b border-border font-medium text-xs text-textMuted uppercase tracking-wider flex items-center shrink-0">
+                  {cat}
+                </div>
+                <div className="py-1">
+                  {catTabs.map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => switchTab(tab.key)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left ${
+                        activeTab === tab.key
+                          ? 'bg-primary-500/10 text-primary-600 dark:text-primary-300 border-r-2 border-primary-400'
+                          : 'text-textSecondary hover:bg-elevated hover:text-textPrimary border-r-2 border-transparent'
+                      }`}
+                    >
+                      <tab.icon size={16} className="shrink-0" />
+                      <span className="truncate">{tab.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+        {/* 右侧内容区 */}
+        <div className="flex-1 overflow-y-auto p-6 bg-canvas">
+          {renderContent(activeTab)}
+        </div>
       </div>
 
       {/* 移动端：导航列表视图（按分类分组） */}
@@ -179,9 +194,9 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* 内容区（桌面端始终显示；移动端在详情视图显示） */}
-      <div className={`flex-1 overflow-y-auto p-4 md:p-6 pb-[var(--safe-bottom)] md:pb-6 bg-canvas ${
-        mobileView === 'list' ? 'hidden md:block' : ''
+      {/* 移动端：详情内容区 */}
+      <div className={`md:hidden flex-1 overflow-y-auto p-4 pb-[var(--safe-bottom)] bg-canvas ${
+        mobileView === 'list' ? 'hidden' : ''
       }`}>
         {renderContent(activeTab)}
       </div>

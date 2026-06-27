@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -10,6 +10,7 @@ import { FileIcon, Download, Globe, ShieldAlert } from 'lucide-react'
 import { formatMessageTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
 import MermaidBlock from './MermaidBlock'
+import FilePreviewModal from './FilePreviewModal'
 
 /** 聊天消息中的 code 渲染：只对 block code/mermaid 做溢出控制，inline code 不干预 */
 function ChatCodeRenderer({ className, children, inline, ...props }: any) {
@@ -70,6 +71,8 @@ const MessageBubble = memo(function MessageBubble({
   const lang = useLang()
   const t = useT()
 
+  const [previewFile, setPreviewFile] = useState<{ file_id: number; name: string; size: number; mime_type: string } | null>(null)
+
   const stateColor = getStateDotColor(state)
 
   const bubbleBg = isMine
@@ -85,7 +88,7 @@ const MessageBubble = memo(function MessageBubble({
   const avatarGradientDir = isMine ? 'bg-gradient-to-br' : 'bg-gradient-to-bl'
   const avatarGradientShadow = isMine ? 'shadow-primary-500/15' : senderType === 'system' ? 'shadow-rose-400/15' : 'shadow-teal-400/10'
 
-  return (
+  return (<>
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
       {/* 头像 — 思考/输入中时带脉动光环 */}
       <div className="relative shrink-0">
@@ -166,27 +169,29 @@ const MessageBubble = memo(function MessageBubble({
                 const token = localStorage.getItem('access_token')
                 const dlUrl = `/api/fs/download/${att.file_id}?token=${token || ''}`
 
-                // 图片类型：前端直接渲染
+                // 图片类型：缩略图，点击弹窗查看
                 if (att.mime_type?.startsWith('image/')) {
                   return (
-                    <a key={att.file_id} href={dlUrl} target="_blank" rel="noopener noreferrer" className="block max-w-full">
+                    <button
+                      key={att.file_id}
+                      onClick={() => setPreviewFile({ file_id: att.file_id, name: att.name, size: att.size, mime_type: att.mime_type })}
+                      className="block max-w-full"
+                    >
                       <img
                         src={dlUrl}
                         alt={att.name}
                         className="max-w-[280px] max-h-[200px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity border border-white/10"
                         title={att.name}
                       />
-                    </a>
+                    </button>
                   )
                 }
 
-                // 其他文件：下载链接
+                // 其他文件：点击预览（不可预览时自动下载）
                 return (
-                  <a
+                  <button
                     key={att.file_id}
-                    href={dlUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={() => setPreviewFile({ file_id: att.file_id, name: att.name, size: att.size, mime_type: att.mime_type })}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors ${
                       isMine
                         ? 'bg-white/10 hover:bg-white/20 text-white/90'
@@ -198,7 +203,7 @@ const MessageBubble = memo(function MessageBubble({
                     <span className="max-w-[100px] truncate">{att.name}</span>
                     <span className="text-[10px] opacity-60">{formatFileSize(att.size)}</span>
                     <Download size={11} className="opacity-60" />
-                  </a>
+                  </button>
                 )
               })}
             </div>
@@ -206,6 +211,17 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       </div>
     </div>
-  )
+
+    {/* 文件预览弹窗 */}
+    {previewFile && (
+      <FilePreviewModal
+        fileId={previewFile.file_id}
+        fileName={previewFile.name}
+        fileSize={previewFile.size}
+        mimeType={previewFile.mime_type}
+        onClose={() => setPreviewFile(null)}
+      />
+    )}
+  </>)
 })
 export default MessageBubble

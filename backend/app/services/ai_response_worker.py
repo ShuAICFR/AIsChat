@@ -143,7 +143,7 @@ async def _send_system_error(
                     "id": dm_msg.id,
                     "session_id": dm_sid,
                     "sender_type": "system",
-                    "sender_id": sys_user.id,
+                    "sender_id": 0,
                     "sender_name": "系统",
                     "content": content,
                     "reply_to": None,

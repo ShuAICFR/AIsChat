@@ -6,7 +6,7 @@ import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
-import { FileIcon, Download, Globe } from 'lucide-react'
+import { FileIcon, Download, Globe, ShieldAlert } from 'lucide-react'
 import { formatMessageTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
 import MermaidBlock from './MermaidBlock'
@@ -73,11 +73,15 @@ const MessageBubble = memo(function MessageBubble({
 
   const bubbleBg = isMine
     ? 'bg-primary-600 text-white rounded-2xl rounded-tr-md shadow-lg shadow-primary-500/15'
-    : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
+    : senderType === 'system'
+      ? 'bg-rose-50 text-rose-900 rounded-2xl rounded-tl-md border border-rose-200'
+      : 'bg-surface text-textPrimary rounded-2xl rounded-tl-md border border-border'
 
-  const avatarGradientBase = isMine ? 'from-primary-500 to-primary-700' : 'from-mint-400 to-emerald-600'
+  const avatarGradientBase = senderType === 'system'
+    ? 'from-rose-400 to-rose-600'
+    : isMine ? 'from-primary-500 to-primary-700' : 'from-mint-400 to-emerald-600'
   const avatarGradientOpacity = senderAvatarUrl ? '/30' : ''
-  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : 'shadow-mint-400/20'
+  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : senderType === 'system' ? 'shadow-rose-400/25' : 'shadow-mint-400/20'
 
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>
@@ -90,14 +94,16 @@ const MessageBubble = memo(function MessageBubble({
         {/* 头像 */}
         <div
           onClick={() => {
-            if (onAvatarClick && senderType && senderId) {
+            if (onAvatarClick && senderType && senderId && senderType !== 'system') {
               onAvatarClick(senderType, senderId, senderName, state)
             }
           }}
-          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold cursor-pointer hover:scale-105 transition-transform shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
-          title={thinking ? t('chat.thinking') : isTyping ? t('chat.typing') : t('chat.viewProfile').replace('{name}', senderName)}
+          className={`relative w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold ${senderType !== 'system' ? 'cursor-pointer hover:scale-105 transition-transform' : ''} shadow-lg ${avatarGradientBase}${avatarGradientOpacity} ${avatarGradientShadow}`}
+          title={senderType === 'system' ? '系统通知' : thinking ? t('chat.thinking') : isTyping ? t('chat.typing') : t('chat.viewProfile').replace('{name}', senderName)}
         >
-          {(thinking || isTyping) ? (
+          {senderType === 'system' ? (
+            <ShieldAlert size={16} className="text-white" />
+          ) : (thinking || isTyping) ? (
             <span className="inline-flex gap-0.5">
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -118,7 +124,7 @@ const MessageBubble = memo(function MessageBubble({
       {/* 消息内容 */}
       <div className={`max-w-[72%] ${isMine ? 'items-end' : 'items-start'}`}>
         <div className={`flex items-center gap-2 mb-1 flex-wrap ${isMine ? 'flex-row-reverse' : ''}`}>
-          <span className="text-xs font-medium text-textSecondary">{senderName}</span>
+          <span className={`text-xs font-medium ${senderType === 'system' ? 'text-rose-500' : 'text-textSecondary'}`}>{senderName}</span>
           {sourcePublicId && (
             <span className="text-[10px] text-primary-400 bg-primary-500/10 px-1.5 py-0.5 rounded-full" title={t('chat.fromInstance').replace('{publicId}', sourcePublicId)}>
               <Globe size={10} className="inline" /> {sourcePublicId.length > 15 ? sourcePublicId.slice(0, 15) + '...' : sourcePublicId}

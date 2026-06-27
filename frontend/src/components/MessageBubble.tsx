@@ -146,7 +146,7 @@ const MessageBubble = memo(function MessageBubble({
           [&_pre]:overflow-x-auto [&_pre]:-mx-1 [&_pre]:px-1
           [&_table]:overflow-x-auto [&_table]:block
           [&_img]:max-w-full [&_img]:rounded-lg
-          [&_a]:break-all
+          [&_a]:break-all [&_a]:text-primary-500 dark:[&_a]:text-primary-400 [&_a]:underline
         `}>
           {isTyping ? (
             <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />

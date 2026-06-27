@@ -69,28 +69,31 @@ async def _send_system_error(
     guidance = {
         "no_api_key": (
             f"⚠️ AI「{agent.name}」缺少 API Key，无法回复消息。\n\n"
-            f"📌 **解决方法**：\n"
-            f"1. 前往 [AI 设置页](/agents/{agent.id}) → 点击「完整设置」→ API 提供商 → 填写 API Key\n"
-            f"2. 或前往 [兑换码页面](/me) 输入兑换码获取 API 额度（使用 API Key 池）\n\n"
+            f"📌 **解决方法**（任选其一）：\n"
+            f"1. 为 AI 单独配置：[AI 设置页](/agents/{agent.id}) → 完整设置 → API 提供商 → 填写 API Key\n"
+            f"2. 使用全局 Key：前往 [个人设置](/settings) → API 配置 → 填写你的 API Key（所有 AI 共用）\n"
+            f"3. 使用额度兑换：前往 [兑换码页面](/me) 输入兑换码获取 API 池额度\n\n"
             f"设置完成后 AI 即可正常回复。"
         ),
         "insufficient_balance": (
             f"⚠️ AI「{agent.name}」的 API 余额不足（402），无法回复消息。\n\n"
             f"📌 **解决方法**：\n"
             f"1. 前往 DeepSeek 官网充值\n"
-            f"2. 或前往 [兑换码页面](/me) 输入兑换码获取额度\n"
-            f"3. 或在 [AI 设置页](/agents/{agent.id}) 更换 API Key"
+            f"2. 前往 [个人设置](/settings) 更换全局 API Key\n"
+            f"3. 前往 [AI 设置页](/agents/{agent.id}) 更换此 AI 的 Key\n"
+            f"4. 或前往 [兑换码页面](/me) 输入兑换码获取额度"
         ),
         "auth_error": (
             f"⚠️ AI「{agent.name}」的 API Key 无效（401），无法回复消息。\n\n"
             f"📌 **解决方法**：\n"
             f"1. 前往 [AI 设置页](/agents/{agent.id}) → API 提供商 → 检查并更新 API Key\n"
-            f"2. 确认 API Key 未过期、未被删除"
+            f"2. 或前往 [个人设置](/settings) 更新全局 API Key\n"
+            f"3. 确认 API Key 未过期、未被删除"
         ),
         "all_failed": (
             f"⚠️ AI「{agent.name}」的 API 调用全部失败。\n\n"
             f"错误详情：{detail}\n\n"
-            f"📌 请前往 [AI 设置页](/agents/{agent.id}) 检查 API 配置。"
+            f"📌 请前往 [AI 设置页](/agents/{agent.id}) 或 [个人设置](/settings) 检查 API 配置。"
         ),
     }
 

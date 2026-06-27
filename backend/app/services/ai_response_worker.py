@@ -60,8 +60,9 @@ async def _send_system_error(
     db, agent, error_type: str, detail: str,
     conversation_type: str, group_id: int | None, session_id: str | None,
 ):
-    """向群聊/DM 发送系统错误通知消息，引导用户修复配置"""
-    from app.services.group_service import create_message
+    """向 AI owner 私信发送系统错误通知（群聊/DM 均走 DM 通知 owner）"""
+    from app.models.dm import DMMessage, DMSession
+    from app.services.dm_service import generate_dm_session_id
 
     guidance = {
         "no_api_key": (
@@ -94,48 +95,55 @@ async def _send_system_error(
     content = guidance.get(error_type, guidance["all_failed"])
 
     try:
-        if conversation_type == "group" and group_id:
-            msg = await create_message(db, group_id, "system", 0, content)
-            await db.commit()
-            try:
-                from app.routers.ws import manager
-                from app.utils.message_serializer import message_to_dict
-                await manager.broadcast_to_group(group_id, {
-                    "type": "message",
-                    "data": message_to_dict(msg, sender_name="系统"),
-                })
-            except Exception:
-                pass
-            logger.info(f"📢 系统错误通知已发送: group={group_id}, agent={agent.name}, error={error_type}")
-        elif conversation_type == "dm" and session_id:
-            # DM 系统消息绕过 send_dm_message 的 sender 校验，直接写入
-            from app.models.dm import DMMessage
-            dm_msg = DMMessage(
-                session_id=session_id,
-                sender_id=0,
-                content=content,
-            )
-            db.add(dm_msg)
-            await db.commit()
-            await db.refresh(dm_msg)
-            try:
-                from app.routers.ws import manager
-                await manager.broadcast_to_dm(session_id, {
-                    "type": "message",
-                    "data": {
-                        "id": dm_msg.id,
-                        "session_id": session_id,
-                        "sender_type": "system",
-                        "sender_id": 0,
-                        "sender_name": "系统",
-                        "content": content,
-                        "reply_to": None,
-                        "created_at": dm_msg.created_at.isoformat() if dm_msg.created_at else None,
-                    },
-                })
-            except Exception:
-                pass
-            logger.info(f"📢 系统错误通知已发送: dm={session_id}, agent={agent.name}, error={error_type}")
+        # 统一走 DM 通知：发给 AI 的 owner，不广播到群
+        owner_id = agent.owner_id
+        if not owner_id:
+            logger.warning(f"AI {agent.name}({agent.id}) 无 owner，无法发送系统通知")
+            return
+
+        dm_sid = generate_dm_session_id(agent.id, owner_id)
+
+        # 确保 DM 会话存在
+        result = await db.execute(
+            select(DMSession).where(DMSession.session_id == dm_sid)
+        )
+        dm_session = result.scalar_one_or_none()
+        if dm_session is None:
+            ids = sorted([agent.id, owner_id])
+            dm_session = DMSession(session_id=dm_sid, user1_id=ids[0], user2_id=ids[1])
+            db.add(dm_session)
+            await db.flush()
+
+        # 直接写入 DM 消息
+        dm_msg = DMMessage(
+            session_id=dm_sid,
+            sender_id=0,
+            content=content,
+        )
+        db.add(dm_msg)
+        await db.commit()
+        await db.refresh(dm_msg)
+
+        # WebSocket 推送
+        try:
+            from app.routers.ws import manager
+            await manager.broadcast_to_dm(dm_sid, {
+                "type": "message",
+                "data": {
+                    "id": dm_msg.id,
+                    "session_id": dm_sid,
+                    "sender_type": "system",
+                    "sender_id": 0,
+                    "sender_name": "系统",
+                    "content": content,
+                    "reply_to": None,
+                    "created_at": dm_msg.created_at.isoformat() if dm_msg.created_at else None,
+                },
+            })
+        except Exception:
+            pass
+
+        logger.info(f"📢 系统错误通知已 DM 给 owner={owner_id}: agent={agent.name}, error={error_type}")
     except Exception as e:
         logger.warning(f"发送系统错误通知失败（非致命）: {e}")
 

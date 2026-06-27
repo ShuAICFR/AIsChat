@@ -6,6 +6,23 @@
 import json
 
 
+def make_preview(content: str | None, attachments: list | None = None, max_len: int = 50) -> str:
+    """生成消息预览文本。
+
+    纯附件无文字 → 显示 [文件]（超出 1 个则 [N个文件]）；
+    有文字 → 截取前 max_len 个字符。
+    """
+    if content:
+        preview = content[:max_len]
+        if len(content) > max_len:
+            preview += "..."
+        return preview
+    if attachments:
+        count = len(attachments)
+        return "[文件]" if count == 1 else f"[{count}个文件]"
+    return ""
+
+
 def serialize_message(message, *,
                       sender_name=None,
                       sender_type=None,

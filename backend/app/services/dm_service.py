@@ -146,7 +146,8 @@ async def list_dm_sessions(
             )
             msg = last_result.scalar_one_or_none()
             if msg:
-                last_msg = msg.content[:100] if msg.content else ""
+                from app.utils.message_serializer import make_preview
+                last_msg = make_preview(msg.content, msg.attachments, max_len=100)
 
         # Check if federated
         fed_check = await db.execute(

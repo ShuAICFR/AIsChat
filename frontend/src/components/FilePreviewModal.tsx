@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Download, X, ArrowLeft, FileIcon, Loader2, AlertTriangle } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Download, X, ArrowLeft, FileIcon, Loader2, AlertTriangle, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
 
 /** 可直接文本预览的 MIME 类型 */
@@ -35,12 +35,19 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // 图片缩放
+  const [scale, setScale] = useState(1)
+  const imgContainerRef = useRef<HTMLDivElement>(null)
 
   const token = localStorage.getItem('access_token')
   const dlUrl = `/api/fs/download/${fileId}?token=${token || ''}`
 
   const isImage = mimeType.startsWith('image/')
-  const previewable = isImage || isTextPreviewable(mimeType)
+  const isPDF = mimeType === 'application/pdf'
+  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || fileName.endsWith('.docx')
+  const isText = isTextPreviewable(mimeType)
+  const previewable = isImage || isPDF || isDocx || isText
 
   useEffect(() => {
     if (!previewable) {
@@ -53,8 +60,8 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
       return
     }
 
-    // 图片：不需要 fetch 内容，直接渲染
-    if (isImage) {
+    // 图片 / PDF：不需要 fetch 文本内容
+    if (isImage || isPDF) {
       setLoading(false)
       return
     }
@@ -63,6 +70,18 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
     fetch(dlUrl, { signal: ac.signal })
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+        // DOCX → mammoth 转换
+        if (isDocx) {
+          const { default: mammoth } = await import('mammoth')
+          const buf = await res.arrayBuffer()
+          const result = await mammoth.convertToHtml({ arrayBuffer: buf })
+          setContent(result.value)
+          setLoading(false)
+          return
+        }
+
+        // 文本类
         const text = await res.text()
         if (text.length > 2 * 1024 * 1024) {
           setContent(text.slice(0, 2 * 1024 * 1024) + '\n\n… 文件过大，仅显示前 2MB')
@@ -79,7 +98,26 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
       })
 
     return () => ac.abort()
-  }, [fileId, previewable, dlUrl, fileName, onClose, t, isImage])
+  }, [fileId, previewable, dlUrl, fileName, onClose, t, isImage, isPDF, isDocx])
+
+  // 图片缩放控制
+  const zoomIn = useCallback(() => setScale((s) => Math.min(s + 0.5, 5)), [])
+  const zoomOut = useCallback(() => setScale((s) => Math.max(s - 0.5, 0.5)), [])
+  const zoomReset = useCallback(() => setScale(1), [])
+  // 滚轮缩放（仅图片预览）
+  useEffect(() => {
+    if (!isImage) return
+    const el = imgContainerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+        setScale((s) => Math.max(0.5, Math.min(5, s - e.deltaY * 0.005)))
+      }
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [isImage])
 
   const handleDownload = useCallback(() => {
     const a = document.createElement('a')
@@ -88,12 +126,10 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
     a.click()
   }, [dlUrl, fileName])
 
-  // ── 不可预览：已触发下载，不渲染 ──
   if (!previewable) return null
 
   const headerBar = (
     <div className="flex items-center gap-3 px-4 h-12 border-b border-border bg-surface shrink-0">
-      {/* 移动端返回 / 桌面端关闭 */}
       <button
         onClick={onClose}
         className="p-1 -ml-1 rounded-lg hover:bg-elevated text-textSecondary transition-colors"
@@ -109,6 +145,25 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
         <p className="text-[10px] text-textMuted">{formatFileSize(fileSize)}</p>
       </div>
 
+      {/* 图片缩放按钮 */}
+      {isImage && (
+        <div className="flex items-center gap-0.5">
+          <button onClick={zoomOut} disabled={scale <= 0.5}
+            className="p-1 rounded hover:bg-elevated text-textSecondary disabled:opacity-30 transition-colors" title={t('common.zoomOut')}>
+            <ZoomOut size={16} />
+          </button>
+          <span className="text-[11px] text-textMuted w-9 text-center tabular-nums">{Math.round(scale * 100)}%</span>
+          <button onClick={zoomIn} disabled={scale >= 5}
+            className="p-1 rounded hover:bg-elevated text-textSecondary disabled:opacity-30 transition-colors" title={t('common.zoomIn')}>
+            <ZoomIn size={16} />
+          </button>
+          <button onClick={zoomReset}
+            className="p-1 rounded hover:bg-elevated text-textSecondary transition-colors" title={t('common.resetZoom')}>
+            <RotateCcw size={14} />
+          </button>
+        </div>
+      )}
+
       <button
         onClick={handleDownload}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 transition-colors"
@@ -121,18 +176,16 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
   )
 
   return (
-    /* 遮罩 */
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-0 md:p-6" onClick={onClose}>
-      {/* 弹窗主体：移动端全屏，桌面端最大宽高 */}
       <div
         className="bg-surface border border-border md:rounded-2xl shadow-2xl shadow-black/30 flex flex-col
-                      w-full h-full md:w-[720px] md:max-h-[85vh] md:h-auto"
+                      w-full h-full md:w-[800px] md:max-h-[88vh] md:h-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {headerBar}
 
         {/* 内容区 */}
-        <div className="flex-1 overflow-y-auto p-0 md:p-5 bg-canvas min-h-0 flex items-start justify-center">
+        <div className="flex-1 overflow-auto bg-canvas min-h-0 flex items-start justify-center">
           {loading ? (
             <div className="flex items-center justify-center py-20 w-full">
               <Loader2 size={24} className="animate-spin text-textMuted" />
@@ -146,11 +199,30 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
               </button>
             </div>
           ) : isImage ? (
-            <img src={dlUrl} alt={fileName} className="w-full h-auto md:max-h-[75vh] object-contain md:rounded-lg" />
+            <div ref={imgContainerRef} className="w-full h-full flex items-center justify-center overflow-auto">
+              <img
+                src={dlUrl}
+                alt={fileName}
+                className="object-contain transition-transform duration-100 select-none"
+                style={{ transform: `scale(${scale})`, maxWidth: scale <= 1 ? '100%' : 'none', maxHeight: scale <= 1 ? '100%' : 'none' }}
+                draggable={false}
+              />
+            </div>
+          ) : isPDF ? (
+            <iframe src={dlUrl} className="w-full h-full border-0" title={fileName} />
           ) : (
-            <pre className="w-full text-xs text-textPrimary whitespace-pre-wrap break-all font-mono leading-relaxed select-text p-4 md:p-0">
-              {content}
-            </pre>
+            <div className="w-full p-4 md:p-5">
+              {isDocx ? (
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none text-textPrimary"
+                  dangerouslySetInnerHTML={{ __html: content || '' }}
+                />
+              ) : (
+                <pre className="text-xs text-textPrimary whitespace-pre-wrap break-all font-mono leading-relaxed select-text">
+                  {content}
+                </pre>
+              )}
+            </div>
           )}
         </div>
       </div>

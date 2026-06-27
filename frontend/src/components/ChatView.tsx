@@ -628,7 +628,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         mime_type: a.mime_type,
       }))
 
-    sendMessage(input.trim() || '(附件)', undefined, readyAttachments.length > 0 ? readyAttachments : undefined)
+    sendMessage(input.trim(), undefined, readyAttachments.length > 0 ? readyAttachments : undefined)
     setInput('')
     localStorage.removeItem(`draft_${conversationType}_${conversationId}`)
     setPendingAttachments([])

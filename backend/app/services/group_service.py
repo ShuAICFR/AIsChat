@@ -139,13 +139,14 @@ async def list_user_groups(db: AsyncSession, user_id: int) -> list[dict]:
         last_msg = last_msg_result.scalar_one_or_none()
         if last_msg:
             last_message_at = str(last_msg.created_at) if last_msg.created_at else None
-            preview = last_msg.content[:50]
-            if len(last_msg.content) > 50:
-                preview += "..."
+            from app.utils.message_serializer import make_preview
+            preview = make_preview(last_msg.content, last_msg.attachments, max_len=50)
             # 解析发送者名称
             if last_msg.sender_type == "ai":
                 a = await db.get(AgentModel, last_msg.sender_id)
                 sender = a.name if a else "AI"
+            elif last_msg.sender_type == "system":
+                sender = "系统"
             else:
                 u = await db.get(User, last_msg.sender_id)
                 sender = u.username if u else "用户"

@@ -109,7 +109,7 @@ async def _send_system_error(
             logger.info(f"📢 系统错误通知已发送: group={group_id}, agent={agent.name}, error={error_type}")
         elif conversation_type == "dm" and session_id:
             # DM 系统消息绕过 send_dm_message 的 sender 校验，直接写入
-            from app.models.message import DMMessage
+            from app.models.dm import DMMessage
             dm_msg = DMMessage(
                 session_id=session_id,
                 sender_id=0,

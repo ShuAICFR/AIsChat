@@ -20,26 +20,15 @@ logger = logging.getLogger(__name__)
 def _dm_message_to_dict(m: DMMessage, sender_name: str, sender_type: str,
                         sender_avatar_url: str | None = None) -> dict:
     """将 DMMessage ORM 对象转为字典（send_dm_message 和 _get_messages 共用）"""
-    parsed_attachments = None
-    if m.attachments:
-        try:
-            parsed_attachments = json.loads(m.attachments)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {
-        "id": m.id,
-        "session_id": m.session_id,
-        "sender_id": m.sender_id,
-        "sender_name": sender_name,
-        "sender_type": sender_type,
-        "sender_avatar_url": sender_avatar_url,
-        "content": m.content,
-        "reply_to": m.reply_to,
-        "attachments": parsed_attachments,
-        "source_public_id": getattr(m, "source_public_id", None),
-        "read_at": str(m.read_at) if m.read_at else None,
-        "created_at": str(m.created_at) if m.created_at else None,
-    }
+    from app.utils.message_serializer import serialize_message
+    return serialize_message(
+        m,
+        sender_name=sender_name,
+        sender_type=sender_type,
+        sender_avatar_url=sender_avatar_url,
+        conversation_key='session_id',
+        include_read_at=True,
+    )
 
 
 async def _require_friendship(db: AsyncSession, user_a_id: int, user_b_id: int):

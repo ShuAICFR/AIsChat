@@ -109,9 +109,14 @@ export function useWebSocket(
         }
 
         // 使用 flushSync 强制同步渲染，防止快速连续消息被 React 18 批处理合并丢失
-        flushSync(() => {
+        // error 和 unread_summary 已由各自 handler 处理，无需同步提交
+        if (msg.type === 'error' || msg.type === 'unread_summary') {
           setLastMessage(msg)
-        })
+        } else {
+          flushSync(() => {
+            setLastMessage(msg)
+          })
+        }
       } catch {
         // ignore invalid JSON
       }

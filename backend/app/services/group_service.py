@@ -287,23 +287,14 @@ async def get_recent_messages(
 
 def message_to_dict(message: Message, sender_name: str | None = None, sender_avatar_url: str | None = None) -> dict:
     """将 Message ORM 对象转为字典"""
-    # 联邦消息优先用 DB 存储的 sender_name，其次用传入参数
-    effective_name = sender_name or getattr(message, "sender_name", None)
-    # 头像：优先级：DB 存储值 > 传参 > None（联邦消息从 DB 读取时传参为 None 也能取到）
-    effective_avatar = getattr(message, "sender_avatar_url", None) or sender_avatar_url or None
-    return {
-        "id": message.id,
-        "group_id": message.group_id,
-        "sender_type": message.sender_type,
-        "sender_id": message.sender_id,
-        "sender_name": effective_name,
-        "sender_avatar_url": effective_avatar,
-        "content": message.content,
-        "reply_to": message.reply_to,
-        "source_public_id": getattr(message, "source_public_id", None),
-        "attachments": getattr(message, "attachments", None),
-        "created_at": str(message.created_at) if message.created_at else None,
-    }
+    from app.utils.message_serializer import serialize_message
+    return serialize_message(
+        message,
+        sender_name=sender_name,
+        sender_avatar_url=sender_avatar_url,
+        conversation_key='group_id',
+        include_read_at=False,
+    )
 
 
 # ============================================================

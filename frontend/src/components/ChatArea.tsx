@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
@@ -33,6 +33,10 @@ interface ChatAreaProps {
   dmSessionId: string | null
 }
 
+const SIDEBAR_MIN = 200
+const SIDEBAR_MAX = 500
+const SIDEBAR_DEFAULT = 320
+
 export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const t = useT()
   const [groups, setGroups] = useState<Group[]>([])
@@ -41,6 +45,43 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const [showSettings, setShowSettings] = useState(false)
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
+
+  // 侧栏可拖拽宽度
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('chat_sidebar_width')
+    return saved ? Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Number(saved))) : SIDEBAR_DEFAULT
+  })
+  const resizing = useRef(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    resizing.current = true
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!resizing.current) return
+      const w = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, e.clientX))
+      setSidebarWidth(w)
+      localStorage.setItem('chat_sidebar_width', String(w))
+    }
+    const onUp = () => {
+      if (resizing.current) {
+        resizing.current = false
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [])
 
   // 加载群聊列表
   useEffect(() => {
@@ -77,8 +118,12 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
 
   return (
     <div className="flex h-full relative">
-      {/* 统一侧边栏：群聊 + 私信列表 */}
-      <div className={`${mobileSidebarOpen ? 'absolute inset-y-0 left-0 z-30' : ''} md:relative md:z-auto`}>
+      {/* 统一侧边栏：群聊 + 私信列表（桌面端可拖拽调整宽度） */}
+      <div
+        ref={sidebarRef}
+        className={`shrink-0 ${mobileSidebarOpen ? 'absolute inset-y-0 left-0 z-30 w-full max-w-[90vw]' : 'hidden md:block'} md:relative md:z-auto`}
+        style={!mobileSidebarOpen ? { width: sidebarWidth } : undefined}
+      >
         <ChatSidebar
           activeGroupId={groupId}
           activeSessionId={dmSessionId}
@@ -87,6 +132,11 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
           hideOnMobile={hasActiveConversation && !mobileSidebarOpen}
           onMobileBack={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
           mobileFullscreen={mobileSidebarOpen}
+        />
+        {/* 拖拽手柄（仅桌面端） */}
+        <div
+          className="hidden md:block absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary-400/30 active:bg-primary-400/50 transition-colors z-10"
+          onMouseDown={handleResizeStart}
         />
       </div>
 

@@ -57,6 +57,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     id: string        // 临时前端 ID（用于删除/去重）
     file: File | null // null=上传完成，有值=上传中
     file_id?: number  // 服务端返回的 ID
+    path?: string     // 服务端返回的存储路径
     name: string
     size: number
     mime_type: string
@@ -581,7 +582,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
         const result = await api.upload('/fs/upload-attachment', file)
         setPendingAttachments(prev =>
           prev.map(a => a.id === tempId
-            ? { ...a, file: null, file_id: result.file_id, uploading: false }
+            ? { ...a, file: null, file_id: result.file_id, path: result.path, uploading: false }
             : a
           )
         )
@@ -621,6 +622,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       .filter(a => a.file_id)
       .map(a => ({
         file_id: a.file_id!,
+        path: a.path || '',
         name: a.name,
         size: a.size,
         mime_type: a.mime_type,

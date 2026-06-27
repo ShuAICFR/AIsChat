@@ -452,6 +452,8 @@ async def _get_messages(
 
     # 按时间升序排列（前端从上到下显示）
     sorted_messages = sorted(messages, key=lambda m: m.id) if after_id else list(reversed(messages))
+
+    import json as _json
     return [
         {
             "id": m.id,
@@ -462,6 +464,8 @@ async def _get_messages(
             "sender_avatar_url": sender_info.get(m.sender_id, {}).get("avatar_url"),
             "content": m.content,
             "reply_to": m.reply_to,
+            "attachments": (_json.loads(m.attachments) if m.attachments else None),
+            "source_public_id": getattr(m, "source_public_id", None),
             "read_at": str(m.read_at) if m.read_at else None,
             "created_at": str(m.created_at) if m.created_at else None,
         }

@@ -646,7 +646,7 @@ async def _inject_image_data(
     # 构建 orm 消息的索引：content → orm 对象
     orm_by_content: dict[str, any] = {}
     for orm_m in recent_orm_messages:
-        if orm_m.content and orm_m.sender_type == "human":
+        if orm_m.content and getattr(orm_m, 'sender_type', 'human') == "human":
             orm_by_content[orm_m.content] = orm_m
 
     # 从 messages 末尾向前找最后一条 user 消息

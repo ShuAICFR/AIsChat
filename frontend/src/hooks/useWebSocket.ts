@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 
 interface WebSocketMessage {
   type: string
@@ -107,7 +108,10 @@ export function useWebSocket(
           setUnreadSummary(msg.data)
         }
 
-        setLastMessage(msg)
+        // 使用 flushSync 强制同步渲染，防止快速连续消息被 React 18 批处理合并丢失
+        flushSync(() => {
+          setLastMessage(msg)
+        })
       } catch {
         // ignore invalid JSON
       }

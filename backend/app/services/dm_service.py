@@ -300,6 +300,14 @@ async def send_dm_message(
     db.add(msg)
     await db.flush()
 
+    # 附件自动创建转发引用（非 owner 发送时）
+    if attachments:
+        from app.services.file_service import track_forward_reference
+        for att in attachments:
+            fid = att.get("file_id") if isinstance(att, dict) else getattr(att, "file_id", None)
+            if fid:
+                await track_forward_reference(db, fid, "human", sender_id)
+
     # 更新会话最后消息
     session.last_message_id = msg.id
     session.last_message_at = now

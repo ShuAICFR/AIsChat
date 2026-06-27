@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Download, X, ArrowLeft, FileIcon, Loader2, AlertTriangle, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Download, X, ArrowLeft, FileIcon, Loader2, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, Share2 } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
+import ForwardFileModal from './ForwardFileModal'
 
 /** 可直接文本预览的 MIME 类型 */
 function isTextPreviewable(mimeType: string): boolean {
@@ -38,6 +39,7 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
   // 图片缩放
   const [scale, setScale] = useState(1)
   const imgContainerRef = useRef<HTMLDivElement>(null)
+  const [forwardFile, setForwardFile] = useState<{file_id:number;name:string;size:number;mime_type:string}|null>(null)
 
   const token = localStorage.getItem('access_token')
   const dlUrl = `/api/fs/download/${fileId}?token=${token || ''}`
@@ -128,6 +130,8 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
 
   if (!previewable) return null
 
+  const fileForForward = { file_id: fileId, name: fileName, size: fileSize, mime_type: mimeType }
+
   const headerBar = (
     <div className="flex items-center gap-3 px-4 h-12 border-b border-border bg-surface shrink-0">
       <button
@@ -165,6 +169,15 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
       )}
 
       <button
+        onClick={() => setForwardFile({ file_id: fileId, name: fileName, size: fileSize, mime_type: mimeType })}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-textSecondary hover:bg-elevated text-xs font-medium transition-colors"
+        title={t('forward.send')}
+      >
+        <Share2 size={14} />
+        <span className="hidden sm:inline">{t('forward.send')}</span>
+      </button>
+
+      <button
         onClick={handleDownload}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 transition-colors"
         title={t('common.download')}
@@ -176,56 +189,65 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
   )
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-0 md:p-6" onClick={onClose}>
-      <div
-        className="bg-surface border border-border md:rounded-2xl shadow-2xl shadow-black/30 flex flex-col
-                      w-full h-full md:w-[800px] md:max-h-[88vh] md:h-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {headerBar}
+    <>
+      <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-0 md:p-6" onClick={onClose}>
+        <div
+          className="bg-surface border border-border md:rounded-2xl shadow-2xl shadow-black/30 flex flex-col
+                        w-full h-full md:w-[800px] md:max-h-[88vh] md:h-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {headerBar}
 
-        {/* 内容区 */}
-        <div className="flex-1 overflow-auto bg-canvas min-h-0 flex items-start justify-center">
-          {loading ? (
-            <div className="flex items-center justify-center py-20 w-full">
-              <Loader2 size={24} className="animate-spin text-textMuted" />
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-3 text-textMuted w-full">
-              <AlertTriangle size={24} className="text-rose-400" />
-              <p className="text-sm">{error}</p>
-              <button onClick={handleDownload} className="px-4 py-2 rounded-xl bg-primary-500 text-white text-sm">
-                {t('common.downloadInstead')}
-              </button>
-            </div>
-          ) : isImage ? (
-            <div ref={imgContainerRef} className="w-full h-full flex items-center justify-center overflow-auto">
-              <img
-                src={dlUrl}
-                alt={fileName}
-                className="object-contain transition-transform duration-100 select-none"
-                style={{ transform: `scale(${scale})`, maxWidth: scale <= 1 ? '100%' : 'none', maxHeight: scale <= 1 ? '100%' : 'none' }}
-                draggable={false}
-              />
-            </div>
-          ) : isPDF ? (
-            <iframe src={dlUrl} className="w-full h-full border-0" title={fileName} />
-          ) : (
-            <div className="w-full p-4 md:p-5">
-              {isDocx ? (
-                <div
-                  className="prose prose-sm dark:prose-invert max-w-none text-textPrimary"
-                  dangerouslySetInnerHTML={{ __html: content || '' }}
+          {/* 内容区 */}
+          <div className="flex-1 overflow-auto bg-canvas min-h-0 flex items-start justify-center">
+            {loading ? (
+              <div className="flex items-center justify-center py-20 w-full">
+                <Loader2 size={24} className="animate-spin text-textMuted" />
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-3 text-textMuted w-full">
+                <AlertTriangle size={24} className="text-rose-400" />
+                <p className="text-sm">{error}</p>
+                <button onClick={handleDownload} className="px-4 py-2 rounded-xl bg-primary-500 text-white text-sm">
+                  {t('common.downloadInstead')}
+                </button>
+              </div>
+            ) : isImage ? (
+              <div ref={imgContainerRef} className="w-full h-full flex items-center justify-center overflow-auto">
+                <img
+                  src={dlUrl}
+                  alt={fileName}
+                  className="object-contain transition-transform duration-100 select-none"
+                  style={{ transform: `scale(${scale})`, maxWidth: scale <= 1 ? '100%' : 'none', maxHeight: scale <= 1 ? '100%' : 'none' }}
+                  draggable={false}
                 />
-              ) : (
-                <pre className="text-xs text-textPrimary whitespace-pre-wrap break-all font-mono leading-relaxed select-text">
-                  {content}
-                </pre>
-              )}
-            </div>
-          )}
+              </div>
+            ) : isPDF ? (
+              <iframe src={dlUrl} className="w-full h-full border-0" title={fileName} />
+            ) : (
+              <div className="w-full p-4 md:p-5">
+                {isDocx ? (
+                  <div
+                    className="prose prose-sm dark:prose-invert max-w-none text-textPrimary"
+                    dangerouslySetInnerHTML={{ __html: content || '' }}
+                  />
+                ) : (
+                  <pre className="text-xs text-textPrimary whitespace-pre-wrap break-all font-mono leading-relaxed select-text">
+                    {content}
+                  </pre>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+
+      {forwardFile && (
+        <ForwardFileModal
+          file={forwardFile}
+          onClose={() => setForwardFile(null)}
+        />
+      )}
+    </>
   )
 }

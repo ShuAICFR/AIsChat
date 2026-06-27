@@ -243,7 +243,7 @@ async def create_message(
     reply_to: int | None = None,
     attachments: list[dict] | None = None,
 ) -> Message:
-    """创建消息（支持附件）"""
+    """创建消息（支持附件，非 owner 发送含附件消息时自动创建转发引用）"""
     message = Message(
         group_id=group_id,
         sender_type=sender_type,
@@ -254,6 +254,15 @@ async def create_message(
     )
     db.add(message)
     await db.flush()
+
+    # 附件自动创建转发引用（非 owner 发送时）
+    if attachments:
+        from app.services.file_service import track_forward_reference
+        for att in attachments:
+            fid = att.get("file_id") if isinstance(att, dict) else getattr(att, "file_id", None)
+            if fid:
+                await track_forward_reference(db, fid, sender_type, sender_id)
+
     await db.refresh(message)
     return message
 

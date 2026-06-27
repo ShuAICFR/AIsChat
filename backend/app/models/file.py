@@ -19,6 +19,7 @@ class FileMetadata(Base):
     owner_id = Column(Integer, nullable=False)
     size = Column(BigInteger)
     mime_type = Column(String(100))
+    content_hash = Column(String(64))  # SHA-256 哈希，用于文件去重
     permissions = Column(JSONB)
     # 协作模式: solo(仅自己) | shared(指定协作者) | open(全群可见)
     collaboration_mode = Column(String(10), default="solo", nullable=False)
@@ -60,7 +61,7 @@ class FileReference(Base):
             name="ck_ref_referrer_type",
         ),
         CheckConstraint(
-            "ref_type IN ('read', 'write', 'import', 'share')",
+            "ref_type IN ('read', 'write', 'import', 'share', 'forward')",
             name="ck_ref_type",
         ),
     )

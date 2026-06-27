@@ -102,6 +102,31 @@
 
 ---
 
+## [v0.9.0] - 2026-06-27
+
+### Added
+
+- 📤 **AI 文件发送工具 `send_file`**：AI 可从自己的文件空间（`file_write` 创建的文件）发送到群聊或私信。零拷贝引用已有 `FileMetadata`，三元权限匹配（`path + owner_type + owner_id`），不可跨 AI 读文件。群聊用 `agent_id`，私信用 `agent.user_id`。WebSocket 广播 + 触发其他 AI 回复。`CORE_IDENTITY` 系统提示词已更新告知 AI 有此能力。
+- 🖼️ **文件预览弹窗增强**：图片预览支持缩放（+/- 按钮 + Ctrl+滚轮，0.5x-5x）、重置缩放。PDF 使用浏览器原生 `<iframe>` 内嵌预览。DOCX 通过 mammoth.js 客户端转 HTML 渲染（`dangerouslySetInnerHTML` + prose 样式）。文本类文件（txt/json/xml/yaml/sh/js 等）用 `<pre>` 语法高亮预览（≤2MB）。不可预览的自动触发下载。移动端全屏 + ArrowLeft 返回按钮；桌面端居中弹窗 800px max-w / 88vh max-h。所有预览均有下载按钮。
+- 📎 **纯附件消息优化**：用户仅发文件不输入文字时不再自动附加 `(附件)` 字符串。侧边栏最后消息预览显示 `[文件]`（1 个文件）或 `[N个文件]`（多个）。`make_preview()` 函数统一处理 content + attachments 预览逻辑。
+- 🔗 **文件去重系统**：三级比对（文件名 → 大小 → SHA-256 哈希），上传文件时自动检测。同一用户上传同名同内容文件时直接复用已有 `file_id`，不写物理磁盘。`FileMetadata` 新增 `content_hash` 列。`ai_write_file` 同步写入哈希。
+- 📤 **文件转发系统**：新的 `ForwardFileModal` 组件——搜索 + 多选群聊和联系人（DM），一键将已有文件作为附件转发给多个目标，不重复上传。前端文件预览弹窗和"我的"存储页均有转发入口。
+- 🔄 **转发引用自动追踪**：`create_message` 和 `send_dm_message` 发送含附件的消息时，若非文件 owner 发送则自动在 `file_references` 创建 `ref_type='forward'` 记录（幂等）。转发即计入转发者存储配额。
+- 🏠 **FIFO 文件过户**：文件 owner 删除时，自动查找最早转发该文件的用户并将文件所有权转移过去。过户后原转发引用自动移除（已升级为 owner）。若无转发者接盘则标记为孤儿文件，进入宽限期。
+- ⏳ **孤儿文件宽限期**：无人接盘的文件标记为 `owner_type='system'`，宽限期（默认 7 天，管理员可在 `system_settings.orphan_retention_days` 配置）后由后台 worker 物理清理。每小时检查一次。
+- 🗑️ **转发文件释放**：转发者可从"我的"存储页点击释放按钮移除转发引用（`DELETE /fs/release/{file_id}`），仅删引用不删物理文件。存储空间即时返还。
+- 📊 **存储页文件列表**："我的"存储概览区新增文件列表（含转发文件），自有文件悬停显示转发按钮，转发文件显示 `[转发]` 标签和释放按钮。存储配额计算含转发文件。`GET /fs/list?include_forwarded=true` 合并返回自有+转发文件。`/user/storage` 新增 `forwarded_files` / `forwarded_used` 字段。
+
+### Changed
+
+- 🔧 **群聊消息 REST 端点**：新 `POST /groups/{group_id}/messages` 支持通过 HTTP API 发送群聊消息（含附件），含 WebSocket 广播 + AI 触发器。与 DM 端点对称。
+- 🔧 **DM 消息端点支持附件**：`POST /dm/{session_id}/messages` 现接受 `attachments` 字段并透传给 `send_dm_message`。
+
+### Fixed
+
+- 🐛 **`file_references.ref_type` CHECK 约束缺失 `forward`**：模型和数据库约束新增 `'forward'` 类型，init-db.sql 幂等迁移自动修复。
+
+
 ## [v0.5.0] - 2026-06-21
 
 ### Added

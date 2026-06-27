@@ -15,6 +15,8 @@ class SystemSettings(Base):
 
     federation_sync_interval_minutes = Column(Integer, default=720, comment="联邦 profile 同步间隔（分钟），默认 720（12小时）")
 
+    orphan_retention_days = Column(Integer, default=7, comment="孤儿文件宽限期（天），到期自动物理删除")
+
     system_prompt_overrides = Column(JSONB, nullable=True, comment="系统提示词覆盖（管理员自定义 core_identity/protocols 等段）")
     system_prompt_order = Column(JSONB, nullable=True, comment="系统提示词段拼接顺序（NULL=使用代码默认 SEGMENT_ORDER）")
 

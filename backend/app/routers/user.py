@@ -327,6 +327,21 @@ async def get_user_storage(
             "files": agent_files,
         })
 
+    # 转发来的文件（计入用户配额）
+    from app.services.file_service import get_user_forwarded_file_ids
+    forwarded_ids = await get_user_forwarded_file_ids(db, current_user["user_id"])
+    forwarded_used = 0
+    forwarded_files = 0
+    if forwarded_ids:
+        fwd_result = await db.execute(
+            select(FM).where(FM.id.in_(forwarded_ids))
+        )
+        for fm in fwd_result.scalars():
+            forwarded_used += fm.size or 0
+            forwarded_files += 1
+    total_used += forwarded_used
+    total_files += forwarded_files
+
     # 用户配额
     user_result = await db.execute(select(User).where(User.id == current_user["user_id"]))
     user = user_result.scalar_one()
@@ -340,6 +355,8 @@ async def get_user_storage(
         "quota_bytes": quota_bytes,
         "usage_percent": round(total_used / quota_bytes * 100, 1) if quota_bytes > 0 else 0,
         "per_agent": per_agent,
+        "forwarded_files": forwarded_files,
+        "forwarded_used": forwarded_used,
     }
 
 

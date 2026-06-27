@@ -214,6 +214,19 @@ const zh: TranslationDict = {
   'common.redeemSuccess': '兑换成功',
   'common.redeemFailed': '兑换失败',
 
+  // ======================== 文件转发 / Forward ========================
+  'forward.searchPlaceholder': '搜索群聊或联系人...',
+  'forward.noTargets': '暂无群聊或联系人',
+  'forward.groupsLabel': '群聊',
+  'forward.dmLabel': '联系人',
+  'forward.selectedCount': '已选 {n} 个',
+  'forward.selectHint': '请选择转发目标',
+  'forward.send': '发送',
+  'forward.sent': '已发送',
+  'forward.title': '转发文件',
+  'forward.release': '释放引用',
+  'forward.forwarded': '转发',
+
   // ======================== 外部链接安全弹窗 ========================
   'externalLink.title': '即将离开本站',
   'externalLink.hint': '你即将前往以下外部网页：',
@@ -303,6 +316,7 @@ const zh: TranslationDict = {
   'me.noStorageData': '暂无存储数据',
   'me.fileCount': '文件数',
   'me.fileCountSuffix': '个文件',
+  'me.viewFiles': '查看文件',
   'me.used': '已用',
   'me.quota': '配额',
   'me.storageWarning': '存储空间即将用尽，请清理文件或兑换更多配额',
@@ -1564,6 +1578,19 @@ const en: TranslationDict = {
   'common.redeemSuccess': 'Redeem successful',
   'common.redeemFailed': 'Redeem failed',
 
+  // ======================== Forward ========================
+  'forward.searchPlaceholder': 'Search groups or contacts...',
+  'forward.noTargets': 'No groups or contacts',
+  'forward.groupsLabel': 'Groups',
+  'forward.dmLabel': 'Contacts',
+  'forward.selectedCount': '{n} selected',
+  'forward.selectHint': 'Select targets',
+  'forward.send': 'Send',
+  'forward.sent': 'Sent',
+  'forward.title': 'Forward File',
+  'forward.release': 'Release',
+  'forward.forwarded': 'Forwarded',
+
   // ======================== External Link Safety ========================
   'externalLink.title': 'Leaving this site',
   'externalLink.hint': 'You are about to visit the following external website:',
@@ -1653,6 +1680,7 @@ const en: TranslationDict = {
   'me.noStorageData': 'No storage data',
   'me.fileCount': 'Files',
   'me.fileCountSuffix': ' file(s)',
+  'me.viewFiles': 'View files',
   'me.used': 'Used',
   'me.quota': 'Quota',
   'me.storageWarning': 'Storage almost full. Please clean up files or redeem more quota.',

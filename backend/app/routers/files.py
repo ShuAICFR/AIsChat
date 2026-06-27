@@ -18,6 +18,7 @@ from app.services.file_service import (
     set_collaboration_mode, add_file_collaborator, remove_file_collaborator,
     get_file_collaborators, get_file_referrers,
     _check_path_safe, _get_physical_path,
+    _remove_forward_reference,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,14 +33,38 @@ router = APIRouter(prefix="/fs", tags=["文件"])
 @router.get("/list")
 async def list_directory(
     path: str = Query("/", description="目录路径"),
+    include_forwarded: bool = Query(False, description="是否包含转发来的文件"),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """列出目录内容（自动过滤无权条目）"""
+    """列出目录内容（自动过滤无权条目），可选包含转发来的文件"""
     if not _check_path_safe(path):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="路径不合法")
 
     files = await list_files(db, path, "human", current_user["user_id"])
+
+    # 合并转发来的文件
+    if include_forwarded:
+        from app.services.file_service import get_user_forwarded_file_ids
+        forwarded_ids = await get_user_forwarded_file_ids(db, current_user["user_id"])
+        if forwarded_ids:
+            from sqlalchemy import select
+            from app.models.file import FileMetadata as FM
+            fwd_result = await db.execute(select(FM).where(FM.id.in_(forwarded_ids)))
+            for fm in fwd_result.scalars():
+                files.append({
+                    "id": fm.id,
+                    "path": fm.path,
+                    "owner_type": fm.owner_type,
+                    "owner_id": fm.owner_id,
+                    "size": fm.size,
+                    "mime_type": fm.mime_type,
+                    "collaboration_mode": fm.collaboration_mode,
+                    "created_at": str(fm.created_at) if fm.created_at else None,
+                    "updated_at": str(fm.updated_at) if fm.updated_at else None,
+                    "is_forwarded": True,
+                })
+
     return files
 
 
@@ -165,13 +190,34 @@ async def delete_file_endpoint(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """删除文件"""
+    """删除文件（owner 删除时会自动过户给转发者或标记孤儿）"""
     try:
-        await delete_file(db, file_id, "human", current_user["user_id"])
+        result = await delete_file(db, file_id, "human", current_user["user_id"])
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-    return {"message": "文件已删除", "file_id": file_id}
+    action = result.get("action", "deleted")
+    messages = {
+        "deleted": "文件已删除",
+        "released": "已释放文件引用",
+        "transferred": f"文件已由他人接管",
+        "orphaned": "文件无人持有，将在宽限期后清理",
+    }
+    return {"message": messages.get(action, "操作成功"), **result}
+
+
+@router.delete("/release/{file_id}")
+async def release_file_reference(
+    file_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """释放转发文件的引用（非 owner 从存储中移除）"""
+    try:
+        result = await delete_file(db, file_id, "human", current_user["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return {"message": "已释放文件引用", **result}
 
 
 # ============================================================

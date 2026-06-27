@@ -4,10 +4,11 @@
 """
 import os
 import uuid
+import hashlib
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete as sa_delete, and_
+from sqlalchemy import select, delete as sa_delete, and_, func
 from app.models.file import FileMetadata, FileReference, FileCollaborator
 from app.config import settings
 
@@ -120,17 +121,38 @@ async def upload_file(
     owner_id: int,
     collaboration_mode: str = "solo",
 ) -> FileMetadata:
-    """上传文件到指定路径"""
+    """上传文件到指定路径（含三级去重：文件名 → 大小 → 内容哈希）"""
     if not _check_path_safe(path):
         raise ValueError("路径不合法")
 
     relative_path = os.path.join(path, filename or f"unnamed_{uuid.uuid4().hex[:8]}")
-    physical_path = _get_physical_path(relative_path)
 
-    # 确保目录存在
+    # ── 三级去重：文件名 → 大小 → 内容哈希 ──
+    result = await db.execute(
+        select(FileMetadata).where(
+            FileMetadata.path == relative_path,
+            FileMetadata.owner_type == owner_type,
+            FileMetadata.owner_id == owner_id,
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing and existing.size == len(content):
+        # 大小相同 → 计算内容哈希进一步比对
+        content_hash = hashlib.sha256(content).hexdigest()
+        # 若已有文件未存哈希则补存
+        if not existing.content_hash:
+            existing.content_hash = content_hash
+            await db.flush()
+        if existing.content_hash == content_hash:
+            logger.info(f"文件去重复用: {relative_path} (SHA256={content_hash[:8]}…)")
+            return existing
+
+    # ── 非重复 → 写入物理文件 ──
+    content_hash = hashlib.sha256(content).hexdigest()
+    physical_path = _get_physical_path(relative_path)
     os.makedirs(os.path.dirname(physical_path), exist_ok=True)
 
-    # 写入物理文件
     with open(physical_path, "wb") as f:
         f.write(content)
 
@@ -141,6 +163,7 @@ async def upload_file(
         owner_id=owner_id,
         size=len(content),
         mime_type=mime_type,
+        content_hash=content_hash,
         collaboration_mode=collaboration_mode,
         permissions={
             "owner": f"{owner_type}:{owner_id}",
@@ -221,31 +244,221 @@ async def delete_file(
     file_id: int,
     requester_type: str,
     requester_id: int,
-) -> bool:
-    """删除文件（需 owner 或 delete 权限）"""
-    metadata = await check_file_access(db, file_id, requester_type, requester_id, "delete")
+) -> dict:
+    """删除文件（owner 删除时若有转发引用则过户给最早转发者，否则真删）"""
+    result = await db.execute(
+        select(FileMetadata).where(FileMetadata.id == file_id)
+    )
+    metadata = result.scalar_one_or_none()
     if metadata is None:
-        # 再检查是否为 owner
-        result = await db.execute(
-            select(FileMetadata).where(FileMetadata.id == file_id)
-        )
-        metadata = result.scalar_one_or_none()
-        if metadata is None:
-            raise ValueError("文件不存在")
-        if not (metadata.owner_type == requester_type and metadata.owner_id == requester_id):
-            raise ValueError("无权删除此文件")
+        raise ValueError("文件不存在")
 
-    # 删除物理文件
+    # ── 转发者删除引用（非 owner） ──
+    if not (metadata.owner_type == requester_type and metadata.owner_id == requester_id):
+        removed = await _remove_forward_reference(db, file_id, requester_type, requester_id)
+        if not removed:
+            raise ValueError("无权删除此文件")
+        return {"action": "released", "file_id": file_id}
+
+    # ── Owner 删除：查找接盘者 ──
+    successor = await _find_first_forwarder(db, file_id)
+    if successor:
+        # 过户给最早转发者
+        old_owner = f"{metadata.owner_type}:{metadata.owner_id}"
+        metadata.owner_type = successor[0]
+        metadata.owner_id = successor[1]
+        metadata.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        # 删除接盘者的 forward 引用（他已升级为 owner）
+        await db.execute(
+            sa_delete(FileReference).where(
+                FileReference.file_id == file_id,
+                FileReference.referrer_type == successor[0],
+                FileReference.referrer_id == successor[1],
+                FileReference.ref_type == "forward",
+            )
+        )
+        await db.flush()
+        logger.info(f"文件 {file_id} 已过户: {old_owner} → {successor[0]}:{successor[1]}")
+        return {"action": "transferred", "file_id": file_id, "new_owner": f"{successor[0]}:{successor[1]}"}
+
+    # ── 无接盘者 → 孤儿或真删 ──
+    forward_count = await db.execute(
+        select(func.count(FileReference.id)).where(
+            FileReference.file_id == file_id,
+            FileReference.ref_type == "forward",
+        )
+    )
+    if forward_count.scalar() > 0:
+        # 仍有 forward 引用但无匹配 referrer（异常情况）→ 孤儿
+        await _orphan_file(db, file_id)
+        return {"action": "orphaned", "file_id": file_id}
+
+    # 真删
     physical_path = _get_physical_path(metadata.path)
     if os.path.exists(physical_path):
         os.remove(physical_path)
-
-    # 删除元数据（级联删除 references 和 collaborators）
     await db.delete(metadata)
     await db.flush()
+    logger.info(f"文件已物理删除: {metadata.path} by {requester_type}:{requester_id}")
+    return {"action": "deleted", "file_id": file_id}
 
-    logger.info(f"文件已删除: {metadata.path} by {requester_type}:{requester_id}")
+
+# ============================================================
+# 文件转发引用（零拷贝转发 + 过户 + 孤儿清理）
+# ============================================================
+
+async def _find_first_forwarder(db: AsyncSession, file_id: int) -> tuple[str, int] | None:
+    """查找文件的第一个转发者（FIFO 排序），用于过户接盘"""
+    r = await db.execute(
+        select(FileReference.referrer_type, FileReference.referrer_id).where(
+            FileReference.file_id == file_id,
+            FileReference.ref_type == "forward",
+        ).order_by(FileReference.created_at.asc()).limit(1)
+    )
+    row = r.one_or_none()
+    return (row[0], row[1]) if row else None
+
+
+async def track_forward_reference(
+    db: AsyncSession,
+    file_id: int,
+    referrer_type: str,
+    referrer_id: int,
+) -> bool:
+    """创建转发引用（幂等：同一人对同一文件只保留一条 forward 记录）。
+    非 owner 发送含附件的消息时自动调用。
+    返回 True 表示新创建（可用于扣配额），False 表示已存在或为 owner。
+    """
+    # Owner 自己不发转发引用
+    meta = await db.get(FileMetadata, file_id)
+    if not meta:
+        return False
+    if meta.owner_type == referrer_type and meta.owner_id == referrer_id:
+        return False
+
+    # 幂等：已有 forward 引用则跳过
+    existing = await db.execute(
+        select(FileReference).where(
+            FileReference.file_id == file_id,
+            FileReference.referrer_type == referrer_type,
+            FileReference.referrer_id == referrer_id,
+            FileReference.ref_type == "forward",
+        )
+    )
+    if existing.scalar_one_or_none():
+        return False
+
+    ref = FileReference(
+        file_id=file_id,
+        referrer_type=referrer_type,
+        referrer_id=referrer_id,
+        ref_type="forward",
+    )
+    db.add(ref)
+    await db.flush()
+    logger.info(f"转发引用: file={file_id} → {referrer_type}:{referrer_id}")
     return True
+
+
+async def _remove_forward_reference(
+    db: AsyncSession,
+    file_id: int,
+    referrer_type: str,
+    referrer_id: int,
+) -> bool:
+    """删除转发者的引用记录（返还配额时调用），返回是否找到并删除"""
+    r = await db.execute(
+        sa_delete(FileReference).where(
+            FileReference.file_id == file_id,
+            FileReference.referrer_type == referrer_type,
+            FileReference.referrer_id == referrer_id,
+            FileReference.ref_type == "forward",
+        )
+    )
+    await db.flush()
+    deleted = r.rowcount > 0
+    if deleted:
+        logger.info(f"转发引用已释放: file={file_id} ← {referrer_type}:{referrer_id}")
+    return deleted
+
+
+async def _orphan_file(db: AsyncSession, file_id: int):
+    """将文件标记为孤儿（无主状态，宽限期后清理）"""
+    meta = await db.get(FileMetadata, file_id)
+    if meta:
+        meta.owner_type = "system"
+        meta.owner_id = 0
+        meta.permissions = {"orphaned_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
+        await db.flush()
+        logger.info(f"文件已标记为孤儿: {file_id}")
+
+
+async def cleanup_orphaned_files(db: AsyncSession, retention_days: int = 7):
+    """清理超过宽限期的孤儿文件（由定时任务调用）"""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=retention_days)
+
+    r = await db.execute(
+        select(FileMetadata).where(
+            FileMetadata.owner_type == "system",
+            FileMetadata.owner_id == 0,
+        )
+    )
+    orphans = r.scalars().all()
+
+    deleted = 0
+    for meta in orphans:
+        # 从 permissions JSONB 读取 orphaned_at 时间
+        perms = meta.permissions or {}
+        orphaned_str = perms.get("orphaned_at", "")
+        try:
+            orphaned_at = datetime.fromisoformat(orphaned_str)
+        except (ValueError, TypeError):
+            orphaned_at = meta.updated_at or meta.created_at
+
+        if orphaned_at and orphaned_at < cutoff:
+            physical_path = _get_physical_path(meta.path)
+            if os.path.exists(physical_path):
+                os.remove(physical_path)
+            await db.delete(meta)
+            deleted += 1
+
+    if deleted:
+        await db.flush()
+        logger.info(f"已清理 {deleted} 个过期孤儿文件（宽限期 {retention_days} 天）")
+    return deleted
+
+
+async def get_user_forwarded_file_ids(db: AsyncSession, user_id: int) -> set[int]:
+    """获取用户所有转发引用的 file_id 集合（用于存储计算）"""
+    r = await db.execute(
+        select(FileReference.file_id).where(
+            FileReference.referrer_type == "human",
+            FileReference.referrer_id == user_id,
+            FileReference.ref_type == "forward",
+        )
+    )
+    return {row[0] for row in r.all()}
+
+
+async def orphan_cleanup_worker():
+    """后台 worker：每小时检查并清理过期孤儿文件"""
+    import asyncio
+    from app.database import async_session
+    from app.models.system_settings import SystemSettings
+
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            async with async_session() as db:
+                r = await db.execute(select(SystemSettings).where(SystemSettings.id == 1))
+                ss = r.scalar_one_or_none()
+                retention_days = ss.orphan_retention_days if ss else 7
+                await cleanup_orphaned_files(db, retention_days=retention_days)
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.warning("孤儿文件清理出错", exc_info=True)
 
 
 # ============================================================
@@ -550,6 +763,8 @@ async def ai_write_file(db: AsyncSession, agent_id: int, file_path: str,
     os.makedirs(os.path.dirname(physical_path), exist_ok=True)
 
     content_bytes = content.encode("utf-8")
+    content_hash = hashlib.sha256(content_bytes).hexdigest()
+
     with open(physical_path, "wb") as f:
         f.write(content_bytes)
 
@@ -562,6 +777,7 @@ async def ai_write_file(db: AsyncSession, agent_id: int, file_path: str,
     if metadata:
         # 更新已有文件
         metadata.size = len(content_bytes)
+        metadata.content_hash = content_hash
         metadata.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
         await track_file_reference(db, metadata.id, "ai", agent_id, "write")
         await db.flush()
@@ -575,6 +791,7 @@ async def ai_write_file(db: AsyncSession, agent_id: int, file_path: str,
             owner_id=agent_id,
             size=len(content_bytes),
             mime_type="text/plain",
+            content_hash=content_hash,
             collaboration_mode=collaboration_mode,
             permissions={
                 "owner": f"ai:{agent_id}",

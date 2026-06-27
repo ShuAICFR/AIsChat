@@ -623,6 +623,33 @@ DO $$ BEGIN
     END IF;
 END $$;
 
+-- file_metadata.content_hash（SHA-256，用于文件去重）
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'file_metadata' AND column_name = 'content_hash'
+    ) THEN
+        ALTER TABLE file_metadata ADD COLUMN content_hash VARCHAR(64);
+    END IF;
+END $$;
+
+-- file_references ref_type 增加 'forward' 类型
+DO $$ BEGIN
+    ALTER TABLE file_references DROP CONSTRAINT IF EXISTS ck_ref_type;
+    ALTER TABLE file_references ADD CONSTRAINT ck_ref_type
+        CHECK (ref_type IN ('read', 'write', 'import', 'share', 'forward'));
+END $$;
+
+-- system_settings 增加 orphan_retention_days（孤儿文件宽限期，默认 7 天）
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'system_settings' AND column_name = 'orphan_retention_days'
+    ) THEN
+        ALTER TABLE system_settings ADD COLUMN orphan_retention_days INTEGER NOT NULL DEFAULT 7;
+    END IF;
+END $$;
+
 -- ============================================================
 -- 索引
 -- ============================================================

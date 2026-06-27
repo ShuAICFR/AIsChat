@@ -94,6 +94,7 @@ async def send_dm(
             sender_id=current_user["user_id"],
             content=body.get("content", ""),
             reply_to=body.get("reply_to"),
+            attachments=body.get("attachments"),
         )
         # 触发 AI 回复（如果对方是 AI）
         await _maybe_trigger_dm_ai_reply(db, session_id, msg, current_user["user_id"])

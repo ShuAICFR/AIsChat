@@ -9,9 +9,10 @@ import {
   User, Settings, LogOut, Shield,
   Gift, BarChart3, Bot, ChevronRight, Edit3,
   Loader2, Check, X, ArrowRight, Activity,
-  FileText, HardDrive, Camera, Users, MessageSquare
+  FileText, HardDrive, Camera, Users, MessageSquare, Share2
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'
+import ForwardFileModal from '../components/ForwardFileModal'
 
 interface AgentBrief {
   id: number
@@ -79,6 +80,33 @@ export default function MePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
+
+  // 文件列表 + 转发
+  const [fileList, setFileList] = useState<Array<{id:number;path:string;size:number;mime_type:string;created_at:string}>>([])
+  const [fileListLoading, setFileListLoading] = useState(false)
+  const [forwardFile, setForwardFile] = useState<{file_id:number;name:string;size:number;mime_type:string}|null>(null)
+
+  interface FileItem {
+    id: number; path: string; size: number; mime_type: string; created_at: string
+    is_forwarded?: boolean
+  }
+
+  const loadFileList = () => {
+    setFileListLoading(true)
+    api.get<FileItem[]>('/fs/list?path=/&include_forwarded=true')
+      .then(r => setFileList(Array.isArray(r) ? r : []))
+      .catch(() => {})
+      .finally(() => setFileListLoading(false))
+  }
+
+  const releaseFile = async (fileId: number) => {
+    try {
+      await api.delete(`/fs/release/${fileId}`)
+      setFileList(prev => prev.filter(f => f.id !== fileId))
+    } catch (err: any) {
+      alert(err.message || t('error.unknown'))
+    }
+  }
 
   useEffect(() => {
     // 加载我的 AI 列表
@@ -322,9 +350,19 @@ export default function MePage() {
 
       {/* ====== 存储概览 ====== */}
       <div className="bg-surface rounded-2xl border border-border p-5">
-        <h3 className="text-sm font-semibold text-textPrimary mb-3 flex items-center gap-2">
-          <HardDrive size={16} className="text-primary-400" /> {t('me.storageSection')}
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
+            <HardDrive size={16} className="text-primary-400" /> {t('me.storageSection')}
+          </h3>
+          {storage && storage.total_files > 0 && (
+            <button
+              onClick={loadFileList}
+              className="text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 transition-colors"
+            >
+              {fileList.length > 0 ? t('common.refresh') : t('me.viewFiles')}
+            </button>
+          )}
+        </div>
         {storageLoading ? (
           <div className="flex justify-center py-6"><Loader2 size={18} className="animate-spin text-textMuted" /></div>
         ) : storage ? (
@@ -350,6 +388,45 @@ export default function MePage() {
             {storage.usage_percent > 90 && (
               <p className="text-xs text-rose-400">{t('me.storageWarning')}</p>
             )}
+
+            {/* 文件列表 */}
+            {fileListLoading ? (
+              <div className="flex justify-center py-3"><Loader2 size={14} className="animate-spin text-textMuted" /></div>
+            ) : fileList.length > 0 ? (
+              <div className="mt-2 pt-3 border-t border-border/60 space-y-1">
+                {fileList.map((f) => {
+                  const name = f.path.split('/').pop() || f.path
+                  return (
+                    <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-elevated transition-colors group">
+                      <FileText size={14} className={`shrink-0 ${(f as any).is_forwarded ? 'text-accent-400' : 'text-textMuted'}`} />
+                      <span className="text-xs text-textPrimary truncate flex-1" title={name}>
+                        {name}
+                        {(f as any).is_forwarded && (
+                          <span className="text-[10px] text-accent-400 ml-1.5">{t('forward.forwarded')}</span>
+                        )}
+                      </span>
+                      <span className="text-[10px] text-textMuted shrink-0">{formatSize(f.size)}</span>
+                      <button
+                        onClick={() => setForwardFile({ file_id: f.id, name, size: f.size, mime_type: f.mime_type || 'application/octet-stream' })}
+                        className="p-1 rounded hover:bg-primary-500/10 text-textMuted hover:text-primary-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title={t('forward.send')}
+                      >
+                        <Share2 size={12} />
+                      </button>
+                      {(f as any).is_forwarded && (
+                        <button
+                          onClick={() => releaseFile(f.id)}
+                          className="p-1 rounded hover:bg-rose-500/10 text-textMuted hover:text-rose-400 transition-colors opacity-0 group-hover:opacity-100"
+                          title={t('forward.release')}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="text-sm text-textMuted py-3 text-center">{t('me.noStorageData')}</p>
@@ -499,6 +576,14 @@ export default function MePage() {
           file={cropFile}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {/* 文件转发弹窗 */}
+      {forwardFile && (
+        <ForwardFileModal
+          file={forwardFile}
+          onClose={() => setForwardFile(null)}
         />
       )}
     </div>

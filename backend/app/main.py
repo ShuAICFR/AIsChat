@@ -55,6 +55,10 @@ async def lifespan(app: FastAPI):
     from app.services.memory_buffer import memory_flush_worker
     memory_flush_task = asyncio.create_task(memory_flush_worker())
 
+    # 启动孤儿文件清理 worker
+    from app.services.file_service import orphan_cleanup_worker
+    orphan_cleanup_task = asyncio.create_task(orphan_cleanup_worker())
+
     # 启动系统指标收集 flush worker
     from app.services.metrics_collector import metrics_flush_worker
     metrics_flush_task = asyncio.create_task(metrics_flush_worker())
@@ -93,7 +97,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass
     for task in [ai_worker_task, vector_worker_task, alarm_scheduler_task,
-                  memory_flush_task, metrics_flush_task,
+                  memory_flush_task, metrics_flush_task, orphan_cleanup_task,
                   fed_heartbeat_task, fed_reconnect_task]:
         task.cancel()
         try:

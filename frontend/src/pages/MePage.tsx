@@ -6,10 +6,10 @@ import { api } from '../api/client'
 import { AI_TYPE_LABEL } from '../constants'
 import { fmtTokenNum } from '../utils/format'
 import {
-  User, Settings, LogOut, Shield, Tag,
-  CreditCard, Gift, BarChart3, Bot, ChevronRight, Edit3,
+  User, Settings, LogOut, Shield,
+  Gift, BarChart3, Bot, ChevronRight, Edit3,
   Loader2, Check, X, ArrowRight, Activity,
-  FileText, HardDrive, Camera
+  FileText, HardDrive, Camera, Users, MessageSquare
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'
 
@@ -34,6 +34,24 @@ interface UsageOverview {
   total_calls: number
 }
 
+function StatCard({ icon, value, label, onClick, bg }: {
+  icon: React.ReactNode; value: string | number; label: string; onClick: () => void; bg: string;
+}) {
+  return (
+    <button onClick={onClick} className={`rounded-xl p-3.5 text-center hover:brightness-95 transition-all cursor-pointer w-full ${bg}`}>
+      <div className="mx-auto mb-1 flex justify-center">{icon}</div>
+      <div className="text-lg font-bold text-textPrimary tabular-nums">{value}</div>
+      <div className="text-[10px] text-textMuted mt-0.5">{label}</div>
+    </button>
+  )
+}
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 export default function MePage() {
   const { user, logout, refreshUser } = useAuth()
   const t = useT()
@@ -50,6 +68,7 @@ export default function MePage() {
   // 存储概览
   const [storage, setStorage] = useState<{ total_used: number; total_files: number; quota_mb: number; usage_percent: number } | null>(null)
   const [storageLoading, setStorageLoading] = useState(true)
+  const [stats, setStats] = useState<{ ai_count: number; friend_count: number; group_count: number; storage_used: number } | null>(null)
 
   // 编辑资料弹窗
   const [showEditProfile, setShowEditProfile] = useState(false)
@@ -78,6 +97,11 @@ export default function MePage() {
     api.get<{ total_used: number; total_files: number; quota_mb: number; usage_percent: number }>('/user/storage').then(r => {
       setStorage(r)
     }).catch(() => {}).finally(() => setStorageLoading(false))
+
+    // 加载个人统计（单次高效 COUNT 查询）
+    api.get<{ ai_count: number; friend_count: number; group_count: number; storage_used: number }>('/user/stats').then(r => {
+      setStats(r)
+    }).catch(() => {})
   }, [])
 
   // 汇总
@@ -193,24 +217,36 @@ export default function MePage() {
           </div>
         </div>
 
-        {/* 额度概览 */}
+        {/* 个人统计概览 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border/60">
-          {[
-            { key: 'me.aiQuotaCard', value: user.ai_quota ?? 0, icon: Bot, color: 'text-primary-400', action: () => navigate('/agents') },
-            { key: 'me.apiCreditCard', value: ((user as any).total_effective ?? (user as any).api_credit ?? 0).toLocaleString() + ((user as any).api_credit < 0 ? ' ⚠' : ''), subColor: (user as any).api_credit < 0 ? 'text-rose-400' : undefined, icon: CreditCard, color: (user as any).api_credit < 0 ? 'text-rose-400' : 'text-mint-400', action: () => navigate('/me/usage'), poolName: (user as any).assigned_pool_key_name },
-            { key: 'me.bundleCreditCard', value: user.agent_bundle_credit ?? 0, icon: Tag, color: 'text-amber-400', action: () => navigate('/agents') },
-            { key: 'me.fileQuotaCard', value: `${user.file_quota_mb ?? 100}MB`, icon: HardDrive, color: 'text-accent-400', action: () => navigate('/agents') },
-          ].map(item => (
-            <button
-              key={item.key}
-              onClick={item.action}
-              className="bg-canvas rounded-xl p-3 text-center hover:bg-elevated transition-colors cursor-pointer w-full"
-            >
-              <item.icon size={16} className={`${item.color} mx-auto mb-1`} />
-              <div className="text-sm font-semibold text-textPrimary">{item.value}</div>
-              <div className="text-[10px] text-textMuted">{t(item.key)}{item.poolName ? ` · ${item.poolName}` : ''}</div>
-            </button>
-          ))}
+          <StatCard
+            icon={<Bot size={18} className="text-primary-400" />}
+            value={stats?.ai_count ?? '...'}
+            label={t('me.aiCountCard')}
+            bg="bg-primary-500/5"
+            onClick={() => navigate('/agents')}
+          />
+          <StatCard
+            icon={<Users size={18} className="text-mint-400" />}
+            value={stats?.friend_count ?? '...'}
+            label={t('me.friendCountCard')}
+            bg="bg-mint-500/5"
+            onClick={() => navigate('/friends')}
+          />
+          <StatCard
+            icon={<MessageSquare size={18} className="text-amber-400" />}
+            value={stats?.group_count ?? '...'}
+            label={t('me.groupCountCard')}
+            bg="bg-amber-500/5"
+            onClick={() => navigate('/chat')}
+          />
+          <StatCard
+            icon={<HardDrive size={18} className="text-accent-400" />}
+            value={stats ? formatSize(stats.storage_used) : '...'}
+            label={t('me.storageUsedCard')}
+            bg="bg-accent-500/5"
+            onClick={() => navigate('/agents')}
+          />
         </div>
       </div>
 

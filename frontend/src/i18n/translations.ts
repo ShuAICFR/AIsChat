@@ -242,6 +242,10 @@ const zh: TranslationDict = {
 
   // ======================== 我的页面 / MePage ========================
   'me.title': '我的',
+  'me.aiCountCard': '创建的 AI',
+  'me.friendCountCard': '好友',
+  'me.groupCountCard': '加入的群聊',
+  'me.storageUsedCard': '已用存储',
   'me.admin': '管理员',
   'me.adminBadge': '管理员',
   'me.aiLabel': 'AI',
@@ -1583,6 +1587,10 @@ const en: TranslationDict = {
 
   // ======================== MePage ========================
   'me.title': 'Me',
+  'me.aiCountCard': 'AI Created',
+  'me.friendCountCard': 'Friends',
+  'me.groupCountCard': 'Groups Joined',
+  'me.storageUsedCard': 'Storage Used',
   'me.admin': 'Admin',
   'me.adminBadge': 'Admin',
   'me.aiLabel': 'AI',

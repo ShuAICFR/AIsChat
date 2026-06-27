@@ -244,6 +244,45 @@ async def upload_user_avatar(
     return {"avatar_url": avatar_url}
 
 
+@router.get("/stats")
+async def get_user_stats(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """用户个人统计卡片：AI数、好友数、群聊数、存储用量（高效 COUNT 查询）"""
+    from sqlalchemy import func, or_
+    from app.models.agent import Agent
+    from app.models.friend import Friend
+    from app.models.group import Group as GroupModel, GroupMember
+    from app.models.file import FileMetadata
+
+    uid = current_user["user_id"]
+
+    ai_n = (await db.execute(select(func.count(Agent.id)).where(Agent.owner_id == uid))).scalar() or 0
+
+    friend_n = (await db.execute(
+        select(func.count(Friend.id)).where(Friend.status == "accepted", or_(Friend.user_id == uid, Friend.friend_id == uid))
+    )).scalar() or 0
+
+    group_n = (await db.execute(
+        select(func.count(func.distinct(GroupModel.id))).where(
+            or_(
+                (GroupModel.owner_type == "human") & (GroupModel.owner_id == uid),
+                GroupModel.id.in_(select(GroupMember.group_id).where(GroupMember.member_type == "human", GroupMember.member_id == uid))
+            )
+        )
+    )).scalar() or 0
+
+    storage_n = (await db.execute(
+        select(func.coalesce(func.sum(FileMetadata.size), 0)).where(
+            FileMetadata.owner_type == "ai",
+            FileMetadata.owner_id.in_(select(Agent.id).where(Agent.owner_id == uid))
+        )
+    )).scalar() or 0
+
+    return {"ai_count": ai_n, "friend_count": friend_n, "group_count": group_n, "storage_used": storage_n}
+
+
 @router.get("/storage")
 async def get_user_storage(
     current_user: dict = Depends(get_current_user),

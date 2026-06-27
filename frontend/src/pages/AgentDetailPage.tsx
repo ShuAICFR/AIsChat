@@ -61,7 +61,14 @@ interface StorageInfo {
   quota_bytes: number
   quota_mb: number
   usage_percent: number
-  files: Array<{ name: string; size: number; path: string }>
+  files: Array<{ id: number; name: string; size: number; path: string }>
+}
+
+interface FileReference {
+  referrer_type: string
+  referrer_id: number
+  ref_type: string
+  display: string
 }
 
 interface LogSummary {
@@ -106,6 +113,11 @@ export default function AgentDetailPage() {
   const [modelOptions, setModelOptions] = useState<{ value: string; label: string }[]>([])
   const [defaultModels, setDefaultModels] = useState({ chat_model: '', work_model: '' })
   const [thinkingSupported, setThinkingSupported] = useState(true)
+  // 文件删除确认
+  const [deleteFileTarget, setDeleteFileTarget] = useState<{ id: number; name: string } | null>(null)
+  const [deleteFileRefs, setDeleteFileRefs] = useState<{ reference_count: number; references: FileReference[] } | null>(null)
+  const [deleteFileLoading, setDeleteFileLoading] = useState(false)
+  const [deletingFile, setDeletingFile] = useState(false)
 
   // Delete
   const [showDelete, setShowDelete] = useState(false)
@@ -318,6 +330,36 @@ export default function AgentDetailPage() {
       alert(err.message || t('error.saveFailed'))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  // 文件操作
+  const handleOpenDeleteConfirm = async (file: { id: number; name: string }) => {
+    setDeleteFileTarget(file)
+    setDeleteFileRefs(null)
+    setDeleteFileLoading(true)
+    try {
+      const data = await api.get<{ reference_count: number; references: FileReference[] }>(`/fs/${file.id}/references-detail`)
+      setDeleteFileRefs(data)
+    } catch {
+      setDeleteFileRefs({ reference_count: 0, references: [] })
+    } finally {
+      setDeleteFileLoading(false)
+    }
+  }
+
+  const handleDeleteFile = async () => {
+    if (!deleteFileTarget) return
+    setDeletingFile(true)
+    try {
+      await api.delete(`/fs/delete/${deleteFileTarget.id}`)
+      setDeleteFileTarget(null)
+      setDeleteFileRefs(null)
+      loadStorage()
+    } catch (err: any) {
+      alert(err.message || err.detail || t('error.saveFailed'))
+    } finally {
+      setDeletingFile(false)
     }
   }
 
@@ -873,11 +915,26 @@ export default function AgentDetailPage() {
                 </div>
 
                 {storage.files.length > 0 ? (
-                  <div className="space-y-1 max-h-60 overflow-y-auto">
-                    {storage.files.map((f, i) => (
-                      <div key={i} className="flex justify-between text-xs py-1.5 px-2 rounded hover:bg-canvas">
-                        <span className="text-textSecondary truncate flex-1 mr-2">{f.name}</span>
-                        <span className="text-textMuted shrink-0">{formatSize(f.size)}</span>
+                  <div className="space-y-1 max-h-72 overflow-y-auto">
+                    {storage.files.map((f) => (
+                      <div key={f.id} className="flex items-center justify-between text-xs py-2 px-2 rounded hover:bg-canvas group">
+                        <a
+                          href={`/api/fs/download/${f.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-textSecondary hover:text-primary-400 truncate flex-1 mr-2 transition-colors"
+                          title={t('agentDetail.clickToDownload')}
+                        >
+                          {f.name}
+                        </a>
+                        <span className="text-textMuted shrink-0 mr-2">{formatSize(f.size)}</span>
+                        <button
+                          onClick={() => handleOpenDeleteConfirm(f)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/10 text-textMuted hover:text-rose-400 transition-all"
+                          title={t('common.delete')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1280,6 +1337,66 @@ export default function AgentDetailPage() {
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
         />
+      )}
+
+      {/* 文件删除确认弹窗 */}
+      {deleteFileTarget && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[70] p-4" onClick={() => { setDeleteFileTarget(null); setDeleteFileRefs(null) }}>
+          <div className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center">
+                <Trash2 size={16} className="text-rose-400" />
+              </div>
+              <h3 className="font-semibold text-textPrimary text-base">{t('agentDetail.deleteFileTitle')}</h3>
+            </div>
+
+            <p className="text-sm text-textSecondary mb-3">
+              {t('agentDetail.deleteFileConfirm')} <span className="font-medium text-textPrimary">「{deleteFileTarget.name}」</span>？
+            </p>
+
+            {/* 引用信息 */}
+            <div className="bg-canvas rounded-lg p-3 mb-4 text-xs">
+              {deleteFileLoading ? (
+                <div className="flex items-center gap-2 text-textMuted py-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  {t('agentDetail.checkingReferences')}
+                </div>
+              ) : deleteFileRefs && deleteFileRefs.reference_count > 0 ? (
+                <>
+                  <p className="text-amber-400 font-medium mb-2">
+                    ⚠ {t('agentDetail.fileReferencedBy').replace('{count}', String(deleteFileRefs.reference_count))}
+                  </p>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {deleteFileRefs.references.map((ref, i) => (
+                      <div key={i} className="text-textMuted pl-2 border-l-2 border-amber-500/30">
+                        {ref.display}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-textMuted mt-2 text-[10px]">{t('agentDetail.deleteFileConsequence')}</p>
+                </>
+              ) : (
+                <p className="text-textMuted">{t('agentDetail.fileNoReferences')}</p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setDeleteFileTarget(null); setDeleteFileRefs(null) }}
+                className="flex-1 py-2.5 text-sm border border-border text-textSecondary rounded-xl hover:bg-elevated font-medium transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleDeleteFile}
+                disabled={deletingFile}
+                className="flex-1 py-2.5 text-sm bg-rose-500 text-white rounded-xl hover:bg-rose-400 font-medium transition-all disabled:opacity-50"
+              >
+                {deletingFile ? <Loader2 size={16} className="animate-spin mx-auto" /> : t('common.delete')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 完整设置弹窗 */}

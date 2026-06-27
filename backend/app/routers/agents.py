@@ -703,6 +703,7 @@ async def get_agent_storage(
     )
     for f in file_list_result.scalars().all():
         files.append({
+            "id": f.id,
             "path": f.path,
             "size": f.size or 0,
             "name": f.path.rsplit("/", 1)[-1] if "/" in f.path else f.path,

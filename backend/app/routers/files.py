@@ -265,6 +265,81 @@ async def list_collaborators(
     }
 
 
+@router.get("/{file_id}/references-detail")
+async def get_file_references_detail(
+    file_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取文件的详细引用信息（含群名、AI 名等可读名称），用于删除确认"""
+    from app.models.file import FileReference as FR
+    from app.models.agent import Agent
+    from app.models.user import User
+    from app.models.group import Group as GroupModel
+    from app.models.message import Message as MessageModel
+    from sqlalchemy import select
+
+    metadata = await get_file(db, file_id)
+    if metadata is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+
+    # 查询所有引用
+    ref_result = await db.execute(
+        select(FR).where(FR.file_id == file_id)
+    )
+    refs = ref_result.scalars().all()
+
+    references = []
+    for r in refs:
+        ref_info = {
+            "referrer_type": r.referrer_type,
+            "referrer_id": r.referrer_id,
+            "ref_type": r.ref_type,
+            "display": f"{r.referrer_type}:{r.referrer_id}",
+        }
+
+        # 解析为可读名称
+        if r.referrer_type == "ai":
+            agent_result = await db.execute(select(Agent.name).where(Agent.id == r.referrer_id))
+            name = agent_result.scalar_one_or_none()
+            ref_info["display"] = f"AI「{name or r.referrer_id}」"
+
+        elif r.referrer_type == "human":
+            user_result = await db.execute(select(User.username).where(User.id == r.referrer_id))
+            name = user_result.scalar_one_or_none()
+            ref_info["display"] = f"用户「{name or r.referrer_id}」"
+
+        elif r.referrer_type == "group":
+            group_result = await db.execute(select(GroupModel.name).where(GroupModel.id == r.referrer_id))
+            name = group_result.scalar_one_or_none()
+            ref_info["display"] = f"群聊「{name or r.referrer_id}」"
+
+        elif r.referrer_type == "message":
+            # 消息引用：查出消息所在的群聊或 DM
+            msg_result = await db.execute(
+                select(MessageModel.group_id).where(MessageModel.id == r.referrer_id)
+            )
+            gid = msg_result.scalar_one_or_none()
+            if gid is not None:
+                # 群聊消息
+                gname_result = await db.execute(select(GroupModel.name).where(GroupModel.id == gid))
+                gname = gname_result.scalar_one_or_none()
+                ref_info["display"] = f"群聊「{gname or gid}」的消息 #{r.referrer_id}"
+            else:
+                ref_info["display"] = f"私信消息 #{r.referrer_id}"
+
+        references.append(ref_info)
+
+    return {
+        "file_id": file_id,
+        "path": metadata.path,
+        "name": metadata.path.rsplit("/", 1)[-1] if "/" in metadata.path else metadata.path,
+        "size": metadata.size,
+        "reference_count": len(references),
+        "references": references,
+    }
+
+
 # ============================================================
 # 创建目录
 # ============================================================

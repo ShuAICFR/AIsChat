@@ -14,7 +14,7 @@ interface DMChatViewProps {
 
 export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps) {
   const t = useT()
-  const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null; is_federated?: boolean } | null>(null)
+  const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null; is_federated?: boolean; avatar_url?: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const navigate = useNavigate()
@@ -55,8 +55,12 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         </button>
 
         {/* 对方头像 */}
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-mint-400 to-emerald-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
-          {partner?.name?.charAt(0)?.toUpperCase() || '?'}
+        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-mint-400 to-emerald-600 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden">
+          {partner?.avatar_url ? (
+            <img src={partner.avatar_url} alt={partner.name || ''} className="w-full h-full object-cover" />
+          ) : (
+            partner?.name?.charAt(0)?.toUpperCase() || '?'
+          )}
         </div>
 
         {/* 对方信息 */}

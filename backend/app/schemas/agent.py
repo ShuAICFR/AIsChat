@@ -119,6 +119,7 @@ class AgentResponse(BaseModel):
     memory_load_mode: str = "index_only"
     memory_recent_count: int = 0
     memory_shared_scope: str = "private_only"
+    avatar_url: str | None = None
     created_at: str | None
 
 

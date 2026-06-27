@@ -389,20 +389,23 @@ async def _get_partner_info(db: AsyncSession, user_id: int) -> dict:
         return {"id": user_id, "name": f"未知:{user_id}", "type": "unknown", "state": None}
 
     state = None
+    avatar_url = getattr(user, 'avatar_url', None)
     if user.type == "ai":
-        # 查 agent 表获取在线状态
+        # 查 agent 表获取在线状态和头像（AI 头像存在 agents 表，不在 users 表）
         agent_result = await db.execute(
-            select(Agent.state).where(Agent.user_id == user_id)
+            select(Agent.state, Agent.avatar_url).where(Agent.user_id == user_id)
         )
-        agent_state = agent_result.scalar_one_or_none()
-        state = agent_state
+        agent_row = agent_result.one_or_none()
+        if agent_row:
+            state = agent_row[0]
+            avatar_url = agent_row[1] or avatar_url  # Agent 头像优先
 
     return {
         "id": user.id,
         "name": user.username,
         "type": user.type,
         "state": state,
-        "avatar_url": getattr(user, 'avatar_url', None),
+        "avatar_url": avatar_url,
     }
 
 
@@ -444,6 +447,16 @@ async def _get_messages(
         )
         for row in result.all():
             sender_info[row[0]] = {"name": row[1], "type": row[2] or "human", "avatar_url": row[3]}
+
+        # AI 头像存在 agents 表，需要额外查询补充
+        ai_sender_ids = [uid for uid, info in sender_info.items() if info["type"] == "ai"]
+        if ai_sender_ids:
+            agent_avatar_result = await db.execute(
+                select(Agent.user_id, Agent.avatar_url).where(Agent.user_id.in_(ai_sender_ids))
+            )
+            for agent_row in agent_avatar_result.all():
+                if agent_row[1]:
+                    sender_info[agent_row[0]]["avatar_url"] = agent_row[1]
 
     # 按时间升序排列（前端从上到下显示）
     sorted_messages = sorted(messages, key=lambda m: m.id) if after_id else list(reversed(messages))

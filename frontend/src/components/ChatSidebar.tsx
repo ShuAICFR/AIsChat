@@ -63,10 +63,13 @@ export default function ChatSidebar({
     loadDMSessions()
   }, [])
 
-  // 活跃对话变化时刷新
+  // 活跃对话变化时刷新（延迟等 mark-as-read 完成）
   useEffect(() => {
-    loadGroups()
-    loadDMSessions()
+    const timer = setTimeout(() => {
+      loadGroups()
+      loadDMSessions()
+    }, 300)
+    return () => clearTimeout(timer)
   }, [activeGroupId, activeSessionId])
 
   // chat-refresh 事件
@@ -74,13 +77,37 @@ export default function ChatSidebar({
     const handler = (e: CustomEvent) => {
       const t = e.detail?.type
       if (t === 'dm_notification' || t === 'unread_update' || t === 'message_sent') {
+        if (t === 'message_sent') {
+          // 乐观更新：立即将当前活跃对话移到列表顶部
+          const now = new Date().toISOString()
+          setGroups(prev => {
+            const idx = prev.findIndex(g => g.id === activeGroupId)
+            if (idx >= 0) {
+              const updated = [...prev]
+              const [item] = updated.splice(idx, 1)
+              updated.unshift({ ...item, last_message_at: now, last_message_preview: item.last_message_preview })
+              return updated
+            }
+            return prev
+          })
+          setDmSessions(prev => {
+            const idx = prev.findIndex(s => s.session_id === activeSessionId)
+            if (idx >= 0) {
+              const updated = [...prev]
+              const [item] = updated.splice(idx, 1)
+              updated.unshift({ ...item, last_message_at: now, last_message_preview: item.last_message_preview })
+              return updated
+            }
+            return prev
+          })
+        }
         loadGroups()
         loadDMSessions()
       }
     }
     window.addEventListener('chat-refresh', handler as EventListener)
     return () => window.removeEventListener('chat-refresh', handler as EventListener)
-  }, [])
+  }, [activeGroupId, activeSessionId])
 
   // 排序：按 last_message_at 降序（最新在前），无时间戳的排末尾
   const sortByTime = (a: any, b: any) => {

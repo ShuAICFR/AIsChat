@@ -135,6 +135,12 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       if (isAtBottomRef.current) {
         setTimeout(() => scrollToBottom(true), 50)
       }
+      // 新消息到达 → 通知侧栏刷新排序和未读
+      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: {
+        type: 'unread_update',
+        conversation_type: conversationType,
+        conversation_id: conversationId,
+      } }))
       if (m.sender_type === 'ai' && m.sender_id) {
         setThinkingAgents((prev) => {
           const next = new Map(prev)
@@ -623,9 +629,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     localStorage.removeItem(`draft_${conversationType}_${conversationId}`)
     setPendingAttachments([])
     setMentionActive(false)
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'message_sent' } }))
-    }, 300)
+    window.dispatchEvent(new CustomEvent('chat-refresh', { detail: { type: 'message_sent' } }))
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

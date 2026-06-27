@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
-import { ArrowLeft, Bell, BellOff, Settings, Bot, User, Globe } from 'lucide-react'
+import { ArrowLeft, Bell, BellOff, Settings, Bot, User, Globe, ShieldAlert } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
 
@@ -55,9 +55,13 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
         </button>
 
         {/* 对方头像 */}
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-mint-400 to-emerald-600 flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden">
+        <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${
+          partner?.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-mint-400 to-emerald-600'
+        }`}>
           {partner?.avatar_url ? (
             <img src={partner.avatar_url} alt={partner.name || ''} className="w-full h-full object-cover" />
+          ) : partner?.type === 'system' ? (
+            <ShieldAlert size={14} className="text-white" />
           ) : (
             partner?.name?.charAt(0)?.toUpperCase() || '?'
           )}
@@ -71,10 +75,12 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
             </span>
           </div>
           <span className="text-[10px] text-textMuted">
-            {partner?.type === 'ai' ? <><Bot size={12} className="inline" /> {t('dm.ai')}</> : <><User size={12} className="inline" /> {t('dm.user')}</>}
-            {partner?.state === 'active' && ` · ${t('dm.online')}`}
-            {partner?.state === 'dnd' && ` · ${t('dm.dnd')}`}
-            {(!partner?.state || partner?.state === 'offline') && ` · ${t('dm.offline')}`}
+            {partner?.type === 'system' ? <><ShieldAlert size={12} className="inline text-rose-400" /> 系统通知</>
+            : partner?.type === 'ai' ? <><Bot size={12} className="inline" /> {t('dm.ai')}</>
+            : <><User size={12} className="inline" /> {t('dm.user')}</>}
+            {partner?.type !== 'system' && partner?.state === 'active' && ` · ${t('dm.online')}`}
+            {partner?.type !== 'system' && partner?.state === 'dnd' && ` · ${t('dm.dnd')}`}
+            {partner?.type !== 'system' && (!partner?.state || partner?.state === 'offline') && ` · ${t('dm.offline')}`}
           </span>
         </div>
 

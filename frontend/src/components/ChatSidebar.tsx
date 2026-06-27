@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Plus, BellOff, Menu, UserPlus, Users, Bot, Globe } from 'lucide-react'
+import { Plus, BellOff, Menu, UserPlus, Users, Bot, Globe, ShieldAlert } from 'lucide-react'
 import { getStateDotColor, CHAT_REFRESH_EVENT } from '../constants'
 import { formatRelativeTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
@@ -285,17 +285,24 @@ export default function ChatSidebar({
               >
                 <div className="flex items-center gap-2.5">
                   {/* 对方头像 */}
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-mint-400 to-emerald-600 flex items-center justify-center shrink-0 relative">
+                  <div className={`w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center shrink-0 relative ${
+                    s.partner.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-mint-400 to-emerald-600'
+                  }`}>
                     {s.partner.avatar_url ? (
                       <img src={s.partner.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                    ) : s.partner.type === 'system' ? (
+                      <ShieldAlert size={16} className="text-white" />
                     ) : (
                       <span className="text-xs font-bold text-white">{s.partner.name?.charAt(0)?.toUpperCase() || '?'}</span>
                     )}
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface ${getStateDotColor(s.partner.state)}`} />
+                    {s.partner.type !== 'system' && (
+                      <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-surface ${getStateDotColor(s.partner.state)}`} />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="font-medium flex items-center gap-1.5 min-w-0">
+                        {s.partner.type === 'system' && <ShieldAlert size={11} className="shrink-0 text-rose-400" />}
                         {s.partner.type === 'ai' && <Bot size={11} className="shrink-0 text-mint-400" />}
                         {s.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
                         <span className="truncate block">{s.partner.name}</span>

@@ -53,7 +53,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
         {/* 头部 */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-lg font-bold ${
+            <div className={`w-12 h-12 rounded-full bg-gradient-to-bl flex items-center justify-center text-lg font-bold ${
               entityType === 'human'
                 ? 'from-primary-500 to-primary-700 text-white'
                 : 'from-teal-400 to-teal-600 text-white'

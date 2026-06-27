@@ -39,6 +39,7 @@ async def run_migrations():
             await _migrate_reminder_not_count(db)     # v0.4.1 系统提醒不计入轮次
             await _migrate_agents_user_id(db)
             await _migrate_friend_controls(db)         # v0.6.0 好友控制字段（必须在 select(Agent) 之前）
+            await _migrate_memory_config_columns(db)   # v0.8.0 文件记忆配置字段（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -1407,6 +1408,42 @@ async def _migrate_friend_controls(db):
         logger.info("  ✅ agents.auto_respond_friend_request 列添加完成")
     else:
         logger.info("  ⏭ agents.auto_respond_friend_request 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+
+
+async def _migrate_memory_config_columns(db):
+    """v0.8.0: 文件记忆配置字段——加载模式、最近篇数、共享范围"""
+    logger.info("  📂 迁移文件记忆配置字段...")
+    created_any = False
+
+    if not await _column_exists(db, "agents", "memory_load_mode"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN memory_load_mode VARCHAR(30) NOT NULL DEFAULT 'index_only'"
+        ))
+        created_any = True
+        logger.info("  ✅ agents.memory_load_mode 列添加完成")
+    else:
+        logger.info("  ⏭ agents.memory_load_mode 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "memory_recent_count"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN memory_recent_count INT NOT NULL DEFAULT 0"
+        ))
+        created_any = True
+        logger.info("  ✅ agents.memory_recent_count 列添加完成")
+    else:
+        logger.info("  ⏭ agents.memory_recent_count 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "memory_shared_scope"):
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN memory_shared_scope VARCHAR(30) NOT NULL DEFAULT 'private_only'"
+        ))
+        created_any = True
+        logger.info("  ✅ agents.memory_shared_scope 列添加完成")
+    else:
+        logger.info("  ⏭ agents.memory_shared_scope 已存在，跳过")
 
     if created_any:
         await db.flush()

@@ -657,14 +657,14 @@ export default function SettingsPage() {
       {/* ── 主体：桌面端侧边栏 + 内容，移动端纯内容 ── */}
       <div className="flex-1 flex min-h-0">
         {/* 桌面端侧边栏导航（可拖拽宽度） */}
-        <div className="hidden md:flex shrink-0 relative border-r border-border bg-surface">
-          <div className="overflow-y-auto py-1" style={{ width: sidebarWidth - 1 }}>
+        <div className="hidden md:flex shrink-0 relative border-r border-border bg-surface" style={{ width: sidebarWidth }}>
+          <div className="overflow-y-auto py-1 w-full">
             {/* 管理员快捷入口 */}
             {user?.role === 'admin' && (
               <button
                 onClick={() => navigate('/admin')}
                 className="w-full flex items-center gap-2 mx-2 px-2 py-1.5 mb-1 rounded-lg bg-primary-500/10 border border-primary-500/20 text-primary-400 hover:bg-primary-500/15 text-[13px] font-medium transition-colors"
-                style={{ width: sidebarWidth - 17 }}
+                style={{ width: 'calc(100% - 16px)' }}
               >
                 <Shield size={14} />
                 {t('settings.adminButton')}

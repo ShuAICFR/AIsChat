@@ -52,7 +52,7 @@ export default function ApiKeyPoolTab() {
   const handleDelete = async (id: number, name: string) => {
     if (!confirm(t('admin.confirmDeletePoolKey').replace('{name}', name))) return
     try {
-      await api.del(`/admin/api-key-pool/${id}`)
+      await api.delete(`/admin/api-key-pool/${id}`)
       loadKeys()
     } catch (err: any) {
       alert(err?.message || t('admin.deleteFailed'))

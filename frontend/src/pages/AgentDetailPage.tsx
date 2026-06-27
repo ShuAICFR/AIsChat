@@ -189,7 +189,7 @@ export default function AgentDetailPage() {
   const handleRemoveCollaborator = async (userId: number) => {
     if (!confirm('确认移除该合作者？')) return
     try {
-      await api.del(`/agents/${agentId}/collaborators/${userId}`)
+      await api.delete(`/agents/${agentId}/collaborators/${userId}`)
       await loadCollaborators()
     } catch (e: any) { alert(e?.detail || e?.message || '移除失败') }
   }

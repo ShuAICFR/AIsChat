@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useWebSocket } from '../hooks/useWebSocket'
+import { useWebSocket, type WebSocketMessage } from '../hooks/useWebSocket'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
@@ -15,6 +15,7 @@ interface Message {
   sender_type: string
   sender_id: number
   sender_name: string | null
+  sender_avatar_url?: string | null
   content: string
   reply_to: number | null
   read_at?: string | null
@@ -123,7 +124,112 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     return () => clearTimeout(timer)
   }, [input, conversationType, conversationId])
 
-  const { lastMessage, connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(conversationType, conversationId)
+  const handleMessage = useCallback((msg: WebSocketMessage) => {
+    if (msg.type === 'message') {
+      const m = msg.data
+      setMessages((prev) => {
+        const next = [...prev, m]
+        newestIdRef.current = m.id
+        return next
+      })
+      if (isAtBottomRef.current) {
+        setTimeout(() => scrollToBottom(true), 50)
+      }
+      if (m.sender_type === 'ai' && m.sender_id) {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(m.sender_id)
+          return next
+        })
+        setTypingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(m.sender_id)
+          return next
+        })
+      }
+    } else if (msg.type === 'ai_thinking') {
+      const d = msg.data
+      if (d.trigger === 'auto') return
+      const thinkingBelongsToHere =
+        (conversationType === 'group' && d.group_id === conversationId) ||
+        (conversationType === 'dm' && d.session_id === conversationId)
+      if (!thinkingBelongsToHere) return
+      setThinkingAgents((prev) => {
+        const next = new Map(prev)
+        next.set(d.agent_id, d.agent_name)
+        return next
+      })
+    } else if (msg.type === 'ai_thinking_end') {
+      const d = msg.data
+      if (d.trigger === 'auto') return
+      const endBelongsToHere =
+        (conversationType === 'group' && d.group_id === conversationId) ||
+        (conversationType === 'dm' && d.session_id === conversationId)
+      if (!endBelongsToHere) return
+      setThinkingAgents((prev) => {
+        const next = new Map(prev)
+        next.delete(d.agent_id)
+        return next
+      })
+      setTypingAgents((prev) => {
+        const next = new Map(prev)
+        next.delete(d.agent_id)
+        return next
+      })
+    } else if (msg.type === 'ai_typing') {
+      const d = msg.data
+      if (d.trigger === 'auto') return
+      const typingBelongsToHere =
+        (conversationType === 'group' && d.group_id === conversationId) ||
+        (conversationType === 'dm' && d.session_id === conversationId)
+      if (!typingBelongsToHere) return
+      const clearThinking = () => {
+        setThinkingAgents((prev) => {
+          const next = new Map(prev)
+          next.delete(d.agent_id)
+          return next
+        })
+      }
+      setTimeout(clearThinking, 1500)
+      setTypingAgents((prev) => {
+        const next = new Map(prev)
+        next.set(d.agent_id, d.agent_name)
+        return next
+      })
+    } else if (msg.type === 'announcement') {
+      const d = msg.data
+      if (d.group_id !== conversationId) return
+      setMessages((prev) => [...prev, {
+        id: -Date.now(),
+        sender_type: 'system',
+        sender_id: 0,
+        sender_name: t('groupSettings.announcement'),
+        content: d.content,
+        reply_to: null,
+        created_at: new Date().toISOString(),
+      } as Message])
+    } else if (msg.type === 'avatar_updated') {
+      const d = msg as any
+      const etype = d.entity_type
+      const eid = d.entity_id
+      const newUrl = d.avatar_url
+      if (etype && eid && newUrl) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.sender_type === etype && m.sender_id === eid
+              ? { ...m, sender_avatar_url: newUrl }
+              : m,
+          ),
+        )
+      }
+    } else if (msg.type === 'dm_notification' || msg.type === 'unread_update') {
+      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: msg }))
+    }
+  }, [conversationType, conversationId, t])
+
+  const { connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(
+    conversationType, conversationId, { onMessage: handleMessage },
+  )
 
   // 稳定引用，配合 MessageBubble 的 React.memo 避免输入时重渲染消息列表
   const handleAvatarClick = useCallback((type: string, id: number, name: string, state?: string) => {
@@ -329,122 +435,6 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       }, 100)
     }
   }, [loadingState, messages.length, firstUnreadId])
-
-  // ============================================================
-  // WebSocket 消息处理
-  // ============================================================
-
-  useEffect(() => {
-    if (!lastMessage) return
-    if (lastMessage.type === 'message') {
-      const msg = lastMessage.data
-      setMessages((prev) => {
-        const next = [...prev, msg]
-        newestIdRef.current = msg.id
-        return next
-      })
-      // 如果当前在底部，自动滚到底部（用 ref 避免闭包陈旧）
-      if (isAtBottomRef.current) {
-        setTimeout(() => scrollToBottom(true), 50)
-      }
-      if (msg.sender_type === 'ai' && msg.sender_id) {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(msg.sender_id)
-          return next
-        })
-        // AI 消息到达 → 清除"输入中"状态
-        setTypingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(msg.sender_id)
-          return next
-        })
-      }
-    } else if (lastMessage.type === 'ai_thinking') {
-      const d = lastMessage.data
-      // v0.6.0: 仅用户触发的对话显示"思考中"（闹钟等自主行为不显示）
-      if (d.trigger === 'auto') return
-      const thinkingBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!thinkingBelongsToHere) return
-      setThinkingAgents((prev) => {
-        const next = new Map(prev)
-        next.set(d.agent_id, d.agent_name)
-        return next
-      })
-    } else if (lastMessage.type === 'ai_thinking_end') {
-      const d = lastMessage.data
-      if (d.trigger === 'auto') return
-      const endBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!endBelongsToHere) return
-      setThinkingAgents((prev) => {
-        const next = new Map(prev)
-        next.delete(d.agent_id)
-        return next
-      })
-      // thinking 结束也清除 typing（兜底）
-      setTypingAgents((prev) => {
-        const next = new Map(prev)
-        next.delete(d.agent_id)
-        return next
-      })
-    } else if (lastMessage.type === 'ai_typing') {
-      // v0.6.0: AI 准备发送消息，"输入中"是"思考"的下一阶段
-      const d = lastMessage.data
-      if (d.trigger === 'auto') return
-      const typingBelongsToHere =
-        (conversationType === 'group' && d.group_id === conversationId) ||
-        (conversationType === 'dm' && d.session_id === conversationId)
-      if (!typingBelongsToHere) return
-      // 清除"思考中"（进入"输入中"阶段），但保证最小显示时长（1.5s）
-      const clearThinking = () => {
-        setThinkingAgents((prev) => {
-          const next = new Map(prev)
-          next.delete(d.agent_id)
-          return next
-        })
-      }
-      // 延迟清除 thinking，确保用户能看到"思考中"
-      setTimeout(clearThinking, 1500)
-      setTypingAgents((prev) => {
-        const next = new Map(prev)
-        next.set(d.agent_id, d.agent_name)
-        return next
-      })
-    } else if (lastMessage.type === 'announcement') {
-      const d = lastMessage.data
-      if (d.group_id !== conversationId) return
-      setMessages((prev) => [...prev, {
-        id: -Date.now(),
-        sender_type: 'system',
-        sender_id: 0,
-        sender_name: t('groupSettings.announcement'),
-        content: d.content,
-        reply_to: null,
-        created_at: new Date().toISOString(),
-      } as Message])
-    } else if (lastMessage.type === 'avatar_updated') {
-      // 头像下载完成后更新已渲染消息气泡中的头像 URL
-      const d = lastMessage as any
-      const etype = d.entity_type
-      const eid = d.entity_id
-      const newUrl = d.avatar_url
-      if (etype && eid && newUrl) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.sender_type === etype && m.sender_id === eid
-              ? { ...m, sender_avatar_url: newUrl }
-              : m,
-          ),
-        )
-      }
-    } else if (lastMessage.type === 'dm_notification' || lastMessage.type === 'unread_update') {
-      window.dispatchEvent(new CustomEvent('chat-refresh', { detail: lastMessage }))
-    }
-  }, [lastMessage])
 
   // ============================================================
   // 共享哨兵 Hook：IntersectionObserver 用 ref 读取消息 ID，避免 messages 数组依赖

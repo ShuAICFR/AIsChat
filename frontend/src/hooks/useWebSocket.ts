@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { flushSync } from 'react-dom'
 
-interface WebSocketMessage {
+export interface WebSocketMessage {
   type: string
   data?: any
   code?: string
@@ -35,8 +34,8 @@ function calcReconnectDelay(retryCount: number): number {
 export function useWebSocket(
   conversationType: 'group' | 'dm',
   conversationId: number | string | null,
+  opts?: { onMessage?: (msg: WebSocketMessage) => void },
 ) {
-  const [lastMessage, setLastMessage] = useState<WebSocketMessage | null>(null)
   const [connected, setConnected] = useState(false)
   const [reconnecting, setReconnecting] = useState(false)
   const [errors, setErrors] = useState<WsError[]>([])
@@ -50,6 +49,11 @@ export function useWebSocket(
     }>
   } | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+
+  // 消息回调 ref — 由消费者设置，WebSocket onmessage 时调用
+  // 用 ref 而非直接依赖，避免 connect useCallback 随回调变化而重建
+  const onMessageRef = useRef<((msg: WebSocketMessage) => void) | undefined>(opts?.onMessage)
+  onMessageRef.current = opts?.onMessage
 
   // 重连控制 ref
   const retryCountRef = useRef(0)
@@ -108,15 +112,10 @@ export function useWebSocket(
           setUnreadSummary(msg.data)
         }
 
-        // 使用 flushSync 强制同步渲染，防止快速连续消息被 React 18 批处理合并丢失
-        // error 和 unread_summary 已由各自 handler 处理，无需同步提交
-        if (msg.type === 'error' || msg.type === 'unread_summary') {
-          setLastMessage(msg)
-        } else {
-          flushSync(() => {
-            setLastMessage(msg)
-          })
-        }
+        // 分发给消费者回调（ChatView 注册）
+        // 无需 flushSync：消费者内部全部使用函数式 setState(prev => ...)，
+        // 即使 React 18 批处理合并多次调用，prev 链式叠加也不会丢失消息。
+        onMessageRef.current?.(msg)
       } catch {
         // ignore invalid JSON
       }
@@ -206,7 +205,6 @@ export function useWebSocket(
     retryCountRef.current = 0
     setConnected(false)
     setReconnecting(false)
-    setLastMessage(null)
 
     if (!conversationId) {
       return () => { mountedRef.current = false }
@@ -272,7 +270,6 @@ export function useWebSocket(
   }
 
   return {
-    lastMessage,
     connected,
     reconnecting,
     errors,

@@ -31,6 +31,7 @@ interface UserAgentRow {
   reasoning_tokens: number
   cached_tokens: number
   total_calls: number
+  model?: string | null
 }
 
 interface DailyPoint {

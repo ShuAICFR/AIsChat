@@ -252,7 +252,7 @@ async def get_user_stats(
     """用户个人统计卡片：AI数、好友数、群聊数、存储用量（高效 COUNT 查询）"""
     from sqlalchemy import func, or_
     from app.models.agent import Agent
-    from app.models.friend import Friend
+    from app.models.friendship import Friendship
     from app.models.group import Group as GroupModel, GroupMember
     from app.models.file import FileMetadata
 
@@ -261,7 +261,7 @@ async def get_user_stats(
     ai_n = (await db.execute(select(func.count(Agent.id)).where(Agent.owner_id == uid))).scalar() or 0
 
     friend_n = (await db.execute(
-        select(func.count(Friend.id)).where(Friend.status == "accepted", or_(Friend.user_id == uid, Friend.friend_id == uid))
+        select(func.count(Friendship.id)).where(Friendship.user_id == uid)
     )).scalar() or 0
 
     group_n = (await db.execute(

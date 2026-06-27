@@ -165,6 +165,8 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     if (msg.type === 'message') {
       const m = msg.data
       setMessages((prev) => {
+        // 去重：防止 WebSocket 与 HTTP fetch 竞态导致同 ID 消息重复
+        if (prev.some((existing) => existing.id === m.id)) return prev
         const next = [...prev, m]
         newestIdRef.current = m.id
         return next
@@ -284,10 +286,15 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
       setMessages((prev) => {
         if (mode === 'older') {
-          return [...fetched, ...prev]
+          // 去重：fetched 可能在 prev 中已存在（竞态）
+          const existingIds = new Set(prev.map((m) => m.id))
+          const unique = fetched.filter((m) => !existingIds.has(m.id))
+          return [...unique, ...prev]
         } else if (mode === 'newer') {
-          // 游标 after_id 保证不重叠，直接拼接
-          return [...prev, ...fetched]
+          // 游标 after_id 保证不重叠，但以防万一也去重
+          const existingIds = new Set(prev.map((m) => m.id))
+          const unique = fetched.filter((m) => !existingIds.has(m.id))
+          return [...prev, ...unique]
         } else {
           return fetched
         }

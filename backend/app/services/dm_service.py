@@ -2,6 +2,7 @@
 私信（DM）服务
 处理私信会话的创建、查询、消息发送
 """
+import json
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,31 @@ from app.models.federation import FederatedEntity
 from app.models.friendship import Friendship
 
 logger = logging.getLogger(__name__)
+
+
+def _dm_message_to_dict(m: DMMessage, sender_name: str, sender_type: str,
+                        sender_avatar_url: str | None = None) -> dict:
+    """将 DMMessage ORM 对象转为字典（send_dm_message 和 _get_messages 共用）"""
+    parsed_attachments = None
+    if m.attachments:
+        try:
+            parsed_attachments = json.loads(m.attachments)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {
+        "id": m.id,
+        "session_id": m.session_id,
+        "sender_id": m.sender_id,
+        "sender_name": sender_name,
+        "sender_type": sender_type,
+        "sender_avatar_url": sender_avatar_url,
+        "content": m.content,
+        "reply_to": m.reply_to,
+        "attachments": parsed_attachments,
+        "source_public_id": getattr(m, "source_public_id", None),
+        "read_at": str(m.read_at) if m.read_at else None,
+        "created_at": str(m.created_at) if m.created_at else None,
+    }
 
 
 async def _require_friendship(db: AsyncSession, user_a_id: int, user_b_id: int):
@@ -258,7 +284,6 @@ async def send_dm_message(
     if not content.strip():
         raise ValueError("消息内容不能为空")
 
-    import json
     result = await db.execute(
         select(DMSession).where(DMSession.session_id == session_id)
     )
@@ -300,26 +325,7 @@ async def send_dm_message(
     sender_name = row[0] if row else f"用户{sender_id}"
     sender_type = (row[1] or "human") if row else "human"
     sender_avatar_url = row[2] if row else None
-    # 解析 attachments
-    parsed_attachments = None
-    if msg.attachments:
-        try:
-            parsed_attachments = json.loads(msg.attachments)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {
-        "id": msg.id,
-        "session_id": msg.session_id,
-        "sender_id": msg.sender_id,
-        "sender_name": sender_name,
-        "sender_type": sender_type,
-        "sender_avatar_url": sender_avatar_url,
-        "content": msg.content,
-        "reply_to": msg.reply_to,
-        "attachments": parsed_attachments,
-        "read_at": str(msg.read_at) if msg.read_at else None,
-        "created_at": str(msg.created_at) if msg.created_at else None,
-    }
+    return _dm_message_to_dict(msg, sender_name, sender_type, sender_avatar_url)
 
 
 async def set_dm_dnd(
@@ -453,22 +459,13 @@ async def _get_messages(
     # 按时间升序排列（前端从上到下显示）
     sorted_messages = sorted(messages, key=lambda m: m.id) if after_id else list(reversed(messages))
 
-    import json as _json
     return [
-        {
-            "id": m.id,
-            "session_id": m.session_id,
-            "sender_id": m.sender_id,
-            "sender_name": sender_info.get(m.sender_id, {}).get("name", f"用户{m.sender_id}"),
-            "sender_type": sender_info.get(m.sender_id, {}).get("type", "human"),
-            "sender_avatar_url": sender_info.get(m.sender_id, {}).get("avatar_url"),
-            "content": m.content,
-            "reply_to": m.reply_to,
-            "attachments": (_json.loads(m.attachments) if m.attachments else None),
-            "source_public_id": getattr(m, "source_public_id", None),
-            "read_at": str(m.read_at) if m.read_at else None,
-            "created_at": str(m.created_at) if m.created_at else None,
-        }
+        _dm_message_to_dict(
+            m,
+            sender_name=sender_info.get(m.sender_id, {}).get("name", f"用户{m.sender_id}"),
+            sender_type=sender_info.get(m.sender_id, {}).get("type", "human"),
+            sender_avatar_url=sender_info.get(m.sender_id, {}).get("avatar_url"),
+        )
         for m in sorted_messages
     ]
 

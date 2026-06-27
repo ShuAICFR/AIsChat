@@ -56,6 +56,90 @@ async def ai_response_worker():
             await asyncio.sleep(1)  # 防止死循环
 
 
+async def _send_system_error(
+    db, agent, error_type: str, detail: str,
+    conversation_type: str, group_id: int | None, session_id: str | None,
+):
+    """向群聊/DM 发送系统错误通知消息，引导用户修复配置"""
+    from app.services.group_service import create_message
+
+    guidance = {
+        "no_api_key": (
+            f"⚠️ AI「{agent.name}」缺少 API Key，无法回复消息。\n\n"
+            f"📌 **解决方法**：\n"
+            f"1. 前往 [AI 设置页](/agents/{agent.id}) → 点击「完整设置」→ API 提供商 → 填写 API Key\n"
+            f"2. 或前往 [兑换码页面](/me) 输入兑换码获取 API 额度（使用 API Key 池）\n\n"
+            f"设置完成后 AI 即可正常回复。"
+        ),
+        "insufficient_balance": (
+            f"⚠️ AI「{agent.name}」的 API 余额不足（402），无法回复消息。\n\n"
+            f"📌 **解决方法**：\n"
+            f"1. 前往 DeepSeek 官网充值\n"
+            f"2. 或前往 [兑换码页面](/me) 输入兑换码获取额度\n"
+            f"3. 或在 [AI 设置页](/agents/{agent.id}) 更换 API Key"
+        ),
+        "auth_error": (
+            f"⚠️ AI「{agent.name}」的 API Key 无效（401），无法回复消息。\n\n"
+            f"📌 **解决方法**：\n"
+            f"1. 前往 [AI 设置页](/agents/{agent.id}) → API 提供商 → 检查并更新 API Key\n"
+            f"2. 确认 API Key 未过期、未被删除"
+        ),
+        "all_failed": (
+            f"⚠️ AI「{agent.name}」的 API 调用全部失败。\n\n"
+            f"错误详情：{detail}\n\n"
+            f"📌 请前往 [AI 设置页](/agents/{agent.id}) 检查 API 配置。"
+        ),
+    }
+
+    content = guidance.get(error_type, guidance["all_failed"])
+
+    try:
+        if conversation_type == "group" and group_id:
+            msg = await create_message(db, group_id, "system", 0, content)
+            await db.commit()
+            try:
+                from app.routers.ws import manager
+                from app.utils.message_serializer import message_to_dict
+                await manager.broadcast_to_group(group_id, {
+                    "type": "message",
+                    "data": message_to_dict(msg, sender_name="系统"),
+                })
+            except Exception:
+                pass
+            logger.info(f"📢 系统错误通知已发送: group={group_id}, agent={agent.name}, error={error_type}")
+        elif conversation_type == "dm" and session_id:
+            # DM 系统消息绕过 send_dm_message 的 sender 校验，直接写入
+            from app.models.message import DMMessage
+            dm_msg = DMMessage(
+                session_id=session_id,
+                sender_id=0,
+                content=content,
+            )
+            db.add(dm_msg)
+            await db.commit()
+            await db.refresh(dm_msg)
+            try:
+                from app.routers.ws import manager
+                await manager.broadcast_to_dm(session_id, {
+                    "type": "message",
+                    "data": {
+                        "id": dm_msg.id,
+                        "session_id": session_id,
+                        "sender_type": "system",
+                        "sender_id": 0,
+                        "sender_name": "系统",
+                        "content": content,
+                        "reply_to": None,
+                        "created_at": dm_msg.created_at.isoformat() if dm_msg.created_at else None,
+                    },
+                })
+            except Exception:
+                pass
+            logger.info(f"📢 系统错误通知已发送: dm={session_id}, agent={agent.name}, error={error_type}")
+    except Exception as e:
+        logger.warning(f"发送系统错误通知失败（非致命）: {e}")
+
+
 async def _process_event(db, event: dict):
     """
     处理单条消息事件。
@@ -330,6 +414,12 @@ async def _maybe_trigger_ai_reply(
     logger.info(f"🔍 AI {agent.name}: api_base={api_base}, has_api_key={api_key is not None}, "
                 f"credit_source={credit_source}")
 
+    # 5.1. 无 API Key → 发送系统通知后跳过
+    if api_key is None:
+        logger.warning(f"AI {agent.name}({agent.id}) 无 API Key，发送系统通知")
+        await _send_system_error(db, agent, "no_api_key", "", "group", group_id, None)
+        return
+
     # 5.5. 中断标记：如果 AI 之前在忙，记录中断
     try:
         from app.services.workspace_service import mark_interrupted
@@ -528,6 +618,8 @@ async def _tool_call_loop(
         MAX_KEY_SWITCHES = 3
         MAX_SERVER_RETRIES = 2
         last_limited_key_id = pool_key_id  # 初始值，429 后更新
+        last_error_type = None  # 追踪最后一个错误类型，用于系统通知
+        last_error_detail = ""
         current_api_key = api_key
         current_api_base = api_base_url
         current_credit_source = credit_source
@@ -594,6 +686,8 @@ async def _tool_call_loop(
                 break  # 成功，退出 Key 切换循环
 
             except RateLimitError as e:
+                last_error_type = "rate_limited"
+                last_error_detail = e.message
                 if current_pool_key_id:
                     await concurrency_mgr.mark_rate_limited(current_pool_key_id)
                 last_limited_key_id = current_pool_key_id
@@ -604,6 +698,8 @@ async def _tool_call_loop(
                 continue
 
             except KeyFatalError as e:
+                last_error_type = "auth_error" if e.status_code == 401 else "insufficient_balance" if e.status_code == 402 else "key_fatal"
+                last_error_detail = e.message
                 await _log_key_fatal(db, current_pool_key_id, e.status_code, e.message)
                 last_limited_key_id = current_pool_key_id
                 logger.error(
@@ -613,6 +709,8 @@ async def _tool_call_loop(
                 continue
 
             except ServerError as e:
+                last_error_type = "server_error"
+                last_error_detail = f"{e.status_code}: {e.message}"
                 logger.error(
                     f"AI {agent.name}({agent.id}) Key #{current_pool_key_id} "
                     f"{e.status_code} 重试耗尽，最终失败"
@@ -624,11 +722,15 @@ async def _tool_call_loop(
 
         # ── 全部重试失败 ──
         if response is None:
-            logger.error(f"AI {agent.name}({agent.id}) LLM 调用全部重试失败")
+            logger.error(f"AI {agent.name}({agent.id}) LLM 调用全部重试失败，last_error={last_error_type}")
             await _save_conversation_log_safe(
                 db, agent, messages, conversation_type,
                 group_id, session_id, has_output=False, model=model,
             )
+            # 发送分类系统通知
+            error_type = last_error_type or "all_failed"
+            await _send_system_error(db, agent, error_type, last_error_detail,
+                                     conversation_type, group_id, session_id)
             return
 
         content = response.get("content")
@@ -969,6 +1071,12 @@ async def _trigger_dm_ai_reply(
 
     # 获取 API 配置（v0.6.0: 四层优先链含池 Key）
     api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
+
+    # 无 API Key → 发送 DM 系统通知后跳过
+    if api_key is None:
+        logger.warning(f"AI {agent.name}({agent.id}) 无 API Key，发送 DM 系统通知")
+        await _send_system_error(db, agent, "no_api_key", "", "dm", None, session_id)
+        return
 
     # 中断标记：如果 AI 之前在忙，记录中断
     try:

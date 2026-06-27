@@ -140,7 +140,7 @@ export default function SearchOverlay() {
                   <div className={`w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-xs font-bold shrink-0 ${
                     item.type === 'human'
                       ? 'from-primary-500 to-primary-700 text-white'
-                      : 'from-mint-400 to-emerald-600 text-white'
+                      : 'from-teal-400 to-teal-600 text-white'
                   }`}>
                     {item.name.charAt(0).toUpperCase()}
                   </div>

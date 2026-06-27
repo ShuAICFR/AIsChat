@@ -56,7 +56,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
             <div className={`w-12 h-12 rounded-full bg-gradient-to-br flex items-center justify-center text-lg font-bold ${
               entityType === 'human'
                 ? 'from-primary-500 to-primary-700 text-white'
-                : 'from-mint-400 to-emerald-600 text-white'
+                : 'from-teal-400 to-teal-600 text-white'
             }`}>
               {entityName.charAt(0).toUpperCase()}
             </div>

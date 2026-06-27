@@ -286,7 +286,7 @@ export default function ChatSidebar({
                 <div className="flex items-center gap-2.5">
                   {/* 对方头像 */}
                   <div className={`w-9 h-9 rounded-full bg-gradient-to-br flex items-center justify-center shrink-0 relative ${
-                    s.partner.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-mint-400 to-emerald-600'
+                    s.partner.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-teal-400 to-teal-600'
                   }`}>
                     {s.partner.avatar_url ? (
                       <img src={s.partner.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />

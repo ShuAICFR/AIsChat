@@ -79,9 +79,9 @@ const MessageBubble = memo(function MessageBubble({
 
   const avatarGradientBase = senderType === 'system'
     ? 'from-rose-400 to-rose-600'
-    : isMine ? 'from-primary-500 to-primary-700' : 'from-mint-400 to-emerald-600'
+    : isMine ? 'from-primary-500 to-primary-700' : 'from-teal-400 to-teal-600'
   const avatarGradientOpacity = senderAvatarUrl ? '/30' : ''
-  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : senderType === 'system' ? 'shadow-rose-400/25' : 'shadow-mint-400/20'
+  const avatarGradientShadow = isMine ? 'shadow-primary-500/25' : senderType === 'system' ? 'shadow-rose-400/25' : 'shadow-teal-400/20'
 
   return (
     <div className={`flex gap-3 mb-5 msg-enter ${isMine ? 'flex-row-reverse' : ''}`}>

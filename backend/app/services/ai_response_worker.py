@@ -62,7 +62,17 @@ async def _send_system_error(
 ):
     """向 AI owner 私信发送系统错误通知（群聊/DM 均走 DM 通知 owner）"""
     from app.models.dm import DMMessage, DMSession
+    from app.models.user import User as UserModel
     from app.services.dm_service import generate_dm_session_id
+
+    # 查找系统通知用户
+    sys_result = await db.execute(
+        select(UserModel).where(UserModel.username == "系统", UserModel.type == "system")
+    )
+    sys_user = sys_result.scalar_one_or_none()
+    if sys_user is None:
+        logger.warning("系统用户不存在，无法发送系统通知")
+        return
 
     guidance = {
         "no_api_key": (
@@ -114,10 +124,10 @@ async def _send_system_error(
             db.add(dm_session)
             await db.flush()
 
-        # 直接写入 DM 消息（sender_id 用 AI 的 user_id，满足 FK 约束）
+        # 直接写入 DM 消息（sender_id 用系统用户 ID）
         dm_msg = DMMessage(
             session_id=dm_sid,
-            sender_id=agent.user_id,
+            sender_id=sys_user.id,
             content=content,
         )
         db.add(dm_msg)
@@ -133,8 +143,8 @@ async def _send_system_error(
                     "id": dm_msg.id,
                     "session_id": dm_sid,
                     "sender_type": "system",
-                    "sender_id": agent.user_id,
-                    "sender_name": "系统通知",
+                    "sender_id": sys_user.id,
+                    "sender_name": "系统",
                     "content": content,
                     "reply_to": None,
                     "created_at": dm_msg.created_at.isoformat() if dm_msg.created_at else None,

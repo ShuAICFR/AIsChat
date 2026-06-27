@@ -64,6 +64,7 @@ async def run_migrations():
             await _migrate_prompt_order(db)               # v0.7.0 系统提示词顺序可编辑
             await _fix_file_refs_referrer_type(db)      # v0.7.0+ 修复 file_references.referrer_type 缺 human
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
+            await _migrate_system_user(db)             # v0.8.0+ 系统通知用户（sender_id 外键需要）
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")
@@ -1695,4 +1696,33 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
         ))
         # 注意：不在此处 commit，由外层 db.begin() 统一提交
         await db.flush()
+
+
+async def _migrate_system_user(db):
+    """v0.8.0+: 确保系统通知用户存在（用于系统错误通知等场景）"""
+    from app.models.user import User
+    from app.utils.auth import hash_password
+
+    result = await db.execute(
+        select(User).where(User.username == "系统")
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        if existing.type != "system":
+            existing.type = "system"
+            await db.flush()
+        logger.info("  ✅ 系统用户已存在")
+        return
+
+    logger.info("  📢 创建系统通知用户...")
+    sys_user = User(
+        username="系统",
+        password_hash=hash_password("system_internal_no_login"),
+        role="user",
+        type="system",
+        is_active=True,
+    )
+    db.add(sys_user)
+    await db.flush()
+    logger.info(f"  ✅ 系统用户已创建 (id={sys_user.id})")
 

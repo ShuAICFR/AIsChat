@@ -1699,30 +1699,36 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
 
 
 async def _migrate_system_user(db):
-    """v0.8.0+: 确保系统通知用户存在（用于系统错误通知等场景）"""
-    from app.models.user import User
+    """v0.8.0+: 确保系统通知用户 id=0 存在（硬编码 ID，不依赖 username 查询）"""
     from app.utils.auth import hash_password
 
-    result = await db.execute(
-        select(User).where(User.username == "系统")
-    )
-    existing = result.scalar_one_or_none()
-    if existing:
-        if existing.type != "system":
-            existing.type = "system"
-            await db.flush()
-        logger.info("  ✅ 系统用户已存在")
+    # 检查 id=0 是否已是系统用户
+    result = await db.execute(text("SELECT id, username, type FROM users WHERE id = 0"))
+    row = result.fetchone()
+    if row and row[2] == "system":
+        logger.info("  ✅ 系统用户 id=0 已存在")
         return
 
-    logger.info("  📢 创建系统通知用户...")
-    sys_user = User(
-        username="系统",
-        password_hash=hash_password("system_internal_no_login"),
-        role="user",
-        type="system",
-        is_active=True,
-    )
-    db.add(sys_user)
+    # 删除旧的系统用户（可能由旧版迁移创建的非0 ID）
+    await db.execute(text("DELETE FROM dm_messages WHERE sender_id IN (SELECT id FROM users WHERE type = 'system' AND id != 0)"))
+    await db.execute(text("DELETE FROM dm_sessions WHERE user1_id IN (SELECT id FROM users WHERE type = 'system' AND id != 0) OR user2_id IN (SELECT id FROM users WHERE type = 'system' AND id != 0)"))
+    await db.execute(text("DELETE FROM friendships WHERE user_id IN (SELECT id FROM users WHERE type = 'system' AND id != 0) OR friend_id IN (SELECT id FROM users WHERE type = 'system' AND id != 0)"))
+    await db.execute(text("DELETE FROM users WHERE type = 'system' AND id != 0"))
+
+    # 如果 id=0 存在但不是 system 类型，更新它
+    if row:
+        await db.execute(text("UPDATE users SET username = '系统', type = 'system', role = 'user', is_active = true WHERE id = 0"))
+        logger.info("  ✅ 用户 id=0 已更新为系统用户")
+    else:
+        # 强制插入 id=0 的系统用户
+        pw = hash_password("system_internal_no_login")
+        await db.execute(text(
+            "INSERT INTO users (id, username, password_hash, role, type, is_active) "
+            "VALUES (0, '系统', :pw, 'user', 'system', true)"
+        ), {"pw": pw})
+        logger.info("  ✅ 系统用户 id=0 已创建")
+
+    # 重置序列（确保后续 ID 不受影响）
+    await db.execute(text("SELECT setval('users_id_seq', greatest(0, (SELECT COALESCE(MAX(id), 0) FROM users)))"))
     await db.flush()
-    logger.info(f"  ✅ 系统用户已创建 (id={sys_user.id})")
 

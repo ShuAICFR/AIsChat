@@ -111,7 +111,7 @@ async def _send_system_error(
             logger.warning(f"AI {agent.name}({agent.id}) 无 owner，无法发送系统通知")
             return
 
-        dm_sid = generate_dm_session_id(agent.id, owner_id)
+        dm_sid = generate_dm_session_id(sys_user.id, owner_id)
 
         # 确保 DM 会话存在
         result = await db.execute(
@@ -119,7 +119,7 @@ async def _send_system_error(
         )
         dm_session = result.scalar_one_or_none()
         if dm_session is None:
-            ids = sorted([agent.id, owner_id])
+            ids = sorted([sys_user.id, owner_id])
             dm_session = DMSession(session_id=dm_sid, user1_id=ids[0], user2_id=ids[1])
             db.add(dm_session)
             await db.flush()

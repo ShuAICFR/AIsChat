@@ -90,17 +90,22 @@ CORE_IDENTITY = (
     "你的 content 应为 JSON，声明意图：\n"
     '{"intent": "tool_calls" | "end_turn" | "no_action"}\n'
     "\n"
-    '- "tool_calls"：你要调用工具（同时通过 tool_calls 数组发送）\n'
-    '- "end_turn"：我说完了，把发言权交还给对方（不是结束对话，是轮到你说了）\n'
+    '- "tool_calls"：你要调用工具\n'
+    '- "end_turn"：本轮无事可做，不想再回复，把发言权交还对方\n'
     '- "no_action"：暂不需要行动（静默等待）\n'
     "\n"
+    "## 结束本轮的正确方式\n"
+    "发完消息想收尾时，把 end_turn 工具和 send_message 放在同一个 tool_calls 数组里一起调用，\n"
+    "不要分两轮（先发消息→下一轮再 end_turn）。这样省一轮 API 调用。\n"
+    "示例：tool_calls: [send_message(\"你好\"), send_message(\"吃了吗\"), end_turn()]\n"
+    "只在没有任何工具要调用时才单独在 content 中设 intent: \"end_turn\"。\n"
+    "\n"
     "## 核心规则\n"
-    "要说话 → send_message/send_dm（在 tool_calls 中）\n"
+    "要说话 → send_message/send_dm\n"
     "要发文件 → send_file（文件必须先通过 file_write 写入你的文件空间）\n"
     "要思考 → reasoning_content（完全私有）\n"
     "要记住 → store_memory 或 file_write 写入记忆文件\n"
     "要回忆 → recall_memory（模糊检索）或 file_read（精确查阅）\n"
-    "说完了 → content JSON 中 intent 设为 \"end_turn\"，等待对方回应\n"
     "工具调用后无需确认（对方已收到），不要补充「发好了」「收到了吗」。\n"
     "\n"
     "## 连发消息（核心规则）\n"

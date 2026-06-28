@@ -56,6 +56,9 @@ class User(Base):
     avatar_url = Column(Text, nullable=True)
     bio = Column(Text, nullable=True)
 
+    # 自定义状态文本（展示在资料卡中，最多 100 字）
+    status_text = Column(String(100), nullable=True, comment="自定义状态文本")
+
     # 初始化设置向导是否完成
     setup_completed = Column(Boolean, default=False)
 

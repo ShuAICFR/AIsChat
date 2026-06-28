@@ -458,6 +458,7 @@ async def search_entities(
         select(User).where(
             User.username.ilike(like_pattern),
             User.is_active == True,
+            User.type == "human",
         ).limit(limit)
     )
     for user in user_result.scalars().all():

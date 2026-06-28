@@ -46,6 +46,7 @@ class UserInfoResponse(BaseModel):
     total_effective: int = 0
     avatar_url: str | None = None
     bio: str | None = None
+    status_text: str | None = None
     language: str = "zh"
     ui_prefs: dict = {}
     setup_completed: bool = True

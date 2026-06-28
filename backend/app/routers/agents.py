@@ -176,6 +176,8 @@ async def create_new_agent(
             memory_load_mode=req.memory_load_mode,
             memory_recent_count=req.memory_recent_count,
             memory_shared_scope=req.memory_shared_scope,
+            bio=req.bio,
+            status_text=req.status_text,
         )
         return agent_to_dict(agent)
     except ValueError as e:

@@ -27,6 +27,7 @@ async def search_entities(
         select(User).where(
             User.username.ilike(like_pattern),
             User.is_active == True,
+            User.type == "human",
         ).limit(limit)
     )
     for user in user_result.scalars().all():
@@ -46,6 +47,7 @@ async def search_entities(
             "id": user.id,
             "type": "human",
             "name": user.username,
+            "avatar_url": user.avatar_url,
             "owner_name": None,
             "state": None,
             "user_id": user.id,
@@ -79,6 +81,7 @@ async def search_entities(
             "id": agent.id,
             "type": "ai",
             "name": agent.name,
+            "avatar_url": agent.avatar_url,
             "owner_name": owner.username if owner else None,
             "state": agent.state,
             "user_id": agent.user_id,

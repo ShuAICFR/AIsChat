@@ -69,6 +69,7 @@ async def run_migrations():
             await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
             await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
             await _migrate_default_file_quota(db)   # v0.9.0 用户默认文件配额配置
+            await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")
@@ -1753,6 +1754,36 @@ async def _migrate_default_file_quota(db):
     if created_any:
         await db.flush()
         logger.info("  ✅ default_file_quota / file_quota_bonus 迁移完成")
+
+
+async def _migrate_bio_and_status(db):
+    """v0.9.0: agents.bio + users.status_text + agents.status_text"""
+    created_any = False
+
+    if not await _column_exists(db, "agents", "bio"):
+        logger.info("  📝 添加 agents.bio 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN bio TEXT"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.bio 已存在，跳过")
+
+    if not await _column_exists(db, "users", "status_text"):
+        logger.info("  💬 添加 users.status_text 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN status_text VARCHAR(100)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.status_text 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "status_text"):
+        logger.info("  💬 添加 agents.status_text 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN status_text VARCHAR(100)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.status_text 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ bio/status_text 迁移完成")
 
 
 async def _fix_column_types(db):

@@ -33,6 +33,8 @@ class AgentCreateRequest(BaseModel):
     memory_load_mode: str = Field(default="index_only", description="记忆加载模式: index_only|index_plus_recent|index_plus_semantic")
     memory_recent_count: int = Field(default=0, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
     memory_shared_scope: str = Field(default="private_only", description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
+    bio: str | None = Field(default=None, max_length=500, description="AI 简介")
+    status_text: str | None = Field(default=None, max_length=100, description="自定义状态文本")
 
 
 class AgentGenerateRequest(BaseModel):
@@ -76,6 +78,8 @@ class AgentUpdateConfigRequest(BaseModel):
     memory_load_mode: str | None = Field(default=None, description="记忆加载模式: index_only|index_plus_recent|index_plus_semantic")
     memory_recent_count: int | None = Field(default=None, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
     memory_shared_scope: str | None = Field(default=None, description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
+    bio: str | None = Field(default=None, max_length=500, description="AI 简介")
+    status_text: str | None = Field(default=None, max_length=100, description="自定义状态文本")
 
 
 class AgentStateRequest(BaseModel):
@@ -120,9 +124,9 @@ class AgentResponse(BaseModel):
     memory_recent_count: int = 0
     memory_shared_scope: str = "private_only"
     avatar_url: str | None = None
-    is_ai_editable: bool = True
+    bio: str | None = None
+    status_text: str | None = None
     reminder_grace: str = "every_time"
-    discoverable: bool = True
     created_at: str | None
 
 

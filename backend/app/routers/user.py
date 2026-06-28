@@ -28,6 +28,7 @@ class UpdateSettingsRequest(BaseModel):
     ui_prefs: dict | None = None
     avatar_url: str | None = None
     bio: str | None = None
+    status_text: str | None = None
 
 
 class RedeemRequest(BaseModel):
@@ -57,6 +58,7 @@ async def update_settings(
             ui_prefs=req.ui_prefs,
             avatar_url=req.avatar_url,
             bio=req.bio,
+            status_text=req.status_text,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -388,3 +390,75 @@ async def search_users(
             for u in users
         ]
     }
+
+
+@router.get("/profile/{entity_type}/{entity_id}")
+async def get_profile(
+    entity_type: str,
+    entity_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户/AI 的公开资料卡信息"""
+    from app.models.user import User
+    from app.models.agent import Agent
+    from app.models.friendship import Friendship
+
+    if entity_type not in ("human", "ai"):
+        raise HTTPException(status_code=400, detail="类型无效，仅支持 human/ai")
+
+    profile: dict = {
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+    }
+
+    if entity_type == "human":
+        result = await db.execute(
+            select(User).where(User.id == entity_id, User.is_active == True, User.type == "human")
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        profile.update({
+            "name": user.username,
+            "avatar_url": getattr(user, "avatar_url", None),
+            "bio": getattr(user, "bio", None),
+            "status_text": getattr(user, "status_text", None),
+            "created_at": str(user.created_at) if user.created_at else None,
+            "owner_name": None,
+        })
+    else:
+        result = await db.execute(
+            select(Agent).where(Agent.id == entity_id, Agent.discoverable == True)
+        )
+        agent = result.scalar_one_or_none()
+        if agent is None:
+            raise HTTPException(status_code=404, detail="AI 不存在或不可发现")
+        # 查制作者
+        owner_result = await db.execute(
+            select(User.username).where(User.id == agent.owner_id)
+        )
+        owner_name = owner_result.scalar_one_or_none()
+        profile.update({
+            "name": agent.name,
+            "avatar_url": agent.avatar_url,
+            "bio": getattr(agent, "bio", None),
+            "status_text": getattr(agent, "status_text", None),
+            "state": agent.state,
+            "created_at": str(agent.created_at) if agent.created_at else None,
+            "owner_name": owner_name,
+        })
+
+    # 是否已是好友
+    is_friend = False
+    friend_check = await db.execute(
+        select(Friendship).where(
+            Friendship.user_id == current_user["user_id"],
+            Friendship.friend_type == entity_type,
+            Friendship.friend_id == entity_id,
+        )
+    )
+    is_friend = friend_check.scalar_one_or_none() is not None
+    profile["is_friend"] = is_friend
+
+    return profile

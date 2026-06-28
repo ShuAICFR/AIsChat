@@ -130,6 +130,7 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "file_quota_mb": user.file_quota_mb,
         "avatar_url": getattr(user, 'avatar_url', None),
         "bio": getattr(user, 'bio', None),
+        "status_text": getattr(user, 'status_text', None),
         "api_base_url": user.api_base_url,
         "has_api_key": user.api_key_encrypted is not None,
         "auto_approve_vector_timeout": user.auto_approve_vector_timeout,
@@ -157,6 +158,7 @@ async def update_user_settings(
     ui_prefs: dict | None = None,
     avatar_url: str | None = None,
     bio: str | None = None,
+    status_text: str | None = None,
 ) -> dict:
     """更新用户设置（含用户名和密码修改）"""
     result = await db.execute(select(User).where(User.id == user_id))
@@ -190,6 +192,8 @@ async def update_user_settings(
         user.avatar_url = avatar_url
     if bio is not None:
         user.bio = bio
+    if status_text is not None:
+        user.status_text = status_text
 
     await db.flush()
     await db.refresh(user)

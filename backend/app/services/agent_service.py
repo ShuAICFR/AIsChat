@@ -307,6 +307,8 @@ async def create_agent(
     memory_load_mode: str = "index_only",
     memory_recent_count: int = 0,
     memory_shared_scope: str = "private_only",
+    bio: str | None = None,
+    status_text: str | None = None,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -383,6 +385,8 @@ async def create_agent(
         memory_load_mode=memory_load_mode,
         memory_recent_count=memory_recent_count,
         memory_shared_scope=memory_shared_scope,
+        bio=bio,
+        status_text=status_text,
     )
     db.add(agent)
     await db.flush()
@@ -754,6 +758,12 @@ async def update_agent_config(
         agent.memory_recent_count = updates["memory_recent_count"]
     if "memory_shared_scope" in updates and updates["memory_shared_scope"] is not None:
         agent.memory_shared_scope = updates["memory_shared_scope"]
+
+    # 简介 & 状态文本
+    if "bio" in updates:
+        agent.bio = updates["bio"]
+    if "status_text" in updates:
+        agent.status_text = updates["status_text"]
 
     # 好友申请开关
     if "allow_friend_requests" in updates:
@@ -1379,6 +1389,8 @@ def agent_to_dict(agent: Agent) -> dict:
         "memory_load_mode": agent.memory_load_mode or "index_only",
         "memory_recent_count": agent.memory_recent_count if agent.memory_recent_count is not None else 0,
         "memory_shared_scope": agent.memory_shared_scope or "private_only",
+        "bio": getattr(agent, 'bio', None),
+        "status_text": getattr(agent, 'status_text', None),
     }
 
 

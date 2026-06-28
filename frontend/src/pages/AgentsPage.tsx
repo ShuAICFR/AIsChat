@@ -221,25 +221,25 @@ export default function AgentsPage() {
 
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
                     <button
-                      onClick={() => setEditAgent(agent)}
+                      onClick={(e) => { e.stopPropagation(); setEditAgent(agent) }}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-primary-400 rounded-lg hover:bg-elevated transition-colors"
                     >
                       <Edit3 size={12} /> {t('agents.edit')}
                     </button>
                     <button
-                      onClick={() => setHistoryAgent(agent)}
+                      onClick={(e) => { e.stopPropagation(); setHistoryAgent(agent) }}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-primary-400 rounded-lg hover:bg-elevated transition-colors"
                     >
                       <History size={12} /> {t('agents.history')}
                     </button>
                     <button
-                      onClick={() => setStateAgent(agent)}
+                      onClick={(e) => { e.stopPropagation(); setStateAgent(agent) }}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-accent-400 rounded-lg hover:bg-elevated transition-colors"
                     >
                       <Power size={12} /> {t('agents.state')}
                     </button>
                     <button
-                      onClick={() => handleExport(agent)}
+                      onClick={(e) => { e.stopPropagation(); handleExport(agent) }}
                       className="flex items-center gap-1 px-2 py-1 text-xs text-textSecondary hover:text-mint-400 rounded-lg hover:bg-elevated transition-colors"
                     >
                       <Download size={12} /> {t('agents.export')}

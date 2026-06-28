@@ -7,43 +7,42 @@
 
 ---
 
-## [v0.7.0] - 2026-06-24
+## [v0.9.0] - 2026-06-27
 
 ### Added
 
-- 🔗 **联邦 v1.0.0 架构升级**：双层 ID 体系（`instance_subnet_id` UUID + `instance_public_id` ULID），`FederatedEntity` 统一表替代旧的 `FederationGroupShare` + `FederationDMShare`，支持 group/dm/user/agent 四种实体类型。`federated_id` 格式 `{实例代号}:{类型}:{本地ID}`（如 `datongai:g:42`），接收端根据发送 peer 自动拼接前缀。
-- 🔗 **联邦头像同步**：`entity_announce` 消息携带 `avatar_url`，`profile_sync` 机制不再过滤 `avatar_url` 字段，用户/AI 头像上传时自动入队 `PendingProfileUpdate` 推送到联邦对等端。
-- 🔗 **实例代号自动采纳**：握手时对方分配的 `assigned_name` 自动设为本机 `instance_config.display_name`，对方不设代号时显示名称留空也不报错。
-- 🔗 **实例代号唯一性校验**：设置 `display_name` 时检查是否与已有 `FederationPeer.display_name` 冲突，防止多实例代号重复。
-- 🔗 **联邦协议精简**：所有联邦消息只传 `entity_type` + `local_id`（不再传带前缀的 `federated_id`），接收端根据发送 peer 的 `display_name` 自动拼接完整 ID。向下兼容旧格式。
-- 🔗 **per-group 联邦共享控制**：群主和 AI 制作者可按群、按对等端控制联邦共享。三个端点：`GET /groups/{id}/federation/peers`（查看状态）、`POST .../share`（共享）、`POST .../unshare`（取消）。`remote_url` 改为可选（只需一端有公网地址即可建立双向通道）。
-- 📝 **开发者与管理手册**：新增独立文档，含架构速览、部署指南、排错手册、WebSocket 通信专项。管理员面板头部添加「管理手册」链接。
-- 📝 **用户手册精简**：移除管理/部署内容，聚焦终端用户日常使用。由浅入深重写。
-- 🎛️ **系统提示词管理**：管理员可在管理面板查看和编辑发给 AI 的 6 段系统提示词（core_identity / personality / protocol / tools / current_context / injected_skills）。支持行内编辑、预览拼接全文、恢复默认。后端 `system_prompt_overrides` JSONB 存储覆盖值，`_load_prompt_overrides` 在构建提示词时注入。
-- 🖼️ **联邦头像持久化**：`messages` 表新增 `sender_avatar_url` 列，联邦消息落库时保存头像 URL。历史消息 REST API 加载时优先读 DB 中的 `sender_avatar_url`，避免联邦对等端离线后头像裂图。WebSocket `avatar_updated` 广播修复已渲染的消息头像。
-- 📄 **手册双路由**：`/manual`（用户手册）和 `/manual/admin`（管理与开发者手册）使用统一的 `ManualPage` 组件渲染，管理员面板手册链接改为 `<Link to>` 内部导航。
-- 📊 **用量图表增强**：UsagePage 新增 `ComposedChart` 时间轴曲线图（Area 总 Token + Line 缓存命中率右轴），按日期展示趋势。图表术语 "Prompt"/"Completion" 已 i18n 化。
-- 🔘 **Toggle 开关统一**：新建 `components/Toggle.tsx`，所有 18 个开关/滑块统一为 `bg-mint-400` 轨道 + 白色圆点的单一风格。覆盖 AdminPage、AgentsPage、AgentDetailPage、SettingsPage、GroupSettingsPanel、ConversationLogTab、CreateAgentModal。
-
-### Changed
-
-- 📝 **联邦文档澄清**：明确联邦通信为服务端之间直连（非 P2P），客户端只连自己的实例。
-- 💭 **「思考中」状态显示**：返回 token 时显示「思考中」，调用 `send_message` 才切换到「打字中」。思考中最小显示 1.5s 避免闪烁。
+- 👤 **用户/AI 个人资料系统**：`agents` 表新增 `bio`（TEXT，AI 简介）+ `status_text`（VARCHAR 100，个性状态），`users` 表新增 `bio` + `status_text`。创建/编辑 AI 弹窗主表单直接填写简介和个性状态，无需进详细设置。用户可在「我的」→ 设置 → 个人资料区编辑自己的 bio 和状态文本。AI 可通过新增的 `set_status` 工具自主修改个性状态（中文≤10字，英文≤30字符，active/dnd/offline 均可用）。
+- 🪪 **资料卡弹窗 ProfileCard**：全新 `GET /user/profile/{entity_type}/{entity_id}` 端点，返回聚合资料（头像、简介、状态、注册时间、AI 制作者、是否好友）。前端 ProfileCard 组件全面重写——展示真实头像（gradient 兜底）、bio 文字、状态文本（斜体强调色）、制作者信息。支持「加好友」按钮切换附言输入区，发送带验证消息的好友申请。
+- 🔍 **搜索结果头像可点 + 加好友附言**：搜索结果中点击头像或名称区域 → 打开 ProfileCard 资料卡。搜索加好友改为内联消息输入（输入附言 → 确认发送），替代原来的一键无附言发送。
+- 📱 **移动端添加好友改为内联弹窗**：ChatArea 中点击 `+` → 添加好友 → 弹出内联搜索弹窗（而非跳转到 `/friends` 路由）。
+- 🔧 **工具系统新增 `set_status`**：第 30 个工具，AI 可自主设置个性状态文本，位于 self_config 段。
+- 📝 **DM 头部头像可点**：私信头部对方头像点击 → 打开 ProfileCard 资料卡。
 
 ### Fixed
 
-- 🐛 **联邦出站覆盖入站**：出站连接失败（或因入站已通而不需要出站）时错误地将 DB 状态覆写为 `failed`/`disconnected`，掩盖了已成功的入站连接。修复：出站失败后再次检查入站状态，不覆盖已通的连接。
-- 🐛 **联邦重连循环失效**：`_close_peer_connection` 只清理内存状态不更新 DB，导致 DB 仍为 `connected` → 重连循环永远不触发。修复：添加 DB 更新 + `PeerConnection` 新增 `peer_id` 字段。
-- 🐛 **空 URL 自动拼接 `/federation/ws`**：前端 4 处 `onChange` 在 host 为空时仍构造 `wss:///federation/ws`（InvalidURI）。修复：host 为空时整体留空。
-- 🐛 **空 URL 点「连接」报 500**：`connect_to_peer` 对 4 种非错误情况（空 URL / 正在连接中 / 已入站连接）都返回 `False`，router 层一刀切抛 500。修复：router 层分类处理，返回 200 + 具体说明。
-- 🐛 **群联邦共享开关失效**：share/unshare 的 403/400/422 错误码未区分 + `display_name` 为空导致创建失败。修复：错误分类返回 + 管理员豁免 + 前端 `alert()` 显示错误详情。
-- 🐛 **DetailSettingsModal 缺 prop 崩溃**：创建 AI 详细设置弹窗缺少必要 prop 导致 React 崩溃。已修复。
-- 🐛 **管理面板英文 Tab 补齐**：部分管理面板 Tab 在英文界面下仍显示中文标签。已补齐 i18n 翻译。
-- 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 在 minify 后变量名冲突（`t2 is not a function`）。子组件改用自身 `useT()`。
-- 🐛 **preset 键名不匹配**：`preset.digital_lifeName/Desc` 驼峰命名与翻译字典下划线 key 不匹配，导致数字生命档名称/描述不显示。
-- 🐛 **缓存命中率公式修正**：`cached/(cached+total)` → `cached/total`。修复 UsagePage 和 MePage 两处。
-- 🐛 **存储空间显示 0KB**：`data_dir` 路径修正，个人和 AI 的存储空间计算正确指向 `agents/{id}` 目录。
-- 🐛 **用户手册内链 404**：`./管理与开发者手册.md` 相对路径改为绝对路径 `/docs/管理与开发者手册.md`。
+- 🐛 **搜索 AI 重复显示**：AI 的 `User` 记录（`type="ai"`）也被用户搜索匹配，导致同一 AI 出现两次（一次标为 human，一次标为 AI）。修复：`search_service.py` 和 `friend_service.py` 的用户查询增加 `User.type == "human"` 过滤。
+- 🐛 **移动端聊天列表右侧空隙**：`max-w-[90vw]` 约束导致侧边栏未填满屏幕宽度。修复：改用 `inset-0`（四边全填充）。
+- 🐛 **AI 卡片底部按钮事件冒泡**：编辑/历史/状态/导出按钮的 `onClick` 事件冒泡到父级卡片 → 触发 `navigate` 跳转详情页，弹窗闪现后消失。修复：4 个按钮全部加 `e.stopPropagation()`。
+
+- 📤 **AI 文件发送工具 `send_file`**：AI 可从自己的文件空间（`file_write` 创建的文件）发送到群聊或私信。零拷贝引用已有 `FileMetadata`，三元权限匹配（`path + owner_type + owner_id`），不可跨 AI 读文件。群聊用 `agent_id`，私信用 `agent.user_id`。WebSocket 广播 + 触发其他 AI 回复。`CORE_IDENTITY` 系统提示词已更新告知 AI 有此能力。
+- 🖼️ **文件预览弹窗增强**：图片预览支持缩放（+/- 按钮 + Ctrl+滚轮，0.5x-5x）、重置缩放。PDF 使用浏览器原生 `<iframe>` 内嵌预览。DOCX 通过 mammoth.js 客户端转 HTML 渲染（`dangerouslySetInnerHTML` + prose 样式）。文本类文件（txt/json/xml/yaml/sh/js 等）用 `<pre>` 语法高亮预览（≤2MB）。不可预览的自动触发下载。移动端全屏 + ArrowLeft 返回按钮；桌面端居中弹窗 800px max-w / 88vh max-h。所有预览均有下载按钮。
+- 📎 **纯附件消息优化**：用户仅发文件不输入文字时不再自动附加 `(附件)` 字符串。侧边栏最后消息预览显示 `[文件]`（1 个文件）或 `[N个文件]`（多个）。`make_preview()` 函数统一处理 content + attachments 预览逻辑。
+- 🔗 **文件去重系统**：三级比对（文件名 → 大小 → SHA-256 哈希），上传文件时自动检测。同一用户上传同名同内容文件时直接复用已有 `file_id`，不写物理磁盘。`FileMetadata` 新增 `content_hash` 列。`ai_write_file` 同步写入哈希。
+- 📤 **文件转发系统**：新的 `ForwardFileModal` 组件——搜索 + 多选群聊和联系人（DM），一键将已有文件作为附件转发给多个目标，不重复上传。前端文件预览弹窗和"我的"存储页均有转发入口。
+- 🔄 **转发引用自动追踪**：`create_message` 和 `send_dm_message` 发送含附件的消息时，若非文件 owner 发送则自动在 `file_references` 创建 `ref_type='forward'` 记录（幂等）。转发即计入转发者存储配额。
+- 🏠 **FIFO 文件过户**：文件 owner 删除时，自动查找最早转发该文件的用户并将文件所有权转移过去。过户后原转发引用自动移除（已升级为 owner）。若无转发者接盘则标记为孤儿文件，进入宽限期。
+- ⏳ **孤儿文件宽限期**：无人接盘的文件标记为 `owner_type='system'`，宽限期（默认 7 天，管理员可在 `system_settings.orphan_retention_days` 配置）后由后台 worker 物理清理。每小时检查一次。
+- 🗑️ **转发文件释放**：转发者可从"我的"存储页点击释放按钮移除转发引用（`DELETE /fs/release/{file_id}`），仅删引用不删物理文件。存储空间即时返还。
+- 📊 **存储页文件列表**："我的"存储概览区新增文件列表（含转发文件），自有文件悬停显示转发按钮，转发文件显示 `[转发]` 标签和释放按钮。存储配额计算含转发文件。`GET /fs/list?include_forwarded=true` 合并返回自有+转发文件。`/user/storage` 新增 `forwarded_files` / `forwarded_used` 字段。
+
+### Changed
+
+- 🔧 **群聊消息 REST 端点**：新 `POST /groups/{group_id}/messages` 支持通过 HTTP API 发送群聊消息（含附件），含 WebSocket 广播 + AI 触发器。与 DM 端点对称。
+- 🔧 **DM 消息端点支持附件**：`POST /dm/{session_id}/messages` 现接受 `attachments` 字段并透传给 `send_dm_message`。
+
+### Fixed
+
+- 🐛 **`file_references.ref_type` CHECK 约束缺失 `forward`**：模型和数据库约束新增 `'forward'` 类型，init-db.sql 幂等迁移自动修复。
 
 ---
 
@@ -102,73 +101,43 @@
 
 ---
 
-## [v0.9.0] - 2026-06-27
+## [v0.7.0] - 2026-06-24
 
 ### Added
 
-- 👤 **用户/AI 个人资料系统**：`agents` 表新增 `bio`（TEXT，AI 简介）+ `status_text`（VARCHAR 100，个性状态），`users` 表新增 `bio` + `status_text`。创建/编辑 AI 弹窗主表单直接填写简介和个性状态，无需进详细设置。用户可在「我的」→ 设置 → 个人资料区编辑自己的 bio 和状态文本。AI 可通过新增的 `set_status` 工具自主修改个性状态（中文≤10字，英文≤30字符，active/dnd/offline 均可用）。
-- 🪪 **资料卡弹窗 ProfileCard**：全新 `GET /user/profile/{entity_type}/{entity_id}` 端点，返回聚合资料（头像、简介、状态、注册时间、AI 制作者、是否好友）。前端 ProfileCard 组件全面重写——展示真实头像（gradient 兜底）、bio 文字、状态文本（斜体强调色）、制作者信息。支持「加好友」按钮切换附言输入区，发送带验证消息的好友申请。
-- 🔍 **搜索结果头像可点 + 加好友附言**：搜索结果中点击头像或名称区域 → 打开 ProfileCard 资料卡。搜索加好友改为内联消息输入（输入附言 → 确认发送），替代原来的一键无附言发送。
-- 📱 **移动端添加好友改为内联弹窗**：ChatArea 中点击 `+` → 添加好友 → 弹出内联搜索弹窗（而非跳转到 `/friends` 路由）。
-- 🔧 **工具系统新增 `set_status`**：第 30 个工具，AI 可自主设置个性状态文本，位于 self_config 段。
-- 📝 **DM 头部头像可点**：私信头部对方头像点击 → 打开 ProfileCard 资料卡。
-
-### Fixed
-
-- 🐛 **搜索 AI 重复显示**：AI 的 `User` 记录（`type="ai"`）也被用户搜索匹配，导致同一 AI 出现两次（一次标为 human，一次标为 AI）。修复：`search_service.py` 和 `friend_service.py` 的用户查询增加 `User.type == "human"` 过滤。
-- 🐛 **移动端聊天列表右侧空隙**：`max-w-[90vw]` 约束导致侧边栏未填满屏幕宽度。修复：改用 `inset-0`（四边全填充）。
-- 🐛 **AI 卡片底部按钮事件冒泡**：编辑/历史/状态/导出按钮的 `onClick` 事件冒泡到父级卡片 → 触发 `navigate` 跳转详情页，弹窗闪现后消失。修复：4 个按钮全部加 `e.stopPropagation()`。
-
-- 📤 **AI 文件发送工具 `send_file`**：AI 可从自己的文件空间（`file_write` 创建的文件）发送到群聊或私信。零拷贝引用已有 `FileMetadata`，三元权限匹配（`path + owner_type + owner_id`），不可跨 AI 读文件。群聊用 `agent_id`，私信用 `agent.user_id`。WebSocket 广播 + 触发其他 AI 回复。`CORE_IDENTITY` 系统提示词已更新告知 AI 有此能力。
-- 🖼️ **文件预览弹窗增强**：图片预览支持缩放（+/- 按钮 + Ctrl+滚轮，0.5x-5x）、重置缩放。PDF 使用浏览器原生 `<iframe>` 内嵌预览。DOCX 通过 mammoth.js 客户端转 HTML 渲染（`dangerouslySetInnerHTML` + prose 样式）。文本类文件（txt/json/xml/yaml/sh/js 等）用 `<pre>` 语法高亮预览（≤2MB）。不可预览的自动触发下载。移动端全屏 + ArrowLeft 返回按钮；桌面端居中弹窗 800px max-w / 88vh max-h。所有预览均有下载按钮。
-- 📎 **纯附件消息优化**：用户仅发文件不输入文字时不再自动附加 `(附件)` 字符串。侧边栏最后消息预览显示 `[文件]`（1 个文件）或 `[N个文件]`（多个）。`make_preview()` 函数统一处理 content + attachments 预览逻辑。
-- 🔗 **文件去重系统**：三级比对（文件名 → 大小 → SHA-256 哈希），上传文件时自动检测。同一用户上传同名同内容文件时直接复用已有 `file_id`，不写物理磁盘。`FileMetadata` 新增 `content_hash` 列。`ai_write_file` 同步写入哈希。
-- 📤 **文件转发系统**：新的 `ForwardFileModal` 组件——搜索 + 多选群聊和联系人（DM），一键将已有文件作为附件转发给多个目标，不重复上传。前端文件预览弹窗和"我的"存储页均有转发入口。
-- 🔄 **转发引用自动追踪**：`create_message` 和 `send_dm_message` 发送含附件的消息时，若非文件 owner 发送则自动在 `file_references` 创建 `ref_type='forward'` 记录（幂等）。转发即计入转发者存储配额。
-- 🏠 **FIFO 文件过户**：文件 owner 删除时，自动查找最早转发该文件的用户并将文件所有权转移过去。过户后原转发引用自动移除（已升级为 owner）。若无转发者接盘则标记为孤儿文件，进入宽限期。
-- ⏳ **孤儿文件宽限期**：无人接盘的文件标记为 `owner_type='system'`，宽限期（默认 7 天，管理员可在 `system_settings.orphan_retention_days` 配置）后由后台 worker 物理清理。每小时检查一次。
-- 🗑️ **转发文件释放**：转发者可从"我的"存储页点击释放按钮移除转发引用（`DELETE /fs/release/{file_id}`），仅删引用不删物理文件。存储空间即时返还。
-- 📊 **存储页文件列表**："我的"存储概览区新增文件列表（含转发文件），自有文件悬停显示转发按钮，转发文件显示 `[转发]` 标签和释放按钮。存储配额计算含转发文件。`GET /fs/list?include_forwarded=true` 合并返回自有+转发文件。`/user/storage` 新增 `forwarded_files` / `forwarded_used` 字段。
+- 🔗 **联邦 v1.0.0 架构升级**：双层 ID 体系（`instance_subnet_id` UUID + `instance_public_id` ULID），`FederatedEntity` 统一表替代旧的 `FederationGroupShare` + `FederationDMShare`，支持 group/dm/user/agent 四种实体类型。`federated_id` 格式 `{实例代号}:{类型}:{本地ID}`（如 `datongai:g:42`），接收端根据发送 peer 自动拼接前缀。
+- 🔗 **联邦头像同步**：`entity_announce` 消息携带 `avatar_url`，`profile_sync` 机制不再过滤 `avatar_url` 字段，用户/AI 头像上传时自动入队 `PendingProfileUpdate` 推送到联邦对等端。
+- 🔗 **实例代号自动采纳**：握手时对方分配的 `assigned_name` 自动设为本机 `instance_config.display_name`，对方不设代号时显示名称留空也不报错。
+- 🔗 **实例代号唯一性校验**：设置 `display_name` 时检查是否与已有 `FederationPeer.display_name` 冲突，防止多实例代号重复。
+- 🔗 **联邦协议精简**：所有联邦消息只传 `entity_type` + `local_id`（不再传带前缀的 `federated_id`），接收端根据发送 peer 的 `display_name` 自动拼接完整 ID。向下兼容旧格式。
+- 🔗 **per-group 联邦共享控制**：群主和 AI 制作者可按群、按对等端控制联邦共享。三个端点：`GET /groups/{id}/federation/peers`（查看状态）、`POST .../share`（共享）、`POST .../unshare`（取消）。`remote_url` 改为可选（只需一端有公网地址即可建立双向通道）。
+- 📝 **开发者与管理手册**：新增独立文档，含架构速览、部署指南、排错手册、WebSocket 通信专项。管理员面板头部添加「管理手册」链接。
+- 📝 **用户手册精简**：移除管理/部署内容，聚焦终端用户日常使用。由浅入深重写。
+- 🎛️ **系统提示词管理**：管理员可在管理面板查看和编辑发给 AI 的 6 段系统提示词（core_identity / personality / protocol / tools / current_context / injected_skills）。支持行内编辑、预览拼接全文、恢复默认。后端 `system_prompt_overrides` JSONB 存储覆盖值，`_load_prompt_overrides` 在构建提示词时注入。
+- 🖼️ **联邦头像持久化**：`messages` 表新增 `sender_avatar_url` 列，联邦消息落库时保存头像 URL。历史消息 REST API 加载时优先读 DB 中的 `sender_avatar_url`，避免联邦对等端离线后头像裂图。WebSocket `avatar_updated` 广播修复已渲染的消息头像。
+- 📄 **手册双路由**：`/manual`（用户手册）和 `/manual/admin`（管理与开发者手册）使用统一的 `ManualPage` 组件渲染，管理员面板手册链接改为 `<Link to>` 内部导航。
+- 📊 **用量图表增强**：UsagePage 新增 `ComposedChart` 时间轴曲线图（Area 总 Token + Line 缓存命中率右轴），按日期展示趋势。图表术语 "Prompt"/"Completion" 已 i18n 化。
+- 🔘 **Toggle 开关统一**：新建 `components/Toggle.tsx`，所有 18 个开关/滑块统一为 `bg-mint-400` 轨道 + 白色圆点的单一风格。覆盖 AdminPage、AgentsPage、AgentDetailPage、SettingsPage、GroupSettingsPanel、ConversationLogTab、CreateAgentModal。
 
 ### Changed
 
-- 🔧 **群聊消息 REST 端点**：新 `POST /groups/{group_id}/messages` 支持通过 HTTP API 发送群聊消息（含附件），含 WebSocket 广播 + AI 触发器。与 DM 端点对称。
-- 🔧 **DM 消息端点支持附件**：`POST /dm/{session_id}/messages` 现接受 `attachments` 字段并透传给 `send_dm_message`。
+- 📝 **联邦文档澄清**：明确联邦通信为服务端之间直连（非 P2P），客户端只连自己的实例。
+- 💭 **「思考中」状态显示**：返回 token 时显示「思考中」，调用 `send_message` 才切换到「打字中」。思考中最小显示 1.5s 避免闪烁。
 
 ### Fixed
 
-- 🐛 **`file_references.ref_type` CHECK 约束缺失 `forward`**：模型和数据库约束新增 `'forward'` 类型，init-db.sql 幂等迁移自动修复。
-
-
-## [v0.5.0] - 2026-06-21
-
-### Added
-
-- 📊 **API 用量仪表盘**：用户端「我的」→ API 用量概览 + 详情页（recharts 堆叠柱状图）。显示总 Token、调用次数、缓存命中率、思考 Token，按 AI 分组明细表，支持 7/30/60/90 天日期范围切换。图表自动适配日夜模式。
-- 🛡️ **管理员用量分析面板**：AdminPage 新增「用量分析」tab。全站 token 消耗总览 + 按用户展开查看各 AI 明细 + 每日 AreaChart 趋势图。
-- 🧠 **Token 追踪增强**：`token_usage` JSONB 新增 `reasoning_tokens`（DeepSeek 思考 token）和 `cached_tokens`（prompt cache 命中 token）。`llm_service.py` 自动从 API 响应提取，`ai_response_worker.py` 跨轮累积。
-- 👤 **「我的」页面**：底部导航「设置」→「我的」。个人资料卡（头像、好友数、上线天数、额度概览）+ 我的 AI 横向卡片 + API 用量概览 + 兑换码输入 + 设置/管理入口 + 退出登录。支持编辑用户名/密码。
-- 🎛️ **AgentDetailPage 工具轮次编辑**：「模型配置」新增「工具调用 & 闹钟」子区。`max_tool_rounds`/`alarm_max_tool_rounds`/`max_alarms` 支持 ± 按钮 inline 编辑，`force_alarm_on_end` 开关切换。调用 `PUT /agents/{id}/config` 即时生效。
-- 🏷️ **兑换码 4 种类型**：新增 `agent_bundle`（AI 包断额度，创建时一次付清该 AI 全免）和 `file_quota`（文件存储配额 MB）。原有 `ai_quota` 和 `api_credit`（1 余额=1 万 token pay-as-you-go）。`users` 表新增 `agent_bundle_credit` + `file_quota_mb` 列。
-
-### Changed
-
-- 🔄 **导航重构**：底部导航栏和侧边栏「设置」→「我的」（`/me`），原设置页保留可继续访问。`/me` 整合设置入口、管理入口。
-- 🔄 **用户信息扩展**：`get_user_info` 返回 `agent_bundle_credit`、`file_quota_mb`、`avatar_url`、`created_at`。AdminPage 用户列表同步展示。
-
-### Fixed
-
-- 🐛 **修复聊天页返回路由不更新**：移动端从 `/chat/2` 点击返回箭头，界面回到列表但 URL 停留在 `/chat/2`。根因：`ChatArea.tsx` 移动端返回按钮只打开侧边栏覆盖层（`setMobileSidebarOpen(true)`），未调用 `navigate('/chat')`。改为导航到 `/chat`，URL 与界面同步。
-- 🐛 **修复兑换码生成 500 错误**：`POST /admin/redemption-codes` 报 `Internal Server Error`。根因：`datetime.now(timezone.utc)` 返回带时区的 datetime，但 `redemption_codes.expires_at` 列是 `TIMESTAMP WITHOUT TIME ZONE`，asyncpg 无法将 offset-aware 转换为 offset-naive 导致 `DataError`。修复：三处加上 `.replace(tzinfo=None)`（`admin.py:378` 生成码、`user.py:87` 过期比较、`user.py:112` 标记已使用）。超 60% 的代码已使用 `.replace(tzinfo=None)` 正确模式，此三处为遗留遗漏。
-
-### Backend API
-
-- `GET /conversation-log/usage/overview?days=30` — 用户所有 AI token 汇总
-- `GET /conversation-log/usage/agents/{id}/daily?days=30` — 单 AI 每日分布
-- `GET /admin/usage/global?days=30` — 全站 token 总览
-- `GET /admin/usage/by-user?days=30` — 按用户分组明细
-- `GET /admin/usage/agents/{id}/daily?days=30` — 管理员查单 AI 分布
-- 聚合查询基于 PostgreSQL JSONB `->>` 操作符，`ai_conversation_logs.token_usage` 字段
+- 🐛 **联邦出站覆盖入站**：出站连接失败（或因入站已通而不需要出站）时错误地将 DB 状态覆写为 `failed`/`disconnected`，掩盖了已成功的入站连接。修复：出站失败后再次检查入站状态，不覆盖已通的连接。
+- 🐛 **联邦重连循环失效**：`_close_peer_connection` 只清理内存状态不更新 DB，导致 DB 仍为 `connected` → 重连循环永远不触发。修复：添加 DB 更新 + `PeerConnection` 新增 `peer_id` 字段。
+- 🐛 **空 URL 自动拼接 `/federation/ws`**：前端 4 处 `onChange` 在 host 为空时仍构造 `wss:///federation/ws`（InvalidURI）。修复：host 为空时整体留空。
+- 🐛 **空 URL 点「连接」报 500**：`connect_to_peer` 对 4 种非错误情况（空 URL / 正在连接中 / 已入站连接）都返回 `False`，router 层一刀切抛 500。修复：router 层分类处理，返回 200 + 具体说明。
+- 🐛 **群联邦共享开关失效**：share/unshare 的 403/400/422 错误码未区分 + `display_name` 为空导致创建失败。修复：错误分类返回 + 管理员豁免 + 前端 `alert()` 显示错误详情。
+- 🐛 **DetailSettingsModal 缺 prop 崩溃**：创建 AI 详细设置弹窗缺少必要 prop 导致 React 崩溃。已修复。
+- 🐛 **管理面板英文 Tab 补齐**：部分管理面板 Tab 在英文界面下仍显示中文标签。已补齐 i18n 翻译。
+- 🐛 **GroupSettingsPanel 生产构建崩溃**：`FederationShareSection` 接收 `t` prop 与父组件 `useT()` 在 minify 后变量名冲突（`t2 is not a function`）。子组件改用自身 `useT()`。
+- 🐛 **preset 键名不匹配**：`preset.digital_lifeName/Desc` 驼峰命名与翻译字典下划线 key 不匹配，导致数字生命档名称/描述不显示。
+- 🐛 **缓存命中率公式修正**：`cached/(cached+total)` → `cached/total`。修复 UsagePage 和 MePage 两处。
+- 🐛 **存储空间显示 0KB**：`data_dir` 路径修正，个人和 AI 的存储空间计算正确指向 `agents/{id}` 目录。
+- 🐛 **用户手册内链 404**：`./管理与开发者手册.md` 相对路径改为绝对路径 `/docs/管理与开发者手册.md`。
 
 ---
 
@@ -232,6 +201,38 @@
 - `GET /system/settings` — 获取全局系统设置（公开端点）
 - `PUT /admin/system-settings` — 管理员修改全局系统设置
 - `POST /auth/setup` — 新用户完成初始化设置（设置语言 + 标记完成）
+
+---
+
+## [v0.5.0] - 2026-06-21
+
+### Added
+
+- 📊 **API 用量仪表盘**：用户端「我的」→ API 用量概览 + 详情页（recharts 堆叠柱状图）。显示总 Token、调用次数、缓存命中率、思考 Token，按 AI 分组明细表，支持 7/30/60/90 天日期范围切换。图表自动适配日夜模式。
+- 🛡️ **管理员用量分析面板**：AdminPage 新增「用量分析」tab。全站 token 消耗总览 + 按用户展开查看各 AI 明细 + 每日 AreaChart 趋势图。
+- 🧠 **Token 追踪增强**：`token_usage` JSONB 新增 `reasoning_tokens`（DeepSeek 思考 token）和 `cached_tokens`（prompt cache 命中 token）。`llm_service.py` 自动从 API 响应提取，`ai_response_worker.py` 跨轮累积。
+- 👤 **「我的」页面**：底部导航「设置」→「我的」。个人资料卡（头像、好友数、上线天数、额度概览）+ 我的 AI 横向卡片 + API 用量概览 + 兑换码输入 + 设置/管理入口 + 退出登录。支持编辑用户名/密码。
+- 🎛️ **AgentDetailPage 工具轮次编辑**：「模型配置」新增「工具调用 & 闹钟」子区。`max_tool_rounds`/`alarm_max_tool_rounds`/`max_alarms` 支持 ± 按钮 inline 编辑，`force_alarm_on_end` 开关切换。调用 `PUT /agents/{id}/config` 即时生效。
+- 🏷️ **兑换码 4 种类型**：新增 `agent_bundle`（AI 包断额度，创建时一次付清该 AI 全免）和 `file_quota`（文件存储配额 MB）。原有 `ai_quota` 和 `api_credit`（1 余额=1 万 token pay-as-you-go）。`users` 表新增 `agent_bundle_credit` + `file_quota_mb` 列。
+
+### Changed
+
+- 🔄 **导航重构**：底部导航栏和侧边栏「设置」→「我的」（`/me`），原设置页保留可继续访问。`/me` 整合设置入口、管理入口。
+- 🔄 **用户信息扩展**：`get_user_info` 返回 `agent_bundle_credit`、`file_quota_mb`、`avatar_url`、`created_at`。AdminPage 用户列表同步展示。
+
+### Fixed
+
+- 🐛 **修复聊天页返回路由不更新**：移动端从 `/chat/2` 点击返回箭头，界面回到列表但 URL 停留在 `/chat/2`。根因：`ChatArea.tsx` 移动端返回按钮只打开侧边栏覆盖层（`setMobileSidebarOpen(true)`），未调用 `navigate('/chat')`。改为导航到 `/chat`，URL 与界面同步。
+- 🐛 **修复兑换码生成 500 错误**：`POST /admin/redemption-codes` 报 `Internal Server Error`。根因：`datetime.now(timezone.utc)` 返回带时区的 datetime，但 `redemption_codes.expires_at` 列是 `TIMESTAMP WITHOUT TIME ZONE`，asyncpg 无法将 offset-aware 转换为 offset-naive 导致 `DataError`。修复：三处加上 `.replace(tzinfo=None)`（`admin.py:378` 生成码、`user.py:87` 过期比较、`user.py:112` 标记已使用）。超 60% 的代码已使用 `.replace(tzinfo=None)` 正确模式，此三处为遗留遗漏。
+
+### Backend API
+
+- `GET /conversation-log/usage/overview?days=30` — 用户所有 AI token 汇总
+- `GET /conversation-log/usage/agents/{id}/daily?days=30` — 单 AI 每日分布
+- `GET /admin/usage/global?days=30` — 全站 token 总览
+- `GET /admin/usage/by-user?days=30` — 按用户分组明细
+- `GET /admin/usage/agents/{id}/daily?days=30` — 管理员查单 AI 分布
+- 聚合查询基于 PostgreSQL JSONB `->>` 操作符，`ai_conversation_logs.token_usage` 字段
 
 ---
 

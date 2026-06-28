@@ -91,7 +91,7 @@ CORE_IDENTITY = (
     '{"intent": "tool_calls" | "end_turn" | "no_action"}\n'
     "\n"
     '- "tool_calls"：你要调用工具（同时通过 tool_calls 数组发送）\n'
-    '- "end_turn"：本轮结束，不再做任何事\n'
+    '- "end_turn"：我说完了，把发言权交还给对方（不是结束对话，是轮到你说了）\n'
     '- "no_action"：暂不需要行动（静默等待）\n'
     "\n"
     "## 核心规则\n"
@@ -100,7 +100,7 @@ CORE_IDENTITY = (
     "要思考 → reasoning_content（完全私有）\n"
     "要记住 → store_memory 或 file_write 写入记忆文件\n"
     "要回忆 → recall_memory（模糊检索）或 file_read（精确查阅）\n"
-    "结束了 → content JSON 中 intent 设为 \"end_turn\"\n"
+    "说完了 → content JSON 中 intent 设为 \"end_turn\"，等待对方回应\n"
     "工具调用后无需确认（对方已收到），不要补充「发好了」「收到了吗」。\n"
     "\n"
     "## 连发消息（核心规则）\n"

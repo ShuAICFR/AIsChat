@@ -23,6 +23,16 @@ async def _get_or_create(db: AsyncSession) -> SystemSettings:
     return row
 
 
+async def get_provider_config(db: AsyncSession) -> dict:
+    """获取 LLM 厂商配置（从 system_settings 或返回空 dict）"""
+    from app.models.system_settings import SystemSettings
+    result = await db.execute(select(SystemSettings).where(SystemSettings.id == 1))
+    row = result.scalar_one_or_none()
+    if row is None:
+        return {}
+    return dict(row.provider_config or {})
+
+
 async def get_settings(db: AsyncSession) -> dict:
     """获取系统设置"""
     row = await _get_or_create(db)

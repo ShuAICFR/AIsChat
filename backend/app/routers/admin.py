@@ -2045,3 +2045,85 @@ async def admin_update_agent_skill(
         is_enabled=body.is_enabled,
         priority=body.priority,
     )
+
+
+# ══════════════════════════════════════════════════════════════
+# v1.1.0 LLM 厂商预设
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/provider-presets")
+async def get_provider_presets(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取所有 LLM 厂商预设 + 当前生效配置"""
+    from app.services.provider_presets import get_all_presets
+    from app.services.system_settings_service import get_settings
+
+    presets = get_all_presets()
+    settings = await get_settings(db)
+    current = settings.get("provider_config") or {
+        "provider": "manual",
+        "base_url": "",
+        "chat_model": "",
+        "work_model": "",
+        "embedding_model": "",
+        "model_options": [],
+    }
+
+    return {
+        "presets": presets,
+        "current": current,
+    }
+
+
+class ApplyPresetBody(BaseModel):
+    provider: str  # preset key, or "manual"
+    base_url: str | None = None
+    chat_model: str | None = None
+    work_model: str | None = None
+    embedding_model: str | None = None
+    model_options: list[dict] | None = None
+
+
+@router.put("/provider-presets/apply")
+async def apply_provider_preset(
+    body: ApplyPresetBody,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """应用 LLM 厂商预设（保存到 system_settings.provider_config）"""
+    from app.services.provider_presets import get_preset
+
+    if body.provider == "manual":
+        config = {
+            "provider": "manual",
+            "base_url": body.base_url or "",
+            "chat_model": body.chat_model or "",
+            "work_model": body.work_model or "",
+            "embedding_model": body.embedding_model or "",
+            "model_options": body.model_options or [],
+        }
+    else:
+        preset = get_preset(body.provider)
+        if preset is None:
+            raise HTTPException(400, f"未知厂商: {body.provider}")
+        config = {
+            "provider": preset["key"],
+            "base_url": preset["base_url"],
+            "chat_model": body.chat_model or preset["chat_model"],
+            "work_model": body.work_model or preset["work_model"],
+            "embedding_model": body.embedding_model or preset["embedding_model"],
+            "model_options": body.model_options or preset["models"],
+        }
+
+    from app.models.system_settings import SystemSettings
+    result = await db.execute(select(SystemSettings).where(SystemSettings.id == 1))
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = SystemSettings(id=1)
+        db.add(row)
+    row.provider_config = config
+    await db.commit()
+
+    return {"message": f"已切换为 {body.provider} 配置", "config": config}

@@ -64,21 +64,31 @@ async def get_available_models(
 ):
     """返回可用模型选项列表（供前端下拉框），附带当前 API 提供商的能力"""
     from app.config import settings
+    from app.services.system_settings_service import get_provider_config
 
-    # 获取当前用户的 API base URL，判断提供商能力
-    api_base = await _get_user_api_base(db, current_user["user_id"])
-    thinking_supported = settings.is_thinking_supported_for(api_base)
-    is_deepseek = "deepseek.com" in api_base
+    provider = await get_provider_config(db)
+
+    # 模型列表优先用 DB 保存的配置，否则用 env 默认
+    models = provider.get("model_options") or settings.get_model_options()
+    chat_model = provider.get("chat_model") or settings.default_chat_model
+    work_model = provider.get("work_model") or settings.default_work_model
+    api_base = provider.get("base_url") or settings.deepseek_base_url
+    thinking_supported = provider.get(
+        "thinking_supported",
+        "deepseek.com" in api_base,
+    )
 
     return {
-        "models": settings.get_model_options(),
+        "models": models,
         "defaults": {
-            "chat_model": settings.default_chat_model,
-            "work_model": settings.default_work_model,
+            "chat_model": chat_model,
+            "work_model": work_model,
         },
         "provider": {
+            "key": provider.get("provider", "unknown"),
+            "base_url": api_base,
             "thinking_supported": thinking_supported,
-            "is_deepseek": is_deepseek,
+            "is_deepseek": "deepseek.com" in api_base,
         },
     }
 

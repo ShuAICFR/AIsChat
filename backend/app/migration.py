@@ -43,6 +43,7 @@ async def run_migrations():
             await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态（必须在 select(Agent) 之前）
             await _migrate_others_chat_controls(db)  # v0.9.0 对话权限 + 限额控制（必须在 select(Agent) 之前）
             await _migrate_email_verification(db)  # v1.0.0 邮箱认证（必须在 select(Agent) 之前）
+            await _migrate_provider_config(db)      # v1.1.0 LLM 厂商预设
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -1902,6 +1903,16 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
         ))
         # 注意：不在此处 commit，由外层 db.begin() 统一提交
         await db.flush()
+
+
+async def _migrate_provider_config(db):
+    """v1.1.0: LLM 厂商预设 — system_settings 表 +provider_config JSONB"""
+    if not await _column_exists(db, "system_settings", "provider_config"):
+        logger.info("  🏭 添加 system_settings.provider_config 列")
+        await db.execute(text("ALTER TABLE system_settings ADD COLUMN provider_config JSONB"))
+        await db.commit()
+    else:
+        logger.info("  ⏭ system_settings.provider_config 已存在，跳过")
 
 
 async def _migrate_system_user(db):

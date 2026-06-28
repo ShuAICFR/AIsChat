@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 class EndTurn(ToolPlugin):
     name = "end_turn"
     description = (
-        "结束当前回复轮次，把发言权交还给对方。不是结束对话，是说完话递话筒。"
-        "发完消息后和 send_message 放同一个 tool_calls 里一起调用。"
+        "结束当前回复轮次，把发言权交还给对方。调用后本轮终止，不会再触发后续 API。"
+        "如需同时切换状态（如下线），必须在同一个 tool_calls 中先调用 switch_state/set_dnd 再调用 end_turn。"
     )
     segment = "self_management"
     parameters = {}

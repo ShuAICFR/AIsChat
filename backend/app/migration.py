@@ -40,6 +40,7 @@ async def run_migrations():
             await _migrate_agents_user_id(db)
             await _migrate_friend_controls(db)         # v0.6.0 好友控制字段（必须在 select(Agent) 之前）
             await _migrate_memory_config_columns(db)   # v0.8.0 文件记忆配置字段（必须在 select(Agent) 之前）
+            await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -69,7 +70,6 @@ async def run_migrations():
             await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
             await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
             await _migrate_default_file_quota(db)   # v0.9.0 用户默认文件配额配置
-            await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")

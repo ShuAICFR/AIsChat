@@ -511,7 +511,6 @@ export default function CreateAgentModal({
             value={statusText}
             onChange={(e) => setStatusText(e.target.value)}
             placeholder={t('agentDetail.statusTextPlaceholder')}
-            maxLength={100}
             className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
           />
         </div>

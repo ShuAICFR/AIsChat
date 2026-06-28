@@ -4,12 +4,13 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from app.database import get_db
 from app.services.auth_service import update_user_settings
 from app.utils.auth import get_current_user
 from app.schemas.auth import UserInfoResponse
 from app.models.user import User
+from app.utils.text import validate_status_text
 from sqlalchemy import select
 
 router = APIRouter(prefix="/user", tags=["用户设置"])
@@ -29,6 +30,11 @@ class UpdateSettingsRequest(BaseModel):
     avatar_url: str | None = None
     bio: str | None = None
     status_text: str | None = None
+
+    @field_validator("status_text")
+    @classmethod
+    def check_status_text(cls, v: str | None) -> str | None:
+        return validate_status_text(v)
 
 
 class RedeemRequest(BaseModel):

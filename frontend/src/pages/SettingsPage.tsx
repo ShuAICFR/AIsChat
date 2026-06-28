@@ -419,11 +419,10 @@ export default function SettingsPage() {
               type="text"
               value={statusText}
               onChange={(e) => setStatusText(e.target.value)}
-              maxLength={100}
               className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
               placeholder={t('settings.statusTextPlaceholder')}
             />
-            <p className="text-[10px] text-textMuted mt-1">{t('settings.statusTextHint')} · {statusText.length}/100</p>
+            <p className="text-[10px] text-textMuted mt-1">{t('settings.statusTextHint')} · {statusText.length} 字</p>
           </div>
         </div>
       </div>

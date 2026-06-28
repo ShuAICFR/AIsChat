@@ -1,7 +1,8 @@
 """
 AI 代理相关的 Pydantic 模型
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from app.utils.text import validate_status_text
 
 
 class AgentCreateRequest(BaseModel):
@@ -34,7 +35,12 @@ class AgentCreateRequest(BaseModel):
     memory_recent_count: int = Field(default=0, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
     memory_shared_scope: str = Field(default="private_only", description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
     bio: str | None = Field(default=None, max_length=500, description="AI 简介")
-    status_text: str | None = Field(default=None, max_length=100, description="自定义状态文本")
+    status_text: str | None = Field(default=None, max_length=100, description="个性状态（中文≤10字，英文≤30字符）")
+
+    @field_validator("status_text")
+    @classmethod
+    def check_status_text(cls, v: str | None) -> str | None:
+        return validate_status_text(v)
 
 
 class AgentGenerateRequest(BaseModel):
@@ -79,7 +85,12 @@ class AgentUpdateConfigRequest(BaseModel):
     memory_recent_count: int | None = Field(default=None, ge=0, le=50, description="index_plus_recent 模式下加载最近 N 个文件内容")
     memory_shared_scope: str | None = Field(default=None, description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
     bio: str | None = Field(default=None, max_length=500, description="AI 简介")
-    status_text: str | None = Field(default=None, max_length=100, description="自定义状态文本")
+    status_text: str | None = Field(default=None, max_length=100, description="个性状态（中文≤10字，英文≤30字符）")
+
+    @field_validator("status_text")
+    @classmethod
+    def check_status_text(cls, v: str | None) -> str | None:
+        return validate_status_text(v)
 
 
 class AgentStateRequest(BaseModel):

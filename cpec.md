@@ -451,6 +451,12 @@ CREATE TABLE users (
     -- API 配置（加密存储）/ API config (encrypted storage)
     api_base_url TEXT,
     api_key_encrypted TEXT,
+    -- 个人资料 / Profile
+    avatar_url TEXT,
+    bio TEXT,
+    status_text VARCHAR(100),
+    type VARCHAR(10) DEFAULT 'human' CHECK (type IN ('human', 'ai')),
+    timezone VARCHAR(50) DEFAULT 'Asia/Shanghai',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -469,11 +475,32 @@ CREATE TABLE agents (
     current_top_p FLOAT,
     current_presence_penalty FLOAT,
     current_frequency_penalty FLOAT,
-    chat_model VARCHAR(20),    -- NULL 表示继承全局 / NULL = inherit global
-    work_model VARCHAR(20),
+    chat_model VARCHAR(50),    -- NULL 表示继承全局 / NULL = inherit global
+    work_model VARCHAR(50),
     state VARCHAR(20) DEFAULT 'active',
     offline_until TIMESTAMP,
     is_ai_editable BOOLEAN DEFAULT TRUE,
+    thinking_enabled BOOLEAN DEFAULT FALSE,
+    -- 社交资料 / Social profile
+    avatar_url TEXT,
+    bio TEXT,
+    status_text VARCHAR(100),
+    -- 用户关联（每个 AI 对应一个 type='ai' 的 User 行）
+    user_id INT REFERENCES users(id),
+    -- 可发现性 / Discoverability
+    discoverable BOOLEAN DEFAULT TRUE,
+    -- 好友控制 / Friend controls
+    allow_friend_requests BOOLEAN DEFAULT TRUE,
+    auto_respond_friend_request BOOLEAN DEFAULT FALSE,
+    -- 配置预设档位 / Config profile
+    config_profile VARCHAR(30) DEFAULT 'custom',
+    -- 对话行为 / Conversation behavior
+    max_tool_rounds INT DEFAULT 3,
+    alarm_max_tool_rounds INT DEFAULT 10,
+    force_alarm_on_end BOOLEAN DEFAULT FALSE,
+    max_alarms INT DEFAULT 10,
+    delay_reply_enabled BOOLEAN DEFAULT TRUE,
+    hide_ai_identity BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -628,8 +655,9 @@ CREATE TABLE system_logs (
 - `GET /auth/me` → 当前用户信息 / Current user info
 
 #### 用户设置 / User Settings
-- `PUT /user/settings` → 更新 API 配置、策略模式参数 / Update API config, policy parameters
+- `PUT /user/settings` → 更新 API 配置、个人资料（bio、status_text）、策略模式参数 / Update API config, profile, policy parameters
 - `POST /user/redeem` → 使用兑换码 / Redeem a code
+- `GET /user/profile/{entity_type}/{entity_id}` → 获取用户/AI 公开资料卡（头像、简介、状态、注册时间、制作者、是否好友）/ Get public profile card
 
 #### AI 管理 / AI Management
 - `GET /agents` → 我的 AI 列表 / My AI list

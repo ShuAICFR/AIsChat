@@ -106,6 +106,19 @@
 
 ### Added
 
+- 👤 **用户/AI 个人资料系统**：`agents` 表新增 `bio`（TEXT，AI 简介）+ `status_text`（VARCHAR 100，个性状态），`users` 表新增 `bio` + `status_text`。创建/编辑 AI 弹窗主表单直接填写简介和个性状态，无需进详细设置。用户可在「我的」→ 设置 → 个人资料区编辑自己的 bio 和状态文本。AI 可通过新增的 `set_status` 工具自主修改个性状态（中文≤10字，英文≤30字符，active/dnd/offline 均可用）。
+- 🪪 **资料卡弹窗 ProfileCard**：全新 `GET /user/profile/{entity_type}/{entity_id}` 端点，返回聚合资料（头像、简介、状态、注册时间、AI 制作者、是否好友）。前端 ProfileCard 组件全面重写——展示真实头像（gradient 兜底）、bio 文字、状态文本（斜体强调色）、制作者信息。支持「加好友」按钮切换附言输入区，发送带验证消息的好友申请。
+- 🔍 **搜索结果头像可点 + 加好友附言**：搜索结果中点击头像或名称区域 → 打开 ProfileCard 资料卡。搜索加好友改为内联消息输入（输入附言 → 确认发送），替代原来的一键无附言发送。
+- 📱 **移动端添加好友改为内联弹窗**：ChatArea 中点击 `+` → 添加好友 → 弹出内联搜索弹窗（而非跳转到 `/friends` 路由）。
+- 🔧 **工具系统新增 `set_status`**：第 30 个工具，AI 可自主设置个性状态文本，位于 self_config 段。
+- 📝 **DM 头部头像可点**：私信头部对方头像点击 → 打开 ProfileCard 资料卡。
+
+### Fixed
+
+- 🐛 **搜索 AI 重复显示**：AI 的 `User` 记录（`type="ai"`）也被用户搜索匹配，导致同一 AI 出现两次（一次标为 human，一次标为 AI）。修复：`search_service.py` 和 `friend_service.py` 的用户查询增加 `User.type == "human"` 过滤。
+- 🐛 **移动端聊天列表右侧空隙**：`max-w-[90vw]` 约束导致侧边栏未填满屏幕宽度。修复：改用 `inset-0`（四边全填充）。
+- 🐛 **AI 卡片底部按钮事件冒泡**：编辑/历史/状态/导出按钮的 `onClick` 事件冒泡到父级卡片 → 触发 `navigate` 跳转详情页，弹窗闪现后消失。修复：4 个按钮全部加 `e.stopPropagation()`。
+
 - 📤 **AI 文件发送工具 `send_file`**：AI 可从自己的文件空间（`file_write` 创建的文件）发送到群聊或私信。零拷贝引用已有 `FileMetadata`，三元权限匹配（`path + owner_type + owner_id`），不可跨 AI 读文件。群聊用 `agent_id`，私信用 `agent.user_id`。WebSocket 广播 + 触发其他 AI 回复。`CORE_IDENTITY` 系统提示词已更新告知 AI 有此能力。
 - 🖼️ **文件预览弹窗增强**：图片预览支持缩放（+/- 按钮 + Ctrl+滚轮，0.5x-5x）、重置缩放。PDF 使用浏览器原生 `<iframe>` 内嵌预览。DOCX 通过 mammoth.js 客户端转 HTML 渲染（`dangerouslySetInnerHTML` + prose 样式）。文本类文件（txt/json/xml/yaml/sh/js 等）用 `<pre>` 语法高亮预览（≤2MB）。不可预览的自动触发下载。移动端全屏 + ArrowLeft 返回按钮；桌面端居中弹窗 800px max-w / 88vh max-h。所有预览均有下载按钮。
 - 📎 **纯附件消息优化**：用户仅发文件不输入文字时不再自动附加 `(附件)` 字符串。侧边栏最后消息预览显示 `[文件]`（1 个文件）或 `[N个文件]`（多个）。`make_preview()` 函数统一处理 content + attachments 预览逻辑。

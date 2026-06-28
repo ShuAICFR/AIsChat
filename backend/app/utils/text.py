@@ -9,6 +9,9 @@ _MENTION_RE = re.compile(
     r'@([^\s@，。！？、；：""''「」『』【】（）\(\)\[\]{}<>#+*&^%$!~`|\\/\n]+)'
 )
 
+# CJK 字符范围（中日韩统一表意文字）
+_CJK_RE = re.compile(r'[一-鿿㐀-䶿豈-﫿]')
+
 
 def extract_mentions(content: str) -> set[str]:
     """
@@ -37,3 +40,33 @@ def check_mention(content: str, target_name: str) -> bool:
         return True
     content_lower = content.lower()
     return "@all" in content_lower or "@ai" in content_lower
+
+
+def validate_status_text(status_text: str | None) -> str | None:
+    """
+    校验状态文本长度。空值/空字符串直接放行（表示清空状态）。
+
+    规则：中文为主（CJK 占比 > 50%）→ 最多 10 字；英文为主 → 最多 30 字符。
+    不符合则抛出 ValueError。
+    """
+    if not status_text or not status_text.strip():
+        return status_text
+
+    text = status_text.strip()
+    cjk_count = len(_CJK_RE.findall(text))
+    total_chars = len(text)
+    cjk_ratio = cjk_count / total_chars if total_chars > 0 else 0
+
+    if cjk_ratio > 0.5:
+        max_len = 10
+        lang_name = "中文"
+    else:
+        max_len = 30
+        lang_name = "英文/拉丁"
+
+    if total_chars > max_len:
+        raise ValueError(
+            f"状态文本过长（{total_chars} 字符），{lang_name}状态最多 {max_len} 个字符"
+        )
+
+    return text

@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.tools.base import ToolPlugin, ToolRegistry
+from app.utils.text import validate_status_text
 
 logger = logging.getLogger(__name__)
 
@@ -14,13 +15,14 @@ class SetStatus(ToolPlugin):
     description = (
         "设置你的自定义状态文本，展示在你的资料卡中。"
         "可以随时更新，用来表达你当前在做什么、心情如何等。"
-        "最多 100 字。设置为空字符串可清除状态。"
+        "中文最多 10 字，英文最多 30 字符。"
+        "设置为空字符串可清除状态。"
     )
     segment = "self_config"
     parameters = {
         "status_text": {
             "type": "string",
-            "description": "自定义状态文本，最多 100 字。设为空字符串 '' 可清除状态。",
+            "description": "自定义状态文本。中文至少 10 字，英文至少 20 字符，最多 100 字。设为空字符串 '' 可清除状态。",
         },
     }
     required = ["status_text"]
@@ -31,8 +33,12 @@ class SetStatus(ToolPlugin):
         from app.models.agent import Agent as AgentModel
 
         status_text = arguments.get("status_text", "")
-        if status_text and len(status_text) > 100:
-            status_text = status_text[:100]
+
+        # 校验长度
+        try:
+            status_text = validate_status_text(status_text if status_text else None)
+        except ValueError as e:
+            return {"error": True, "message": str(e)}
 
         result = await db.execute(select(AgentModel).where(AgentModel.id == agent_id))
         agent = result.scalar_one_or_none()

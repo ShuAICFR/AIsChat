@@ -661,7 +661,6 @@ export default function AgentDetailPage() {
                       const val = e.target.value
                       if (val !== (agent?.status_text || '')) handleUpdateAgentField('status_text', val || null)
                     }}
-                    maxLength={100}
                     className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                     placeholder={t('agentDetail.statusTextPlaceholder')}
                   />

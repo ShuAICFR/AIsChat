@@ -1,7 +1,7 @@
 """
 平台全局系统设置 — 单行表（id=1）
 """
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func
 from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 

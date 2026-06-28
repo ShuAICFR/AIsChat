@@ -106,7 +106,8 @@ export default function LoginPage() {
 
   const showEmailFields = loginMethod === 'email_code' || (mode === 'register' && requireEmailVerification)
   const showDirectFields = loginMethod === 'direct'
-  const canSubmit = loading && (showDirectFields ? (!username || !password) : (!email || !code))
+  const isRegister = mode === 'register'
+  const isLogin = mode === 'login'
 
   // 可用的登录方式标签
   const availableMethods = providers.length > 0 ? providers : ['direct']
@@ -178,95 +179,171 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* 用户名（direct 模式 + 注册模式） */}
-              {(showDirectFields || mode === 'register') && (
-                <div>
-                  <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                    {t('auth.username')}
-                  </label>
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    minLength={2}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
-                    placeholder={t('auth.usernamePlaceholder')}
-                  />
-                </div>
-              )}
+              {/* ── 注册模式：邮箱 → 用户名 → 密码 ── */}
+              {isRegister && (
+                <>
+                  {/* 邮箱（注册时选填，强制验证时必填） */}
+                  <div>
+                    <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                      {t('auth.email')}
+                      {!requireEmailVerification && (
+                        <span className="text-textMuted ml-1">{t('auth.emailOptional')}</span>
+                      )}
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); setCodeSent(false) }}
+                      required={requireEmailVerification}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                      placeholder={t('auth.emailPlaceholder')}
+                    />
+                  </div>
 
-              {/* 密码（direct 模式） */}
-              {showDirectFields && (
-                <div>
-                  <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                    {t('auth.password')}
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
-                    placeholder={'••••••••（' + t('auth.passwordHint') + '）'}
-                  />
-                </div>
-              )}
-
-              {/* 邮箱（所有模式都显示，注册且强制验证时必填，否则选填） */}
-              <div>
-                <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                  {t('auth.email')}
-                  {mode === 'register' && !requireEmailVerification && (
-                    <span className="text-textMuted ml-1">{t('auth.emailOptional')}</span>
+                  {/* 发送验证码（强制验证或已填邮箱时显示） */}
+                  {(requireEmailVerification || email) && (
+                    <button
+                      type="button"
+                      onClick={handleSendCode}
+                      disabled={!email || sendCooldown > 0}
+                      className="w-full py-2 text-sm font-medium rounded-xl border border-primary-500/30 text-primary-500 hover:bg-primary-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {sendCooldown > 0
+                        ? t('auth.codeResendIn').replace('{seconds}', String(sendCooldown))
+                        : codeSent ? t('auth.codeSent') : t('auth.sendCode')
+                      }
+                    </button>
                   )}
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => { setEmail(e.target.value); setCodeSent(false) }}
-                    required={showEmailFields}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
-                    placeholder={t('auth.emailPlaceholder')}
-                  />
-                </div>
-              </div>
 
-              {/* 发送验证码按钮（需要邮箱验证时显示） */}
-              {(showEmailFields || (mode === 'register' && email)) && (
-                <button
-                  type="button"
-                  onClick={handleSendCode}
-                  disabled={!email || sendCooldown > 0}
-                  className="w-full py-2 text-sm font-medium rounded-xl border border-primary-500/30 text-primary-500 hover:bg-primary-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  {sendCooldown > 0
-                    ? t('auth.codeResendIn').replace('{seconds}', String(sendCooldown))
-                    : codeSent ? t('auth.codeSent') : t('auth.sendCode')
-                  }
-                </button>
+                  {/* 验证码输入 */}
+                  {codeSent && (
+                    <div>
+                      <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                        {t('auth.codePlaceholder')}
+                      </label>
+                      <input
+                        type="text" inputMode="numeric"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.slice(0, 6))}
+                        required maxLength={6} minLength={6}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 transition-shadow"
+                        placeholder="000000"
+                      />
+                    </div>
+                  )}
+
+                  {/* 用户名 */}
+                  <div>
+                    <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                      {t('auth.username')}
+                    </label>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required minLength={2}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                      placeholder={t('auth.usernamePlaceholder')}
+                    />
+                  </div>
+
+                  {/* 密码 */}
+                  <div>
+                    <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                      {t('auth.password')}
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required minLength={6}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                      placeholder={'••••••••（' + t('auth.passwordHint') + '）'}
+                    />
+                  </div>
+                </>
               )}
 
-              {/* 验证码输入（发送过验证码后显示） */}
-              {codeSent && (
-                <div>
-                  <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
-                    {t('auth.codePlaceholder')}
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.slice(0, 6))}
-                    required
-                    maxLength={6}
-                    minLength={6}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 transition-shadow"
-                    placeholder="000000"
-                  />
-                </div>
+              {/* ── 登录模式 ── */}
+              {isLogin && (
+                <>
+                  {/* 直接登录：统一输入框（用户名或邮箱） */}
+                  {loginMethod === 'direct' && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                          {t('auth.username')} / {t('auth.email')}
+                        </label>
+                        <input
+                          type="text"
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          required
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                          placeholder={t('auth.usernamePlaceholder')}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                          {t('auth.password')}
+                        </label>
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required minLength={6}
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                          placeholder={'••••••••（' + t('auth.passwordHint') + '）'}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* 邮箱+验证码登录 */}
+                  {loginMethod === 'email_code' && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                          {t('auth.email')}
+                        </label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => { setEmail(e.target.value); setCodeSent(false) }}
+                          required
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 text-sm transition-shadow"
+                          placeholder={t('auth.emailPlaceholder')}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSendCode}
+                        disabled={!email || sendCooldown > 0}
+                        className="w-full py-2 text-sm font-medium rounded-xl border border-primary-500/30 text-primary-500 hover:bg-primary-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {sendCooldown > 0
+                          ? t('auth.codeResendIn').replace('{seconds}', String(sendCooldown))
+                          : codeSent ? t('auth.codeSent') : t('auth.sendCode')
+                        }
+                      </button>
+                      {codeSent && (
+                        <div>
+                          <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                            {t('auth.codePlaceholder')}
+                          </label>
+                          <input
+                            type="text" inputMode="numeric"
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.slice(0, 6))}
+                            required maxLength={6} minLength={6}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 transition-shadow"
+                            placeholder="000000"
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
               )}
 
               {/* 错误 */}
@@ -279,7 +356,7 @@ export default function LoginPage() {
               {/* 提交 */}
               <button
                 type="submit"
-                disabled={loading || (showDirectFields && (!username || !password)) || (loginMethod === 'email_code' && (!email || !code)) || (mode === 'register' && !username)}
+                disabled={loading || (isLogin && loginMethod === 'direct' && (!username || !password)) || (isLogin && loginMethod === 'email_code' && (!email || !code)) || (isRegister && !username)}
                 className="w-full py-2.5 bg-primary-500 hover:bg-primary-400 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg shadow-primary-500/20 hover:shadow-primary-400/30 mt-2"
               >
                 {loading ? (
@@ -287,7 +364,7 @@ export default function LoginPage() {
                     <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     {t('auth.verifying')}
                   </span>
-                ) : mode === 'login' ? t('auth.enterPlatform') : t('auth.createAccount')}
+                ) : isLogin ? t('auth.enterPlatform') : t('auth.createAccount')}
               </button>
             </form>
 

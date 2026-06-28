@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class EndTurn(ToolPlugin):
     name = "end_turn"
     description = (
-        "结束当前回复轮次。当你决定不再继续对话时调用此工具——"
-        "例如用户让你停下、你不确定该说什么、或已完成任务无需再回复时。"
-        "如果想结束并同时切换状态，可设置 set_state。"
+        "结束当前回复轮次，把发言权交还给对方。这是正常的收尾动作，不是终结对话——"
+        "就像说完话把话筒递回去。发完消息后和 send_message 放在同一个 tool_calls 里一起调用，省一轮 API。"
+        "如果同时想切换状态，可设置 set_state。"
     )
     segment = "self_management"
     parameters = {
-        "reason": {"type": "string", "description": "结束本轮的原因（如\"用户让我停下\"）"},
+        "reason": {"type": "string", "description": "结束本轮的原因（可省略，如\"说完了\"）"},
         "set_state": {
             "type": "string", "enum": ["active", "offline"],
             "description": "结束后的状态。默认不改变当前状态，若用户要求停下可设为 offline。",

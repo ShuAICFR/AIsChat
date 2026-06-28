@@ -6,6 +6,7 @@ import { api } from '../api/client'
 import { AI_TYPE_LABEL } from '../constants'
 import { fmtTokenNum } from '../utils/format'
 import { getStatusTextStyle, STATUS_COLORS, BG_SURFACE_LIGHT, BG_SURFACE_DARK } from '../utils/statusColor'
+import VerificationCodeInput from '../components/VerificationCodeInput'
 import { useTheme } from '../context/ThemeContext'
 import {
   User, Settings, LogOut, Shield,
@@ -760,14 +761,11 @@ export default function MePage() {
               </button>
               {bindCodeSent && (
                 <div>
-                  <label className="block text-xs text-textSecondary mb-1">{t('auth.codePlaceholder')}</label>
-                  <input
-                    type="text" inputMode="numeric"
+                  <label className="block text-xs text-textSecondary mb-2 text-center">{t('auth.codePlaceholder')}</label>
+                  <VerificationCodeInput
                     value={bindCode}
-                    onChange={e => setBindCode(e.target.value.slice(0, 6))}
-                    maxLength={6} minLength={6}
-                    className="w-full px-3 py-2 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-                    placeholder="000000"
+                    onChange={setBindCode}
+                    disabled={bindLoading}
                   />
                 </div>
               )}

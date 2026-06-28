@@ -50,6 +50,8 @@ async def get_settings(db: AsyncSession) -> dict:
         "login_providers": getattr(row, "login_providers", ["direct"]) or ["direct"],
         "require_email_verification": getattr(row, "require_email_verification", False) or False,
         "smtp_config": getattr(row, "smtp_config", None),
+        "email_templates": getattr(row, "email_templates", None),
+        "provider_config": getattr(row, "provider_config", None),
     }
 
 
@@ -70,8 +72,8 @@ async def update_settings(
     row = await _get_or_create(db)
 
     if default_language is not None:
-        if default_language not in ("zh", "en"):
-            raise ValueError("不支持的语言，仅支持 zh / en")
+        if default_language not in ("zh", "en", "ja"):
+            raise ValueError("不支持的语言，仅支持 zh / en / ja")
         row.default_language = default_language
 
     if default_platform_credit is not None:

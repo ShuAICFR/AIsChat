@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
 import { overrideLangForSetup } from '../i18n/I18nContext'
+import { type Lang, DEFAULT_LANG, LANGUAGES } from '../i18n/languages'
 import { api } from '../api/client'
 import { Globe, Check } from 'lucide-react'
 
-type Lang = 'zh' | 'en'
-
 export default function SetupPage() {
   const [step, setStep] = useState<1 | 2>(1)
-  const [selectedLang, setSelectedLang] = useState<Lang>('en')
+  const [selectedLang, setSelectedLang] = useState<Lang>(DEFAULT_LANG)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const { refreshUser } = useAuth()
@@ -42,10 +41,7 @@ export default function SetupPage() {
     }
   }
 
-  const langOptions: { value: Lang; label: string; desc: string }[] = [
-    { value: 'zh', label: '中文（简体）', desc: 'Chinese (Simplified)' },
-    { value: 'en', label: 'English', desc: '英语 / English' },
-  ]
+  const selectedMeta = LANGUAGES.find(l => l.code === selectedLang)
 
   return (
     <div className="h-full flex items-center justify-center bg-canvas">
@@ -76,26 +72,26 @@ export default function SetupPage() {
               <p className="text-sm text-textMuted mb-6">{t('setup.step1Desc')}</p>
 
               <div className="space-y-3">
-                {langOptions.map((opt) => (
+                {LANGUAGES.map((l) => (
                   <button
-                    key={opt.value}
-                    onClick={() => handleSelectLang(opt.value)}
+                    key={l.code}
+                    onClick={() => handleSelectLang(l.code)}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all duration-200 ${
-                      selectedLang === opt.value
+                      selectedLang === l.code
                         ? 'border-primary-400 bg-primary-500/10 shadow-sm shadow-primary-500/10'
                         : 'border-border hover:border-borderHover bg-canvas'
                     }`}
                   >
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      selectedLang === opt.value
+                      selectedLang === l.code
                         ? 'border-primary-400 bg-primary-400'
                         : 'border-border'
                     }`}>
-                      {selectedLang === opt.value && <Check size={12} className="text-white" />}
+                      {selectedLang === l.code && <Check size={12} className="text-white" />}
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-textPrimary">{opt.label}</div>
-                      <div className="text-xs text-textMuted">{opt.desc}</div>
+                      <div className="text-sm font-medium text-textPrimary">{l.nativeName}</div>
+                      <div className="text-xs text-textMuted">{t(l.i18nKey)}</div>
                     </div>
                   </button>
                 ))}
@@ -119,7 +115,7 @@ export default function SetupPage() {
               <div className="bg-canvas rounded-xl p-4 border border-border mb-6">
                 <div className="text-xs text-textMuted mb-1">{t('setup.selectedLang')}</div>
                 <div className="text-sm font-medium text-textPrimary">
-                  {selectedLang === 'zh' ? '中文（简体）' : 'English'}
+                  {selectedMeta?.nativeName ?? 'English'}
                 </div>
               </div>
 

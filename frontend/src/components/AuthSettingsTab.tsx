@@ -1,33 +1,52 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
-import { Mail, Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { Mail, Shield, CheckCircle, XCircle, Loader2, Plus, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import ProviderPresetSelector from './ProviderPresetSelector'
+
+interface SmtpConfigItem {
+  host: string
+  port: number
+  username: string
+  from_email: string
+  from_name: string
+  use_tls: boolean
+  is_active: boolean
+  priority: number
+  has_password: boolean
+}
+
+interface SmtpFormItem extends SmtpConfigItem {
+  password: string
+}
 
 interface AuthSettingsData {
   require_email_verification: boolean
   login_providers: string[]
   smtp_configured: boolean
-  smtp_config: {
-    host: string
-    port: number
-    username: string
-    from_email: string
-    from_name: string
-    use_tls: boolean
-    has_password: boolean
-  } | null
+  smtp_config: SmtpConfigItem | null
+  smtp_configs: SmtpConfigItem[]
 }
 
-interface SmtpFormData {
-  host: string
-  port: number
-  username: string
-  password: string
-  from_email: string
-  from_name: string
-  use_tls: boolean
+interface EmailTemplate {
+  subject: string
+  body_html: string
 }
+
+interface EmailTemplatesData {
+  [lang: string]: Record<string, EmailTemplate>
+}
+
+const PURPOSES = [
+  { key: 'register', labelKey: 'auth.register' },
+  { key: 'login', labelKey: 'auth.login' },
+  { key: 'rebind', labelKey: 'auth.rebindEmail' },
+]
+
+const LANGS: { key: string; label: string }[] = [
+  { key: 'zh', label: '中文' },
+  { key: 'en', label: 'English' },
+]
 
 const PROVIDER_OPTIONS = [
   { key: 'direct', labelKey: 'admin.loginProviderDirect' },
@@ -36,68 +55,145 @@ const PROVIDER_OPTIONS = [
   { key: 'qq', labelKey: 'admin.loginProviderQQ' },
 ]
 
+function emptySmtpForm(): SmtpFormItem {
+  return {
+    host: '', port: 587, username: '', password: '',
+    from_email: '', from_name: 'AIsChat', use_tls: true,
+    is_active: true, priority: 0, has_password: false,
+  }
+}
+
+function cfgToForm(cfg: SmtpConfigItem): SmtpFormItem {
+  return { ...cfg, password: '' }
+}
+
 export default function AuthSettingsTab() {
   const t = useT()
   const [settings, setSettings] = useState<AuthSettingsData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // SMTP 表单
-  const [smtp, setSmtp] = useState<SmtpFormData>({
-    host: '', port: 587, username: '', password: '',
-    from_email: '', from_name: 'AIsChat', use_tls: true,
-  })
+  // SMTP 多配置表单
+  const [smtpConfigs, setSmtpConfigs] = useState<SmtpFormItem[]>([emptySmtpForm()])
   const [smtpSaving, setSmtpSaving] = useState(false)
-  const [smtpTesting, setSmtpTesting] = useState(false)
-  const [smtpTestResult, setSmtpTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [smtpTesting, setSmtpTesting] = useState<number | null>(null) // 正在测试的索引
+  const [smtpTestResults, setSmtpTestResults] = useState<Record<number, { ok: boolean; msg: string }>>({})
 
-  // 验证开关 + 登录方式
+  // 认证设置
   const [reqVerification, setReqVerification] = useState(false)
   const [providers, setProviders] = useState<string[]>(['direct'])
   const [authSaving, setAuthSaving] = useState(false)
 
-  const loadSettings = async () => {
+  // 邮件模板
+  const [templates, setTemplates] = useState<EmailTemplatesData | null>(null)
+  const [templateLang, setTemplateLang] = useState('zh')
+  const [templatePurpose, setTemplatePurpose] = useState('register')
+  const [editSubject, setEditSubject] = useState('')
+  const [editBody, setEditBody] = useState('')
+  const [tplSaving, setTplSaving] = useState(false)
+  const [tplLoading, setTplLoading] = useState(false)
+
+  const loadSettings = useCallback(async () => {
     try {
       const data = await api.get<AuthSettingsData>('/admin/auth-settings')
       setSettings(data)
       setReqVerification(data.require_email_verification)
       setProviders(data.login_providers)
-      if (data.smtp_config) {
-        setSmtp({
-          host: data.smtp_config.host || '',
-          port: data.smtp_config.port || 587,
-          username: data.smtp_config.username || '',
-          password: '',
-          from_email: data.smtp_config.from_email || '',
-          from_name: data.smtp_config.from_name || 'AIsChat',
-          use_tls: data.smtp_config.use_tls !== false,
-        })
+      if (data.smtp_configs && data.smtp_configs.length > 0) {
+        setSmtpConfigs(data.smtp_configs.map(cfgToForm))
+      } else if (data.smtp_config) {
+        setSmtpConfigs([cfgToForm(data.smtp_config)])
       }
     } catch { /* */ } finally { setLoading(false) }
+  }, [])
+
+  const loadTemplates = useCallback(async () => {
+    setTplLoading(true)
+    try {
+      const data = await api.get<{ templates: EmailTemplatesData }>('/admin/email-templates')
+      setTemplates(data.templates)
+    } catch { /* */ } finally { setTplLoading(false) }
+  }, [])
+
+  useEffect(() => { loadSettings(); loadTemplates() }, [loadSettings, loadTemplates])
+
+  // 切换模板语言/用途时更新编辑字段
+  useEffect(() => {
+    if (!templates) return
+    const tpl = templates[templateLang]?.[templatePurpose]
+    if (tpl) {
+      setEditSubject(tpl.subject)
+      setEditBody(tpl.body_html)
+    }
+  }, [templates, templateLang, templatePurpose])
+
+  // ── SMTP 操作 ──
+
+  const updateConfig = (index: number, patch: Partial<SmtpFormItem>) => {
+    setSmtpConfigs(prev => prev.map((c, i) => i === index ? { ...c, ...patch } : c))
   }
 
-  useEffect(() => { loadSettings() }, [])
+  const addConfig = () => {
+    setSmtpConfigs(prev => [...prev, emptySmtpForm()])
+  }
+
+  const removeConfig = (index: number) => {
+    if (smtpConfigs.length <= 1) return
+    setSmtpConfigs(prev => prev.filter((_, i) => i !== index))
+    setSmtpTestResults(prev => {
+      const next = { ...prev }
+      delete next[index]
+      return next
+    })
+  }
+
+  const moveConfig = (index: number, dir: -1 | 1) => {
+    const newIndex = index + dir
+    if (newIndex < 0 || newIndex >= smtpConfigs.length) return
+    setSmtpConfigs(prev => {
+      const next = [...prev]
+      const tmp = next[index]
+      next[index] = next[newIndex]
+      next[newIndex] = tmp
+      // 同步更新 priority
+      next[index] = { ...next[index], priority: index }
+      next[newIndex] = { ...next[newIndex], priority: newIndex }
+      return next
+    })
+  }
 
   const handleSaveSmtp = async () => {
     setSmtpSaving(true)
-    setSmtpTestResult(null)
+    setSmtpTestResults({})
     try {
-      await api.put('/admin/smtp-config', smtp)
+      await api.put('/admin/smtp-configs', {
+        configs: smtpConfigs.map((c, i) => ({
+          ...c, priority: i,
+        })),
+      })
       await loadSettings()
     } catch (err: any) {
-      setSmtpTestResult({ ok: false, msg: err.message || 'Save failed' })
+      // error handled via test results
     } finally { setSmtpSaving(false) }
   }
 
-  const handleTestSmtp = async () => {
-    setSmtpTesting(true)
-    setSmtpTestResult(null)
+  const handleTestSmtp = async (index: number) => {
+    setSmtpTesting(index)
+    setSmtpTestResults(prev => ({ ...prev, [index]: undefined as any }))
     try {
-      const res = await api.post<{ success: boolean; message: string }>('/admin/smtp-test', smtp)
-      setSmtpTestResult({ ok: res.success, msg: res.message })
+      const cfg = smtpConfigs[index]
+      const res = await api.post<{ success: boolean; message: string }>(
+        `/admin/smtp-configs/test/${index}`,
+        { host: cfg.host, port: cfg.port, username: cfg.username,
+          password: cfg.password || undefined,
+          from_email: cfg.from_email, from_name: cfg.from_name, use_tls: cfg.use_tls },
+      )
+      setSmtpTestResults(prev => ({ ...prev, [index]: { ok: res.success, msg: res.message } }))
     } catch (err: any) {
-      setSmtpTestResult({ ok: false, msg: err.message || 'Test failed' })
-    } finally { setSmtpTesting(false) }
+      setSmtpTestResults(prev => ({ ...prev, [index]: { ok: false, msg: err.message || 'Test failed' } }))
+    } finally { setSmtpTesting(null) }
   }
+
+  // ── 认证设置 ──
 
   const handleSaveAuth = async () => {
     if (providers.length < 1) return
@@ -113,11 +209,37 @@ export default function AuthSettingsTab() {
 
   const toggleProvider = (key: string) => {
     if (providers.includes(key)) {
-      if (providers.length <= 1) return // 至少保留一种
+      if (providers.length <= 1) return
       setProviders(prev => prev.filter(p => p !== key))
     } else {
       setProviders(prev => [...prev, key])
     }
+  }
+
+  // ── 邮件模板操作 ──
+
+  const handleSaveTemplates = async () => {
+    if (!templates) return
+    setTplSaving(true)
+    try {
+      const updated: Record<string, Record<string, EmailTemplate>> = {
+        zh: { ...templates.zh },
+        en: { ...templates.en },
+      }
+      updated[templateLang] = {
+        ...updated[templateLang],
+        [templatePurpose]: { subject: editSubject, body_html: editBody },
+      }
+      await api.put('/admin/email-templates', { templates: updated })
+      setTemplates(updated as EmailTemplatesData)
+    } catch { /* */ } finally { setTplSaving(false) }
+  }
+
+  const handleResetTemplates = async () => {
+    try {
+      await api.post('/admin/email-templates/reset')
+      await loadTemplates()
+    } catch { /* */ }
   }
 
   if (loading) {
@@ -130,103 +252,269 @@ export default function AuthSettingsTab() {
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* ── SMTP 配置 ── */}
+      {/* ── SMTP 多配置管理 ── */}
       <section className="bg-surface border border-border rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2 mb-1">
-          <Mail size={16} className="text-primary-400" />
-          {t('admin.smtpConfig')}
-        </h3>
-        <p className="text-xs text-textMuted mb-4">{t('admin.authDesc')}</p>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpHost')}</label>
-            <input
-              type="text" value={smtp.host}
-              onChange={e => setSmtp({ ...smtp, host: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-              placeholder="smtp.example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpPort')}</label>
-            <input
-              type="number" value={smtp.port}
-              onChange={e => setSmtp({ ...smtp, port: parseInt(e.target.value) || 587 })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpUsername')}</label>
-            <input
-              type="text" value={smtp.username}
-              onChange={e => setSmtp({ ...smtp, username: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpPassword')}</label>
-            <input
-              type="password" value={smtp.password}
-              onChange={e => setSmtp({ ...smtp, password: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-              placeholder={settings?.smtp_config?.has_password ? t('admin.smtpPasswordPlaceholder') : ''}
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpFromEmail')}</label>
-            <input
-              type="email" value={smtp.from_email}
-              onChange={e => setSmtp({ ...smtp, from_email: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-              placeholder="noreply@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-textSecondary mb-1">{t('admin.smtpFromName')}</label>
-            <input
-              type="text" value={smtp.from_name}
-              onChange={e => setSmtp({ ...smtp, from_name: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mt-3">
-          <input
-            type="checkbox" checked={smtp.use_tls}
-            onChange={e => setSmtp({ ...smtp, use_tls: e.target.checked })}
-            id="smtp-tls" className="rounded"
-          />
-          <label htmlFor="smtp-tls" className="text-xs text-textSecondary">{t('admin.smtpUseTls')}</label>
-        </div>
-
-        {/* 测试结果 */}
-        {smtpTestResult && (
-          <div className={`mt-3 text-xs rounded-lg px-3 py-2 flex items-center gap-2 ${
-            smtpTestResult.ok ? 'bg-mint-500/10 text-mint-400 border border-mint-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-          }`}>
-            {smtpTestResult.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
-            {smtpTestResult.msg}
-          </div>
-        )}
-
-        <div className="flex gap-2 mt-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2">
+            <Mail size={16} className="text-primary-400" />
+            {t('admin.smtpConfig')}
+          </h3>
           <button
-            onClick={handleTestSmtp}
-            disabled={!smtp.host || !smtp.username || smtpTesting}
-            className="px-4 py-2 text-sm rounded-lg border border-border text-textSecondary hover:text-textPrimary hover:bg-elevated disabled:opacity-30 transition-colors"
+            onClick={addConfig}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-elevated text-textSecondary transition-colors"
           >
-            {smtpTesting ? t('admin.smtpTesting') : t('admin.smtpTest')}
+            <Plus size={14} />
+            {t('admin.smtpAdd')}
           </button>
+        </div>
+
+        <div className="space-y-3">
+          {smtpConfigs.map((cfg, index) => {
+            const testResult = smtpTestResults[index]
+            const isTesting = smtpTesting === index
+            return (
+              <div
+                key={index}
+                className={`border rounded-lg p-4 transition-colors ${
+                  cfg.is_active
+                    ? 'border-border bg-canvas/50'
+                    : 'border-border/50 bg-canvas/30 opacity-60'
+                }`}
+              >
+                {/* 头部：序号 + 主机 + 启用开关 + 操作按钮 */}
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs font-mono text-textMuted">#{index + 1}</span>
+                  <input
+                    type="text"
+                    value={cfg.host}
+                    onChange={e => updateConfig(index, { host: e.target.value })}
+                    className="flex-1 min-w-0 px-2 py-1 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    placeholder="smtp.example.com"
+                  />
+                  {/* 启用/停用 */}
+                  <button
+                    onClick={() => updateConfig(index, { is_active: !cfg.is_active })}
+                    className={`px-2 py-0.5 text-[10px] rounded-full font-medium transition-colors ${
+                      cfg.is_active
+                        ? 'bg-mint-500/10 text-mint-400 border border-mint-500/20'
+                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                    }`}
+                  >
+                    {cfg.is_active ? t('admin.smtpActive') : t('admin.smtpInactive')}
+                  </button>
+                  {/* 上移/下移 */}
+                  <div className="flex gap-0.5">
+                    <button
+                      onClick={() => moveConfig(index, -1)}
+                      disabled={index === 0}
+                      className="p-0.5 rounded text-textMuted hover:text-textPrimary disabled:opacity-20 transition-colors"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button
+                      onClick={() => moveConfig(index, 1)}
+                      disabled={index === smtpConfigs.length - 1}
+                      className="p-0.5 rounded text-textMuted hover:text-textPrimary disabled:opacity-20 transition-colors"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                  </div>
+                  {/* 删除 */}
+                  <button
+                    onClick={() => removeConfig(index)}
+                    disabled={smtpConfigs.length <= 1}
+                    className="p-1 rounded text-textMuted hover:text-rose-400 disabled:opacity-20 transition-colors"
+                    title={t('admin.smtpDelete')}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {/* 表单字段 */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-textMuted mb-0.5">{t('admin.smtpPort')}</label>
+                    <input
+                      type="number" value={cfg.port}
+                      onChange={e => updateConfig(index, { port: parseInt(e.target.value) || 587 })}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-textMuted mb-0.5">{t('admin.smtpUsername')}</label>
+                    <input
+                      type="text" value={cfg.username}
+                      onChange={e => updateConfig(index, { username: e.target.value })}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-textMuted mb-0.5">{t('admin.smtpPassword')}</label>
+                    <input
+                      type="password" value={cfg.password}
+                      onChange={e => updateConfig(index, { password: e.target.value })}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                      placeholder={cfg.has_password ? t('admin.smtpPasswordPlaceholder') : ''}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-textMuted mb-0.5">{t('admin.smtpFromEmail')}</label>
+                    <input
+                      type="email" value={cfg.from_email}
+                      onChange={e => updateConfig(index, { from_email: e.target.value })}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                      placeholder="noreply@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-textMuted mb-0.5">{t('admin.smtpFromName')}</label>
+                    <input
+                      type="text" value={cfg.from_name}
+                      onChange={e => updateConfig(index, { from_name: e.target.value })}
+                      className="w-full px-2 py-1.5 text-xs rounded border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-1 focus:ring-primary-500/50"
+                    />
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox" checked={cfg.use_tls}
+                        onChange={e => updateConfig(index, { use_tls: e.target.checked })}
+                        className="rounded"
+                      />
+                      <span className="text-[10px] text-textMuted">{t('admin.smtpUseTls')}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* 测试结果 + 按钮 */}
+                <div className="flex items-center gap-2 mt-3">
+                  <button
+                    onClick={() => handleTestSmtp(index)}
+                    disabled={!cfg.host || !cfg.username || isTesting}
+                    className="px-3 py-1.5 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary hover:bg-elevated disabled:opacity-30 transition-colors"
+                  >
+                    {isTesting ? t('admin.smtpTesting') : t('admin.smtpTest')}
+                  </button>
+                  {testResult && (
+                    <span className={`text-xs flex items-center gap-1 ${
+                      testResult.ok ? 'text-mint-400' : 'text-rose-400'
+                    }`}>
+                      {testResult.ok ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                      {testResult.ok ? t('admin.smtpTestSuccess') : testResult.msg.slice(0, 60)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="flex justify-between items-center mt-4">
+          <p className="text-[10px] text-textMuted">{t('admin.smtpPriority')}</p>
           <button
             onClick={handleSaveSmtp}
-            disabled={!smtp.host || !smtp.from_email || smtpSaving}
+            disabled={smtpSaving || smtpConfigs.length < 1}
             className="px-4 py-2 text-sm rounded-lg bg-primary-500 hover:bg-primary-400 disabled:opacity-30 text-white font-medium transition-colors"
           >
             {smtpSaving ? t('common.saving') : t('common.save')}
           </button>
         </div>
+      </section>
+
+      {/* ── 邮件模板编辑 ── */}
+      <section className="bg-surface border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-textPrimary flex items-center gap-2 mb-4">
+          <Mail size={16} className="text-amber-400" />
+          {t('admin.emailTemplates')}
+        </h3>
+
+        {tplLoading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 size={20} className="animate-spin text-textMuted" />
+          </div>
+        ) : templates ? (
+          <>
+            {/* 语言 Tab */}
+            <div className="flex gap-1 mb-3">
+              {LANGS.map(l => (
+                <button
+                  key={l.key}
+                  onClick={() => setTemplateLang(l.key)}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
+                    templateLang === l.key
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-canvas border border-border text-textMuted hover:text-textSecondary'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+
+            {/* 用途 Tab */}
+            <div className="flex gap-1 mb-4">
+              {PURPOSES.map(p => (
+                <button
+                  key={p.key}
+                  onClick={() => setTemplatePurpose(p.key)}
+                  className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
+                    templatePurpose === p.key
+                      ? 'bg-primary-500/10 border border-primary-500/30 text-primary-500'
+                      : 'bg-canvas border border-border text-textMuted hover:text-textSecondary'
+                  }`}
+                >
+                  {t(p.labelKey)}
+                </button>
+              ))}
+            </div>
+
+            {/* 主题 */}
+            <div className="mb-3">
+              <label className="block text-xs text-textSecondary mb-1">{t('admin.emailTemplateSubject')}</label>
+              <input
+                type="text"
+                value={editSubject}
+                onChange={e => setEditSubject(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              />
+            </div>
+
+            {/* HTML 正文 */}
+            <div className="mb-3">
+              <label className="block text-xs text-textSecondary mb-1">{t('admin.emailTemplateBody')}</label>
+              <textarea
+                value={editBody}
+                onChange={e => setEditBody(e.target.value)}
+                rows={10}
+                className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-canvas text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-y"
+              />
+            </div>
+
+            {/* 变量提示 */}
+            <p className="text-[10px] text-textMuted mb-4 bg-canvas rounded-lg px-3 py-2 border border-border/50">
+              💡 {t('admin.emailTemplateVarHint')}
+            </p>
+
+            {/* 按钮 */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleResetTemplates}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border text-textSecondary hover:text-rose-400 transition-colors"
+              >
+                {t('admin.emailTemplateResetAll')}
+              </button>
+              <button
+                onClick={handleSaveTemplates}
+                disabled={tplSaving}
+                className="px-4 py-1.5 text-xs rounded-lg bg-primary-500 hover:bg-primary-400 disabled:opacity-30 text-white font-medium transition-colors"
+              >
+                {tplSaving ? t('common.saving') : t('admin.emailTemplatesSave')}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-textMuted py-4 text-center">{t('common.loading')}</p>
+        )}
       </section>
 
       {/* ── LLM 厂商预设 ── */}

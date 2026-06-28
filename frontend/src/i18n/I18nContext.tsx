@@ -1,8 +1,7 @@
 import { createContext, useContext, useCallback, useState, useEffect, type ReactNode } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getTranslation } from './translations'
-
-type Lang = 'zh' | 'en'
+import { type Lang, DEFAULT_LANG, isValidLang } from './languages'
 
 interface I18nContextType {
   lang: Lang
@@ -10,7 +9,7 @@ interface I18nContextType {
 }
 
 const I18nContext = createContext<I18nContextType>({
-  lang: 'en',
+  lang: DEFAULT_LANG,
   t: (path: string) => path,
 })
 
@@ -36,18 +35,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const resolveLang = (): Lang => {
     // 1. 设置向导临时覆盖
     const override = localStorage.getItem('i18n_override_lang')
-    if (override === 'en' || override === 'zh') return override
+    if (isValidLang(override)) return override
 
     // 2. 已登录用户的语言设置
-    if (user?.language === 'en') return 'en'
-    if (user?.language === 'zh') return 'zh'
+    if (isValidLang(user?.language)) return user.language
 
     // 3. localStorage 缓存的全局默认语言（登录页获取）
     const cached = localStorage.getItem('i18n_cached_lang')
-    if (cached === 'en' || cached === 'zh') return cached
+    if (cached && isValidLang(cached)) return cached
 
-    // 4. 硬回退：英文（系统全局默认）
-    return 'en'
+    // 4. 硬回退：系统全局默认语言
+    return DEFAULT_LANG
   }
 
   const [lang, setLang] = useState<Lang>(resolveLang)

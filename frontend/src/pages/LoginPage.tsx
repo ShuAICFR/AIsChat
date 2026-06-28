@@ -5,6 +5,7 @@ import { useT } from '../i18n/I18nContext'
 import { cacheLangForUnauth } from '../i18n/I18nContext'
 import { api } from '../api/client'
 import { MessageCircle, Mail } from 'lucide-react'
+import VerificationCodeInput from '../components/VerificationCodeInput'
 
 /** 登录方式对应的 provider 标签 */
 const METHOD_LABELS: Record<string, string> = {
@@ -218,16 +219,12 @@ export default function LoginPage() {
                   {/* 验证码输入 */}
                   {codeSent && (
                     <div>
-                      <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                      <label className="block text-xs font-medium text-textSecondary mb-2 ml-0.5 text-center">
                         {t('auth.codePlaceholder')}
                       </label>
-                      <input
-                        type="text" inputMode="numeric"
+                      <VerificationCodeInput
                         value={code}
-                        onChange={(e) => setCode(e.target.value.slice(0, 6))}
-                        required maxLength={6} minLength={6}
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 transition-shadow"
-                        placeholder="000000"
+                        onChange={setCode}
                       />
                     </div>
                   )}
@@ -328,16 +325,12 @@ export default function LoginPage() {
                       </button>
                       {codeSent && (
                         <div>
-                          <label className="block text-xs font-medium text-textSecondary mb-1.5 ml-0.5">
+                          <label className="block text-xs font-medium text-textSecondary mb-2 ml-0.5 text-center">
                             {t('auth.codePlaceholder')}
                           </label>
-                          <input
-                            type="text" inputMode="numeric"
+                          <VerificationCodeInput
                             value={code}
-                            onChange={(e) => setCode(e.target.value.slice(0, 6))}
-                            required maxLength={6} minLength={6}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/60 transition-shadow"
-                            placeholder="000000"
+                            onChange={setCode}
                           />
                         </div>
                       )}

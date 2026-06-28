@@ -53,3 +53,54 @@ class AuthSettingsResponse(BaseModel):
     login_providers: list[str] = ["direct"]
     smtp_configured: bool = False
     smtp_config: dict | None = None  # 密码已脱敏
+    smtp_configs: list[dict] = []    # v1.0.0 多 SMTP（密码已脱敏）
+
+
+# ── v1.0.0 多 SMTP 容灾 ──
+
+class SmtpConfigItem(BaseModel):
+    """单个 SMTP 配置项"""
+    host: str = Field(..., min_length=1, max_length=255)
+    port: int = Field(587, ge=1, le=65535)
+    username: str = Field("", max_length=255)
+    password: str | None = Field(None, description="留空保持现网不变")
+    from_email: str = Field(..., max_length=255)
+    from_name: str = Field("AIsChat", max_length=100)
+    use_tls: bool = True
+    is_active: bool = True
+    priority: int = Field(0, ge=0)
+
+
+class SmtpConfigsRequest(BaseModel):
+    """多 SMTP 配置批量保存请求"""
+    configs: list[SmtpConfigItem] = Field(..., min_length=1)
+
+
+class SmtpTestRequest(BaseModel):
+    """测试单个 SMTP 配置"""
+    host: str = Field(..., min_length=1, max_length=255)
+    port: int = Field(587, ge=1, le=65535)
+    username: str = Field("", max_length=255)
+    password: str | None = Field(None)
+    from_email: str = Field(..., max_length=255)
+    from_name: str = Field("AIsChat", max_length=100)
+    use_tls: bool = True
+
+
+# ── v1.0.0 自定义邮件模板 ──
+
+class EmailTemplateItem(BaseModel):
+    """单个邮件模板（subject + body_html）"""
+    subject: str
+    body_html: str
+
+
+class EmailTemplatesData(BaseModel):
+    """邮件模板数据（按语言 + 用途组织）"""
+    zh: dict[str, EmailTemplateItem] = {}  # key: register/login/rebind
+    en: dict[str, EmailTemplateItem] = {}
+
+
+class EmailTemplatesRequest(BaseModel):
+    """邮件模板保存请求"""
+    templates: EmailTemplatesData

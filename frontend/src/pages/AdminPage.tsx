@@ -5,6 +5,7 @@ import { Users, Bot, MessageCircle, Ticket, FileText, Activity, Terminal, Databa
 import { MANUAL_URL, ADMIN_MANUAL_URL } from '../constants'
 import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
+import { LANGUAGES } from '../i18n/languages'
 import FederationTab from '../components/FederationTab'
 import ConversationLogTab from '../components/ConversationLogTab'
 import UsageDashboardTab from '../components/UsageDashboardTab'
@@ -1433,8 +1434,9 @@ function SystemSettingsTab() {
           }}
           className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary"
         >
-          <option value="zh">{t('settings.chinese')}</option>
-          <option value="en">{t('settings.english')}</option>
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>{t(l.i18nKey)}</option>
+          ))}
         </select>
       </div>
 

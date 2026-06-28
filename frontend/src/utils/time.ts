@@ -1,3 +1,5 @@
+import { type Lang, getLangMeta } from '../i18n/languages'
+
 /**
  * 解析后端时间字符串（后端 DateTime 列无 timezone=True，Pydantic 序列化为 naive UTC）。
  * 对无时区标记的字符串追加 'Z'，避免 JavaScript 将其误判为本地时间。
@@ -18,7 +20,7 @@ function parseServerDate(dateStr: string): Date {
  */
 export function formatRelativeTime(
   dateStr: string | null | undefined,
-  lang: 'zh' | 'en' = 'zh'
+  lang: Lang = 'zh'
 ): string {
   if (!dateStr) return ''
 
@@ -30,9 +32,11 @@ export function formatRelativeTime(
   // 负数修正：服务器时间略微超前客户端时，新消息 diffDays 可能为 -1
   const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)))
 
+  const meta = getLangMeta(lang)
+
   // 今天：显示时间 HH:MM
   if (diffDays === 0) {
-    return date.toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', {
+    return date.toLocaleTimeString(meta.locale, {
       hour: '2-digit',
       minute: '2-digit',
     })
@@ -40,18 +44,18 @@ export function formatRelativeTime(
 
   // 昨天
   if (diffDays === 1) {
-    return lang === 'zh' ? '昨天' : 'Yesterday'
+    return meta.yesterday
   }
 
   // 2-6 天前
   if (diffDays >= 2 && diffDays <= 6) {
-    return lang === 'zh' ? `${diffDays}天前` : `${diffDays} days ago`
+    return meta.daysAgo(diffDays)
   }
 
   // 1-4 周前（7-28 天）
   if (diffDays >= 7 && diffDays <= 28) {
     const weeks = Math.floor(diffDays / 7)
-    return lang === 'zh' ? `${weeks}周前` : `${weeks} week${weeks > 1 ? 's' : ''} ago`
+    return meta.weeksAgo(weeks)
   }
 
   // >4 周前：YYYY/M/D
@@ -66,7 +70,7 @@ export function formatRelativeTime(
  */
 export function formatMessageTime(
   dateStr: string | null | undefined,
-  lang: 'zh' | 'en' = 'zh'
+  lang: Lang = 'zh'
 ): string {
   if (!dateStr) return ''
 

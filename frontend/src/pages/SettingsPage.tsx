@@ -5,7 +5,9 @@ import { useTheme } from '../context/ThemeContext'
 import { useT } from '../i18n/I18nContext'
 import Toggle from '../components/Toggle'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
-import { Key, Zap, Save, Clock, Palette, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft } from 'lucide-react'
+import VerificationCodeInput from '../components/VerificationCodeInput'
+import { LANGUAGES } from '../i18n/languages'
+import { Key, Zap, Save, Clock, Palette, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft, Mail } from 'lucide-react'
 import { useNavigate, useBlocker, useLocation } from 'react-router-dom'
 
 // 常用时区列表
@@ -30,11 +32,6 @@ const TIMEZONES = [
   'UTC',
 ]
 
-const LANGUAGES = [
-  { code: 'zh', key: 'settings.chinese' },
-  { code: 'en', key: 'settings.english' },
-]
-
 const CHAT_STYLES = [
   { value: 'cozy', key: 'settings.cozyMode', descKey: 'settings.cozyModeDesc' },
   { value: 'compact', key: 'settings.compactMode', descKey: 'settings.compactModeDesc' },
@@ -56,6 +53,7 @@ const NAV_SECTIONS: NavSection[] = [
   { id: 'strategy',    icon: Zap,     labelKey: 'settings.strategy',         category: 'settings.catBehavior' },
   { id: 'appearance',  icon: Palette, labelKey: 'settings.appearance',       category: 'settings.appearance' },
   { id: 'notifications', icon: Bell,  labelKey: 'settings.notifications',   category: 'settings.appearance' },
+  { id: 'email',         icon: Mail,  labelKey: 'auth.email',                category: 'settings.catAccount' },
 ]
 
 export default function SettingsPage() {
@@ -88,6 +86,68 @@ export default function SettingsPage() {
   const [redeeming, setRedeeming] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState('')
   const [showAgentApi, setShowAgentApi] = useState(false)
+
+  // ── 邮箱管理 ──
+  const [showBindEmail, setShowBindEmail] = useState(false)
+  const [bindEmail, setBindEmail] = useState('')
+  const [bindCode, setBindCode] = useState('')
+  const [bindCodeSent, setBindCodeSent] = useState(false)
+  const [bindSendCooldown, setBindSendCooldown] = useState(0)
+  const [bindError, setBindError] = useState('')
+  const [bindLoading, setBindLoading] = useState(false)
+  const [removeConfirm, setRemoveConfirm] = useState(false)
+  const { rebindEmail, removeEmail } = useAuth()
+  const bindCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // 清理倒计时
+  useEffect(() => {
+    return () => { if (bindCooldownRef.current) clearInterval(bindCooldownRef.current) }
+  }, [])
+
+  const handleSendBindCode = async () => {
+    if (!bindEmail || bindSendCooldown > 0) return
+    try {
+      await api.post('/auth/send-verification-code', { email: bindEmail, purpose: 'rebind' })
+      setBindCodeSent(true)
+      setBindError('')
+      setBindSendCooldown(60)
+      bindCooldownRef.current = setInterval(() => {
+        setBindSendCooldown(prev => {
+          if (prev <= 1) { if (bindCooldownRef.current) clearInterval(bindCooldownRef.current); return 0 }
+          return prev - 1
+        })
+      }, 1000)
+    } catch (err: any) {
+      setBindError(err.message || t('auth.tooManyRequests'))
+    }
+  }
+
+  const handleBind = async () => {
+    if (!bindEmail || !bindCode) return
+    setBindLoading(true)
+    setBindError('')
+    try {
+      await rebindEmail(bindEmail, bindCode)
+      await refreshUser()
+      setShowBindEmail(false)
+      setBindEmail(''); setBindCode(''); setBindCodeSent(false); setBindSendCooldown(0)
+      if (bindCooldownRef.current) { clearInterval(bindCooldownRef.current); bindCooldownRef.current = null }
+    } catch (err: any) {
+      setBindError(err.message || t('auth.invalidCode'))
+    } finally {
+      setBindLoading(false)
+    }
+  }
+
+  const handleRemoveEmail = async () => {
+    try {
+      await removeEmail()
+      await refreshUser()
+      setRemoveConfirm(false)
+    } catch (err: any) {
+      setBindError(err.message || t('error.saveFailed'))
+    }
+  }
 
   // ── 可拖拽侧边栏 ──
   const sidebarRef = useRef<HTMLDivElement>(null)
@@ -378,6 +438,54 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* 邮箱管理 */}
+      <div id="settings-email" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+        <div className="flex items-center gap-2 mb-4">
+          <Mail size={18} className="text-primary-400" />
+          <h2 className="font-semibold text-textPrimary">{t('auth.email')}</h2>
+        </div>
+
+        {user?.email ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-textPrimary truncate">{user.email}</span>
+              {user.email_verified ? (
+                <span className="text-[10px] text-mint-400 bg-mint-500/10 px-1.5 py-0.5 rounded-full">{t('auth.emailVerified')}</span>
+              ) : (
+                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full">{t('auth.emailNotVerified')}</span>
+              )}
+            </div>
+            <p className="text-xs text-textMuted">{t('auth.emailVerified') ? t('settings.emailVerifiedDesc') : t('settings.emailNotVerifiedDesc')}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowBindEmail(true); setBindEmail(user.email || ''); setBindCode(''); setBindCodeSent(false); setBindError('') }}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-elevated text-textSecondary transition-colors"
+              >
+                {t('auth.changeEmail')}
+              </button>
+              {user.email && (
+                <button
+                  onClick={() => setRemoveConfirm(true)}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-rose-500/20 text-rose-400 hover:bg-rose-500/10 transition-colors"
+                >
+                  {t('auth.removeEmail')}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-textMuted">{t('settings.emailNotSetDesc')}</p>
+            <button
+              onClick={() => { setShowBindEmail(true); setBindEmail(''); setBindCode(''); setBindCodeSent(false); setBindError('') }}
+              className="px-3 py-1.5 text-xs rounded-lg bg-primary-500 hover:bg-primary-400 text-white font-medium transition-colors"
+            >
+              {t('auth.bindEmailTitle')}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* API 提供商配置 */}
       <div id="settings-api" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
         <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -555,7 +663,7 @@ export default function SettingsPage() {
           className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
         >
           {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>{t(l.key)}</option>
+            <option key={l.code} value={l.code}>{t(l.i18nKey)}</option>
           ))}
         </select>
       </div>
@@ -741,6 +849,89 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── 邮箱绑定弹窗 ── */}
+      {showBindEmail && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/30">
+            <h3 className="text-lg font-semibold text-textPrimary mb-4">{t('auth.bindEmailTitle')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-textSecondary mb-1">{t('auth.email')}</label>
+                <input
+                  type="email"
+                  value={bindEmail}
+                  onChange={e => setBindEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                  placeholder={t('auth.emailPlaceholder')}
+                />
+              </div>
+              <button
+                onClick={handleSendBindCode}
+                disabled={!bindEmail || bindSendCooldown > 0}
+                className="w-full py-2 text-xs rounded-xl border border-border text-textSecondary hover:text-textPrimary hover:bg-elevated disabled:opacity-30 transition-colors"
+              >
+                {bindSendCooldown > 0 ? `${t('auth.codeResendIn')} ${bindSendCooldown}s` : bindCodeSent ? t('auth.codeSent') : t('auth.sendCode')}
+              </button>
+              <div>
+                <label className="block text-xs text-textSecondary mb-2 text-center">{t('auth.codePlaceholder')}</label>
+                <VerificationCodeInput
+                  value={bindCode}
+                  onChange={setBindCode}
+                  disabled={bindLoading}
+                  error={bindError}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setShowBindEmail(false)}
+                  className="flex-1 py-2 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleBind}
+                  disabled={!bindEmail || !bindCode || bindLoading}
+                  className="flex-1 py-2 text-sm bg-primary-500 text-white rounded-xl hover:bg-primary-400 disabled:opacity-30 font-medium transition-all"
+                >
+                  {bindLoading ? t('common.saving') : t('common.confirm')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 邮箱解绑确认弹窗 ── */}
+      {removeConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl shadow-black/30">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} className="text-rose-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-textPrimary">{t('settings.removeEmailTitle') || '解绑邮箱'}</h3>
+                <p className="text-sm text-textSecondary mt-1">{t('settings.removeEmailDesc') || '解绑后你将无法使用邮箱登录和找回密码。确定要解绑吗？'}</p>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setRemoveConfirm(false)}
+                className="flex-1 py-2.5 text-sm border border-border rounded-xl hover:bg-elevated text-textSecondary transition-colors font-medium"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleRemoveEmail}
+                className="flex-1 py-2.5 text-sm bg-rose-500 text-white rounded-xl hover:bg-rose-400 font-medium transition-all"
+              >
+                {t('common.confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 未保存修改离开确认弹窗 ── */}
       {blocker.state === 'blocked' && (

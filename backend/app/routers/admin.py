@@ -926,6 +926,8 @@ async def update_system_settings(
 
 from app.schemas.system_settings import (
     SmtpConfigRequest, AuthSettingsRequest, AuthSettingsResponse,
+    SmtpConfigItem, SmtpConfigsRequest, SmtpTestRequest,
+    EmailTemplatesData, EmailTemplatesRequest,
 )
 from app.utils.crypto import encrypt_api_key, decrypt_api_key
 
@@ -938,26 +940,44 @@ async def get_auth_settings(
     """获取认证设置（SMTP 已脱敏）"""
     s = await get_settings(db)
     smtp = s.get("smtp_config")
-    smtp_configured = bool(smtp and smtp.get("host"))
 
-    # 脱敏：移除密码
-    safe_smtp = None
-    if smtp:
-        safe_smtp = {
-            "host": smtp.get("host", ""),
-            "port": smtp.get("port", 587),
-            "username": smtp.get("username", ""),
-            "from_email": smtp.get("from_email", ""),
-            "from_name": smtp.get("from_name", "AIsChat"),
-            "use_tls": smtp.get("use_tls", True),
-            "has_password": bool(smtp.get("password_encrypted")),
+    # 兼容新旧格式：单对象 → 统一按数组处理
+    if isinstance(smtp, dict):
+        smtp_list = [smtp]
+    elif isinstance(smtp, list):
+        smtp_list = smtp
+    else:
+        smtp_list = []
+
+    smtp_configured = bool(smtp_list and any(c.get("host") for c in smtp_list if isinstance(c, dict)))
+
+    # 脱敏：移除密码，保留 is_active/priority
+    safe_configs = []
+    safe_first = None
+    for cfg in smtp_list:
+        if not isinstance(cfg, dict):
+            continue
+        safe = {
+            "host": cfg.get("host", ""),
+            "port": cfg.get("port", 587),
+            "username": cfg.get("username", ""),
+            "from_email": cfg.get("from_email", ""),
+            "from_name": cfg.get("from_name", "AIsChat"),
+            "use_tls": cfg.get("use_tls", True),
+            "has_password": bool(cfg.get("password_encrypted")),
+            "is_active": cfg.get("is_active", True),
+            "priority": cfg.get("priority", 0),
         }
+        safe_configs.append(safe)
+        if safe_first is None:
+            safe_first = safe
 
     return {
         "require_email_verification": s.get("require_email_verification", False),
         "login_providers": s.get("login_providers", ["direct"]),
         "smtp_configured": smtp_configured,
-        "smtp_config": safe_smtp,
+        "smtp_config": safe_first,
+        "smtp_configs": safe_configs,
     }
 
 
@@ -1005,10 +1025,23 @@ async def update_smtp_config(
     admin: dict = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """配置 SMTP 邮件服务"""
+    """配置 SMTP 邮件服务（已废弃 — 内部转为 smtp_configs[0] 读写，请使用 /smtp-configs）"""
     try:
         row = await _get_or_create_settings(db)
-        smtp = row.smtp_config or {}
+
+        # 归一化为数组格式，取第一个配置
+        raw = row.smtp_config
+        if isinstance(raw, list) and raw:
+            configs = list(raw)
+        elif isinstance(raw, dict) and raw.get("host"):
+            configs = [dict(raw)]
+        else:
+            configs = []
+
+        if configs:
+            smtp = dict(configs[0])
+        else:
+            smtp = {}
 
         smtp["host"] = req.host
         smtp["port"] = req.port
@@ -1016,6 +1049,8 @@ async def update_smtp_config(
         smtp["from_email"] = req.from_email
         smtp["from_name"] = req.from_name
         smtp["use_tls"] = req.use_tls
+        smtp.setdefault("is_active", True)
+        smtp.setdefault("priority", 0)
 
         # 密码：留空 = 保留现网，否则重新加密
         if req.password and req.password.strip():
@@ -1023,7 +1058,11 @@ async def update_smtp_config(
         elif not smtp.get("password_encrypted") and req.password and req.password.strip():
             smtp["password_encrypted"] = encrypt_api_key(req.password)
 
-        row.smtp_config = smtp
+        if configs:
+            configs[0] = smtp
+        else:
+            configs = [smtp]
+        row.smtp_config = configs
         await db.flush()
         await _log_admin_action(
             db, admin["user_id"], "update_smtp_config", "system", 1,
@@ -1046,10 +1085,13 @@ async def test_smtp(
     password = req.password or ""
     if not password.strip():
         s = await get_settings(db)
-        existing = s.get("smtp_config", {}) or {}
-        if existing.get("password_encrypted"):
+        raw = s.get("smtp_config", {}) or {}
+        # 兼容数组格式
+        if isinstance(raw, list) and raw:
+            raw = raw[0]
+        if isinstance(raw, dict) and raw.get("password_encrypted"):
             try:
-                password = decrypt_api_key(existing["password_encrypted"])
+                password = decrypt_api_key(raw["password_encrypted"])
             except Exception:
                 pass
 
@@ -1066,6 +1108,205 @@ async def test_smtp(
     from app.services.email_service import test_smtp_connection
     ok, msg = await test_smtp_connection(config)
     return {"success": ok, "message": msg}
+
+
+# ── v1.0.0 多 SMTP 配置管理 ──
+
+@router.get("/smtp-configs")
+async def get_smtp_configs(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取全部 SMTP 配置列表（密码脱敏）"""
+    s = await get_settings(db)
+    raw = s.get("smtp_config")
+
+    if isinstance(raw, dict):
+        configs = [raw]
+    elif isinstance(raw, list):
+        configs = raw
+    else:
+        configs = []
+
+    result = []
+    for cfg in configs:
+        if not isinstance(cfg, dict):
+            continue
+        result.append({
+            "host": cfg.get("host", ""),
+            "port": cfg.get("port", 587),
+            "username": cfg.get("username", ""),
+            "from_email": cfg.get("from_email", ""),
+            "from_name": cfg.get("from_name", "AIsChat"),
+            "use_tls": cfg.get("use_tls", True),
+            "is_active": cfg.get("is_active", True),
+            "priority": cfg.get("priority", 0),
+            "has_password": bool(cfg.get("password_encrypted")),
+        })
+    return {"configs": result}
+
+
+@router.put("/smtp-configs")
+async def update_smtp_configs(
+    req: SmtpConfigsRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """批量保存 SMTP 配置（整体替换）"""
+    try:
+        row = await _get_or_create_settings(db)
+
+        new_configs = []
+        for item in req.configs:
+            cfg = {
+                "host": item.host,
+                "port": item.port,
+                "username": item.username,
+                "from_email": item.from_email,
+                "from_name": item.from_name,
+                "use_tls": item.use_tls,
+                "is_active": item.is_active,
+                "priority": item.priority,
+            }
+            # 密码：提供了则加密，留空则保留现网
+            if item.password and item.password.strip():
+                cfg["password_encrypted"] = encrypt_api_key(item.password)
+            else:
+                # 尝试从旧配置中保留密码
+                old = _find_old_config(row.smtp_config, item.host, item.username)
+                if old and old.get("password_encrypted"):
+                    cfg["password_encrypted"] = old["password_encrypted"]
+
+            new_configs.append(cfg)
+
+        row.smtp_config = new_configs
+        await db.flush()
+        await _log_admin_action(
+            db, admin["user_id"], "update_smtp_configs", "system", 1,
+            {"count": len(new_configs)},
+        )
+        return await get_smtp_configs(admin=admin, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/smtp-configs/test/{index}")
+async def test_smtp_by_index(
+    index: int,
+    password_override: SmtpTestRequest | None = None,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """测试指定索引的 SMTP 配置（可选覆盖密码，不存库）"""
+    s = await get_settings(db)
+    raw = s.get("smtp_config")
+
+    if isinstance(raw, dict):
+        configs = [raw]
+    elif isinstance(raw, list):
+        configs = raw
+    else:
+        raise HTTPException(status_code=404, detail="无 SMTP 配置")
+
+    if index < 0 or index >= len(configs):
+        raise HTTPException(status_code=404, detail=f"配置索引 {index} 不存在（共 {len(configs)} 个）")
+
+    cfg = dict(configs[index])
+    if not isinstance(cfg, dict) or not cfg.get("host"):
+        raise HTTPException(status_code=404, detail=f"配置 #{index} 无效")
+
+    # 解密密码
+    password = ""
+    if cfg.get("password_encrypted"):
+        try:
+            password = decrypt_api_key(cfg["password_encrypted"])
+        except Exception:
+            pass
+
+    # 请求体可覆盖密码（用于测试时临时填写）
+    if password_override and password_override.password and password_override.password.strip():
+        password = password_override.password
+
+    test_config = {
+        "host": cfg["host"],
+        "port": cfg.get("port", 587),
+        "username": cfg.get("username", ""),
+        "password": password,
+        "from_email": cfg.get("from_email", ""),
+        "from_name": cfg.get("from_name", "AIsChat"),
+        "use_tls": cfg.get("use_tls", True),
+    }
+
+    from app.services.email_service import test_smtp_connection
+    ok, msg = await test_smtp_connection(test_config)
+    return {"success": ok, "message": msg, "index": index}
+
+
+# ── v1.0.0 自定义邮件模板管理 ──
+
+@router.get("/email-templates")
+async def get_email_templates_endpoint(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取当前邮件模板（DB 优先，fallback 默认值）"""
+    from app.services.email_service import get_email_templates
+    templates = await get_email_templates(db)
+    return {"templates": templates}
+
+
+@router.put("/email-templates")
+async def update_email_templates(
+    req: EmailTemplatesRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """保存自定义邮件模板到 DB"""
+    try:
+        row = await _get_or_create_settings(db)
+        row.email_templates = req.templates.model_dump()
+        await db.flush()
+        await _log_admin_action(
+            db, admin["user_id"], "update_email_templates", "system", 1,
+            {"languages": list(req.templates.model_dump().keys())},
+        )
+        return await get_email_templates_endpoint(admin=admin, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/email-templates/reset")
+async def reset_email_templates(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """重置邮件模板为默认值（设为 NULL，让 fallback 生效）"""
+    try:
+        row = await _get_or_create_settings(db)
+        row.email_templates = None
+        await db.flush()
+        await _log_admin_action(
+            db, admin["user_id"], "reset_email_templates", "system", 1, {},
+        )
+        return await get_email_templates_endpoint(admin=admin, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+def _find_old_config(old_raw, host: str, username: str) -> dict | None:
+    """从旧配置中查找匹配 host+username 的配置（用于密码保留）"""
+    if not old_raw:
+        return None
+    if isinstance(old_raw, dict):
+        configs = [old_raw]
+    elif isinstance(old_raw, list):
+        configs = old_raw
+    else:
+        return None
+    for c in configs:
+        if isinstance(c, dict) and c.get("host") == host and c.get("username") == username:
+            return c
+    return None
 
 
 async def _get_or_create_settings(db: AsyncSession):
@@ -2048,7 +2289,7 @@ async def admin_update_agent_skill(
 
 
 # ══════════════════════════════════════════════════════════════
-# v1.1.0 LLM 厂商预设
+# v1.0.0 LLM 厂商预设
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/provider-presets")

@@ -389,6 +389,31 @@ The panel should be separate from the chat interface; use a different route (e.g
 - 支持按操作者、操作类型、时间范围筛选。
   Filter by operator, operation type, time range.
 
+#### 4.6.8 邮箱系统管理
+#### 4.6.8 Email System Management
+
+**多 SMTP 容灾 / Multi-SMTP Failover**：
+- 支持配置多个 SMTP 发件服务器，按优先级排序，发送时自动跳过故障配置尝试下一个。
+  Multiple SMTP sender configurations with priority ordering. Sending automatically fails over to the next config on error.
+- 每个配置独立控制：host/port/username/password/from_email/from_name/TLS/启用开关/优先级。
+  Each config has independent: host, port, username, password, from_email, from_name, TLS, enable toggle, priority.
+- 管理员可增删改排序配置列表，对单个配置测试连通性。
+  Admin can add/delete/reorder configs, test individual connections.
+
+**自定义邮件模板 / Custom Email Templates**：
+- 管理员可编辑验证码邮件的主题和 HTML 正文（分中文/英文，分注册/登录/换绑三种场景）。
+  Admin can edit verification email subject and HTML body (per language: zh/en, per purpose: register/login/rebind).
+- 模板支持变量占位符：`{code}` `{from_name}` `{username}` `{purpose_label}` `{instance_name}` `{expire_minutes}`。
+  Templates support variable placeholders.
+- 可一键重置为系统默认模板。
+  One-click reset to system defaults.
+
+**验证码发送 / Verification Code Sending**：
+- 6 位数字验证码，5 分钟有效，60 秒发送冷却。
+  6-digit codes, 5-minute validity, 60s cooldown.
+- 三种用途：注册验证、登录验证、换绑邮箱。
+  Three purposes: register, login, rebind.
+
 ### 4.7 额度与兑换码
 ### 4.7 Quota & Redemption Codes
 
@@ -653,6 +678,10 @@ CREATE TABLE system_logs (
 - `POST /auth/register` → 创建用户，第一个为 admin / Create user, first becomes admin
 - `POST /auth/login` → 返回 JWT / Return JWT
 - `GET /auth/me` → 当前用户信息 / Current user info
+- `POST /auth/send-verification-code` → 发送邮箱验证码（register/login/rebind）/ Send email verification code
+- `POST /auth/verify-email` → 验证邮箱 / Verify email
+- `POST /auth/bind-email` → 绑定/换绑邮箱 / Bind or rebind email
+- `DELETE /auth/email` → 解绑邮箱 / Unbind email
 
 #### 用户设置 / User Settings
 - `PUT /user/settings` → 更新 API 配置、个人资料（bio、status_text）、策略模式参数 / Update API config, profile, policy parameters
@@ -696,6 +725,11 @@ CREATE TABLE system_logs (
 - `GET /admin/groups` → 所有群聊 / All groups
 - `PUT /admin/agents/{id}/editable` → 开关 AI 自修改 / Toggle AI self-modification
 - `GET /admin/logs` → 系统日志 / System logs
+- `GET/PUT /admin/smtp-configs` → 多 SMTP 配置管理 / Multi-SMTP config management
+- `POST /admin/smtp-configs/test/{index}` → 测试单个 SMTP 配置 / Test single SMTP config
+- `GET/PUT /admin/email-templates` → 邮件模板管理 / Email template management
+- `POST /admin/email-templates/reset` → 重置模板为默认 / Reset templates to default
+- `GET/PUT /admin/auth-settings` → 认证设置（邮箱验证开关 + 登录方式）/ Auth settings
 
 #### 备份与恢复 / Backup & Restore
 - `GET /admin/backup/download` → 下载数据库备份 (.sql) / Download DB backup

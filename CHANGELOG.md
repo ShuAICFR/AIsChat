@@ -7,6 +7,22 @@
 
 ---
 
+## [v1.0.0] - 2026-06-28
+
+### Added
+
+- 📧 **邮箱系统增强**：多 SMTP 配置容灾——支持配置多个发件服务器按优先级自动故障转移，一个不可用自动尝试下一个。管理员可增删改排序，独立测试每个配置的连通性。
+- ✉️ **自定义邮件模板**：管理员可编辑验证码邮件的 HTML 模板（分中文/英文/日语，分注册/登录/换绑三种用途），支持 `{code}` `{from_name}` `{username}` 等变量占位符。一键重置为默认模板。
+- 🔢 **OTP 验证码输入组件**：全新 `VerificationCodeInput` 组件——6 个独立数字框，自动聚焦跳转、Backspace 回退、粘贴分发。LoginPage / MePage / SettingsPage 三处统一替换，体验一致。
+- 🇯🇵 **日语界面支持**：完整日语翻译（1415+ key），前端语言选择器全线支持。设置向导、设置页、管理员面板均可切换日语。时间格式化（相对时间 + 消息时间）日语本地化。
+
+### Changed
+
+- 🔧 **语言配置统一化**：新建 `frontend/src/i18n/languages.ts` 作为语言元数据的单一数据源（`Lang` 类型、`LANGUAGES` 数组、`isValidLang()` 校验、`getLangMeta()` 查询）。`I18nContext`、`SetupPage`、`SettingsPage`、`AdminPage`、`AuthContext`、`time.ts` 全部改为引用此中心文件。新增语言只需在此文件加一条记录。
+- ♻️ **SMTP 配置数据迁移**：`system_settings.smtp_config` 从单 JSONB 对象改为 JSONB 数组（`_migrate_smtp_configs_array` 自动包装旧格式）。`get_auth_settings` 返回新增 `smtp_configs` 字段，旧 `smtp_config` 字段保留兼容。
+
+---
+
 ## [v0.9.0] - 2026-06-27
 
 ### Added

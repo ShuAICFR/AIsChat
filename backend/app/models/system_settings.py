@@ -25,7 +25,7 @@ class SystemSettings(Base):
     # v1.0.0 邮箱认证
     smtp_config = Column(JSONB, nullable=True, comment="SMTP 邮件配置（密码 Fernet 加密）")
 
-    # v1.1.0 LLM 厂商配置
+    # v1.0.0 LLM 厂商配置
     provider_config = Column(JSONB, nullable=True, comment="LLM 厂商预设：{provider, base_url, chat_model, work_model, embedding_model, model_options}")
     require_email_verification = Column(Boolean, default=False, comment="注册是否必须验证邮箱（默认关闭）")
     login_providers = Column(JSONB, default=lambda: ["direct"], comment="可用登录方式: direct/email_code/wechat/qq")

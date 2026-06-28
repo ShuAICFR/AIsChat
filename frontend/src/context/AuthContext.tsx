@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { api } from '../api/client'
 import { cacheLangForUnauth } from '../i18n/I18nContext'
+import { type Lang, isValidLang, DEFAULT_LANG } from '../i18n/languages'
 
 interface User {
   id: number
@@ -85,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api_credit: 0,
     has_api_key: false,
     timezone: 'Asia/Shanghai',
-    language: (data.language === 'en' || data.language === 'zh') ? data.language : 'zh',
+    language: isValidLang(data.language) ? data.language : DEFAULT_LANG,
     ui_prefs: {} as Record<string, any>,
     agent_bundle_credit: 0,
     file_quota_mb: 100,
@@ -113,7 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const data = await api.post('/auth/login', body)
     localStorage.setItem('access_token', data.access_token)
-    cacheLangForUnauth(data.language as 'zh' | 'en')
+    cacheLangForUnauth(data.language as Lang)
     setUser(buildUserFromData(data))
   }
 
@@ -123,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (options?.code) body.verification_code = options.code
     const data = await api.post('/auth/register', body)
     localStorage.setItem('access_token', data.access_token)
-    cacheLangForUnauth(data.language as 'zh' | 'en')
+    cacheLangForUnauth(data.language as Lang)
     setUser(buildUserFromData(data))
   }
 

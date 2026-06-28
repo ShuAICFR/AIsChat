@@ -43,7 +43,9 @@ async def run_migrations():
             await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态（必须在 select(Agent) 之前）
             await _migrate_others_chat_controls(db)  # v0.9.0 对话权限 + 限额控制（必须在 select(Agent) 之前）
             await _migrate_email_verification(db)  # v1.0.0 邮箱认证（必须在 select(Agent) 之前）
-            await _migrate_provider_config(db)      # v1.1.0 LLM 厂商预设
+            await _migrate_provider_config(db)      # v1.0.0 LLM 厂商预设
+            await _migrate_smtp_configs_array(db)      # v1.0.0 多 SMTP 容灾：单对象 → 数组
+            await _migrate_email_templates(db)          # v1.0.0 自定义邮件模板列
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -1877,6 +1879,75 @@ async def _migrate_email_verification(db):
         logger.info("  ✅ 邮箱认证迁移完成")
 
 
+async def _migrate_smtp_configs_array(db):
+    """v1.0.0: 多 SMTP 容灾 — 将 smtp_config 从单对象迁移为数组格式
+
+    旧格式: {"host":"...","port":587,...}
+    新格式: [{"host":"...","port":587,...,"is_active":true,"priority":0}]
+    """
+    if not await _column_exists(db, "system_settings", "smtp_config"):
+        logger.info("  ⏭ system_settings.smtp_config 列不存在，跳过多 SMTP 迁移")
+        return
+
+    # 检查是否已经是数组格式
+    result = await db.execute(
+        text("SELECT smtp_config FROM system_settings WHERE id = 1 AND smtp_config IS NOT NULL")
+    )
+    row = result.fetchone()
+    if row is None:
+        logger.info("  ⏭ smtp_config 为 NULL，跳过迁移")
+        return
+
+    raw = row[0]
+    # 已经是列表 list → 无需迁移
+    if isinstance(raw, list):
+        logger.info("  ⏭ smtp_config 已是数组格式，跳过")
+        return
+
+    # 字典 → 包装为数组
+    if isinstance(raw, dict):
+        # JSONB 从 PG 读取自动反序列化，但有时会是 JSON 字符串
+        pass
+    elif isinstance(raw, str):
+        import json
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            logger.warning("  ⚠️ smtp_config 解析失败，跳过迁移")
+            return
+
+    if not isinstance(raw, dict) or not raw.get("host"):
+        logger.info("  ⏭ smtp_config 为空对象，设为空数组")
+        await db.execute(
+            text("UPDATE system_settings SET smtp_config = '[]'::jsonb WHERE id = 1")
+        )
+        await db.flush()
+        return
+
+    logger.info("  📦 迁移 smtp_config: 单对象 → 数组格式")
+    raw.setdefault("is_active", True)
+    raw.setdefault("priority", 0)
+    import json
+    new_value = json.dumps([raw])
+    await db.execute(
+        text("UPDATE system_settings SET smtp_config = :val::jsonb WHERE id = 1"),
+        {"val": new_value},
+    )
+    await db.flush()
+    logger.info("  ✅ smtp_config 已迁移为数组格式")
+
+
+async def _migrate_email_templates(db):
+    """v1.0.0: 自定义邮件模板 — system_settings 表 +email_templates JSONB 列"""
+    if await _column_exists(db, "system_settings", "email_templates"):
+        logger.info("  ⏭ system_settings.email_templates 已存在，跳过")
+        return
+    logger.info("  📧 添加 system_settings.email_templates 列")
+    await db.execute(text("ALTER TABLE system_settings ADD COLUMN email_templates JSONB"))
+    await db.flush()
+    logger.info("  ✅ system_settings.email_templates 列添加完成")
+
+
 async def _fix_column_types(db):
     """修复老部署中列类型与新代码不匹配的问题（幂等：按需 ALTER）"""
     # system_logs.log_type：老版本可能是 VARCHAR(10)，代码写 "add_opencli_presets"（21 字符）
@@ -1906,7 +1977,7 @@ async def _widen_varchar(db, table: str, column: str, target_length: int):
 
 
 async def _migrate_provider_config(db):
-    """v1.1.0: LLM 厂商预设 — system_settings 表 +provider_config JSONB"""
+    """v1.0.0: LLM 厂商预设 — system_settings 表 +provider_config JSONB"""
     if not await _column_exists(db, "system_settings", "provider_config"):
         logger.info("  🏭 添加 system_settings.provider_config 列")
         await db.execute(text("ALTER TABLE system_settings ADD COLUMN provider_config JSONB"))

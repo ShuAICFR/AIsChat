@@ -84,7 +84,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
       {/* 统一侧边栏：群聊 + 私信列表（桌面端可拖拽调整宽度） */}
       <div
         ref={sidebarRef}
-        className={`shrink-0 ${mobileSidebarOpen ? 'absolute inset-y-0 left-0 z-30 w-full max-w-[90vw]' : 'hidden md:block'} md:relative md:z-auto`}
+        className={`shrink-0 ${mobileSidebarOpen ? 'absolute inset-0 z-30' : 'hidden md:block'} md:relative md:z-auto`}
         style={!mobileSidebarOpen ? { width: sidebarWidth } : undefined}
       >
         <ChatSidebar

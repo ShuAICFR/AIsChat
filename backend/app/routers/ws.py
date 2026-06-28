@@ -301,10 +301,13 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                             logger.warning("AI 回复队列已满，丢弃 DM 事件")
 
                     # Federation: forward DM to connected peers
-                    from app.services.federation_manager import federation_manager as fed_mgr
-                    asyncio.create_task(
-                        fed_mgr.forward_dm_message(session_id, msg)
-                    )
+                    try:
+                        from app.services.federation_manager import federation_manager as fed_mgr
+                        asyncio.create_task(
+                            fed_mgr.forward_dm_message(session_id, msg)
+                        )
+                    except Exception:
+                        pass  # 联邦转发失败不影响本地消息
 
                 else:
                     # ── 群聊消息（原有逻辑） ──
@@ -329,18 +332,22 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
 
                         # 获取发送者头像
                         sender_avatar = None
-                        if sender_type == "human":
-                            from app.models.user import User as UserModel
-                            u_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
-                            u = u_result.scalar_one_or_none()
-                            if u:
-                                sender_avatar = u.avatar_url
-                        elif sender_type == "ai":
-                            from app.models.agent import Agent as AgentModel
-                            a_result = await db.execute(select(AgentModel).where(AgentModel.id == user_id))
-                            a = a_result.scalar_one_or_none()
-                            if a:
-                                sender_avatar = a.avatar_url
+                        try:
+                            if sender_type == "human":
+                                from app.models.user import User as UserModel
+                                u_result = await db.execute(select(UserModel).where(UserModel.id == user_id))
+                                u = u_result.scalar_one_or_none()
+                                if u:
+                                    sender_avatar = u.avatar_url
+                            elif sender_type == "ai":
+                                from app.models.agent import Agent as AgentModel
+                                a_result = await db.execute(select(AgentModel).where(AgentModel.id == user_id))
+                                a = a_result.scalar_one_or_none()
+                                if a:
+                                    sender_avatar = a.avatar_url
+                        except Exception as e:
+                            logger.error(f"获取发送者头像失败: {e}", exc_info=True)
+                            # 头像获取失败不阻断发送
 
                         msg_data = message_to_dict(message, sender_name=username, sender_avatar_url=sender_avatar)
 
@@ -354,72 +361,81 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                         ]
 
                         if online_ids:
-                            # 批量查询所有在线成员的 DND 状态（替代逐个 N+1 查询）
-                            paused_result = await db.execute(
-                                select(AgentModel.id).where(
-                                    AgentModel.id.in_(online_ids),
-                                    AgentModel.is_paused == True,
+                            try:
+                                # 批量查询所有在线成员的 DND 状态（替代逐个 N+1 查询）
+                                paused_result = await db.execute(
+                                    select(AgentModel.id).where(
+                                        AgentModel.id.in_(online_ids),
+                                        AgentModel.is_paused == True,
+                                    )
                                 )
-                            )
-                            paused_ids = {row[0] for row in paused_result.all()}
+                                paused_ids = {row[0] for row in paused_result.all()}
 
-                            now = datetime.utcnow()
-                            dnd_result = await db.execute(
-                                select(GroupMemberModel.member_id, GroupMemberModel.dnd_until).where(
-                                    GroupMemberModel.group_id == group_id,
-                                    GroupMemberModel.member_type == "ai",
-                                    GroupMemberModel.member_id.in_(online_ids),
+                                now = datetime.utcnow()
+                                dnd_result = await db.execute(
+                                    select(GroupMemberModel.member_id, GroupMemberModel.dnd_until).where(
+                                        GroupMemberModel.group_id == group_id,
+                                        GroupMemberModel.member_type == "ai",
+                                        GroupMemberModel.member_id.in_(online_ids),
+                                    )
                                 )
-                            )
-                            dnd_map: dict[int, datetime | None] = {row[0]: row[1] for row in dnd_result.all()}
+                                dnd_map: dict[int, datetime | None] = {row[0]: row[1] for row in dnd_result.all()}
 
-                            # 广播：DND 成员暂存消息，但 @提及 强制推送
-                            from app.utils.text import extract_mentions
-                            mentioned_names = extract_mentions(content)
-                            is_all_call = "@all" in content.lower() or "@ai" in content.lower()
-                            mentioned_agents = set()
-                            for uid in online_ids:
-                                agent_name_result = await db.execute(
-                                    select(AgentModel.name).where(AgentModel.id == uid)
-                                )
-                                agent_name = agent_name_result.scalar_one_or_none()
-                                if agent_name and (agent_name in mentioned_names or is_all_call):
-                                    mentioned_agents.add(uid)
+                                # 广播：DND 成员暂存消息，但 @提及 强制推送
+                                from app.utils.text import extract_mentions
+                                mentioned_names = extract_mentions(content)
+                                is_all_call = "@all" in content.lower() or "@ai" in content.lower()
+                                mentioned_agents = set()
+                                for uid in online_ids:
+                                    agent_name_result = await db.execute(
+                                        select(AgentModel.name).where(AgentModel.id == uid)
+                                    )
+                                    agent_name = agent_name_result.scalar_one_or_none()
+                                    if agent_name and (agent_name in mentioned_names or is_all_call):
+                                        mentioned_agents.add(uid)
 
-                            for uid, user_ws in manager.group_connections[group_id].items():
-                                if uid == user_id:
-                                    continue
+                                for uid, user_ws in manager.group_connections[group_id].items():
+                                    if uid == user_id:
+                                        continue
 
-                                in_dnd = (
-                                    uid in paused_ids
-                                    or (uid in dnd_map and (dnd_map[uid] is None or dnd_map[uid] > now))
-                                )
+                                    in_dnd = (
+                                        uid in paused_ids
+                                        or (uid in dnd_map and (dnd_map[uid] is None or dnd_map[uid] > now))
+                                    )
 
-                                # @提及强制推送（即使 DND 也推送）
-                                if in_dnd and uid in mentioned_agents:
+                                    # @提及强制推送（即使 DND 也推送）
+                                    if in_dnd and uid in mentioned_agents:
+                                        try:
+                                            await user_ws.send_json({"type": "message", "conversation_type": "group", "data": msg_data})
+                                        except Exception as e:
+                                            logger.warning(f"发送消息给用户 {uid} 失败: {e}")
+                                        continue
+
+                                    if in_dnd:
+                                        try:
+                                            await store_pending_message(
+                                                db, agent_id=uid, group_id=group_id,
+                                                message_id=message.id,
+                                            )
+                                        except Exception as e:
+                                            logger.warning(f"暂存消息给 AI {uid} 失败: {e}")
+                                        continue
+
                                     try:
                                         await user_ws.send_json({"type": "message", "conversation_type": "group", "data": msg_data})
                                     except Exception as e:
                                         logger.warning(f"发送消息给用户 {uid} 失败: {e}")
-                                    continue
-
-                                if in_dnd:
-                                    try:
-                                        await store_pending_message(
-                                            db, agent_id=uid, group_id=group_id,
-                                            message_id=message.id,
-                                        )
-                                    except Exception as e:
-                                        logger.warning(f"暂存消息给 AI {uid} 失败: {e}")
-                                    continue
-
-                                try:
-                                    await user_ws.send_json({"type": "message", "conversation_type": "group", "data": msg_data})
-                                except Exception as e:
-                                    logger.warning(f"发送消息给用户 {uid} 失败: {e}")
+                            except Exception as e:
+                                logger.error(f"广播消息给群成员失败: {e}", exc_info=True)
+                                # 广播失败不阻断消息已创建的事实
 
                         # 持久化提交
-                        await db.commit()
+                        try:
+                            await db.commit()
+                        except Exception as e:
+                            logger.error(f"消息提交失败: {e}", exc_info=True)
+                            await ws.send_json(build_ws_error("SEND_FAILED", "消息提交失败"))
+                            continue
 
                         # 联邦通信：异步转发到共享此群的对等端
                         try:
@@ -451,22 +467,25 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                                 logger.warning("AI 回复队列已满，丢弃事件")
 
                         # 触发向量化 pipeline（仅向量加速群聊）
-                        from app.models.group import Group as GroupModel
-                        group_check = await db.execute(
-                            select(GroupModel.is_vector_accelerated).where(
-                                GroupModel.id == group_id,
+                        try:
+                            from app.models.group import Group as GroupModel
+                            group_check = await db.execute(
+                                select(GroupModel.is_vector_accelerated).where(
+                                    GroupModel.id == group_id,
+                                )
                             )
-                        )
-                        is_accelerated = group_check.scalar_one_or_none()
-                        if is_accelerated:
-                            from app.services.vector_pipeline import embedding_queue
-                            try:
-                                embedding_queue.put_nowait({
-                                    "group_id": group_id,
-                                    "message_id": message.id,
-                                })
-                            except asyncio.QueueFull:
-                                pass  # 向量化队列满则丢弃，不影响主流程
+                            is_accelerated = group_check.scalar_one_or_none()
+                            if is_accelerated:
+                                from app.services.vector_pipeline import embedding_queue
+                                try:
+                                    embedding_queue.put_nowait({
+                                        "group_id": group_id,
+                                        "message_id": message.id,
+                                    })
+                                except asyncio.QueueFull:
+                                    pass  # 向量化队列满则丢弃，不影响主流程
+                        except Exception as e:
+                            logger.warning(f"向量化 pipeline 触发失败: {e}")
 
             # ---- 输入状态 ----
             elif msg_type == "typing":

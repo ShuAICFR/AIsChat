@@ -42,6 +42,8 @@ class UserInfoResponse(BaseModel):
     timezone: str = "Asia/Shanghai"
     agent_bundle_credit: int = 0
     file_quota_mb: int = 100
+    platform_gifted_credit: int = 0
+    total_effective: int = 0
     avatar_url: str | None = None
     bio: str | None = None
     language: str = "zh"

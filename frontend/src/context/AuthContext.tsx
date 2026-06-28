@@ -11,6 +11,8 @@ interface User {
   api_credit: number
   agent_bundle_credit: number
   file_quota_mb: number
+  platform_gifted_credit: number
+  total_effective: number
   has_api_key: boolean
   timezone: string
   language: string
@@ -76,6 +78,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ui_prefs: {} as Record<string, any>,
       agent_bundle_credit: 0,
       file_quota_mb: 100,
+      platform_gifted_credit: 0,
+      total_effective: 0,
       avatar_url: null,
       bio: null,
       setup_completed: data.setup_completed ?? true,
@@ -102,6 +106,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ui_prefs: {} as Record<string, any>,
       agent_bundle_credit: 0,
       file_quota_mb: 100,
+      platform_gifted_credit: 0,
+      total_effective: 0,
       avatar_url: null,
       bio: null,
       setup_completed: data.setup_completed ?? false,

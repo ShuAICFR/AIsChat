@@ -171,7 +171,7 @@ export default function UsagePage() {
       </div>
 
       {/* AI 选择 + 图表 */}
-      <div className="bg-surface rounded-2xl border border-border p-5 overflow-hidden">
+      <div className="bg-surface rounded-2xl border border-border p-5">
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={24} /></div>
         ) : overview.length === 0 ? (
@@ -209,7 +209,7 @@ export default function UsagePage() {
             ) : (
               <div className="h-72 md:h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                  <BarChart data={dailyData} margin={{ top: 5, right: 10, left: 0, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                     <XAxis
                       dataKey="date"
@@ -260,7 +260,7 @@ export default function UsagePage() {
                   {t('usage.dailyTrend')}
                 </h4>
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={dailyData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                  <ComposedChart data={dailyData} margin={{ top: 5, right: 10, left: 0, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} />
                     <XAxis
                       dataKey="date"

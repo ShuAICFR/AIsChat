@@ -3,6 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.utils.auth import get_current_user
@@ -168,6 +169,54 @@ async def cancel_dm_dnd_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
+# ──────────────────────────── 余额弹窗重试 ────────────────────────────
+
+class ContinueWithOwnKeyRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/continue-with-own-key")
+async def continue_with_own_key(
+    req: ContinueWithOwnKeyRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """用户确认使用自有 API Key 后重新触发 AI 回复"""
+    from sqlalchemy import select as sa_select, desc
+    from app.models.dm import DMSession
+    from app.models.message import Message
+
+    # 验证会话存在且用户是参与者
+    sess_result = await db.execute(
+        sa_select(DMSession).where(DMSession.session_id == req.session_id)
+    )
+    session = sess_result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=404, detail="会话不存在")
+    if current_user["user_id"] not in (session.user1_id, session.user2_id):
+        raise HTTPException(status_code=403, detail="无权操作此会话")
+
+    # 获取最后一条消息
+    msg_result = await db.execute(
+        sa_select(Message)
+        .where(Message.session_id == req.session_id)
+        .order_by(desc(Message.created_at))
+        .limit(1)
+    )
+    msg_row = msg_result.scalar_one_or_none()
+    if msg_row is None:
+        raise HTTPException(status_code=404, detail="消息不存在")
+
+    # 重新触发 AI 回复，使用自有 Key
+    await _maybe_trigger_dm_ai_reply(
+        db, req.session_id,
+        {"id": msg_row.id, "content": msg_row.content},
+        current_user["user_id"],
+        force_own_key=True,
+    )
+    return {"ok": True}
+
+
 # ============================================================
 # 内部：AI 回复触发
 # ============================================================
@@ -177,8 +226,11 @@ async def _maybe_trigger_dm_ai_reply(
     session_id: str,
     msg: dict,
     sender_id: int,
+    force_own_key: bool = False,
 ):
     """如果消息的接收方是 AI，触发 AI 自动回复"""
+    import logging
+    logger = logging.getLogger(__name__)
     from app.models.dm import DMSession
     from app.models.user import User
 
@@ -209,7 +261,91 @@ async def _maybe_trigger_dm_ai_reply(
     if agent is None:
         return
 
-    # 推入 AI 回复队列
+    # ── v0.9.0: 对话权限与限额决策 ──
+    is_owner = sender_id == agent.owner_id
+
+    if not is_owner:
+        # 检查是否允许他人对话
+        if not agent.allow_others_chat:
+            # 禁止模式
+            if agent.disallow_mode == "own_key" and not force_own_key:
+                # 检查聊天者是否有自有 Key
+                chatter_result = await db.execute(
+                    select(User).where(User.id == sender_id)
+                )
+                chatter = chatter_result.scalar_one_or_none()
+                if chatter and chatter.api_key_encrypted:
+                    force_own_key = True  # 允许，走自有 Key
+                else:
+                    # 聊天者无自有 Key → 发系统 DM 提示
+                    await _send_system_dm_notice(
+                        db, session_id, agent,
+                        "此 AI 需要你使用自有 API Key 才能对话，请在设置中配置 API Key。"
+                    )
+                    return
+            elif agent.disallow_mode == "strict":
+                return  # 严格禁止，静默跳过
+        else:
+            # 允许模式 → 检查配额
+            if agent.others_chat_mode == "quota":
+                used = agent.others_chat_used or 0
+                quota = agent.others_chat_quota or 30
+                if used >= quota:
+                    # 配额耗尽 → 自动关闭 + 通知主人
+                    agent.allow_others_chat = False
+                    await db.flush()
+                    await _notify_owner_quota_exhausted(db, agent, used, quota)
+                    # 进入禁止分支
+                    if agent.disallow_mode == "own_key":
+                        chatter_result = await db.execute(
+                            select(User).where(User.id == sender_id)
+                        )
+                        chatter = chatter_result.scalar_one_or_none()
+                        if chatter and chatter.api_key_encrypted:
+                            force_own_key = True
+                        else:
+                            await _send_system_dm_notice(
+                                db, session_id, agent,
+                                "此 AI 的对话配额已用完，且需要你使用自有 API Key，请在设置中配置。"
+                            )
+                            return
+                    else:
+                        return  # strict
+                else:
+                    # 配额未满 → 计数 +1
+                    agent.others_chat_used = used + 1
+                    await db.flush()
+
+    # ── v0.9.0: 余额检查（通用/半通用 AI，聊天者要付）──
+    if not is_owner and not force_own_key and agent.ai_type in ("general", "semi_general"):
+        chatter_result = await db.execute(
+            select(User).where(User.id == sender_id)
+        )
+        chatter = chatter_result.scalar_one_or_none()
+        if chatter:
+            chatter_eff = max(0, (chatter.platform_gifted_credit or 0)) + (chatter.api_credit or 0)
+            if chatter_eff <= 0:
+                if chatter.api_key_encrypted:
+                    # 有自有 Key → WebSocket 弹窗询问
+                    from app.routers.ws import manager
+                    await manager.send_to_user(sender_id, {
+                        "type": "balance_prompt",
+                        "data": {
+                            "agent_id": agent.id,
+                            "agent_name": agent.name,
+                            "session_id": session_id,
+                        }
+                    })
+                    return  # 不入队，等用户确认
+                else:
+                    # 没余额也没 Key → 系统提示
+                    await _send_system_dm_notice(
+                        db, session_id, agent,
+                        "你的额度不足，请在设置中配置 API Key 或联系管理员充值。"
+                    )
+                    return
+
+    # ── 推入 AI 回复队列 ──
     from app.services.ai_response_worker import message_queue
     import asyncio
     try:
@@ -221,7 +357,55 @@ async def _maybe_trigger_dm_ai_reply(
             "sender_type": "human" if sender_id != receiver_id else "ai",
             "sender_id": sender_id,
             "chain_depth": 0,
+            "force_own_key": force_own_key,  # v0.9.0
         })
     except asyncio.QueueFull:
-        import logging
-        logging.getLogger(__name__).warning("AI 回复队列已满，丢弃 DM 事件")
+        logger.warning("AI 回复队列已满，丢弃 DM 事件")
+
+
+async def _send_system_dm_notice(db: AsyncSession, session_id: str, agent, text: str):
+    """向 DM 会话发送系统提示消息"""
+    from app.services.dm_service import send_dm_message
+    from app.models.user import User as UserModel
+    try:
+        # 获取系统用户
+        sys_result = await db.execute(
+            select(UserModel).where(UserModel.id == 0)
+        )
+        sys_user = sys_result.scalar_one_or_none()
+        if sys_user is None:
+            return
+        # 以系统用户身份发消息
+        await send_dm_message(
+            db, session_id=session_id,
+            sender_id=0, sender_type="system",
+            content=f"🤖 {agent.name}：{text}",
+        )
+    except Exception:
+        pass
+
+
+async def _notify_owner_quota_exhausted(db: AsyncSession, agent, used: int, quota: int):
+    """通知 AI 主人：他人对话配额已用完"""
+    from app.services.dm_service import get_or_create_dm_session, send_dm_message
+    from app.models.user import User as UserModel
+    try:
+        owner_result = await db.execute(
+            select(UserModel).where(UserModel.id == agent.owner_id)
+        )
+        owner = owner_result.scalar_one_or_none()
+        if owner is None:
+            return
+        # 获取或创建 DM 会话
+        dm = await get_or_create_dm_session(db, agent.user_id, agent.owner_id)
+        await send_dm_message(
+            db, session_id=dm["session_id"],
+            sender_id=0, sender_type="system",
+            content=(
+                f"📊 你的 AI「{agent.name}」已被其他人触发 {used} 次对话，"
+                f"已达到配额上限（{quota} 条），已自动关闭「允许他人对话」。"
+                f"你可以在 AI 设置中重置计数或调整配额。"
+            ),
+        )
+    except Exception:
+        pass

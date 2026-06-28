@@ -4,6 +4,8 @@ import { X, MessageSquare, UserPlus, Bot, User } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
+import { getStatusTextStyle, BG_ELEVATED_LIGHT, BG_ELEVATED_DARK } from '../utils/statusColor'
+import { useTheme } from '../context/ThemeContext'
 
 interface ProfileCardProps {
   entityType: 'human' | 'ai'
@@ -20,6 +22,7 @@ interface ProfileData {
   avatar_url: string | null
   bio: string | null
   status_text: string | null
+  status_color: string | null
   state?: string
   created_at: string | null
   owner_name: string | null
@@ -28,6 +31,7 @@ interface ProfileData {
 
 export default function ProfileCard({ entityType, entityId, entityName, state, onClose }: ProfileCardProps) {
   const t = useT()
+  const { theme } = useTheme()
   const navigate = useNavigate()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -110,6 +114,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
   const avatarUrl = profile?.avatar_url
   const bio = profile?.bio
   const statusText = profile?.status_text
+  const statusColor = profile?.status_color
   const ownerName = profile?.owner_name
   const createdAt = profile?.created_at
   const isFriend = profile?.is_friend ?? false
@@ -140,6 +145,13 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
               <div className="flex items-center gap-1.5 text-sm text-textSecondary">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(displayState)}`} />
                 <span>{entityType === 'ai' ? `AI · ${getStateText(displayState)}` : t('profileCard.human')}</span>
+                {statusText && (
+                  <span className="font-medium truncate" style={statusColor
+                    ? getStatusTextStyle(statusColor, theme === 'dark' ? BG_ELEVATED_DARK : BG_ELEVATED_LIGHT)
+                    : undefined}>
+                    · {statusText}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -147,13 +159,6 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
             <X size={20} />
           </button>
         </div>
-
-        {/* 状态文本 */}
-        {statusText && (
-          <div className="mb-3 px-3 py-2 rounded-lg bg-accent-400/5 border border-accent-400/10 text-sm text-accent-400 italic">
-            "{statusText}"
-          </div>
-        )}
 
         {/* 简介 */}
         {bio && (

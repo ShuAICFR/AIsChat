@@ -244,17 +244,14 @@ export default function MePage() {
             <div className="flex items-center gap-3 mt-1 text-xs text-textMuted">
               <span className="flex items-center gap-1"><Bot size={12} /> AI {agents.length}</span>
               <span>{t('me.daysOnline')} {daysSince} {t('me.daysSuffix')}</span>
-            </div>
-            {user.status_text && (
-              <p
-                className="text-sm mt-1.5 font-medium"
-                style={user.status_color
+              {user.status_text && (
+                <span className="font-medium" style={user.status_color
                   ? getStatusTextStyle(user.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
-                  : undefined}
-              >
-                {user.status_text}
-              </p>
-            )}
+                  : undefined}>
+                  {user.status_text}
+                </span>
+              )}
+            </div>
             <button
               onClick={openEditProfile}
               className="mt-2 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 flex items-center gap-1 transition-colors"

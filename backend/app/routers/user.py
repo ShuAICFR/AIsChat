@@ -432,6 +432,7 @@ async def get_profile(
             "avatar_url": getattr(user, "avatar_url", None),
             "bio": getattr(user, "bio", None),
             "status_text": getattr(user, "status_text", None),
+            "status_color": getattr(user, "status_color", None),
             "created_at": str(user.created_at) if user.created_at else None,
             "owner_name": None,
         })
@@ -452,6 +453,7 @@ async def get_profile(
             "avatar_url": agent.avatar_url,
             "bio": getattr(agent, "bio", None),
             "status_text": getattr(agent, "status_text", None),
+            "status_color": getattr(agent, "status_color", None),
             "state": agent.state,
             "created_at": str(agent.created_at) if agent.created_at else None,
             "owner_name": owner_name,

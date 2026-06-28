@@ -308,7 +308,14 @@ export default function ChatSidebar({
                         {s.partner.type === 'system' && <ShieldAlert size={11} className="shrink-0 text-rose-400" />}
                         {s.partner.type === 'ai' && <Bot size={11} className="shrink-0 text-mint-400" />}
                         {s.is_federated && <Globe size={11} className="text-primary-400 shrink-0" />}
-                        <span className="truncate block">{s.partner.name}</span>
+                        <span className="truncate">{s.partner.name}</span>
+                        {s.partner.status_text && (
+                          <span className="text-[11px] font-medium truncate" style={s.partner.status_color
+                            ? getStatusTextStyle(s.partner.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
+                            : undefined}>
+                            · {s.partner.status_text}
+                          </span>
+                        )}
                       </div>
                       {s.unread_count > 0 && (
                         <span className="shrink-0 ml-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-primary-500/80">
@@ -316,16 +323,6 @@ export default function ChatSidebar({
                         </span>
                       )}
                     </div>
-                    {s.partner.status_text && (
-                      <p
-                        className="text-[11px] mt-0.5 font-medium"
-                        style={s.partner.status_color
-                          ? getStatusTextStyle(s.partner.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
-                          : undefined}
-                      >
-                        {s.partner.status_text}
-                      </p>
-                    )}
                     <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
                       <span className="min-w-0 flex-1" style={{ display: 'block' }}>
                         <span className="truncate block">{s.last_message_preview || t('chatlist.noMessages')}</span>

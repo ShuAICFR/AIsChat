@@ -178,6 +178,11 @@ async def create_new_agent(
             memory_shared_scope=req.memory_shared_scope,
             bio=req.bio,
             status_text=req.status_text,
+            allow_others_chat=req.allow_others_chat,
+            others_chat_mode=req.others_chat_mode,
+            others_chat_quota=req.others_chat_quota,
+            others_chat_used=req.others_chat_used,
+            disallow_mode=req.disallow_mode,
         )
         return agent_to_dict(agent)
     except ValueError as e:
@@ -897,6 +902,23 @@ async def apply_preset(
         return agent_to_dict(updated)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+# ──────────────────────────── 对话限额重置 ────────────────────────────
+
+@router.post("/{agent_id}/reset-others-chat-used")
+async def reset_others_chat_used(
+    agent_id: int,
+    agent: any = Depends(_require_agent_access),
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """重置 AI 的他人对话使用计数"""
+    if agent.owner_id != current_user["user_id"] and current_user.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅 AI 主人或管理员可重置")
+    agent.others_chat_used = 0
+    await db.flush()
+    return {"ok": True, "others_chat_used": 0}
 
 
 # ──────────────────────────── AI 个人工作区 ────────────────────────────

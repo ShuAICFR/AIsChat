@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
 import { Users, MessageSquare, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User, Menu } from 'lucide-react'
 import { getStateDotColor } from '../constants'
-import { getStatusTextStyle, BG_SURFACE_LIGHT, BG_SURFACE_DARK } from '../utils/statusColor'
+import { getStatusTextStyle, BG_CANVAS_LIGHT, BG_CANVAS_DARK } from '../utils/statusColor'
 import { useTheme } from '../context/ThemeContext'
 
 interface Friend {
@@ -337,21 +337,18 @@ export default function FriendsPage() {
                       <span className="text-sm font-medium text-textPrimary truncate">
                         {f.friend_name}
                       </span>
+                      {f.status_text && (
+                        <span className="text-xs font-medium truncate" style={f.status_color
+                          ? getStatusTextStyle(f.status_color, theme === 'dark' ? BG_CANVAS_DARK : BG_CANVAS_LIGHT)
+                          : undefined}>
+                          · {f.status_text}
+                        </span>
+                      )}
                       {stateIcon(f.state)}
                     </div>
                     <span className="text-xs text-textMuted">
                       {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> {t('friends.friendAi')}</> : <><User size={12} className="inline" /> {t('friends.friendHuman')}</>}
                     </span>
-                    {f.status_text && (
-                      <p
-                        className="text-xs mt-0.5 font-medium"
-                        style={f.status_color
-                          ? getStatusTextStyle(f.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
-                          : undefined}
-                      >
-                        {f.status_text}
-                      </p>
-                    )}
                   </div>
                   <MessageSquare size={16} className="text-textMuted shrink-0" />
                 </button>

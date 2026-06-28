@@ -97,6 +97,13 @@ class Agent(Base):
     # AI 类型 (v0.4.0): general(通用) | semi_general(半通用) | resonance(共振, 默认)
     ai_type = Column(String(20), default="resonance")
 
+    # ── 对话权限与限额 (v0.9.0) ──
+    allow_others_chat = Column(Boolean, default=True, comment="是否允许非主人触发此 AI 对话")
+    others_chat_mode = Column(String(20), default="unlimited", comment="允许时的模式: unlimited | quota")
+    others_chat_quota = Column(Integer, default=30, comment="配额上限（触发次数），仅 quota 模式生效")
+    others_chat_used = Column(Integer, default=0, comment="当前已使用次数（可重置）")
+    disallow_mode = Column(String(20), default="strict", comment="禁止时的模式: strict | own_key")
+
     # ── 文件系统记忆配置 (v0.7.0) ──
     # 记忆加载模式: index_only(仅索引) | index_plus_recent(索引+最近N篇内容) | index_plus_semantic(索引+语义检索)
     memory_load_mode = Column(String(30), default="index_only")

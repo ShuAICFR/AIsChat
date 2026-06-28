@@ -548,6 +548,25 @@ const zh: TranslationDict = {
   'agents.discoverable': '允许他人查找此 AI',
   'agents.discoverableDesc': '关闭后其他用户无法通过搜索找到此 AI，也无法通过点击头像添加好友',
 
+  // v0.9.0 对话权限与限额
+  'agents.allowOthersChat': '允许他人对话此 AI',
+  'agents.allowOthersChatDesc': '关闭后仅主人和合作者可触发 AI 回复',
+  'agents.othersChatUnlimited': '始终允许（无限制）',
+  'agents.othersChatQuota': '限制触发次数',
+  'agents.othersChatQuotaLabel': '配额上限（次）',
+  'agents.othersChatUsed': '已使用',
+  'agents.othersChatUsedReset': '重置',
+  'agents.disallowStrict': '严格禁止',
+  'agents.disallowOwnKey': '允许使用自有 API Key',
+  'agents.disallowModeLabel': '禁止时的处理方式',
+  'agents.quotaExhaustedNotice': '你的 AI「{name}」已被其他人触发 {used} 次对话，已达到配额上限（{quota} 条），已自动关闭「允许他人对话」。',
+
+  // v0.9.0 余额弹窗
+  'balance.title': '额度不足',
+  'balance.useOwnKeyPrompt': '你的额度不足，是否使用自有 API Key 继续与「{name}」对话？',
+  'balance.useOwnKey': '使用自有 Key',
+  'balance.cancel': '取消',
+
   // ======================== AI 详情页 / AgentDetail ========================
   'agentDetail.tabInfo': '基本信息',
   'agentDetail.profileSection': '个人资料',
@@ -1944,6 +1963,25 @@ const en: TranslationDict = {
   'agents.paramDelayReplyEnabled': 'Delay Reply',
   'agents.discoverable': 'Allow others to discover this AI',
   'agents.discoverableDesc': 'When disabled, this AI will not appear in search results and cannot receive friend requests via profile click',
+
+  // v0.9.0 Chat permissions & quota
+  'agents.allowOthersChat': 'Allow others to chat with this AI',
+  'agents.allowOthersChatDesc': 'When disabled, only the owner and collaborators can trigger AI replies',
+  'agents.othersChatUnlimited': 'Always allow (unlimited)',
+  'agents.othersChatQuota': 'Limit trigger count',
+  'agents.othersChatQuotaLabel': 'Quota limit (times)',
+  'agents.othersChatUsed': 'Used',
+  'agents.othersChatUsedReset': 'Reset',
+  'agents.disallowStrict': 'Strictly disallow',
+  'agents.disallowOwnKey': 'Allow with own API Key',
+  'agents.disallowModeLabel': 'When disallowed',
+  'agents.quotaExhaustedNotice': 'Your AI "{name}" has been triggered {used} times by others, reaching the quota ({quota}). "Allow others to chat" has been auto-disabled.',
+
+  // v0.9.0 Balance prompt
+  'balance.title': 'Insufficient Balance',
+  'balance.useOwnKeyPrompt': 'Your balance is insufficient. Use your own API Key to continue chatting with "{name}"?',
+  'balance.useOwnKey': 'Use Own Key',
+  'balance.cancel': 'Cancel',
 
   // ======================== AgentDetail ========================
   'agentDetail.tabInfo': 'Basic Info',

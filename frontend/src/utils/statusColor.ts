@@ -63,10 +63,18 @@ export function getStatusTextStyle(
 export const BG_LIGHT = '#f9fafb'
 /** 深色背景典型 hex（Tailwind gray-900） */
 export const BG_DARK = '#111827'
-/** 表面卡片浅色（Tailwind white） */
+/** 表面卡片浅色 — 对应 bg-surface light: #ffffff */
 export const BG_SURFACE_LIGHT = '#ffffff'
-/** 表面卡片深色（Tailwind gray-800） */
-export const BG_SURFACE_DARK = '#1f2937'
+/** 表面卡片深色 — 对应 bg-surface dark: #151223 */
+export const BG_SURFACE_DARK = '#151223'
+/** 浮层卡片浅色 — 对应 bg-elevated light: #ffffff */
+export const BG_ELEVATED_LIGHT = '#ffffff'
+/** 浮层卡片深色 — 对应 bg-elevated dark: #1e1a30 */
+export const BG_ELEVATED_DARK = '#1e1a30'
+/** 画布浅色 — 对应 bg-canvas light: #f8fafc */
+export const BG_CANVAS_LIGHT = '#f8fafc'
+/** 画布深色 — 对应 bg-canvas dark: #0c0a14 */
+export const BG_CANVAS_DARK = '#0c0a14'
 
 /** 预设颜色选项 */
 export const STATUS_COLORS = [

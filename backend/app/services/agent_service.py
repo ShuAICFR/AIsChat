@@ -309,6 +309,11 @@ async def create_agent(
     memory_shared_scope: str = "private_only",
     bio: str | None = None,
     status_text: str | None = None,
+    allow_others_chat: bool = True,
+    others_chat_mode: str = "unlimited",
+    others_chat_quota: int = 30,
+    others_chat_used: int = 0,
+    disallow_mode: str = "strict",
 ) -> Agent:
     """
     创建 AI 代理。
@@ -387,6 +392,11 @@ async def create_agent(
         memory_shared_scope=memory_shared_scope,
         bio=bio,
         status_text=status_text,
+        allow_others_chat=allow_others_chat,
+        others_chat_mode=others_chat_mode,
+        others_chat_quota=others_chat_quota,
+        others_chat_used=others_chat_used,
+        disallow_mode=disallow_mode,
     )
     db.add(agent)
     await db.flush()
@@ -746,6 +756,18 @@ async def update_agent_config(
     # discoverable 可发现性控制
     if "discoverable" in updates:
         agent.discoverable = updates["discoverable"]
+
+    # v0.9.0: 对话权限与限额
+    if "allow_others_chat" in updates and updates["allow_others_chat"] is not None:
+        agent.allow_others_chat = updates["allow_others_chat"]
+    if "others_chat_mode" in updates and updates["others_chat_mode"] is not None:
+        agent.others_chat_mode = updates["others_chat_mode"]
+    if "others_chat_quota" in updates and updates["others_chat_quota"] is not None:
+        agent.others_chat_quota = updates["others_chat_quota"]
+    if "others_chat_used" in updates and updates["others_chat_used"] is not None:
+        agent.others_chat_used = updates["others_chat_used"]
+    if "disallow_mode" in updates and updates["disallow_mode"] is not None:
+        agent.disallow_mode = updates["disallow_mode"]
 
     # is_ai_editable 允许 AI 自修改
     if "is_ai_editable" in updates:
@@ -1378,6 +1400,11 @@ def agent_to_dict(agent: Agent) -> dict:
         "allow_friend_requests": agent.allow_friend_requests if agent.allow_friend_requests is not None else True,
         "auto_respond_friend_request": agent.auto_respond_friend_request if agent.auto_respond_friend_request is not None else False,
         "discoverable": agent.discoverable if agent.discoverable is not None else True,
+        "allow_others_chat": agent.allow_others_chat if agent.allow_others_chat is not None else True,
+        "others_chat_mode": agent.others_chat_mode or "unlimited",
+        "others_chat_quota": agent.others_chat_quota if agent.others_chat_quota is not None else 30,
+        "others_chat_used": agent.others_chat_used if agent.others_chat_used is not None else 0,
+        "disallow_mode": agent.disallow_mode or "strict",
         "user_id": agent.user_id,
         "api_credit_cost": agent.api_credit_cost,
         "api_base_url": agent.api_base_url,

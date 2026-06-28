@@ -227,6 +227,11 @@ export default function CreateAgentModal({
   const [allowFriendRequests, setAllowFriendRequests] = useState(true)
   const [autoRespondFriendRequest, setAutoRespondFriendRequest] = useState(false)
   const [discoverable, setDiscoverable] = useState(true)
+  const [allowOthersChat, setAllowOthersChat] = useState(true)
+  const [othersChatMode, setOthersChatMode] = useState('unlimited')
+  const [othersChatQuota, setOthersChatQuota] = useState(30)
+  const [othersChatUsed, setOthersChatUsed] = useState(0)
+  const [disallowMode, setDisallowMode] = useState('strict')
   const [chatModel, setChatModel] = useState('')
   const [workModel, setWorkModel] = useState('')
   const [apiCreditCost, setApiCreditCost] = useState(0)
@@ -365,6 +370,11 @@ export default function CreateAgentModal({
         allow_friend_requests: allowFriendRequests,
         auto_respond_friend_request: autoRespondFriendRequest,
         discoverable,
+        allow_others_chat: allowOthersChat,
+        others_chat_mode: othersChatMode,
+        others_chat_quota: othersChatQuota,
+        others_chat_used: othersChatUsed,
+        disallow_mode: disallowMode,
         api_credit_cost: apiCreditCost,
         ai_type: aiType,
         memory_load_mode: memoryLoadMode,
@@ -569,6 +579,11 @@ export default function CreateAgentModal({
             autoRespondFriendRequest={autoRespondFriendRequest} setAutoRespondFriendRequest={setAutoRespondFriendRequest}
             reminderGrace={reminderGrace} setReminderGrace={setReminderGrace}
             discoverable={discoverable} setDiscoverable={setDiscoverable}
+            allowOthersChat={allowOthersChat} setAllowOthersChat={setAllowOthersChat}
+            othersChatMode={othersChatMode} setOthersChatMode={setOthersChatMode}
+            othersChatQuota={othersChatQuota} setOthersChatQuota={setOthersChatQuota}
+            othersChatUsed={othersChatUsed} setOthersChatUsed={setOthersChatUsed}
+            disallowMode={disallowMode} setDisallowMode={setDisallowMode}
             chatModel={chatModel} setChatModel={setChatModel}
             workModel={workModel} setWorkModel={setWorkModel}
             aiType={aiType} setAiType={setAiType}
@@ -696,6 +711,11 @@ function DetailSettingsModal({
   autoRespondFriendRequest, setAutoRespondFriendRequest,
   reminderGrace, setReminderGrace,
   discoverable, setDiscoverable,
+  allowOthersChat, setAllowOthersChat,
+  othersChatMode, setOthersChatMode,
+  othersChatQuota, setOthersChatQuota,
+  othersChatUsed, setOthersChatUsed,
+  disallowMode, setDisallowMode,
   chatModel, setChatModel,
   workModel, setWorkModel,
   apiCreditCost, setApiCreditCost,
@@ -728,6 +748,11 @@ function DetailSettingsModal({
   autoRespondFriendRequest: boolean; setAutoRespondFriendRequest: (v: boolean) => void
   reminderGrace: string; setReminderGrace: (v: string) => void
   discoverable: boolean; setDiscoverable: (v: boolean) => void
+  allowOthersChat: boolean; setAllowOthersChat: (v: boolean) => void
+  othersChatMode: string; setOthersChatMode: (v: string) => void
+  othersChatQuota: number; setOthersChatQuota: (v: number) => void
+  othersChatUsed: number; setOthersChatUsed: (v: number) => void
+  disallowMode: string; setDisallowMode: (v: string) => void
   chatModel: string; setChatModel: (v: string) => void
   workModel: string; setWorkModel: (v: string) => void
   apiCreditCost: number; setApiCreditCost: (v: number) => void
@@ -982,6 +1007,48 @@ function DetailSettingsModal({
             {allowFriendRequests && (
               <ToggleField label={t('modal.detailSettingsAutoRespondFriendRequest')} value={autoRespondFriendRequest} setValue={setAutoRespondFriendRequest} desc={t('modal.detailSettingsAutoRespondFriendRequestDesc')} />
             )}
+          </Section>
+
+          {/* ── 对话权限 ── */}
+          <Section title={t('agents.allowOthersChat')} desc={t('agents.allowOthersChatDesc')}>
+            <ToggleField label={t('agents.allowOthersChat')} value={allowOthersChat} setValue={setAllowOthersChat} desc={t('agents.allowOthersChatDesc')} />
+            {/* 允许时的子模式 */}
+            <div className={`ml-4 pl-3 border-l-2 transition-opacity ${allowOthersChat ? 'border-primary-400/30' : 'border-border/30 opacity-60'}`}>
+              <label className="text-[11px] font-medium text-textMuted mb-2 block">{t('agents.othersChatQuotaLabel')} · {allowOthersChat ? 'ON' : 'OFF'}</label>
+              <div className="flex items-center gap-3 mb-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="othersChatMode" value="unlimited" checked={othersChatMode === 'unlimited'} onChange={() => setOthersChatMode('unlimited')} className="text-primary-500" />
+                  <span className="text-xs text-textSecondary">{t('agents.othersChatUnlimited')}</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="othersChatMode" value="quota" checked={othersChatMode === 'quota'} onChange={() => setOthersChatMode('quota')} className="text-primary-500" />
+                  <span className="text-xs text-textSecondary">{t('agents.othersChatQuota')}</span>
+                </label>
+              </div>
+              {othersChatMode === 'quota' && (
+                <div className="flex items-center gap-3 mb-2">
+                  <NumberField label={t('agents.othersChatQuotaLabel')} value={othersChatQuota} setValue={setOthersChatQuota} min={1} max={9999} />
+                  <div className="flex items-center gap-2 pt-5">
+                    <span className="text-[11px] text-textMuted">{t('agents.othersChatUsed')}: {othersChatUsed}</span>
+                    <button type="button" onClick={() => setOthersChatUsed(0)} className="text-[10px] px-2 py-0.5 rounded border border-border text-textMuted hover:text-textSecondary transition-colors">{t('agents.othersChatUsedReset')}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* 禁止时的子模式 */}
+            <div className={`ml-4 pl-3 border-l-2 transition-opacity ${!allowOthersChat ? 'border-rose-400/30' : 'border-border/30 opacity-60'}`}>
+              <label className="text-[11px] font-medium text-textMuted mb-2 block">{t('agents.disallowModeLabel')} · {!allowOthersChat ? 'ON' : 'OFF'}</label>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="disallowMode" value="strict" checked={disallowMode === 'strict'} onChange={() => setDisallowMode('strict')} className="text-primary-500" />
+                  <span className="text-xs text-textSecondary">{t('agents.disallowStrict')}</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="disallowMode" value="own_key" checked={disallowMode === 'own_key'} onChange={() => setDisallowMode('own_key')} className="text-primary-500" />
+                  <span className="text-xs text-textSecondary">{t('agents.disallowOwnKey')}</span>
+                </label>
+              </div>
+            </div>
           </Section>
 
           {/* ── 额度 ── */}

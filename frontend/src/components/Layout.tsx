@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
+import BalancePromptModal from './BalancePromptModal'
 import { useDesktopNotification } from '../hooks/useDesktopNotification'
 
 export default function Layout() {
@@ -46,6 +47,9 @@ export default function Layout() {
 
       {/* ── 移动端底部导航（聊天详情页隐藏） ── */}
       {!hideNav && <MobileNav closeDrawer={() => setDrawerOpen(false)} />}
+
+      {/* ── 全局弹窗 ── */}
+      <BalancePromptModal />
     </div>
   )
 }

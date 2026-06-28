@@ -98,6 +98,11 @@ export function useWebSocket(
           }, 5000)
         }
 
+        // v0.9.0: 余额弹窗 → 全局自定义事件（BalancePromptModal 监听）
+        if (msg.type === 'balance_prompt' && msg.data) {
+          window.dispatchEvent(new CustomEvent('balance-prompt', { detail: msg.data }))
+        }
+
         // 分发给消费者回调（ChatView 注册）
         // 无需 flushSync：消费者内部全部使用函数式 setState(prev => ...)，
         // 即使 React 18 批处理合并多次调用，prev 链式叠加也不会丢失消息。

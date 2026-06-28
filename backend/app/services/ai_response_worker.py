@@ -181,6 +181,7 @@ async def _process_dm_event(db, event: dict):
     content = event["content"]
     sender_id = event.get("sender_id")
     chain_depth = event.get("chain_depth", 0)
+    force_own_key = event.get("force_own_key", False)  # v0.9.0
 
     from app.models.dm import DMSession
     from app.models.user import User
@@ -225,6 +226,7 @@ async def _process_dm_event(db, event: dict):
         db, agent, session_id, content, message_id,
         chain_depth=chain_depth + 1,
         sender_id=sender_id,
+        force_own_key=force_own_key,
     )
 
 
@@ -308,18 +310,24 @@ async def _process_group_event(db, event: dict):
         )
 
 
-async def _get_api_config(db, agent, exclude_pool_key_id: int | None = None) -> tuple[str | None, str, str, int | None]:
+async def _get_api_config(
+    db, agent,
+    exclude_pool_key_id: int | None = None,
+    chatter_id: int | None = None,
+    force_own_key: bool = False,
+) -> tuple[str | None, str, str, int | None]:
     """
     获取 API Key 和 Base URL（四层优先链 + 平台赠送额度）。
 
-    Tier 1: Agent 自有 Key（已有，不变）
-    Tier 2: 用户有可用额度（平台赠送 + api_credit）→ 使用 API Key 池
-    Tier 3: 用户有 api_credit + 无绑定 → 自动选最优池 Key 并绑定
-    Tier 4: 用户自有 Key（已有，不变）
+    Tier 1: Agent 自有 Key
+    Tier 2: 账单人有可用额度 → API Key 池
+    Tier 3: 账单人有 api_credit + 无绑定 → 自动选最优池 Key
+    Tier 4: 账单人自有 Key
+
+    v0.9.0: chatter_id 决定账单人（通用 AI 扣聊天者，否则扣主人）。
+            force_own_key=True 时跳过 Tier 2/3，直接走账单人自有 Key。
 
     返回: (api_key, api_base, credit_source, pool_key_id)
-      - credit_source: "agent_key" | "pool_key" | "user_key" | "none"
-      - pool_key_id: 池 Key ID（仅 pool_key 时有值）
     """
     from app.utils.crypto import decrypt_api_key
     from app.models.user import User as UserModel
@@ -329,6 +337,12 @@ async def _get_api_config(db, agent, exclude_pool_key_id: int | None = None) -> 
     credit_source = "none"
     pool_key_id = None
 
+    # 确定账单人：通用/半通用 + 有聊天者 → 聊天者付；否则主人付
+    if chatter_id and agent.ai_type in ("general", "semi_general"):
+        bill_user_id = chatter_id
+    else:
+        bill_user_id = agent.owner_id
+
     # Tier 1: Agent 自有 Key
     if agent.api_key_encrypted:
         api_key = decrypt_api_key(agent.api_key_encrypted)
@@ -336,11 +350,19 @@ async def _get_api_config(db, agent, exclude_pool_key_id: int | None = None) -> 
         credit_source = "agent_key"
         return api_key, api_base, credit_source, pool_key_id
 
-    # 查用户
-    user_result = await db.execute(select(UserModel).where(UserModel.id == agent.owner_id))
+    # 查账单用户
+    user_result = await db.execute(select(UserModel).where(UserModel.id == bill_user_id))
     user = user_result.scalar_one_or_none()
 
     if user is None:
+        return api_key, api_base, credit_source, pool_key_id
+
+    # force_own_key: 跳过池 Key，直接走用户自有 Key
+    if force_own_key:
+        if user.api_key_encrypted:
+            api_key = decrypt_api_key(user.api_key_encrypted)
+            api_base = user.api_base_url or settings.deepseek_base_url
+            credit_source = "user_key"
         return api_key, api_base, credit_source, pool_key_id
 
     # 有效可用额度 = 平台赠送（截断>=0） + api_credit
@@ -1028,13 +1050,18 @@ async def _tool_call_loop(
             await save_current_task(db, agent.id, last_task)
         except Exception:
             pass
-    # v0.6.0: LLM 调用后扣除额度（使用池 Key 时才扣 api_credit）
+    # v0.9.0: LLM 调用后扣除额度（按 AI 类型 + 场景决定账单人）
     if total_usage["api_calls"] > 0 and total_usage["total_tokens"] > 0:
         try:
+            # 确定账单人：DM + 通用/半通用 → 聊天者（trigger_user_id）；否则 → 创建者
+            if conversation_type == "dm" and agent.ai_type in ("general", "semi_general") and trigger_user_id:
+                bill_user_id = trigger_user_id
+            else:
+                bill_user_id = agent.owner_id
             from app.services.quota_service import deduct_credit
             await deduct_credit(
                 db,
-                user_id=agent.owner_id,
+                user_id=bill_user_id,
                 tokens_used=total_usage["total_tokens"],
                 source=credit_source,
                 pool_key_id=pool_key_id,
@@ -1063,6 +1090,7 @@ async def _trigger_dm_ai_reply(
     trigger_message_id: int,
     chain_depth: int = 0,
     sender_id: int | None = None,
+    force_own_key: bool = False,
 ):
     """触发 AI 对私信的自动回复"""
     from app.services.agent_service import get_agent
@@ -1082,8 +1110,12 @@ async def _trigger_dm_ai_reply(
     from app.services.agent_service import get_effective_config as _get_eff_cfg
     effective_cfg = await _get_eff_cfg(db, agent.id, sender_id)
 
-    # 获取 API 配置（v0.6.0: 四层优先链含池 Key）
-    api_key, api_base, credit_source, pool_key_id = await _get_api_config(db, agent)
+    # 获取 API 配置（v0.9.0: 按 AI 类型 + force_own_key 决定账单人）
+    api_key, api_base, credit_source, pool_key_id = await _get_api_config(
+        db, agent,
+        chatter_id=sender_id,
+        force_own_key=force_own_key,
+    )
 
     # 无 API Key → 发送 DM 系统通知后跳过
     if api_key is None:

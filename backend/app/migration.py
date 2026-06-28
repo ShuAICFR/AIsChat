@@ -41,6 +41,7 @@ async def run_migrations():
             await _migrate_friend_controls(db)         # v0.6.0 好友控制字段（必须在 select(Agent) 之前）
             await _migrate_memory_config_columns(db)   # v0.8.0 文件记忆配置字段（必须在 select(Agent) 之前）
             await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态（必须在 select(Agent) 之前）
+            await _migrate_others_chat_controls(db)  # v0.9.0 对话权限 + 限额控制（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -1854,4 +1855,48 @@ async def _migrate_system_user(db):
     # 重置序列（确保后续 ID 不受影响）
     await db.execute(text("SELECT setval('users_id_seq', greatest(0, (SELECT COALESCE(MAX(id), 0) FROM users)))"))
     await db.flush()
+
+
+async def _migrate_others_chat_controls(db):
+    """v0.9.0: AI 对话权限与限额控制"""
+    created_any = False
+
+    if not await _column_exists(db, "agents", "allow_others_chat"):
+        logger.info("  👥 添加 agents.allow_others_chat 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN allow_others_chat BOOLEAN NOT NULL DEFAULT TRUE"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.allow_others_chat 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "others_chat_mode"):
+        logger.info("  📊 添加 agents.others_chat_mode 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN others_chat_mode VARCHAR(20) NOT NULL DEFAULT 'unlimited'"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.others_chat_mode 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "others_chat_quota"):
+        logger.info("  🔢 添加 agents.others_chat_quota 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN others_chat_quota INTEGER NOT NULL DEFAULT 30"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.others_chat_quota 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "others_chat_used"):
+        logger.info("  🔢 添加 agents.others_chat_used 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN others_chat_used INTEGER NOT NULL DEFAULT 0"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.others_chat_used 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "disallow_mode"):
+        logger.info("  🚫 添加 agents.disallow_mode 列")
+        await db.execute(text("ALTER TABLE agents ADD COLUMN disallow_mode VARCHAR(20) NOT NULL DEFAULT 'strict'"))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.disallow_mode 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ 对话权限/限额迁移完成")
 

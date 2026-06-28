@@ -11,18 +11,27 @@
 
 ### Added
 
-- 👤 **用户/AI 个人资料系统**：`agents` 表新增 `bio`（TEXT，AI 简介）+ `status_text`（VARCHAR 100，个性状态），`users` 表新增 `bio` + `status_text`。创建/编辑 AI 弹窗主表单直接填写简介和个性状态，无需进详细设置。用户可在「我的」→ 设置 → 个人资料区编辑自己的 bio 和状态文本。AI 可通过新增的 `set_status` 工具自主修改个性状态（中文≤10字，英文≤30字符，active/dnd/offline 均可用）。
+- 👤 **用户/AI 个人资料系统**：`agents` 表新增 `bio`（TEXT，AI 简介）+ `status_text`（VARCHAR 100，个性状态），`users` 表新增 `bio` + `status_text`。创建/编辑 AI 弹窗主表单直接填写简介和个性状态，无需进详细设置。用户可在「我的」→ 编辑资料弹窗中编辑自己的 bio 和状态文本。AI 可通过新增的 `set_status` 工具自主修改个性状态（中文≤10字，英文≤30字符，active/dnd/offline 均可用）。
 - 🪪 **资料卡弹窗 ProfileCard**：全新 `GET /user/profile/{entity_type}/{entity_id}` 端点，返回聚合资料（头像、简介、状态、注册时间、AI 制作者、是否好友）。前端 ProfileCard 组件全面重写——展示真实头像（gradient 兜底）、bio 文字、状态文本（斜体强调色）、制作者信息。支持「加好友」按钮切换附言输入区，发送带验证消息的好友申请。
 - 🔍 **搜索结果头像可点 + 加好友附言**：搜索结果中点击头像或名称区域 → 打开 ProfileCard 资料卡。搜索加好友改为内联消息输入（输入附言 → 确认发送），替代原来的一键无附言发送。
 - 📱 **移动端添加好友改为内联弹窗**：ChatArea 中点击 `+` → 添加好友 → 弹出内联搜索弹窗（而非跳转到 `/friends` 路由）。
 - 🔧 **工具系统新增 `set_status`**：第 30 个工具，AI 可自主设置个性状态文本，位于 self_config 段。
 - 📝 **DM 头部头像可点**：私信头部对方头像点击 → 打开 ProfileCard 资料卡。
+- 🎨 **状态文字颜色自定义**：用户可为个性状态选择预设颜色（8 种 + 默认无颜色）。WCAG 对比度自动检测——与父容器背景色计算对比度，不足 4.5:1 时自动追加文字辉光保证可读性。`users` 表新增 `status_color` 列。颜色选择器在 `/me` 编辑资料弹窗中。
+- 📍 **状态文本多位置显示**：好友列表、私信（DM）列表、`/me` 个人资料卡三处均展示个性状态文本（含自定义颜色）。后端 `dm_service._get_partner_info` 和 `friend_service.list_friends` 同步返回 `status_text` + `status_color`。
+
+### Changed
+
+- ♻️ **个人资料编辑迁移到 /me**：bio 和 status_text 从设置页（`/settings`）移至 `/me` 编辑资料弹窗。设置页移除"个人资料"分区。所有个人资料编辑统一在 `/me` 完成。
 
 ### Fixed
 
 - 🐛 **搜索 AI 重复显示**：AI 的 `User` 记录（`type="ai"`）也被用户搜索匹配，导致同一 AI 出现两次（一次标为 human，一次标为 AI）。修复：`search_service.py` 和 `friend_service.py` 的用户查询增加 `User.type == "human"` 过滤。
 - 🐛 **移动端聊天列表右侧空隙**：`max-w-[90vw]` 约束导致侧边栏未填满屏幕宽度。修复：改用 `inset-0`（四边全填充）。
 - 🐛 **AI 卡片底部按钮事件冒泡**：编辑/历史/状态/导出按钮的 `onClick` 事件冒泡到父级卡片 → 触发 `navigate` 跳转详情页，弹窗闪现后消失。修复：4 个按钮全部加 `e.stopPropagation()`。
+- 🐛 **/agents 页 AI 卡片不显示已设头像**：头像区域硬编码 Bot 图标。修复：有 `avatar_url` 显示 `<img>`，无则默认图标。
+- 🐛 **头像裁剪失效**：`AvatarCropModal` 的 `onMediaLoaded` 接收的是 `MediaSize` 尺寸对象而非 `HTMLImageElement`，`imageRef` 永远为 null 导致裁剪确认时回退发原图。
+- 🐛 **人类用户资料卡注册时间旁显示机器人图标**：ProfileCard 注册时间行硬编码 `<Bot>` 图标。修复：`entityType === 'human'` 时显示 `<User>` 图标。
 
 - 📤 **AI 文件发送工具 `send_file`**：AI 可从自己的文件空间（`file_write` 创建的文件）发送到群聊或私信。零拷贝引用已有 `FileMetadata`，三元权限匹配（`path + owner_type + owner_id`），不可跨 AI 读文件。群聊用 `agent_id`，私信用 `agent.user_id`。WebSocket 广播 + 触发其他 AI 回复。`CORE_IDENTITY` 系统提示词已更新告知 AI 有此能力。
 - 🖼️ **文件预览弹窗增强**：图片预览支持缩放（+/- 按钮 + Ctrl+滚轮，0.5x-5x）、重置缩放。PDF 使用浏览器原生 `<iframe>` 内嵌预览。DOCX 通过 mammoth.js 客户端转 HTML 渲染（`dangerouslySetInnerHTML` + prose 样式）。文本类文件（txt/json/xml/yaml/sh/js 等）用 `<pre>` 语法高亮预览（≤2MB）。不可预览的自动触发下载。移动端全屏 + ArrowLeft 返回按钮；桌面端居中弹窗 800px max-w / 88vh max-h。所有预览均有下载按钮。

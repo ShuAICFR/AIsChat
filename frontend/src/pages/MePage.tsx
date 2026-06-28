@@ -131,7 +131,7 @@ export default function MePage() {
     api.get<{ ai_count: number; friend_count: number; group_count: number; storage_used: number }>('/user/stats').then(r => {
       setStats(r)
     }).catch(() => {})
-  }, [user])
+  }, [])
 
   // 汇总
   const totalTokens = usage.reduce((s, u) => s + (u.total_tokens || 0), 0)

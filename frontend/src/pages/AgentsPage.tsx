@@ -172,8 +172,12 @@ export default function AgentsPage() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary-500/15 flex items-center justify-center">
-                        <Bot size={20} className="text-primary-400" />
+                      <div className="w-10 h-10 rounded-full bg-primary-500/15 flex items-center justify-center overflow-hidden">
+                        {agent.avatar_url ? (
+                          <img src={agent.avatar_url} className="w-10 h-10 rounded-full object-cover" alt={agent.name} />
+                        ) : (
+                          <Bot size={20} className="text-primary-400" />
+                        )}
                       </div>
                       <div>
                         <h3 className="font-medium text-textPrimary">{agent.name}</h3>

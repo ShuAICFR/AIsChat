@@ -329,7 +329,7 @@ export default function SettingsPage() {
           <Zap size={18} className="text-primary-400" />
           <h2 className="font-semibold text-textPrimary">{t('settings.quotaTitle')}</h2>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="bg-canvas rounded-xl p-4 border border-border">
             <p className="text-xs text-textMuted mb-1">{t('settings.aiQuota')}</p>
             <p className="text-2xl font-bold text-textPrimary">{user?.ai_quota ?? 0}</p>
@@ -344,11 +344,6 @@ export default function SettingsPage() {
             <p className="text-xs text-textMuted mb-1">{t('settings.platformCredit')}</p>
             <p className="text-2xl font-bold text-textPrimary">{user?.platform_gifted_credit ?? 0}</p>
             <p className="text-[10px] text-textMuted mt-1">{t('settings.platformCreditHint')}</p>
-          </div>
-          <div className="bg-canvas rounded-xl p-4 border border-border">
-            <p className="text-xs text-textMuted mb-1">{t('settings.totalEffective')}</p>
-            <p className="text-2xl font-bold text-textPrimary">{user?.total_effective ?? 0}</p>
-            <p className="text-[10px] text-textMuted mt-1">{t('settings.totalEffectiveHint')}</p>
           </div>
           <div className="bg-canvas rounded-xl p-4 border border-border">
             <p className="text-xs text-textMuted mb-1">{t('settings.fileQuota')}</p>

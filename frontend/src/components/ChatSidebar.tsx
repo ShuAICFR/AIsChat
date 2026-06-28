@@ -31,6 +31,7 @@ interface ChatSidebarProps {
   activeGroupId: number | null
   activeSessionId: string | null
   onCreateGroup: () => void
+  onAddFriend: () => void
   openDrawer: () => void
   /** 移动端选中对话后隐藏侧边栏 */
   hideOnMobile: boolean
@@ -44,6 +45,7 @@ export default function ChatSidebar({
   activeGroupId,
   activeSessionId,
   onCreateGroup,
+  onAddFriend,
   openDrawer,
   hideOnMobile,
   onMobileBack,
@@ -184,7 +186,7 @@ export default function ChatSidebar({
                   {t('chatlist.createGroup')}
                 </button>
                 <button
-                  onClick={() => { setShowPlusMenu(false); navigate('/friends') }}
+                  onClick={() => { setShowPlusMenu(false); onAddFriend() }}
                   className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-textSecondary hover:bg-canvas hover:text-textPrimary transition-colors"
                 >
                   <UserPlus size={15} />

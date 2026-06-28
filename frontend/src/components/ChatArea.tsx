@@ -5,7 +5,8 @@ import ChatView from './ChatView'
 import ChatSidebar from './ChatSidebar'
 import DMChatView from './DMChatView'
 import GroupSettingsPanel from './GroupSettingsPanel'
-import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User, Globe } from 'lucide-react'
+import SearchOverlay from './SearchOverlay'
+import { Bell, BellOff, UserPlus, Settings, ArrowLeft, Bot, User, Globe, X } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 
@@ -40,6 +41,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showAddFriend, setShowAddFriend] = useState(false)
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
@@ -91,6 +93,7 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
           activeGroupId={groupId}
           activeSessionId={dmSessionId}
           onCreateGroup={() => setShowCreateGroup(true)}
+          onAddFriend={() => setShowAddFriend(true)}
           openDrawer={openDrawer}
           hideOnMobile={hasActiveConversation && !mobileSidebarOpen}
           onMobileBack={mobileSidebarOpen ? () => setMobileSidebarOpen(false) : undefined}
@@ -193,6 +196,24 @@ export default function ChatArea({ groupId, dmSessionId }: ChatAreaProps) {
         /* ── 私信 ── */
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <DMChatView sessionId={dmSessionId!} onMobileBack={() => setMobileSidebarOpen(true)} />
+        </div>
+      )}
+
+      {/* 添加好友弹窗 */}
+      {showAddFriend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowAddFriend(false)}>
+          <div
+            className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl shadow-black/30 pb-[var(--safe-bottom)] md:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-textPrimary">{t('friends.add')}</h2>
+              <button onClick={() => setShowAddFriend(false)} className="p-1 hover:bg-canvas rounded-lg text-textMuted hover:text-textSecondary">
+                <X size={18} />
+              </button>
+            </div>
+            <SearchOverlay />
+          </div>
         </div>
       )}
 

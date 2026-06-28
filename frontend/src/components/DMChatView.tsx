@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import ChatView from './ChatView'
 import DMSettingsPanel from './DMSettingsPanel'
+import ProfileCard from './ProfileCard'
 import { ArrowLeft, Bell, BellOff, Settings, Bot, User, Globe, ShieldAlert } from 'lucide-react'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
@@ -17,6 +18,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
   const [partner, setPartner] = useState<{ id: number; name: string; type: string; state: string | null; is_federated?: boolean; avatar_url?: string | null } | null>(null)
   const [myDndUntil, setMyDndUntil] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -54,10 +56,15 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
           <ArrowLeft size={20} />
         </button>
 
-        {/* 对方头像 */}
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-bl flex items-center justify-center text-xs font-bold text-white shrink-0 overflow-hidden ${
-          partner?.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-teal-400 to-teal-600'
-        }`}>
+        {/* 对方头像（可点击 → 资料卡） */}
+        <button
+          onClick={() => partner && setShowProfile(true)}
+          className="shrink-0"
+          title={t('profileCard.viewProfile')}
+        >
+          <div className={`w-8 h-8 rounded-full bg-gradient-to-bl flex items-center justify-center text-xs font-bold text-white overflow-hidden ${
+            partner?.type === 'system' ? 'from-rose-400 to-rose-600' : 'from-teal-400 to-teal-600'
+          }`}>
           {partner?.avatar_url ? (
             <img src={partner.avatar_url} alt={partner.name || ''} className="w-full h-full object-cover" />
           ) : partner?.type === 'system' ? (
@@ -66,6 +73,7 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
             partner?.name?.charAt(0)?.toUpperCase() || '?'
           )}
         </div>
+        </button>
 
         {/* 对方信息 */}
         <div className="flex-1 min-w-0">
@@ -133,6 +141,17 @@ export default function DMChatView({ sessionId, onMobileBack }: DMChatViewProps)
           myDndUntil={myDndUntil}
           onClose={() => setShowSettings(false)}
           onDndChange={(dndUntil) => setMyDndUntil(dndUntil)}
+        />
+      )}
+
+      {/* 资料卡 */}
+      {showProfile && partner && (
+        <ProfileCard
+          entityType={partner.type as 'human' | 'ai'}
+          entityId={partner.id}
+          entityName={partner.name}
+          state={partner.state || undefined}
+          onClose={() => setShowProfile(false)}
         />
       )}
     </div>

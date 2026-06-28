@@ -45,6 +45,8 @@ interface Agent {
   api_base_url: string | null
   has_api_key: boolean
   avatar_url: string | null
+  bio: string | null
+  status_text: string | null
   api_token: string | null
   is_ai_editable: boolean
   reminder_grace: string
@@ -625,6 +627,47 @@ export default function AgentDetailPage() {
                   {agent.current_system_prompt || t('agentDetail.notSet')}
                 </p>
               )}
+            </div>
+
+            {/* 个人资料 */}
+            <div className="bg-surface rounded-xl border border-border p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <User size={16} className="text-primary-400" />
+                <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.profileSection')}</h3>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-textMuted">{t('agentDetail.bioLabel')}</label>
+                  <div className="relative mt-1">
+                    <textarea
+                      defaultValue={agent?.bio || ''}
+                      onBlur={(e) => {
+                        const val = e.target.value
+                        if (val !== (agent?.bio || '')) handleUpdateAgentField('bio', val || null)
+                      }}
+                      rows={3}
+                      maxLength={500}
+                      className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-y"
+                      placeholder={t('agentDetail.bioPlaceholder')}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-textMuted">{t('agentDetail.statusTextLabel')}</label>
+                  <input
+                    type="text"
+                    defaultValue={agent?.status_text || ''}
+                    onBlur={(e) => {
+                      const val = e.target.value
+                      if (val !== (agent?.status_text || '')) handleUpdateAgentField('status_text', val || null)
+                    }}
+                    maxLength={100}
+                    className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                    placeholder={t('agentDetail.statusTextPlaceholder')}
+                  />
+                  <p className="text-[10px] text-textMuted mt-1">{t('agentDetail.statusTextHint')}</p>
+                </div>
+              </div>
             </div>
 
             {/* Config Info */}

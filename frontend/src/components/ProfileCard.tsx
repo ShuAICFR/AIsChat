@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, MessageSquare } from 'lucide-react'
+import { X, MessageSquare, UserPlus, Bot, User } from 'lucide-react'
 import { api } from '../api/client'
 import { getStateDotColor } from '../constants'
 import { useT } from '../i18n/I18nContext'
@@ -13,15 +13,41 @@ interface ProfileCardProps {
   onClose: () => void
 }
 
+interface ProfileData {
+  entity_type: string
+  entity_id: number
+  name: string
+  avatar_url: string | null
+  bio: string | null
+  status_text: string | null
+  state?: string
+  created_at: string | null
+  owner_name: string | null
+  is_friend: boolean
+}
+
 export default function ProfileCard({ entityType, entityId, entityName, state, onClose }: ProfileCardProps) {
   const t = useT()
   const navigate = useNavigate()
+  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  // 加好友
+  const [showAddFriend, setShowAddFriend] = useState(false)
+  const [friendMessage, setFriendMessage] = useState('')
+  const [addingFriend, setAddingFriend] = useState(false)
+
+  useEffect(() => {
+    setLoading(true)
+    api.get<ProfileData>(`/user/profile/${entityType}/${entityId}`)
+      .then(setProfile)
+      .catch(() => setProfile(null))
+      .finally(() => setLoading(false))
+  }, [entityType, entityId])
 
   const handleSendDM = async () => {
     setSending(true)
     try {
-      // 注意：DM API 使用 target_user_id（Human 的 user_id 或 AI 绑定的 user_id）
       const dm = await api.post<{ session_id: string }>(`/dm/${entityId}`)
       if (dm.session_id) {
         onClose()
@@ -31,6 +57,25 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
       alert(err.message || t('error.startDmFailed'))
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleAddFriend = async () => {
+    setAddingFriend(true)
+    try {
+      await api.post('/friends/requests', {
+        target_type: entityType,
+        target_id: entityId,
+        message: friendMessage.trim() || undefined,
+      })
+      setProfile(prev => prev ? { ...prev, is_friend: true } : null)
+      setShowAddFriend(false)
+      setFriendMessage('')
+      alert(t('search.addFriendSuccess'))
+    } catch (err: any) {
+      alert(err.message || t('search.addFriendFailed'))
+    } finally {
+      setAddingFriend(false)
     }
   }
 
@@ -44,44 +89,154 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
     }
   }
 
+  const displayState = profile?.state || state
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+        <div
+          className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl shadow-black/30"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const name = profile?.name || entityName
+  const avatarUrl = profile?.avatar_url
+  const bio = profile?.bio
+  const statusText = profile?.status_text
+  const ownerName = profile?.owner_name
+  const createdAt = profile?.created_at
+  const isFriend = profile?.is_friend ?? false
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl shadow-black/30"
+        className="bg-elevated border border-border rounded-2xl p-6 w-full max-w-sm mx-4 shadow-2xl shadow-black/30 pb-[var(--safe-bottom)] md:pb-6"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 头部 */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-full bg-gradient-to-bl flex items-center justify-center text-lg font-bold ${
-              entityType === 'human'
-                ? 'from-primary-500 to-primary-700 text-white'
-                : 'from-teal-400 to-teal-600 text-white'
-            }`}>
-              {entityName.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h3 className="font-semibold text-textPrimary">{entityName}</h3>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            {/* 头像 */}
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={name} className="w-14 h-14 rounded-full object-cover shrink-0 bg-elevated border-2 border-border" />
+            ) : (
+              <div className={`w-14 h-14 rounded-full bg-gradient-to-bl flex items-center justify-center text-xl font-bold shrink-0 ${
+                entityType === 'human'
+                  ? 'from-primary-500 to-primary-700 text-white'
+                  : 'from-teal-400 to-teal-600 text-white'
+              }`}>
+                {name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h3 className="font-semibold text-textPrimary text-base truncate">{name}</h3>
               <div className="flex items-center gap-1.5 text-sm text-textSecondary">
-                <span className={`w-2 h-2 rounded-full ${getStateDotColor(state)}`} />
-                <span>{entityType === 'ai' ? `${t('profileCard.aiPrefix')} ${getStateText(state)}` : t('profileCard.human')}</span>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${getStateDotColor(displayState)}`} />
+                <span>{entityType === 'ai' ? `AI · ${getStateText(displayState)}` : t('profileCard.human')}</span>
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-textMuted hover:text-textSecondary">
+          <button onClick={onClose} className="p-1 hover:bg-canvas rounded-lg text-textMuted hover:text-textSecondary shrink-0">
             <X size={20} />
           </button>
         </div>
 
-        {/* 操作区 — 直接发私信 */}
-        <button
-          onClick={handleSendDM}
-          disabled={sending}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 transition-all text-sm font-medium shadow-lg shadow-primary-500/20"
-        >
-          <MessageSquare size={16} />
-          {sending ? t('profileCard.sending') : t('profileCard.sendDM')}
-        </button>
+        {/* 状态文本 */}
+        {statusText && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-accent-400/5 border border-accent-400/10 text-sm text-accent-400 italic">
+            "{statusText}"
+          </div>
+        )}
+
+        {/* 简介 */}
+        {bio && (
+          <div className="mb-3">
+            <p className="text-sm text-textSecondary leading-relaxed">{bio}</p>
+          </div>
+        )}
+
+        {/* 详细信息 */}
+        <div className="mb-4 space-y-1 text-xs text-textMuted">
+          {entityType === 'ai' && ownerName && (
+            <div className="flex items-center gap-1.5">
+              <User size={12} />
+              <span>{t('profileCard.creator')}: {ownerName}</span>
+            </div>
+          )}
+          {createdAt && (
+            <div className="flex items-center gap-1.5">
+              <Bot size={12} />
+              <span>{t('profileCard.registeredOn')}: {new Date(createdAt).toLocaleDateString('zh-CN')}</span>
+            </div>
+          )}
+          {entityType === 'ai' && (
+            <div className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${getStateDotColor(displayState)}`} />
+              <span>{getStateText(displayState) || displayState}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 操作按钮 */}
+        <div className="space-y-2">
+          {/* 加好友区域 */}
+          {!isFriend && (
+            showAddFriend ? (
+              <div className="space-y-2">
+                <textarea
+                  value={friendMessage}
+                  onChange={(e) => setFriendMessage(e.target.value)}
+                  placeholder={t('profileCard.friendMessagePlaceholder')}
+                  rows={2}
+                  maxLength={200}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShowAddFriend(false); setFriendMessage('') }}
+                    className="flex-1 py-2 text-xs border border-border rounded-lg hover:bg-canvas text-textSecondary transition-colors"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={addingFriend}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg bg-mint-400 text-white hover:bg-mint-500 disabled:opacity-40 transition-colors"
+                  >
+                    <UserPlus size={12} />
+                    {addingFriend ? '...' : t('profileCard.sendRequest')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAddFriend(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-mint-400/10 border border-mint-400/20 text-mint-400 hover:bg-mint-400/20 transition-colors text-sm font-medium"
+              >
+                <UserPlus size={16} />
+                {t('profileCard.addFriend')}
+              </button>
+            )
+          )}
+
+          {/* 发消息 */}
+          <button
+            onClick={handleSendDM}
+            disabled={sending}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-30 transition-all text-sm font-medium shadow-lg shadow-primary-500/20"
+          >
+            <MessageSquare size={16} />
+            {sending ? t('profileCard.sending') : isFriend ? t('profileCard.sendDM') : t('profileCard.sendDM')}
+          </button>
+        </div>
       </div>
     </div>
   )

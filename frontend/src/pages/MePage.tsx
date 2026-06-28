@@ -579,7 +579,7 @@ export default function MePage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.statusColorLabel')}</label>
-                <div className="flex gap-1.5 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   {STATUS_COLORS.map(c => (
                     <button
                       key={c.value}
@@ -598,6 +598,15 @@ export default function MePage() {
                       {c.value === '' && <X size={10} className="text-textMuted m-auto" />}
                     </button>
                   ))}
+                  <div className="relative">
+                    <input
+                      type="color"
+                      value={editStatusColor || '#000000'}
+                      onChange={e => setEditStatusColor(e.target.value)}
+                      className="w-6 h-6 rounded-full cursor-pointer border-2 border-border hover:border-primary-400 transition-colors"
+                      title={t('me.statusColorCustom') || '自定义'}
+                    />
+                  </div>
                 </div>
               </div>
               <div>

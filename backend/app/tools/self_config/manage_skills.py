@@ -37,6 +37,8 @@ class ManageSkills(ToolPlugin):
     }
     required = ["action"]
     states = ["active", "dnd"]
+    admin_description = "管理行为技能（延迟回复、打字指示器、场景匹配、注入提示词）。启用/禁用/配置各项技能参数。"
+    trigger_condition = "AI 或管理员调整行为技能时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

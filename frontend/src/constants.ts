@@ -28,6 +28,22 @@ export const STATE_BADGE_COLORS: Record<string, string> = {
   blocked: 'bg-accent-400/15 text-accent-400 border-accent-400/30',
 }
 
+/** 状态中文标签 */
+export const STATE_LABELS: Record<string, string> = {
+  active: '在线',
+  dnd: '勿扰',
+  offline: '离线',
+  blocked: '封禁',
+}
+
+/** 状态标签颜色（小标签/药丸样式，用于工具和技能管理面板） */
+export const STATE_TAG_COLORS: Record<string, string> = {
+  active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  dnd: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  offline: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  blocked: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+}
+
 // ============================================================
 // AI 类型标签（统一数据源，避免 AgentsPage / MePage 重复定义）
 // ============================================================

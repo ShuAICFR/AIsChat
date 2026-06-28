@@ -18,6 +18,8 @@ class EndTurn(ToolPlugin):
     parameters = {}
     required = []
     states = ["active", "dnd", "offline"]
+    admin_description = "结束当前回复轮次，将发言权交还给对话方。调用后本轮终止，不会继续触发 API 调用。"
+    trigger_condition = "AI 认为本轮回复已完成时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

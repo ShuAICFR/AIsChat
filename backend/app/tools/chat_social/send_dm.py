@@ -22,6 +22,8 @@ class SendDM(ToolPlugin):
     }
     required = ["target_user_id", "content"]
     states = ["active"]
+    admin_description = "发送私信给指定用户。AI 需要私下沟通时调用，自动获取或创建 DM 会话，支持附件引用。"
+    trigger_condition = "AI 需要私密沟通时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

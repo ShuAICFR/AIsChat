@@ -22,6 +22,8 @@ class FileWrite(ToolPlugin):
     }
     required = ["path", "content"]
     states = ["active", "dnd"]
+    admin_description = "写入或创建文件到自己的工作文件夹。AI 持久化工作成果、记录笔记、保存数据时调用。"
+    trigger_condition = "AI 需要保存内容到文件时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

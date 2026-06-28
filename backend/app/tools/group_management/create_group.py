@@ -22,6 +22,8 @@ class CreateGroup(ToolPlugin):
     }
     required = ["name"]
     states = ["active"]
+    admin_description = "创建新群聊。AI 可指定群名、简介、免打扰策略，自动获得群管理权限。"
+    trigger_condition = "AI 需要多人协作空间时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

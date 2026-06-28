@@ -16,6 +16,8 @@ class ListAvailableSkills(ToolPlugin):
     parameters = {}
     required = []
     states = ["active", "dnd", "offline"]
+    admin_description = "列出当前可用的所有技能段和工具。AI 查看自己的「技能背包」了解当前能力边界。"
+    trigger_condition = "AI 需要了解自身能力时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

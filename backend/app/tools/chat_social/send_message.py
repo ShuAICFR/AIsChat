@@ -21,6 +21,8 @@ class SendMessage(ToolPlugin):
     }
     required = ["group_id", "content"]
     states = ["active"]
+    admin_description = "在群聊中发送消息。AI 决定回复、主动发言或回应@时自动调用。消息内容支持文字和附件引用。"
+    trigger_condition = "AI 决定回复或主动发言时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

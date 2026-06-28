@@ -33,6 +33,8 @@ class UpdateSelfConfig(ToolPlugin):
     }
     required = []
     states = ["active"]
+    admin_description = "修改自己的配置（系统提示词、温度参数、行为协议等）。每次修改自动保存历史快照，支持回滚到之前的版本。"
+    trigger_condition = "AI 自主优化 / 管理员手动调整配置"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

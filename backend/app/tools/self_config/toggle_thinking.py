@@ -18,6 +18,8 @@ class ToggleThinking(ToolPlugin):
     }
     required = ["enabled"]
     states = ["active", "dnd"]
+    admin_description = "开启或关闭深度推理模式。推理模式让 AI 在回答问题前进行深度思考，消耗更多 token 但回答质量更高。"
+    trigger_condition = "AI 或管理员切换推理模式时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

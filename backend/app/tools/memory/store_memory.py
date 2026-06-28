@@ -27,6 +27,8 @@ class StoreMemory(ToolPlugin):
     }
     required = ["title", "content", "scope"]
     states = ["active"]
+    admin_description = "将重要信息存入长期记忆（向量数据库）。记忆按用户隔离存储，构成 AI 的「人生经历」，影响未来决策。"
+    trigger_condition = "AI 认为信息值得长期记忆时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

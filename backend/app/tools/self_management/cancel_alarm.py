@@ -17,6 +17,8 @@ class CancelAlarm(ToolPlugin):
     }
     required = ["alarm_id"]
     states = ["active", "dnd", "offline"]
+    admin_description = "取消已设置的闹钟。计划变更或任务不再需要时调用，释放闹钟资源。"
+    trigger_condition = "计划变更或任务取消时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

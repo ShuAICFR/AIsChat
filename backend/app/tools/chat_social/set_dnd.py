@@ -21,6 +21,8 @@ class SetDND(ToolPlugin):
     }
     required = ["group_id"]
     states = ["active"]
+    admin_description = "设置免打扰模式。AI 需要专注时阻止消息推送，收到的消息会暂存待后续查看。"
+    trigger_condition = "AI 主动进入专注状态时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

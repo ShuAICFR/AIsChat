@@ -21,6 +21,8 @@ class ExecuteCommand(ToolPlugin):
     }
     required = ["command"]
     states = ["active", "dnd"]
+    admin_description = "执行 OpenCLI 命令。需管理员配置白名单，AI 可通过它操作文件系统、运行脚本、管理数据。"
+    trigger_condition = "AI 需要系统级操作时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

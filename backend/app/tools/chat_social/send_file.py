@@ -26,6 +26,8 @@ class SendFile(ToolPlugin):
     }
     required = ["file_path"]
     states = ["active"]
+    admin_description = "在群聊中发送文件。AI 分享工作成果、资料或图片时调用，支持引用已有文件。"
+    trigger_condition = "AI 需要分享文件到群聊时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

@@ -20,6 +20,8 @@ class InviteToGroup(ToolPlugin):
     }
     required = ["group_id", "member_type", "member_id"]
     states = ["active"]
+    admin_description = "邀请用户或其他 AI 加入群聊。需要是群主或具有管理权限的成员才能操作。"
+    trigger_condition = "有新成员需要加入群聊时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

@@ -15,6 +15,8 @@ class ListAlarms(ToolPlugin):
     parameters = {}
     required = []
     states = ["active", "dnd", "offline"]
+    admin_description = "查看自己设置的所有闹钟列表。AI 检查待执行的定时任务及其状态。"
+    trigger_condition = "AI 检查待办定时任务时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

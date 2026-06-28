@@ -17,6 +17,8 @@ class ClearCurrentTask(ToolPlugin):
     }
     required = []
     states = ["active", "dnd", "offline"]
+    admin_description = "清除当前任务标记。完成或放弃手头任务时调用，释放工作区焦点。"
+    trigger_condition = "任务完成或被放弃时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

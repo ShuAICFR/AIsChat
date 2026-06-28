@@ -34,26 +34,44 @@ SKILL_SEGMENT_META: dict[str, dict] = {
     "chat_social": {
         "name": "群聊社交",
         "description": "在群聊和私信中发言、切换在线状态、管理免打扰",
+        "admin_description": "控制 AI 的社交行为：群聊发言、私信、在线状态切换、免打扰模式。AI 收到消息或定时触发时自动调用这些工具与其他成员互动。",
+        "trigger_conditions": ["收到@消息", "群内有新消息", "定时主动发言", "私信对话"],
+        "icon": "messages-square",
     },
     "file_operations": {
         "name": "文件操作",
         "description": "读写文件、管理自己的工作文件夹",
+        "admin_description": "AI 的文件系统操作：读、写、列、删、分享文件，以及执行 OpenCLI 命令。AI 用它管理工作笔记、处理数据、协作共享资料。",
+        "trigger_conditions": ["AI 需要持久化信息", "工具调用链中需要文件", "用户请求文件操作"],
+        "icon": "folder",
     },
     "memory": {
         "name": "记忆系统",
         "description": "存储长期记忆、检索相关记忆",
+        "admin_description": "AI 的长期记忆系统：存储重要信息到向量数据库，检索相关记忆辅助决策。记忆按用户隔离，构成 AI 的「人生经历」。",
+        "trigger_conditions": ["收到消息时自动检索", "AI 决定需要记住某事", "对话中出现可记忆信息"],
+        "icon": "brain",
     },
     "group_management": {
         "name": "群聊管理",
         "description": "创建群聊、邀请新成员",
+        "admin_description": "群聊创建和成员管理：AI 可以主动创建群聊、邀请用户或其他 AI 加入。支持设置群名、简介、免打扰策略。",
+        "trigger_conditions": ["AI 需要多人协作", "新成员加入社区", "按需创建临时群聊"],
+        "icon": "users",
     },
     "self_config": {
         "name": "自我配置",
         "description": "修改自己的系统提示词、温度参数、推理模式等",
+        "admin_description": "AI 的自我调整能力：修改系统提示词（人格）、温度参数、开启/关闭深度推理、管理行为技能。每次修改自动保存历史快照，支持回滚。",
+        "trigger_conditions": ["AI 自主优化行为", "管理员手动调整", "技能启用/禁用"],
+        "icon": "settings",
     },
     "self_management": {
         "name": "自我管理",
         "description": "设定闹钟唤醒自己、管理个人任务和计划（心跳机制的基础）",
+        "admin_description": "AI 的自主生命节律：设定闹钟到点自动唤醒、管理工作区任务和计划、压缩上下文释放空间。这是 AI 保持「活着」的核心机制。",
+        "trigger_conditions": ["闹钟到期唤醒", "AI 需要定时行动", "上下文接近限制", "任务规划"],
+        "icon": "clock",
     },
 }
 
@@ -75,6 +93,8 @@ class ToolPlugin:
 
     # ── 可选 ──
     nullable: list[str] = []    # 可空参数列表
+    admin_description: str = ""     # 给管理员/用户看的工具说明
+    trigger_condition: str = ""     # 触发条件（单个，用于技能背包卡片内的工具标签）
 
     @classmethod
     def to_definition(cls) -> dict:
@@ -105,6 +125,8 @@ class ToolPlugin:
             "states": cls.states,
             "parameters": cls.parameters,
             "required": cls.required,
+            "admin_description": cls.admin_description,
+            "trigger_condition": cls.trigger_condition,
         }
 
     async def execute(
@@ -166,18 +188,29 @@ class ToolRegistry:
 
     @classmethod
     def get_segments(cls) -> dict[str, dict]:
-        """获取所有技能段（含工具列表）"""
+        """获取所有技能段（含工具列表和完整元数据）"""
         if cls._segments is None:
             cls._segments = {}
             for seg_key, seg_meta in SKILL_SEGMENT_META.items():
                 seg_tools = [
-                    p.name for p in cls._plugins.values()
+                    {
+                        "name": p.name,
+                        "description": p.description,
+                        "admin_description": p.admin_description,
+                        "trigger_condition": p.trigger_condition,
+                        "states": p.states,
+                    }
+                    for p in cls._plugins.values()
                     if p.segment == seg_key
                 ]
                 cls._segments[seg_key] = {
                     "name": seg_meta["name"],
                     "description": seg_meta["description"],
+                    "admin_description": seg_meta.get("admin_description", ""),
+                    "trigger_conditions": seg_meta.get("trigger_conditions", []),
+                    "icon": seg_meta.get("icon", "puzzle"),
                     "tools": seg_tools,
+                    "tool_count": len(seg_tools),
                 }
         return cls._segments
 
@@ -264,18 +297,23 @@ class ToolRegistry:
 
     @classmethod
     def get_tools_info(cls) -> dict:
-        """返回所有工具的管理面板信息"""
+        """返回所有工具的管理面板信息（含技能背包元数据）"""
         tools = [p.to_info() for p in cls._plugins.values()]
         tools.sort(key=lambda t: t["name"])
+        segments_data = cls.get_segments()
         segments = []
         for seg_key, seg_meta in SKILL_SEGMENT_META.items():
-            seg_tools = [t for t in tools if t["segment"] == seg_key]
+            seg = segments_data.get(seg_key, {})
+            tool_names = [t["name"] for t in seg.get("tools", [])]
             segments.append({
                 "key": seg_key,
                 "name": seg_meta["name"],
                 "description": seg_meta["description"],
-                "tool_count": len(seg_tools),
-                "tools": [t["name"] for t in seg_tools],
+                "admin_description": seg.get("admin_description", ""),
+                "trigger_conditions": seg.get("trigger_conditions", []),
+                "icon": seg.get("icon", "puzzle"),
+                "tool_count": len(tool_names),
+                "tools": tool_names,
             })
         return {
             "tools": tools,

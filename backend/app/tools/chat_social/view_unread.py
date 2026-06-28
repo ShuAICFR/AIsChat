@@ -16,6 +16,8 @@ class ViewUnread(ToolPlugin):
     parameters = {}
     required = []
     states = ["active", "dnd"]
+    admin_description = "查看未读消息和暂存消息。AI 唤醒或回归时查看错过的对话内容。"
+    trigger_condition = "AI 回归或唤醒时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

@@ -21,6 +21,8 @@ class SetAlarm(ToolPlugin):
     }
     required = ["task"]
     states = ["active", "dnd", "offline"]
+    admin_description = "设置定时闹钟。到点自动唤醒 AI 执行指定任务，是 AI「心跳机制」和自主生命节律的基础。"
+    trigger_condition = "AI 需要定时行动或计划未来任务时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

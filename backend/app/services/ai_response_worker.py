@@ -24,6 +24,7 @@ _rate_limit_tracker: dict[int, float] = {}
 
 # 导入连接管理器（在 ws.py 中初始化的全局实例）
 from app.routers.ws import manager
+from app.services.context_compressor import should_compress, compress_messages
 
 
 async def ai_response_worker():
@@ -638,6 +639,9 @@ async def _tool_call_loop(
         "session_id": session_id,
         "trigger_user_id": trigger_user_id,
         "is_federated": is_federated,
+        "_messages": messages,       # compress_context 工具需要读写
+        "_agent": agent,             # compress_context 需要 agent.id 做 user_id
+        "_model": model,             # 压缩用的模型
     }
 
     # 追踪 AI 在做什么（用于中断恢复）
@@ -646,6 +650,8 @@ async def _tool_call_loop(
     total_usage: dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "reasoning_tokens": 0, "cached_tokens": 0, "api_calls": 0}
     # system_reminder 额外轮次：AI 返回文字但忘了调 send_message 时，提醒不消耗配额
     _reminder_extra = 0
+    # 上下文压缩：每轮工具调用循环最多自动压缩一次
+    _auto_compressed = False
 
     loop_idx = 0
     while loop_idx < max_loops + _reminder_extra:
@@ -756,6 +762,27 @@ async def _tool_call_loop(
                 _pending_results.append({"tc_id": tc_id, "result": result})
                 if isinstance(result, dict) and result.get("end_turn"):
                     _end_turn = True
+
+            # ── 自动上下文压缩（每轮工具调用循环最多一次）──
+            if not _auto_compressed:
+                if should_compress(messages):
+                    logger.info(
+                        f"AI {agent.name}({agent.id}) 上下文超过阈值，自动压缩中..."
+                    )
+                    compress_model = effective_cfg.get("work_model") or model
+                    messages, compress_stats = await compress_messages(
+                        messages=messages,
+                        api_base_url=current_api_base,
+                        api_key=current_api_key,
+                        model=compress_model,
+                        user_id=str(agent.id),
+                    )
+                    if compress_stats.get("compressed"):
+                        logger.info(
+                            f"AI {agent.name}({agent.id}) 自动压缩完成："
+                            f"{compress_stats['before_tokens']} → {compress_stats['after_tokens']} tokens"
+                        )
+                    _auto_compressed = True
 
             try:
                 # 内层：同 Key 重试（500/503）

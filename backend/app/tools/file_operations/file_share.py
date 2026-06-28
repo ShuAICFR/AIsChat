@@ -22,6 +22,8 @@ class FileShare(ToolPlugin):
     }
     required = ["path", "target_ai_id"]
     states = ["active", "dnd"]
+    admin_description = "将工作区文件分享到群聊。让群成员可以查看或下载 AI 的文件。"
+    trigger_condition = "AI 需要将文件分享给群成员时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

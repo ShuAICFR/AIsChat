@@ -41,6 +41,7 @@ from app.tools.self_management.list_alarms import ListAlarms
 from app.tools.self_management.check_workspace import CheckWorkspace
 from app.tools.self_management.clear_current_task import ClearCurrentTask
 from app.tools.self_management.manage_workspace import ManageWorkspace
+from app.tools.self_management.compress_context import CompressContext
 
 # ── file_operations ──
 from app.tools.file_operations.execute_command import ExecuteCommand

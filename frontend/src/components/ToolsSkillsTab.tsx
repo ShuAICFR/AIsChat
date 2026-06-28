@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
-import { Wrench, Brain } from 'lucide-react'
+import { STATE_LABELS, STATE_TAG_COLORS } from '../constants'
+import { Wrench, Brain, Backpack } from 'lucide-react'
+import SkillBackpack from './SkillBackpack'
 
 // ─── 类型 ────────────────────────────────────────────
 
@@ -41,17 +43,6 @@ interface AgentOption {
 
 // ─── 组件 ────────────────────────────────────────────
 
-const STATE_LABELS: Record<string, string> = {
-  active: '在线', dnd: '勿扰', offline: '离线', blocked: '封禁',
-}
-
-const STATE_COLORS: Record<string, string> = {
-  active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  dnd: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  offline: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
-  blocked: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-}
-
 const SKILL_TYPE_LABELS: Record<string, string> = {
   delay_reply: '延迟回复',
   typing_indicator: '打字指示器',
@@ -59,7 +50,7 @@ const SKILL_TYPE_LABELS: Record<string, string> = {
   inject_prompt: '注入提示词',
 }
 
-type SubTab = 'registry' | 'skills'
+type SubTab = 'registry' | 'skills' | 'backpack'
 
 function ToolRegistryTab() {
   const t = useT()
@@ -144,7 +135,7 @@ function ToolRegistryTab() {
               </span>
               <span className="flex gap-1 ml-auto">
                 {tool.states.map(s => (
-                  <span key={s} className={`text-xs px-1.5 py-0.5 rounded ${STATE_COLORS[s] || ''}`}>
+                  <span key={s} className={`text-xs px-1.5 py-0.5 rounded ${STATE_TAG_COLORS[s] || ''}`}>
                     {STATE_LABELS[s] || s}
                   </span>
                 ))}
@@ -306,6 +297,7 @@ export default function ToolsSkillsTab() {
   const subTabs: { key: SubTab; label: string; icon: React.ElementType }[] = [
     { key: 'registry', label: t('admin.toolRegistry'), icon: Wrench },
     { key: 'skills', label: t('admin.skillManagement'), icon: Brain },
+    { key: 'backpack', label: t('admin.skillBackpack'), icon: Backpack },
   ]
 
   return (
@@ -328,7 +320,7 @@ export default function ToolsSkillsTab() {
       </div>
 
       {/* 内容 */}
-      {subTab === 'registry' ? <ToolRegistryTab /> : <SkillManagementTab />}
+      {subTab === 'registry' ? <ToolRegistryTab /> : subTab === 'skills' ? <SkillManagementTab /> : <SkillBackpack />}
     </div>
   )
 }

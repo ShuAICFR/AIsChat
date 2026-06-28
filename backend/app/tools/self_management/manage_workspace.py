@@ -26,6 +26,8 @@ class ManageWorkspace(ToolPlugin):
     }
     required = ["action", "file"]
     states = ["active", "dnd", "offline"]
+    admin_description = "管理工作区：添加/移除/排序任务、更新任务状态。AI 的项目管理和任务规划工具。"
+    trigger_condition = "AI 规划、调整或执行任务时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

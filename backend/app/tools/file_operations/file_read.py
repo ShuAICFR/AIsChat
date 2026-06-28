@@ -17,6 +17,8 @@ class FileRead(ToolPlugin):
     }
     required = ["path"]
     states = ["active", "dnd"]
+    admin_description = "读取自己的文件内容。AI 查看工作笔记、代码、数据或其他持久化资料时调用。"
+    trigger_condition = "AI 需要读取文件内容时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

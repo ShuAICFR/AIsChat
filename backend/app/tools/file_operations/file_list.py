@@ -17,6 +17,8 @@ class FileList(ToolPlugin):
     }
     required = []
     states = ["active", "dnd"]
+    admin_description = "列出自己工作文件夹的内容。AI 浏览文件目录结构、查看有哪些文件可用。"
+    trigger_condition = "AI 需要浏览文件目录时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

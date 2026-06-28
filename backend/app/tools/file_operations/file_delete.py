@@ -17,6 +17,8 @@ class FileDelete(ToolPlugin):
     }
     required = ["path"]
     states = ["active", "dnd"]
+    admin_description = "删除自己工作文件夹中的文件。AI 清理不需要的资料时调用，操作不可逆。"
+    trigger_condition = "AI 清理不需要的文件时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

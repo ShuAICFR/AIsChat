@@ -2227,6 +2227,50 @@ async def admin_get_tools(
     return ToolRegistry.get_tools_info()
 
 
+@router.get("/tools/backpack")
+async def get_skill_backpack(
+    agent_id: int | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    获取技能背包视图（段+工具+元数据，面向用户/管理员的技能展示）。
+    可选 agent_id：传入时标注每个工具在该 AI 当前状态下的可用性。
+    """
+    from app.tools.base import ToolRegistry
+    segments = ToolRegistry.get_segments()
+
+    # 如果提供了 agent_id，查询 AI 状态并标注工具可用性
+    agent_state = None
+    agent_thinking = None
+    if agent_id is not None:
+        from app.models.agent import Agent as AgentModel
+        result = await db.execute(
+            select(AgentModel).where(AgentModel.id == agent_id)
+        )
+        agent = result.scalar_one_or_none()
+        if agent:
+            agent_state = agent.state
+            agent_thinking = agent.thinking_enabled
+            # 获取该状态下允许的工具
+            from app.services.skill_engine import _is_delay_reply_allowed
+            delay_allowed = await _is_delay_reply_allowed(db, agent)
+            allowed_defs = ToolRegistry.get_allowed_tools(
+                agent_state, agent_thinking, delay_allowed,
+            )
+            allowed_names = {t["function"]["name"] for t in allowed_defs}
+
+            # 标注每个工具的可用性
+            for seg_key, seg_data in segments.items():
+                for tool in seg_data.get("tools", []):
+                    tool["available_in_current_state"] = tool["name"] in allowed_names
+
+    return {
+        "segments": list(segments.values()),
+        "agent_state": agent_state,
+        "agent_thinking": agent_thinking,
+    }
+
+
 @router.get("/skills/agents/{agent_id}")
 async def admin_get_agent_skills(
     agent_id: int,

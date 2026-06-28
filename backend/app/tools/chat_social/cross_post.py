@@ -37,6 +37,8 @@ class CrossPost(ToolPlugin):
     }
     required = ["source_type", "source_id", "target_type", "target_id", "content"]
     states = ["active", "dnd"]
+    admin_description = "跨群转发消息到其他群聊。AI 判断某条消息对其他群有价值时自动调用。"
+    trigger_condition = "消息对其他群有价值时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

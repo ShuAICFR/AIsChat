@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { ArrowLeft, X, Loader2, RotateCw, Ticket } from 'lucide-react'
+import SkillBackpack from './SkillBackpack'
 
 interface AgentData {
   id: number
@@ -482,6 +483,11 @@ export default function AgentSettingsModal({
             {testApiMsg && (
               <p className={`text-xs ${testApiOk === true ? 'text-mint-400' : 'text-rose-400'}`}>{testApiMsg}</p>
             )}
+          </Section>
+
+          {/* ── 技能背包 ── */}
+          <Section title={t('backpack.title')} desc={t('backpack.desc')}>
+            <SkillBackpack agentId={agent.id} />
           </Section>
 
           {/* ── 兑换码 ── */}

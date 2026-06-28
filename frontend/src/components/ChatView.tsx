@@ -185,16 +185,6 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     return () => clearTimeout(timer)
   }, [input, conversationType, conversationId])
 
-  // 切换对话 / 卸载时：清除输入中状态，避免对方看到残留的 typing 指示
-  useEffect(() => {
-    return () => {
-      if (typingRef.current) {
-        typingRef.current = false
-        sendTyping(false)
-      }
-    }
-  }, [conversationType, conversationId, sendTyping])
-
   const handleMessage = useCallback((msg: WebSocketMessage) => {
     if (msg.type === 'message') {
       const m = msg.data
@@ -286,6 +276,16 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
   const { connected, reconnecting, errors, sendMessage, sendTyping, clearErrors } = useWebSocket(
     conversationType, conversationId, { onMessage: handleMessage },
   )
+
+  // 切换对话 / 卸载时：清除输入中状态，避免对方看到残留的 typing 指示
+  useEffect(() => {
+    return () => {
+      if (typingRef.current) {
+        typingRef.current = false
+        sendTyping(false)
+      }
+    }
+  }, [conversationType, conversationId, sendTyping])
 
   // 稳定引用，配合 MessageBubble 的 React.memo 避免输入时重渲染消息列表
   const handleAvatarClick = useCallback((type: string, id: number, name: string, state?: string) => {

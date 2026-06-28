@@ -1506,6 +1506,21 @@ const zh: TranslationDict = {
   'admin.skillsNoAgent': '请先选择一个 AI',
   'admin.skillsLoadFailed': '加载技能失败',
   'admin.skillsToggleFailed': '切换失败',
+  'admin.skillBackpack': '技能背包',
+
+  // ======================== 技能背包 / Skill Backpack ========================
+  'backpack.title': '技能背包',
+  'backpack.toolCount': '个工具',
+  'backpack.triggerConditions': '触发条件',
+  'backpack.toolsInSkill': '技能内工具',
+  'backpack.aiDesc': 'AI 描述',
+  'backpack.adminDesc': '管理说明',
+  'backpack.availableNow': '当前可用',
+  'backpack.unavailableNow': '当前不可用',
+  'backpack.currentState': '当前状态',
+  'backpack.expandDetails': '展开详情',
+  'backpack.moreTriggers': '个触发条件',
+  'backpack.desc': 'AI 拥有的技能（工具），按技能段分类展示。展开可查看每个工具的管理说明和触发条件。',
 }
 
 const en: TranslationDict = {
@@ -2658,6 +2673,22 @@ const en: TranslationDict = {
   'admin.skillsNoAgent': 'Select an AI first',
   'admin.skillsLoadFailed': 'Failed to load skills',
   'admin.skillsToggleFailed': 'Toggle failed',
+  'admin.skillBackpack': 'Skill Backpack',
+
+  // ======================== Skill Backpack ========================
+  'backpack.title': 'Skill Backpack',
+  'backpack.toolCount': 'tools',
+  'backpack.triggerConditions': 'Trigger Conditions',
+  'backpack.toolsInSkill': 'Tools in Skill',
+  'backpack.aiDesc': 'AI Description',
+  'backpack.adminDesc': 'Admin Description',
+  'backpack.availableNow': 'Available Now',
+  'backpack.unavailableNow': 'Unavailable',
+  'backpack.currentState': 'Current State',
+  'backpack.expandDetails': 'Expand Details',
+  'backpack.moreTriggers': 'more triggers',
+  'backpack.desc': 'Skills (tools) available to the AI, organized by category. Expand to view each tool\'s admin description and trigger conditions.',
+
   'admin.usageLogs': 'Usage Logs',
   'admin.logsColAi': 'AI',
   'admin.logsColCmd': 'Command',
@@ -4460,6 +4491,21 @@ const ja: TranslationDict = {
   'admin.skillsNoAgent': '先にAIを選択してください',
   'admin.skillsLoadFailed': 'スキルの読み込みに失敗しました',
   'admin.skillsToggleFailed': '切り替えに失敗しました',
+  'admin.skillBackpack': 'スキルバックパック',
+
+  // ======================== スキルバックパック ========================
+  'backpack.title': 'スキルバックパック',
+  'backpack.toolCount': '個のツール',
+  'backpack.triggerConditions': 'トリガー条件',
+  'backpack.toolsInSkill': 'スキル内ツール',
+  'backpack.aiDesc': 'AIの説明',
+  'backpack.adminDesc': '管理者の説明',
+  'backpack.availableNow': '現在利用可能',
+  'backpack.unavailableNow': '現在利用不可',
+  'backpack.currentState': '現在の状態',
+  'backpack.expandDetails': '詳細を展開',
+  'backpack.moreTriggers': '個のトリガー条件',
+  'backpack.desc': 'AIが利用可能なスキル（ツール）をカテゴリ別に表示します。展開すると各ツールの管理者向け説明とトリガー条件を確認できます。',
 };
 
 export const translations: Record<Lang, TranslationDict> = { zh, en, ja }

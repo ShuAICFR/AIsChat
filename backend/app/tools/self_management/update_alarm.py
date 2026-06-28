@@ -20,6 +20,8 @@ class UpdateAlarm(ToolPlugin):
     }
     required = ["alarm_id"]
     states = ["active", "dnd", "offline"]
+    admin_description = "修改已有闹钟的唤醒时间或原因。调整计划时调用，自动重新调度闹钟。"
+    trigger_condition = "需要调整已有定时任务时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

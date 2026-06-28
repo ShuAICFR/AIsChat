@@ -20,6 +20,8 @@ class RecallMemory(ToolPlugin):
     }
     required = ["query", "scope"]
     states = ["active", "dnd"]
+    admin_description = "搜索并检索相关记忆。收到消息时自动触发检索，AI 也可主动调用来获取历史上下文。"
+    trigger_condition = "收到消息自动检索 / AI 主动查询记忆"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

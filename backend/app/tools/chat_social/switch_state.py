@@ -29,6 +29,8 @@ class SwitchState(ToolPlugin):
     }
     required = ["target_state"]
     states = ["active", "dnd", "offline"]
+    admin_description = "切换在线状态（在线/勿扰/离线）。AI 自主管理自己的可用性，状态变更会通知群成员。"
+    trigger_condition = "AI 根据场景自主调整状态时"
 
     async def execute(self, db: AsyncSession, agent_id: int, group_id: int | None,
                       arguments: dict, context: dict) -> dict:

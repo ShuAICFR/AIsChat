@@ -143,6 +143,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
   const isAtBottomRef = useRef(true)
   const newestIdRef = useRef<number | null>(null)       // 离开时保存已读位置
   const oldestIdRef = useRef<number | null>(null)        // 供哨兵读取，避免 messages 依赖
+  const typingRef = useRef(false)                       // 当前是否正在输入中，避免重复发送 typing 消息
   const showJumpToUnreadRef = useRef(false)              // 避免 scroll 中高频 setState
 
   // 离开对话时保存已读位置（通过 newestIdRef，无需额外的 messages 同步 effect）
@@ -183,6 +184,16 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
     }, 500)
     return () => clearTimeout(timer)
   }, [input, conversationType, conversationId])
+
+  // 切换对话 / 卸载时：清除输入中状态，避免对方看到残留的 typing 指示
+  useEffect(() => {
+    return () => {
+      if (typingRef.current) {
+        typingRef.current = false
+        sendTyping(false)
+      }
+    }
+  }, [conversationType, conversationId, sendTyping])
 
   const handleMessage = useCallback((msg: WebSocketMessage) => {
     if (msg.type === 'message') {
@@ -670,6 +681,11 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
 
     sendMessage(input.trim(), undefined, readyAttachments.length > 0 ? readyAttachments : undefined)
     setInput('')
+    // 发送后清除输入中状态
+    if (typingRef.current) {
+      typingRef.current = false
+      sendTyping(false)
+    }
     localStorage.removeItem(`draft_${conversationType}_${conversationId}`)
     setPendingAttachments([])
     setMentionActive(false)
@@ -910,8 +926,12 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
               setInput(e.target.value)
               const pos = e.target.selectionStart
               detectMention(e.target.value, pos)
-              if (e.target.value && !input) sendTyping(true)
-              if (!e.target.value && input) sendTyping(false)
+              // 只在 空→非空 / 非空→空 时发送 typing 状态变更
+              const nowTyping = e.target.value.length > 0
+              if (nowTyping !== typingRef.current) {
+                typingRef.current = nowTyping
+                sendTyping(nowTyping)
+              }
             }}
             onKeyUp={(e) => {
               if (mentionActive && ['ArrowUp','ArrowDown','Enter','Tab','Escape'].includes(e.key)) return

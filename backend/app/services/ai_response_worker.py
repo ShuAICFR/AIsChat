@@ -474,7 +474,7 @@ async def _maybe_trigger_ai_reply(
     if skill_result.show_typing:
         await manager.broadcast_to_group(group_id, {
             "type": "ai_typing",
-            "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
+            "data": {"agent_id": agent.id, "agent_name": agent.name, "agent_avatar_url": agent.avatar_url, "is_typing": True},
         })
     # 延迟回复（若已有积压消息则跳过，避免级联延迟）
     delay_skipped = False
@@ -546,6 +546,7 @@ async def _maybe_trigger_ai_reply(
                 "data": {
                     "agent_id": agent.id,
                     "agent_name": agent.name,
+                    "agent_avatar_url": agent.avatar_url,
                     "group_id": group_id,
                     "trigger": "user",
                 },
@@ -577,6 +578,8 @@ async def _maybe_trigger_ai_reply(
                 "type": "ai_thinking_end",
                 "data": {
                     "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "agent_avatar_url": agent.avatar_url,
                     "group_id": group_id,
                     "trigger": "user",
                 },
@@ -710,7 +713,7 @@ async def _tool_call_loop(
                 logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
                 # 消息类工具推送"正在输入中…"状态
                 if tool_name in ("send_message", "send_dm") and trigger == "user":
-                    _typing_data: dict = {"agent_id": agent.id, "agent_name": agent.name, "trigger": trigger}
+                    _typing_data: dict = {"agent_id": agent.id, "agent_name": agent.name, "agent_avatar_url": agent.avatar_url, "trigger": trigger}
                     if conversation_type == "dm" and session_id:
                         _typing_data["session_id"] = session_id
                     elif group_id is not None:
@@ -1121,7 +1124,7 @@ async def _trigger_dm_ai_reply(
     if skill_result.show_typing:
         await manager.broadcast_to_dm(session_id, {
             "type": "ai_typing",
-            "data": {"agent_id": agent.id, "agent_name": agent.name, "is_typing": True},
+            "data": {"agent_id": agent.id, "agent_name": agent.name, "agent_avatar_url": agent.avatar_url, "is_typing": True},
         })
     if skill_result.delay_seconds > 0:
         await asyncio.sleep(skill_result.delay_seconds)
@@ -1180,6 +1183,8 @@ async def _trigger_dm_ai_reply(
                 "conversation_type": "dm",
                 "data": {
                     "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "agent_avatar_url": agent.avatar_url,
                     "session_id": session_id,
                     "trigger": "user",
                 },

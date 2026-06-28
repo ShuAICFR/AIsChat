@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useWebSocket, type WebSocketMessage } from '../hooks/useWebSocket'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import MessageBubble from './MessageBubble'
+import ActivityBar, { type ActivityUser } from './ActivityBar'
 import ProfileCard from './ProfileCard'
 import { Send, Loader2, AlertTriangle, X, ArrowDown, ArrowUp, Paperclip, FileIcon, Bot, User } from 'lucide-react'
 import { getStateDotColor, CHAT_REFRESH_EVENT } from '../constants'
@@ -82,8 +83,30 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
   const [profileCard, setProfileCard] = useState<{
     type: string; id: number; name: string; state?: string
   } | null>(null)
-  const [thinkingAgents, setThinkingAgents] = useState<Map<number, string>>(new Map())
-  const [typingAgents, setTypingAgents] = useState<Map<number, string>>(new Map())
+  const [thinkingAgents, setThinkingAgents] = useState<Map<number, { name: string; avatarUrl: string | null }>>(new Map())
+  const [typingAgents, setTypingAgents] = useState<Map<number, { name: string; avatarUrl: string | null }>>(new Map())
+  // 人类打字状态: userId → {name, avatarUrl}
+  const [humanTyping, setHumanTyping] = useState<Map<number, { name: string; avatarUrl: string | null }>>(new Map())
+
+  // 合并所有活动用户（AI 思考 + AI 输入中 + 人类打字）
+  const activityUsers: ActivityUser[] = useMemo(() => {
+    const map = new Map<number, ActivityUser>()
+
+    thinkingAgents.forEach((info, id) => {
+      map.set(id, { id, name: info.name, avatarUrl: info.avatarUrl, status: 'thinking' })
+    })
+    typingAgents.forEach((info, id) => {
+      const existing = map.get(id)
+      if (existing) existing.status = 'typing'
+      else map.set(id, { id, name: info.name, avatarUrl: info.avatarUrl, status: 'typing' })
+    })
+    humanTyping.forEach(({ name, avatarUrl }, id) => {
+      map.set(id, { id, name, avatarUrl, status: 'typing' })
+    })
+
+    return Array.from(map.values())
+  }, [thinkingAgents, typingAgents, humanTyping])
+
   // @提及 自动补全（仅群聊）
   const [groupMembers, setGroupMembers] = useState<Array<{ type: string; id: number; name: string; state?: string }>>([])
   const [mentionActive, setMentionActive] = useState(false)
@@ -188,7 +211,7 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       const d = msg.data
       if (d.trigger === 'auto') return
       if (!isMessageForThisConversation(d, conversationType, conversationId)) return
-      addToMap(setThinkingAgents, d.agent_id, d.agent_name)
+      addToMap(setThinkingAgents, d.agent_id, { name: d.agent_name, avatarUrl: d.agent_avatar_url || null })
     } else if (msg.type === 'ai_thinking_end') {
       const d = msg.data
       if (d.trigger === 'auto') return
@@ -200,7 +223,24 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
       if (d.trigger === 'auto') return
       if (!isMessageForThisConversation(d, conversationType, conversationId)) return
       setTimeout(() => removeFromMap(setThinkingAgents, d.agent_id), 1500)
-      addToMap(setTypingAgents, d.agent_id, d.agent_name)
+      addToMap(setTypingAgents, d.agent_id, { name: d.agent_name, avatarUrl: d.agent_avatar_url || null })
+    } else if (msg.type === 'typing') {
+      // 人类打字状态
+      const d = msg.data
+      if (!isMessageForThisConversation(d, conversationType, conversationId)) return
+      if (d.is_typing) {
+        setHumanTyping(prev => {
+          const next = new Map(prev)
+          next.set(d.sender_id, { name: d.username, avatarUrl: d.avatar_url || null })
+          return next
+        })
+      } else {
+        setHumanTyping(prev => {
+          const next = new Map(prev)
+          next.delete(d.sender_id)
+          return next
+        })
+      }
     } else if (msg.type === 'announcement') {
       const d = msg.data
       if (d.group_id !== conversationId) return
@@ -755,37 +795,8 @@ export default function ChatView({ conversationType, conversationId }: ChatViewP
           ))
         )}
 
-        {/* AI 思考中占位气泡（不显示同时在打字中的 agent） */}
-        {Array.from(thinkingAgents.entries())
-          .filter(([agentId]) => !typingAgents.has(agentId))
-          .map(([agentId, agentName]) => (
-          <MessageBubble
-            key={`thinking-${agentId}`}
-            senderName={agentName}
-            content="..."
-            isMine={false}
-            createdAt={new Date().toISOString()}
-            senderType="ai"
-            senderId={agentId}
-            thinking={true}
-            onAvatarClick={handleAvatarClick}
-          />
-        ))}
-
-        {/* AI 输入中占位气泡（v0.6.0：流式状态显示） */}
-        {Array.from(typingAgents.entries()).map(([agentId, agentName]) => (
-            <MessageBubble
-              key={`typing-${agentId}`}
-              senderName={agentName}
-              content=""
-              isMine={false}
-              createdAt={new Date().toISOString()}
-              senderType="ai"
-              senderId={agentId}
-              isTyping={true}
-              onAvatarClick={handleAvatarClick}
-            />
-          ))}
+        {/* 底部活动状态栏：合并 AI 思考/输入 + 人类打字 */}
+        <ActivityBar users={activityUsers} />
 
         {/* 底部加载指示器 */}
         {loadingState === 'newer' && (

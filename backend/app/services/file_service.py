@@ -4,11 +4,12 @@
 """
 import os
 import uuid
+import json
 import hashlib
 import logging
 from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete as sa_delete, and_, func
+from sqlalchemy import select, delete as sa_delete, and_, func, text
 from app.models.file import FileMetadata, FileReference, FileCollaborator
 from app.config import settings
 
@@ -59,9 +60,26 @@ def _check_permission(metadata: FileMetadata, requester_type: str, requester_id:
     return False
 
 
+def _normalize_collab_type(requester_type: str) -> str:
+    """将 requester_type 映射为 FileCollaborator 中存储的类型。
+
+    FileCollaborator.collaborator_type 只允许 'ai' | 'user'，
+    但调用方可能传 'human'（历史原因），需要统一映射。
+    """
+    if requester_type == "human":
+        return "user"
+    return requester_type
+
+
 async def check_file_access(db: AsyncSession, file_id: int, requester_type: str,
                             requester_id: int, required_perm: str = "read") -> FileMetadata | None:
-    """检查文件访问权限，返回 FileMetadata 或 None"""
+    """检查文件访问权限，返回 FileMetadata 或 None
+
+    权限判定顺序：
+    1. Owner 始终有权限
+    2. collaboration_mode: solo / shared / open
+    3. 消息附件可见性：文件被附在请求者可见的群聊/DM 消息中 → 允许 read
+    """
     result = await db.execute(
         select(FileMetadata).where(FileMetadata.id == file_id)
     )
@@ -75,27 +93,27 @@ async def check_file_access(db: AsyncSession, file_id: int, requester_type: str,
 
     # collaboration_mode 判定
     mode = metadata.collaboration_mode or "solo"
+    collab_type = _normalize_collab_type(requester_type)
 
     if mode == "solo":
-        # 仅 owner 有权限
-        return None
+        # solo 也检查协作者（send_file 等场景会自动添加），然后 fall through 到消息附件检查
+        pass
 
     elif mode == "shared":
-        # 检查是否为显式协作者
+        # 检查是否为显式协作者（用规范化后的类型匹配 DB 中的 'user'）
         collab_result = await db.execute(
             select(FileCollaborator).where(
                 FileCollaborator.file_id == file_id,
-                FileCollaborator.collaborator_type == requester_type,
+                FileCollaborator.collaborator_type == collab_type,
                 FileCollaborator.collaborator_id == requester_id,
             )
         )
         collab = collab_result.scalar_one_or_none()
-        if collab is None:
-            return None
-        # viewer 角色只能读
-        if collab.role == "viewer" and required_perm not in ("read",):
-            return None
-        return metadata
+        if collab is not None:
+            # viewer 角色只能读
+            if collab.role == "viewer" and required_perm not in ("read",):
+                return None
+            return metadata
 
     elif mode == "open":
         # open 模式：read 权限对所有人开放，write 需 owner
@@ -104,7 +122,56 @@ async def check_file_access(db: AsyncSession, file_id: int, requester_type: str,
         # write 以上需 owner（已在上面返回）
         return None
 
+    # ── 消息附件可见性检查（兜底） ──
+    # 如果文件被附在请求者可见的消息中，授予 read 权限
+    # 这覆盖了 AI send_file 到群聊/DM 后接收方下载的场景
+    if required_perm == "read":
+        if await _file_attached_to_visible_message(db, file_id, requester_type, requester_id):
+            return metadata
+
     return None
+
+
+async def _file_attached_to_visible_message(
+    db: AsyncSession, file_id: int, requester_type: str, requester_id: int,
+) -> bool:
+    """检查文件是否被附在请求者可见的消息中（群聊成员 或 DM 参与者）"""
+    pattern = json.dumps([{"file_id": file_id}])
+
+    # 1) 群聊消息：请求者是否为消息所在群的成员
+    check_group = text("""
+        SELECT 1 FROM messages m
+        JOIN group_members gm ON m.group_id = gm.group_id
+        WHERE m.attachments @> :pattern::jsonb
+          AND gm.member_type = :req_type
+          AND gm.member_id = :req_id
+        LIMIT 1
+    """)
+    r = await db.execute(check_group, {
+        "pattern": pattern,
+        "req_type": requester_type,
+        "req_id": requester_id,
+    })
+    if r.scalar():
+        return True
+
+    # 2) DM 消息：请求者是否为 DM 会话的参与者
+    # dm_messages 的 attachments 是 Text 列存 JSON 字符串，用 LIKE 匹配
+    check_dm = text("""
+        SELECT 1 FROM dm_messages dm
+        JOIN dm_sessions ds ON dm.session_id = ds.session_id
+        WHERE dm.attachments LIKE :like_pattern
+          AND (ds.user1_id = :req_id OR ds.user2_id = :req_id)
+        LIMIT 1
+    """)
+    r = await db.execute(check_dm, {
+        "like_pattern": f"%\"file_id\": {file_id}%",
+        "req_id": requester_id,
+    })
+    if r.scalar():
+        return True
+
+    return False
 
 
 # ============================================================

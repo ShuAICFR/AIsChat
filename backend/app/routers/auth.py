@@ -1,14 +1,23 @@
 """
 认证路由
 POST /auth/register, POST /auth/login, GET /auth/me
+v1.0.0: + 邮箱验证码认证
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserInfoResponse
+from app.schemas.auth import (
+    RegisterRequest, LoginRequest, TokenResponse, UserInfoResponse,
+    EmailVerificationRequest, VerifyEmailRequest, RebindEmailRequest,
+    LoginProvidersResponse,
+)
 from app.schemas.system_settings import SetupCompleteRequest
-from app.services.auth_service import register_user, login_user, get_user_info, update_user_settings
+from app.services.auth_service import (
+    register_user, login_user, get_user_info,
+    update_user_settings, rebind_email, unbind_email,
+)
+from app.services.verification_service import generate_and_send_code, verify_code
 from app.utils.auth import get_current_user
 from app.models.user import User
 
@@ -26,9 +35,15 @@ async def has_users(db: AsyncSession = Depends(get_db)):
 async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     """注册新用户。第一个注册的用户自动成为管理员。"""
     try:
-        user = await register_user(db, req.username, req.password)
-        # 注册后自动登录
-        return await login_user(db, req.username, req.password)
+        user = await register_user(
+            db,
+            req.username,
+            req.password,
+            email=req.email,
+            verification_code=req.verification_code,
+        )
+        # 注册后自动登录（使用用户名+密码方式）
+        return await login_user(db, req.username, req.password, method="direct")
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -37,7 +52,13 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     """用户登录，返回 JWT 令牌。"""
     try:
-        return await login_user(db, req.username, req.password)
+        return await login_user(
+            db,
+            req.login_id,
+            password=req.password,
+            method=req.method,
+            verification_code=req.verification_code,
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
@@ -71,3 +92,88 @@ async def complete_setup(
     user.setup_completed = True
     await db.flush()
     return {"status": "ok", "setup_completed": True}
+
+
+# ── v1.0.0 邮箱认证 ──
+
+@router.get("/login-providers", response_model=LoginProvidersResponse)
+async def get_login_providers(db: AsyncSession = Depends(get_db)):
+    """获取当前可用的登录方式（公开，无需认证）"""
+    from app.services.system_settings_service import get_settings
+    sys = await get_settings(db)
+    return {"providers": sys.get("login_providers", ["direct"])}
+
+
+@router.post("/send-verification-code")
+async def send_verification_code(
+    req: EmailVerificationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """发送邮箱验证码。频率限制：每分钟 1 次，每小时 5 次。"""
+    try:
+        # 获取客户端 IP
+        ip = request.client.host if request.client else None
+        # 如果是注册用途，检查邮箱唯一性（但不透露是否已存在）
+        if req.purpose == "register":
+            existing = await db.execute(
+                select(User).where(User.email == req.email)
+            )
+            if existing.scalar_one_or_none():
+                # 邮箱已被使用，但不透露——对外返回成功
+                return {"status": "sent", "message": "如果该邮箱有效，验证码已发送"}
+        # 如果是登录用途，检查邮箱是否存在（不透露）
+        if req.purpose == "login":
+            existing = await db.execute(
+                select(User).where(User.email == req.email)
+            )
+            if not existing.scalar_one_or_none():
+                return {"status": "sent", "message": "如果该邮箱有效，验证码已发送"}
+
+        await generate_and_send_code(
+            db, req.email, req.purpose,
+            ip_address=ip,
+        )
+        return {"status": "sent", "message": "如果该邮箱有效，验证码已发送"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/verify-email")
+async def verify_email(
+    req: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """校验邮箱验证码"""
+    ok = await verify_code(db, req.email, req.code, req.purpose)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="验证码错误或已过期",
+        )
+    return {"status": "verified"}
+
+
+@router.put("/email", response_model=UserInfoResponse)
+async def rebind_email_endpoint(
+    req: RebindEmailRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """换绑邮箱（需登录，需新邮箱验证码）"""
+    try:
+        return await rebind_email(db, current_user["user_id"], req.email, req.code)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/email", response_model=UserInfoResponse)
+async def remove_email_endpoint(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """解绑邮箱（需登录，仅在 require_email_verification=OFF 时允许）"""
+    try:
+        return await unbind_email(db, current_user["user_id"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

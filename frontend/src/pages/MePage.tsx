@@ -91,6 +91,16 @@ export default function MePage() {
   const [fileListLoading, setFileListLoading] = useState(false)
   const [forwardFile, setForwardFile] = useState<{file_id:number;name:string;size:number;mime_type:string}|null>(null)
 
+  // v1.0.0 邮箱绑定
+  const [showBindEmail, setShowBindEmail] = useState(false)
+  const [bindEmail, setBindEmail] = useState('')
+  const [bindCode, setBindCode] = useState('')
+  const [bindCodeSent, setBindCodeSent] = useState(false)
+  const [bindSendCooldown, setBindSendCooldown] = useState(0)
+  const [bindError, setBindError] = useState('')
+  const [bindLoading, setBindLoading] = useState(false)
+  const { rebindEmail, removeEmail } = useAuth()
+
   interface FileItem {
     id: number; path: string; size: number; mime_type: string; created_at: string
     is_forwarded?: boolean
@@ -162,6 +172,49 @@ export default function MePage() {
     } catch (err: any) {
       setRedeemMsg(err.message || t('common.redeemFailed'))
     } finally { setRedeeming(false) }
+  }
+
+  // ── v1.0.0 邮箱绑定 ──
+  useEffect(() => {
+    if (bindSendCooldown <= 0) return
+    const timer = setInterval(() => setBindSendCooldown(c => c - 1), 1000)
+    return () => clearInterval(timer)
+  }, [bindSendCooldown])
+
+  const handleSendBindCode = async () => {
+    if (!bindEmail || bindSendCooldown > 0) return
+    setBindError('')
+    try {
+      await api.post('/auth/send-verification-code', { email: bindEmail, purpose: 'rebind' })
+      setBindCodeSent(true)
+      setBindSendCooldown(60)
+    } catch (err: any) {
+      setBindError(err.message || t('common.error'))
+    }
+  }
+
+  const handleConfirmBind = async () => {
+    if (!bindEmail || !bindCode) return
+    setBindLoading(true)
+    setBindError('')
+    try {
+      await rebindEmail(bindEmail, bindCode)
+      setShowBindEmail(false)
+      setBindEmail('')
+      setBindCode('')
+      setBindCodeSent(false)
+    } catch (err: any) {
+      setBindError(err.message || t('common.error'))
+    } finally { setBindLoading(false) }
+  }
+
+  const handleRemoveEmail = async () => {
+    if (!confirm(t('auth.removeEmail') + '?')) return
+    try {
+      await removeEmail()
+    } catch (err: any) {
+      alert(err.message || t('common.error'))
+    }
   }
 
   // ── 编辑资料 ──
@@ -258,6 +311,38 @@ export default function MePage() {
             >
               <Edit3 size={12} /> {t('me.editProfile')}
             </button>
+            {/* 邮箱 */}
+            <div className="mt-3 pt-3 border-t border-border/60">
+              <span className="text-[10px] text-textMuted uppercase tracking-wider">{t('auth.email')}</span>
+              <div className="flex items-center gap-2 mt-1">
+                {user?.email ? (
+                  <>
+                    <span className="text-sm text-textPrimary truncate">{user.email}</span>
+                    {user.email_verified ? (
+                      <span className="text-[10px] text-mint-400 bg-mint-500/10 px-1.5 py-0.5 rounded-full">{t('auth.emailVerified')}</span>
+                    ) : (
+                      <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-full">{t('auth.emailNotVerified')}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-sm text-textMuted">{t('auth.noEmailBound')}</span>
+                )}
+                <button
+                  onClick={() => setShowBindEmail(true)}
+                  className="text-[10px] text-primary-400 hover:text-primary-500 transition-colors"
+                >
+                  {user?.email ? t('auth.changeEmail') : t('auth.bindEmailTitle')}
+                </button>
+                {user?.email && (
+                  <button
+                    onClick={handleRemoveEmail}
+                    className="text-[10px] text-rose-400 hover:text-rose-500 transition-colors"
+                  >
+                    {t('auth.removeEmail')}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -644,6 +729,64 @@ export default function MePage() {
           file={forwardFile}
           onClose={() => setForwardFile(null)}
         />
+      )}
+
+      {/* v1.0.0 邮箱绑定弹窗 */}
+      {showBindEmail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowBindEmail(false)}>
+          <div className="bg-surface border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-textPrimary mb-4">{t('auth.bindEmailTitle')}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-textSecondary mb-1">{t('auth.email')}</label>
+                <input
+                  type="email"
+                  value={bindEmail}
+                  onChange={e => { setBindEmail(e.target.value); setBindCodeSent(false) }}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/60"
+                  placeholder={t('auth.emailPlaceholder')}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSendBindCode}
+                disabled={!bindEmail || bindSendCooldown > 0}
+                className="w-full py-2 text-sm font-medium rounded-xl border border-primary-500/30 text-primary-500 hover:bg-primary-500/10 disabled:opacity-40 transition-colors"
+              >
+                {bindSendCooldown > 0
+                  ? t('auth.codeResendIn').replace('{seconds}', String(bindSendCooldown))
+                  : bindCodeSent ? t('auth.codeSent') : t('auth.sendCode')
+                }
+              </button>
+              {bindCodeSent && (
+                <div>
+                  <label className="block text-xs text-textSecondary mb-1">{t('auth.codePlaceholder')}</label>
+                  <input
+                    type="text" inputMode="numeric"
+                    value={bindCode}
+                    onChange={e => setBindCode(e.target.value.slice(0, 6))}
+                    maxLength={6} minLength={6}
+                    className="w-full px-3 py-2 rounded-xl border border-primary-500/40 bg-canvas text-textPrimary text-center text-lg tracking-[0.3em] focus:outline-none focus:ring-2 focus:ring-primary-500/60"
+                    placeholder="000000"
+                  />
+                </div>
+              )}
+              {bindError && (
+                <div className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">{bindError}</div>
+              )}
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowBindEmail(false)} className="flex-1 py-2 text-sm rounded-xl border border-border text-textSecondary hover:text-textPrimary transition-colors">{t('common.cancel')}</button>
+                <button
+                  onClick={handleConfirmBind}
+                  disabled={!bindEmail || !bindCode || bindLoading}
+                  className="flex-1 py-2 text-sm rounded-xl bg-primary-500 hover:bg-primary-400 disabled:opacity-30 text-white font-medium transition-colors"
+                >
+                  {bindLoading ? t('auth.verifying') : t('common.confirm')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

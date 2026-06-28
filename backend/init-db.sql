@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_active BOOLEAN DEFAULT TRUE,
     ai_quota INT DEFAULT 3,
     platform_gifted_credit INT DEFAULT 0,   -- 平台赠送额度（独立于兑换码额度 api_credit）
+    email VARCHAR(255),                     -- 邮箱（全局唯一，NULL 不受约束）
+    email_verified BOOLEAN DEFAULT FALSE,    -- 邮箱是否已验证
     -- 策略模式设置
     auto_approve_vector_timeout INT DEFAULT 60,
     auto_approve_vector_default BOOLEAN DEFAULT FALSE,
@@ -665,3 +667,44 @@ CREATE INDEX IF NOT EXISTS idx_file_refs_ref ON file_references(referrer_type, r
 CREATE INDEX IF NOT EXISTS idx_file_collabs_file ON file_collaborators(file_id);
 CREATE INDEX IF NOT EXISTS idx_system_logs_type ON system_logs(log_type);
 CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at);
+
+-- ============================================================
+-- v1.0.0 邮箱认证
+-- ============================================================
+CREATE TABLE IF NOT EXISTS verification_codes (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    code VARCHAR(10) NOT NULL,
+    purpose VARCHAR(30) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    ip_address VARCHAR(45),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_vc_email_purpose ON verification_codes(email, purpose);
+CREATE INDEX IF NOT EXISTS idx_vc_expires ON verification_codes(expires_at);
+
+-- system_settings 增加邮箱认证列
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'system_settings' AND column_name = 'smtp_config'
+    ) THEN
+        ALTER TABLE system_settings ADD COLUMN smtp_config JSONB;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'system_settings' AND column_name = 'require_email_verification'
+    ) THEN
+        ALTER TABLE system_settings ADD COLUMN require_email_verification BOOLEAN NOT NULL DEFAULT FALSE;
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'system_settings' AND column_name = 'login_providers'
+    ) THEN
+        ALTER TABLE system_settings ADD COLUMN login_providers JSONB NOT NULL DEFAULT '["direct"]';
+    END IF;
+END $$;
+
+-- users.email 部分唯一索引
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL;

@@ -8,12 +8,35 @@ class RegisterRequest(BaseModel):
     """注册请求"""
     username: str = Field(..., min_length=2, max_length=50, description="用户名")
     password: str = Field(..., min_length=6, max_length=100, description="密码")
+    email: str | None = Field(None, max_length=255, description="邮箱（require_email_verification=ON 时必填）")
+    verification_code: str | None = Field(None, min_length=6, max_length=6, description="邮箱验证码")
 
 
 class LoginRequest(BaseModel):
-    """登录请求"""
-    username: str = Field(..., description="用户名")
-    password: str = Field(..., description="密码")
+    """登录请求（支持多种方式）"""
+    login_id: str = Field(..., description="用户名或邮箱")
+    password: str | None = Field(None, description="密码（method=direct 时必填）")
+    method: str = Field("direct", description="登录方式: direct / email_code")
+    verification_code: str | None = Field(None, min_length=6, max_length=6, description="验证码（method=email_code 时必填）")
+
+
+class EmailVerificationRequest(BaseModel):
+    """发送验证码请求"""
+    email: str = Field(..., max_length=255, description="目标邮箱")
+    purpose: str = Field("register", description="用途: register / login / rebind")
+
+
+class VerifyEmailRequest(BaseModel):
+    """验证邮箱请求"""
+    email: str = Field(..., max_length=255)
+    code: str = Field(..., min_length=6, max_length=6)
+    purpose: str = Field("register")
+
+
+class RebindEmailRequest(BaseModel):
+    """换绑邮箱请求（需登录）"""
+    email: str = Field(..., max_length=255)
+    code: str = Field(..., min_length=6, max_length=6)
 
 
 class TokenResponse(BaseModel):
@@ -25,6 +48,8 @@ class TokenResponse(BaseModel):
     role: str
     setup_completed: bool = True
     language: str = "zh"
+    email: str | None = None
+    email_verified: bool = False
 
 
 class UserInfoResponse(BaseModel):
@@ -51,3 +76,10 @@ class UserInfoResponse(BaseModel):
     ui_prefs: dict = {}
     setup_completed: bool = True
     created_at: str | None = None
+    email: str | None = None
+    email_verified: bool = False
+
+
+class LoginProvidersResponse(BaseModel):
+    """可用的登录方式"""
+    providers: list[str] = ["direct"]

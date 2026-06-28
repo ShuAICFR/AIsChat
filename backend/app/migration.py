@@ -42,6 +42,7 @@ async def run_migrations():
             await _migrate_memory_config_columns(db)   # v0.8.0 文件记忆配置字段（必须在 select(Agent) 之前）
             await _migrate_bio_and_status(db)     # v0.9.0 AI 简介 + 用户/AI 自定义状态（必须在 select(Agent) 之前）
             await _migrate_others_chat_controls(db)  # v0.9.0 对话权限 + 限额控制（必须在 select(Agent) 之前）
+            await _migrate_email_verification(db)  # v1.0.0 邮箱认证（必须在 select(Agent) 之前）
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -1792,6 +1793,87 @@ async def _migrate_bio_and_status(db):
     if created_any:
         await db.flush()
         logger.info("  ✅ bio/status_text 迁移完成")
+
+
+async def _migrate_email_verification(db):
+    """v1.0.0: 邮箱认证 — users 表 +email/+email_verified + verification_codes 表 + system_settings 扩展"""
+    created_any = False
+
+    # 1. users.email（可空，部分唯一索引）
+    if not await _column_exists(db, "users", "email"):
+        logger.info("  📧 添加 users.email 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN email VARCHAR(255)"))
+        await db.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email IS NOT NULL"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.email 已存在，跳过")
+
+    # 2. users.email_verified
+    if not await _column_exists(db, "users", "email_verified"):
+        logger.info("  ✅ 添加 users.email_verified 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.email_verified 已存在，跳过")
+
+    # 3. verification_codes 表
+    if not await _table_exists(db, "verification_codes"):
+        logger.info("  📦 创建 verification_codes 表")
+        await db.execute(text("""
+            CREATE TABLE verification_codes (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) NOT NULL,
+                code VARCHAR(10) NOT NULL,
+                purpose VARCHAR(30) NOT NULL,
+                expires_at TIMESTAMPTZ NOT NULL,
+                used BOOLEAN NOT NULL DEFAULT FALSE,
+                ip_address VARCHAR(45),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_vc_email_purpose ON verification_codes(email, purpose)"))
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_vc_expires ON verification_codes(expires_at)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ verification_codes 表已存在，跳过")
+        # 补充 ip_address 列（老版本可能没有）
+        if not await _column_exists(db, "verification_codes", "ip_address"):
+            await db.execute(text("ALTER TABLE verification_codes ADD COLUMN ip_address VARCHAR(45)"))
+            created_any = True
+
+    # 4. system_settings.smtp_config
+    if not await _column_exists(db, "system_settings", "smtp_config"):
+        logger.info("  📧 添加 system_settings.smtp_config 列")
+        await db.execute(text("ALTER TABLE system_settings ADD COLUMN smtp_config JSONB"))
+        created_any = True
+    else:
+        logger.info("  ⏭ system_settings.smtp_config 已存在，跳过")
+
+    # 5. system_settings.require_email_verification
+    if not await _column_exists(db, "system_settings", "require_email_verification"):
+        logger.info("  🔒 添加 system_settings.require_email_verification 列")
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN require_email_verification BOOLEAN NOT NULL DEFAULT FALSE"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ system_settings.require_email_verification 已存在，跳过")
+
+    # 6. system_settings.login_providers
+    if not await _column_exists(db, "system_settings", "login_providers"):
+        logger.info("  🔑 添加 system_settings.login_providers 列")
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN login_providers JSONB NOT NULL DEFAULT '[\"direct\"]'"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ system_settings.login_providers 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ 邮箱认证迁移完成")
 
 
 async def _fix_column_types(db):

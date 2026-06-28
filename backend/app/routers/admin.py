@@ -921,6 +921,167 @@ async def update_system_settings(
 
 
 # ============================================================
+# v1.0.0 邮箱认证：SMTP 配置 + 认证设置
+# ============================================================
+
+from app.schemas.system_settings import (
+    SmtpConfigRequest, AuthSettingsRequest, AuthSettingsResponse,
+)
+from app.utils.crypto import encrypt_api_key, decrypt_api_key
+
+
+@router.get("/auth-settings", response_model=AuthSettingsResponse)
+async def get_auth_settings(
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取认证设置（SMTP 已脱敏）"""
+    s = await get_settings(db)
+    smtp = s.get("smtp_config")
+    smtp_configured = bool(smtp and smtp.get("host"))
+
+    # 脱敏：移除密码
+    safe_smtp = None
+    if smtp:
+        safe_smtp = {
+            "host": smtp.get("host", ""),
+            "port": smtp.get("port", 587),
+            "username": smtp.get("username", ""),
+            "from_email": smtp.get("from_email", ""),
+            "from_name": smtp.get("from_name", "AIsChat"),
+            "use_tls": smtp.get("use_tls", True),
+            "has_password": bool(smtp.get("password_encrypted")),
+        }
+
+    return {
+        "require_email_verification": s.get("require_email_verification", False),
+        "login_providers": s.get("login_providers", ["direct"]),
+        "smtp_configured": smtp_configured,
+        "smtp_config": safe_smtp,
+    }
+
+
+@router.put("/auth-settings")
+async def update_auth_settings(
+    req: AuthSettingsRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新认证设置（邮箱验证开关 + 登录方式）"""
+    try:
+        row = await _get_or_create_settings(db)
+
+        if req.require_email_verification is not None:
+            row.require_email_verification = req.require_email_verification
+
+        if req.login_providers is not None:
+            if len(req.login_providers) < 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="必须至少保留一种登录方式",
+                )
+            valid_providers = {"direct", "email_code", "wechat", "qq"}
+            for p in req.login_providers:
+                if p not in valid_providers:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"无效的登录方式: {p}",
+                    )
+            row.login_providers = req.login_providers
+
+        await db.flush()
+        await _log_admin_action(
+            db, admin["user_id"], "update_auth_settings", "system", 1,
+            req.model_dump(exclude_none=True),
+        )
+        return await get_auth_settings(admin=admin, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.put("/smtp-config")
+async def update_smtp_config(
+    req: SmtpConfigRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """配置 SMTP 邮件服务"""
+    try:
+        row = await _get_or_create_settings(db)
+        smtp = row.smtp_config or {}
+
+        smtp["host"] = req.host
+        smtp["port"] = req.port
+        smtp["username"] = req.username
+        smtp["from_email"] = req.from_email
+        smtp["from_name"] = req.from_name
+        smtp["use_tls"] = req.use_tls
+
+        # 密码：留空 = 保留现网，否则重新加密
+        if req.password and req.password.strip():
+            smtp["password_encrypted"] = encrypt_api_key(req.password)
+        elif not smtp.get("password_encrypted") and req.password and req.password.strip():
+            smtp["password_encrypted"] = encrypt_api_key(req.password)
+
+        row.smtp_config = smtp
+        await db.flush()
+        await _log_admin_action(
+            db, admin["user_id"], "update_smtp_config", "system", 1,
+            {"host": req.host, "port": req.port, "username": req.username,
+             "from_email": req.from_email, "from_name": req.from_name},
+        )
+        return await get_auth_settings(admin=admin, db=db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/smtp-test")
+async def test_smtp(
+    req: SmtpConfigRequest,
+    admin: dict = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """测试 SMTP 连接（不保存配置）"""
+    # 如果密码留空，尝试从现有配置读取
+    password = req.password or ""
+    if not password.strip():
+        s = await get_settings(db)
+        existing = s.get("smtp_config", {}) or {}
+        if existing.get("password_encrypted"):
+            try:
+                password = decrypt_api_key(existing["password_encrypted"])
+            except Exception:
+                pass
+
+    config = {
+        "host": req.host,
+        "port": req.port,
+        "username": req.username,
+        "password": password,
+        "from_email": req.from_email,
+        "from_name": req.from_name,
+        "use_tls": req.use_tls,
+    }
+
+    from app.services.email_service import test_smtp_connection
+    ok, msg = await test_smtp_connection(config)
+    return {"success": ok, "message": msg}
+
+
+async def _get_or_create_settings(db: AsyncSession):
+    """获取或创建 system_settings 行（admin 内部使用）"""
+    from app.models.system_settings import SystemSettings
+    result = await db.execute(select(SystemSettings).where(SystemSettings.id == 1))
+    row = result.scalar_one_or_none()
+    if row is None:
+        row = SystemSettings(id=1, default_language="en")
+        db.add(row)
+        await db.flush()
+        await db.refresh(row)
+    return row
+
+
+# ============================================================
 # 系统提示词管理
 # ============================================================
 

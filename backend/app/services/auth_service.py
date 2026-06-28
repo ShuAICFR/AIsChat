@@ -16,10 +16,14 @@ async def register_user(
     db: AsyncSession,
     username: str,
     password: str,
+    email: str | None = None,
+    verification_code: str | None = None,
 ) -> User:
     """
     注册新用户。
-    如果是第一个用户，自动设为 admin。
+    如果是第一个用户，自动设为 admin（跳过邮箱验证）。
+    如果 require_email_verification=ON：email + verification_code 必填。
+    如果 require_email_verification=OFF：email 选填。
     """
     # 检查用户名是否已存在
     result = await db.execute(select(User).where(User.username == username))
@@ -31,12 +35,61 @@ async def register_user(
     user_count = count_result.scalar()
     is_first = user_count == 0
 
+    # 读取系统设置
+    require_verification = False
+    login_providers = ["direct"]
+    try:
+        from app.services.system_settings_service import get_settings
+        sys = await get_settings(db)
+        require_verification = sys.get("require_email_verification", False)
+        login_providers = sys.get("login_providers", ["direct"])
+    except Exception:
+        pass
+
+    email_verified = False
+
+    # 首个用户跳过所有邮箱限制
+    if not is_first and require_verification:
+        # 邮箱必填 + 验证码必填
+        if not email:
+            raise ValueError("需要验证邮箱才能注册")
+        if not verification_code:
+            raise ValueError("请输入邮箱验证码")
+
+        # 检查邮箱唯一性
+        existing_email = await db.execute(
+            select(User).where(User.email == email)
+        )
+        if existing_email.scalar_one_or_none():
+            raise ValueError("该邮箱已被其他账号使用")
+
+        # 验证码校验
+        from app.services.verification_service import verify_code
+        if not await verify_code(db, email, verification_code, "register"):
+            raise ValueError("验证码错误或已过期")
+
+        email_verified = True
+    elif email:
+        # 非强制模式但提供了邮箱：检查唯一性，不强制验证
+        existing_email = await db.execute(
+            select(User).where(User.email == email)
+        )
+        if existing_email.scalar_one_or_none():
+            raise ValueError("该邮箱已被其他账号使用")
+        # 如果提供了验证码，校验之
+        if verification_code:
+            from app.services.verification_service import verify_code
+            if await verify_code(db, email, verification_code, "register"):
+                email_verified = True
+
     user = User(
         username=username,
         password_hash=hash_password(password),
         role="admin" if is_first else "user",
         ai_quota=3,
         setup_completed=False,  # 新用户需完成初始化设置向导
+        email=email,
+        email_verified=email_verified,
     )
     # 读取全局默认设置（语言 + 平台赠送额度）
     try:
@@ -61,14 +114,36 @@ async def register_user(
 
 async def login_user(
     db: AsyncSession,
-    username: str,
-    password: str,
+    login_id: str,
+    password: str | None = None,
+    method: str = "direct",
+    verification_code: str | None = None,
 ) -> dict:
     """
     用户登录，返回 JWT 令牌信息。
+    method='direct': login_id + password（先按 username 查，再按 email 查）
+    method='email_code': login_id（已验证邮箱）+ verification_code
     """
-    result = await db.execute(select(User).where(User.username == username))
+    # 检查登录方式是否可用
+    try:
+        from app.services.system_settings_service import get_settings
+        sys = await get_settings(db)
+        login_providers = sys.get("login_providers", ["direct"])
+        if method not in login_providers:
+            raise ValueError("该登录方式暂不可用")
+    except ValueError as e:
+        if "该登录方式" in str(e) or "登录方式" in str(e):
+            raise
+    except Exception:
+        pass
+
+    # 查找用户：先按 username，再按 email
+    user = None
+    result = await db.execute(select(User).where(User.username == login_id))
     user = result.scalar_one_or_none()
+    if user is None:
+        result = await db.execute(select(User).where(User.email == login_id))
+        user = result.scalar_one_or_none()
 
     if user is None:
         raise ValueError("用户名或密码错误")
@@ -76,8 +151,27 @@ async def login_user(
     if not user.is_active:
         raise ValueError("账号已被封禁")
 
-    if not verify_password(password, user.password_hash):
-        raise ValueError("用户名或密码错误")
+    if method == "email_code":
+        # 邮箱验证码登录：必须有已验证的邮箱
+        email_addr = getattr(user, "email", None)
+        if not email_addr:
+            raise ValueError("用户名或密码错误")
+        if not getattr(user, "email_verified", False):
+            raise ValueError("用户名或密码错误")
+        if not verification_code:
+            raise ValueError("请输入验证码")
+
+        from app.services.verification_service import verify_code
+        if not await verify_code(db, email_addr, verification_code, "login"):
+            raise ValueError("用户名或密码错误")
+
+    elif method == "direct":
+        if not password:
+            raise ValueError("请输入密码")
+        if not verify_password(password, user.password_hash):
+            raise ValueError("用户名或密码错误")
+    else:
+        raise ValueError("不支持的登录方式")
 
     access_token = create_access_token({
         "user_id": user.id,
@@ -93,6 +187,8 @@ async def login_user(
         "role": user.role,
         "setup_completed": getattr(user, "setup_completed", True),
         "language": getattr(user, "language", "zh") or "zh",
+        "email": getattr(user, "email", None),
+        "email_verified": getattr(user, "email_verified", False),
     }
 
 
@@ -142,7 +238,70 @@ async def get_user_info(db: AsyncSession, user_id: int) -> dict:
         "setup_completed": getattr(user, "setup_completed", True),
         "created_at": str(user.created_at) if user.created_at else None,
         "assigned_pool_key_name": assigned_pool_key_name,
+        "email": getattr(user, "email", None),
+        "email_verified": getattr(user, "email_verified", False),
     }
+
+
+async def rebind_email(
+    db: AsyncSession,
+    user_id: int,
+    email: str,
+    code: str,
+) -> dict:
+    """换绑邮箱。需验证新邮箱的验证码。"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise ValueError("用户不存在")
+
+    # 校验验证码
+    from app.services.verification_service import verify_code
+    if not await verify_code(db, email, code, "rebind"):
+        raise ValueError("验证码错误或已过期")
+
+    # 检查邮箱唯一性
+    existing = await db.execute(
+        select(User).where(User.email == email, User.id != user_id)
+    )
+    if existing.scalar_one_or_none():
+        raise ValueError("该邮箱已被其他账号使用")
+
+    user.email = email
+    user.email_verified = True
+    await db.flush()
+    await db.refresh(user)
+
+    logger.info(f"用户 {user_id} 已换绑邮箱 → {email}")
+    return await get_user_info(db, user_id)
+
+
+async def unbind_email(
+    db: AsyncSession,
+    user_id: int,
+) -> dict:
+    """解绑邮箱（仅在 require_email_verification=OFF 时允许）"""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise ValueError("用户不存在")
+
+    # 检查系统是否关闭了邮箱验证
+    try:
+        from app.services.system_settings_service import get_settings
+        sys = await get_settings(db)
+        if sys.get("require_email_verification", False):
+            raise ValueError("当前要求邮箱验证，无法解绑邮箱")
+    except Exception:
+        pass
+
+    user.email = None
+    user.email_verified = False
+    await db.flush()
+    await db.refresh(user)
+
+    logger.info(f"用户 {user_id} 已解绑邮箱")
+    return await get_user_info(db, user_id)
 
 
 async def update_user_settings(

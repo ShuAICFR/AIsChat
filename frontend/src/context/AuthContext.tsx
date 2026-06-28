@@ -24,15 +24,29 @@ interface User {
   setup_completed: boolean
   created_at: string | null
   assigned_pool_key_name: string | null  // v0.6.0: 绑定的池 Key 名
+  email: string | null  // v1.0.0 邮箱
+  email_verified: boolean  // v1.0.0 邮箱是否已验证
+}
+
+interface LoginOptions {
+  method?: string
+  code?: string
+}
+
+interface RegisterOptions {
+  email?: string
+  code?: string
 }
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (username: string, password: string) => Promise<void>
-  register: (username: string, password: string) => Promise<void>
+  login: (loginId: string, password: string, options?: LoginOptions) => Promise<void>
+  register: (username: string, password: string, options?: RegisterOptions) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
+  rebindEmail: (email: string, code: string) => Promise<void>
+  removeEmail: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -62,64 +76,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshUser])
 
-  const login = async (username: string, password: string) => {
-    const data = await api.post('/auth/login', { username, password })
+  const buildUserFromData = (data: any): User => ({
+    id: data.user_id,
+    username: data.username,
+    role: data.role,
+    is_active: true,
+    ai_quota: 0,
+    api_credit: 0,
+    has_api_key: false,
+    timezone: 'Asia/Shanghai',
+    language: (data.language === 'en' || data.language === 'zh') ? data.language : 'zh',
+    ui_prefs: {} as Record<string, any>,
+    agent_bundle_credit: 0,
+    file_quota_mb: 100,
+    platform_gifted_credit: 0,
+    total_effective: 0,
+    avatar_url: null,
+    bio: null,
+    status_text: null,
+    status_color: null,
+    setup_completed: data.setup_completed ?? true,
+    created_at: null,
+    assigned_pool_key_name: null,
+    email: data.email ?? null,
+    email_verified: data.email_verified ?? false,
+  })
+
+  const login = async (loginId: string, password: string, options?: LoginOptions) => {
+    const body: any = {
+      login_id: loginId,
+      password: password || '',
+      method: options?.method || 'direct',
+    }
+    if (options?.method === 'email_code' && options?.code) {
+      body.verification_code = options.code
+    }
+    const data = await api.post('/auth/login', body)
     localStorage.setItem('access_token', data.access_token)
-    const lang = (data.language === 'en' || data.language === 'zh') ? data.language : 'en'
-    cacheLangForUnauth(lang as 'zh' | 'en')
-    setUser({
-      id: data.user_id,
-      username: data.username,
-      role: data.role,
-      is_active: true,
-      ai_quota: 0,
-      api_credit: 0,
-      has_api_key: false,
-      timezone: 'Asia/Shanghai',
-      language: lang,
-      ui_prefs: {} as Record<string, any>,
-      agent_bundle_credit: 0,
-      file_quota_mb: 100,
-      platform_gifted_credit: 0,
-      total_effective: 0,
-      avatar_url: null,
-      bio: null,
-      status_text: null,
-      status_color: null,
-      setup_completed: data.setup_completed ?? true,
-      created_at: null,
-      assigned_pool_key_name: null,
-    })
+    cacheLangForUnauth(data.language as 'zh' | 'en')
+    setUser(buildUserFromData(data))
   }
 
-  const register = async (username: string, password: string) => {
-    const data = await api.post('/auth/register', { username, password })
+  const register = async (username: string, password: string, options?: RegisterOptions) => {
+    const body: any = { username, password }
+    if (options?.email) body.email = options.email
+    if (options?.code) body.verification_code = options.code
+    const data = await api.post('/auth/register', body)
     localStorage.setItem('access_token', data.access_token)
-    const lang = (data.language === 'en' || data.language === 'zh') ? data.language : 'en'
-    cacheLangForUnauth(lang as 'zh' | 'en')
-    setUser({
-      id: data.user_id,
-      username: data.username,
-      role: data.role,
-      is_active: true,
-      ai_quota: 3,
-      api_credit: 0,
-      has_api_key: false,
-      timezone: 'Asia/Shanghai',
-      language: lang,
-      ui_prefs: {} as Record<string, any>,
-      agent_bundle_credit: 0,
-      file_quota_mb: 100,
-      platform_gifted_credit: 0,
-      total_effective: 0,
-      avatar_url: null,
-      bio: null,
-      status_text: null,
-      status_color: null,
-      setup_completed: data.setup_completed ?? false,
-      created_at: null,
-      assigned_pool_key_name: null,
-    })
+    cacheLangForUnauth(data.language as 'zh' | 'en')
+    setUser(buildUserFromData(data))
+  }
+
+  const rebindEmail = async (email: string, code: string) => {
+    const data = await api.put('/auth/email', { email, code })
+    setUser(prev => prev ? { ...prev, email: data.email, email_verified: data.email_verified } : prev)
+  }
+
+  const removeEmail = async () => {
+    const data = await api.delete('/auth/email')
+    setUser(prev => prev ? { ...prev, email: data.email, email_verified: data.email_verified } : prev)
   }
 
   const logout = () => {
@@ -128,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser, rebindEmail, removeEmail }}>
       {children}
     </AuthContext.Provider>
   )

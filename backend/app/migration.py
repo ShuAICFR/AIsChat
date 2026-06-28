@@ -1930,7 +1930,7 @@ async def _migrate_smtp_configs_array(db):
     import json
     new_value = json.dumps([raw])
     await db.execute(
-        text("UPDATE system_settings SET smtp_config = :val::jsonb WHERE id = 1"),
+        text("UPDATE system_settings SET smtp_config = CAST(:val AS jsonb) WHERE id = 1"),
         {"val": new_value},
     )
     await db.flush()

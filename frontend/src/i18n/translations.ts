@@ -891,6 +891,15 @@ const zh: TranslationDict = {
   'admin.loginProviderWechat': '微信登录',
   'admin.loginProviderQQ': 'QQ 登录',
   'admin.loginProviderLastWarning': '不能禁用最后一种登录方式',
+  // v1.1.0 LLM 厂商预设
+  'admin.llmProvider': 'LLM 厂商预设',
+  'admin.manualConfig': '手动配置',
+  'admin.defaultChatModel': '默认聊天模型',
+  'admin.defaultWorkModel': '默认工作模型',
+  'admin.modelOptionsJson': '模型选项列表 (JSON)',
+  // common
+  'common.apply': '应用',
+  'common.saved': '已保存',
   'admin.defaultLanguage': '全局默认语言',
   'admin.defaultLanguageDesc': '新用户未主动选择时将沿用此默认语言。已设置过语言的用户不受影响。',
   'admin.defaultPlatformCredit': '全局默认平台赠送额度',
@@ -2376,6 +2385,15 @@ const en: TranslationDict = {
   'admin.loginProviderWechat': 'WeChat Login',
   'admin.loginProviderQQ': 'QQ Login',
   'admin.loginProviderLastWarning': 'Cannot disable the last remaining login method',
+  // v1.1.0 LLM provider presets
+  'admin.llmProvider': 'LLM Provider Presets',
+  'admin.manualConfig': 'Manual Config',
+  'admin.defaultChatModel': 'Default Chat Model',
+  'admin.defaultWorkModel': 'Default Work Model',
+  'admin.modelOptionsJson': 'Model Options (JSON)',
+  // common
+  'common.apply': 'Apply',
+  'common.saved': 'Saved',
   'admin.defaultLanguage': 'Global Default Language',
   'admin.defaultLanguageDesc': "New users will use this default if they haven't chosen. Users who have set their language won't be affected.",
   'admin.defaultPlatformCredit': 'Global Default Platform Credit',

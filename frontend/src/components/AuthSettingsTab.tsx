@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api/client'
 import { useT } from '../i18n/I18nContext'
 import { Mail, Shield, CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import ProviderPresetSelector from './ProviderPresetSelector'
 
 interface AuthSettingsData {
   require_email_verification: boolean
@@ -227,6 +228,9 @@ export default function AuthSettingsTab() {
           </button>
         </div>
       </section>
+
+      {/* ── LLM 厂商预设 ── */}
+      <ProviderPresetSelector />
 
       {/* ── 认证设置 ── */}
       <section className="bg-surface border border-border rounded-xl p-5">

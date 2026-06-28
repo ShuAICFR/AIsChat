@@ -323,6 +323,17 @@ async def send_dm_message(
     sender_name = row[0] if row else f"用户{sender_id}"
     sender_type = (row[1] or "human") if row else "human"
     sender_avatar_url = row[2] if row else None
+
+    # AI 头像存在 agents 表，需要额外查询补充
+    if sender_type == "ai" and not sender_avatar_url:
+        from app.models.agent import Agent as AgentModel
+        agent_avatar_result = await db.execute(
+            select(AgentModel.avatar_url).where(AgentModel.user_id == sender_id)
+        )
+        agent_avatar = agent_avatar_result.scalar()
+        if agent_avatar:
+            sender_avatar_url = agent_avatar
+
     return _dm_message_to_dict(msg, sender_name, sender_type, sender_avatar_url)
 
 

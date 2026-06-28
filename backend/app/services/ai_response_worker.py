@@ -1151,6 +1151,7 @@ async def _trigger_dm_ai_reply(
                 "data": {
                     "agent_id": agent.id,
                     "agent_name": agent.name,
+                    "agent_avatar_url": agent.avatar_url,
                     "session_id": session_id,
                     "trigger": "user",
                 },

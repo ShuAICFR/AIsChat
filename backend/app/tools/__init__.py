@@ -17,6 +17,7 @@ from app.tools.chat_social.switch_state import SwitchState
 from app.tools.chat_social.view_unread import ViewUnread
 from app.tools.chat_social.list_available_skills import ListAvailableSkills
 from app.tools.chat_social.cross_post import CrossPost
+from app.tools.chat_social.send_file import SendFile
 
 # ── memory ──
 from app.tools.memory.store_memory import StoreMemory

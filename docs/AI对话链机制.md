@@ -296,14 +296,78 @@ flowchart TD
 
 ---
 
-## 9. 关键文件索引 / Key File Index
+## 9. DM 触发决策树 / DM Trigger Decision Tree
+
+> 位置 / Located at: `backend/app/routers/dm.py:_maybe_trigger_dm_ai_reply()`
+
+DM 触发流程与群聊不同——群聊走 Worker 队列统一调度，DM 在 HTTP 层完成权限/余额检查后再入队。
+
+```mermaid
+flowchart TD
+    User[👤 用户发 DM] --> IsOwner{发信人 == AI 主人?}
+    
+    IsOwner -->|是| AllowOwner[✅ 允许触发<br/>走主人账单]
+    AllowOwner --> Enqueue[入队 → Worker]
+    
+    IsOwner -->|否| Allowed{allow_others_chat?}
+    
+    Allowed -->|True| QuotaCheck{others_chat_mode}
+    QuotaCheck -->|unlimited| BalCheck[检查聊天者余额]
+    QuotaCheck -->|quota| UsedCheck{used >= quota?}
+    UsedCheck -->|否| IncUsed[used++]
+    IncUsed --> BalCheck
+    UsedCheck -->|是| AutoFlip[自动 flip allow_others_chat=False<br/>系统 DM 通知主人<br/>配额已用完]
+    AutoFlip --> DisMode
+    
+    Allowed -->|False| DisMode{disallow_mode}
+    DisMode -->|strict| Skip[⏭️ 静默跳过<br/>不入队]
+    DisMode -->|own_key| HasKey{聊天者有自有 Key?}
+    HasKey -->|有| UseOwn[✅ 用聊天者自有 Key<br/>force_own_key=True]
+    UseOwn --> Enqueue
+    HasKey -->|无| SysDM[系统 DM 提示<br/>「请配置 API Key」]
+    
+    BalCheck -->|充足| Deduct[扣聊天者额度<br/>入队 → Worker]
+    Deduct --> Enqueue
+    BalCheck -->|不足| HasKey2{聊天者有自有 Key?}
+    HasKey2 -->|有| Popup[🔔 WS balance_prompt 弹窗<br/>询问是否使用自有 Key]
+    Popup -->|同意| Continue[POST /dm/continue-with-own-key<br/>force_own_key=True]
+    Continue --> Enqueue
+    Popup -->|取消| Cancel[❌ 不触发]
+    HasKey2 -->|无| SysDM
+```
+
+### 9.1 计费规则 / Billing Rules
+
+| 场景 | 付费方 | 触发条件 |
+|------|--------|----------|
+| 主人发 DM 给自己的 AI | 主人 | 始终允许 |
+| 非主人发 DM 给通用/半通用 AI | 聊天者 | `allow_others_chat=True` |
+| 非主人发 DM 给共鸣型 AI | 创建者（主人） | `allow_others_chat=True` |
+| 群聊中触发任意 AI | 创建者 | 群聊始终走创建者账单 |
+| 非主人用自有 Key 触发 | 聊天者（扣自有 Key） | `disallow_mode=own_key` |
+
+扣费优先级：`platform_gifted_credit` → `api_credit`。单次超支允许过界（不中断 AI 回复），`api_credit` 变负后前端标红。
+
+### 9.2 Worker 侧配合 / Worker Side
+
+`_get_api_config` 接收 `chatter_id` 和 `force_own_key` 参数：
+- `force_own_key=True` → 跳过 Tier 2/3 池 Key 查找，直接用聊天者自有 Key
+- `bill_user_id` = 聊天者（通用/半通用 DM）或 创建者（群聊/共鸣）
+- `_tool_call_loop` 扣费使用 `bill_user_id`
+
+---
+
+## 10. 关键文件索引 / Key File Index
 
 | 文件 / File | 职责 / Responsibility |
 |------|------|
 | `backend/app/routers/ws.py` | WebSocket 端点，人类消息持久化 + 广播 + 推入队列 |
-| `backend/app/services/ai_response_worker.py` | Worker 主循环，消息事件处理，工具调用循环 |
+| `backend/app/routers/dm.py` | DM HTTP 端点，含 `_maybe_trigger_dm_ai_reply` 决策树（权限/配额/余额） |
+| `backend/app/services/ai_response_worker.py` | Worker 主循环，消息事件处理，工具调用循环，`_get_api_config` Key 选择 |
 | `backend/app/services/agent_service.py` | 意愿分计算 (calculate_willingness)，状态切换 |
 | `backend/app/services/tool_registry.py` | 工具定义 + 状态白名单 + 统一 dispatch |
 | `backend/app/services/llm_service.py` | LLM 调用抽象 (chat_completion, build_messages) |
 | `backend/app/services/memory_service.py` | 长期记忆检索 (recall_relevant_memories) |
+| `backend/app/services/quota_service.py` | 额度扣减 (deduct_credit)，优先扣赠送额度 |
 | `frontend/src/components/ChatArea.tsx` | @提及自动补全 UI，思考状态显示 |
+| `frontend/src/components/BalancePromptModal.tsx` | 余额不足弹窗，监听 WS 事件，一键切换自有 Key |

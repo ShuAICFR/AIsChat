@@ -19,6 +19,12 @@
 - 📝 **DM 头部头像可点**：私信头部对方头像点击 → 打开 ProfileCard 资料卡。
 - 🎨 **状态文字颜色自定义**：用户可为个性状态选择预设颜色（8 种 + 默认无颜色）。WCAG 对比度自动检测——与父容器背景色计算对比度，不足 4.5:1 时自动追加文字辉光保证可读性。`users` 表新增 `status_color` 列。颜色选择器在 `/me` 编辑资料弹窗中。
 - 📍 **状态文本多位置显示**：好友列表、私信（DM）列表、`/me` 个人资料卡三处均展示个性状态文本（含自定义颜色）。后端 `dm_service._get_partner_info` 和 `friend_service.list_friends` 同步返回 `status_text` + `status_color`。
+- 🔐 **AI 对话权限控制系统**：`agents` 表新增 5 列——`allow_others_chat`（是否允许非主人触发对话）、`others_chat_mode`（允许时子模式：unlimited 始终允许 / quota 限额）、`others_chat_quota`（配额上限，默认 30 次）、`others_chat_used`（当前已使用次数，可重置）、`disallow_mode`（禁止时子模式：strict 严格禁止 / own_key 允许聊天者用自有 Key）。创建/编辑 AI 弹窗新增「对话权限」分区，所有参数始终可见可改。
+- 💰 **差异化额度扣减规则**：通用/半通用 AI 在 DM 中由**聊天者**付费（谁用谁付），群聊中由**创建者**付费，共鸣型 AI 始终由创建者付费。扣减优先消耗 `platform_gifted_credit`（平台赠送），再消耗 `api_credit`。1 万 Token = 1 额度。
+- ⚡ **DM 触发决策树**：非主人发 DM → 检查 `allow_others_chat` → 允许则检查配额（quota 模式超限自动 flip + 系统 DM 通知主人）→ 检查聊天者余额（不足则 WebSocket 弹窗）→ 禁止则检查 `disallow_mode`（strict 静默跳过 / own_key 用聊天者自有 Key）。全新端点 `POST /dm/continue-with-own-key` 处理用户确认使用自有 Key。
+- 🪟 **余额不足弹窗 BalancePromptModal**：聊天者额度不足时，后端通过 WebSocket 推送 `balance_prompt` 消息 → 前端全局弹窗提示「余额不足，是否使用自有 API Key？」→ 同意后续用、不同意取消。`useWebSocket` Hook 通过 CustomEvent 分发。
+- 🔄 **配额自动翻转 + 系统通知**：限额模式下 `others_chat_used` 达上限时自动将 `allow_others_chat` 翻转为 False，系统通过 DM 通知 AI 主人配额已用完。新增 `POST /agents/{id}/reset-others-chat-used` 端点供主人重置计数器。
+- 📊 **前端对话权限 UI**：CreateAgentModal 和 AgentSettingsModal 新增「对话权限」Section，含 Toggle 开关、子模式单选、配额输入、使用计数 + 重置按钮。左边界颜色编码。17 个新增 i18n 翻译键（中英）。
 
 ### Changed
 

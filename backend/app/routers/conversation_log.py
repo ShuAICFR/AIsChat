@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.utils.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter(tags=["对话日志"])
 
@@ -52,11 +53,15 @@ async def get_agent_logs_user(
 ):
     """查看某 AI 的对话日志（需授权）"""
     from app.services.conversation_log_service import get_agent_logs
+    # 从 DB 读取角色而非信任 JWT（提权后 JWT 可能过时）
+    user_result = await db.execute(select(User.role).where(User.id == current_user["user_id"]))
+    db_role = user_result.scalar_one_or_none()
+    is_admin = db_role == "admin"
     try:
         return await get_agent_logs(
             db, agent_id,
             user_id=current_user["user_id"],
-            is_admin=False,
+            is_admin=is_admin,
             limit=limit, offset=offset,
         )
     except ValueError as e:
@@ -72,11 +77,14 @@ async def get_agent_log_detail_user(
 ):
     """查看单条对话日志详情（需授权）"""
     from app.services.conversation_log_service import get_log_detail
+    user_result = await db.execute(select(User.role).where(User.id == current_user["user_id"]))
+    db_role = user_result.scalar_one_or_none()
+    is_admin = db_role == "admin"
     try:
         detail = await get_log_detail(
             db, log_id,
             user_id=current_user["user_id"],
-            is_admin=False,
+            is_admin=is_admin,
         )
         if detail is None:
             raise HTTPException(status_code=404, detail="日志不存在")
@@ -186,11 +194,14 @@ async def export_log_detail(
 ):
     """导出单条对话日志（JSON 或 Markdown）"""
     from app.services.conversation_log_service import get_log_detail
+    user_result = await db.execute(select(User.role).where(User.id == current_user["user_id"]))
+    db_role = user_result.scalar_one_or_none()
+    is_admin = db_role == "admin"
     try:
         detail = await get_log_detail(
             db, log_id,
             user_id=current_user["user_id"],
-            is_admin=False,
+            is_admin=is_admin,
         )
         if detail is None:
             raise HTTPException(status_code=404, detail="日志不存在")

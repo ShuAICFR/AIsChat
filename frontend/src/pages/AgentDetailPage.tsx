@@ -149,6 +149,7 @@ export default function AgentDetailPage() {
   // Logs
   const [logs, setLogs] = useState<LogSummary[]>([])
   const [logsLoading, setLogsLoading] = useState(false)
+  const [logsError, setLogsError] = useState(false)
   const [selectedLog, setSelectedLog] = useState<any>(null)
   const [logDetailLoading, setLogDetailLoading] = useState(false)
   const [logExporting, setLogExporting] = useState(false)
@@ -252,10 +253,14 @@ export default function AgentDetailPage() {
 
   const loadLogs = useCallback(async () => {
     setLogsLoading(true)
+    setLogsError(false)
     try {
       const data = await api.get(`/conversation-log/agents/${agentId}/logs?limit=50`)
       setLogs(data || [])
-    } catch { setLogs([]) }
+    } catch {
+      setLogs([])
+      setLogsError(true)
+    }
     finally { setLogsLoading(false) }
   }, [agentId])
 
@@ -963,8 +968,14 @@ export default function AgentDetailPage() {
               </div>
             ) : logs.length === 0 ? (
               <p className="text-sm text-textMuted py-4 text-center">
-                {t('agentDetail.logsEmpty')}<br />
-                <span className="text-xs">{t('agentDetail.logsEmptyHint')}</span>
+                {logsError ? (
+                  <>
+                    {t('agentDetail.logsEmpty')}<br />
+                    <span className="text-xs">{t('agentDetail.logsEmptyHint')}</span>
+                  </>
+                ) : (
+                  t('agentDetail.logsNone')
+                )}
               </p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">

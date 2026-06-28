@@ -236,6 +236,8 @@ export default function CreateAgentModal({
   const [memoryLoadMode, setMemoryLoadMode] = useState('index_only')
   const [memoryRecentCount, setMemoryRecentCount] = useState(0)
   const [memorySharedScope, setMemorySharedScope] = useState('private_only')
+  const [bio, setBio] = useState('')
+  const [statusText, setStatusText] = useState('')
 
   // 弹窗状态
   const [showDetailSettings, setShowDetailSettings] = useState(false)
@@ -368,6 +370,8 @@ export default function CreateAgentModal({
         memory_load_mode: memoryLoadMode,
         memory_recent_count: memoryRecentCount,
         memory_shared_scope: memorySharedScope,
+        bio: bio || null,
+        status_text: statusText || null,
       })
       // 如果填写了独立 API 配置，创建后立即设置
       if (apiBaseUrl.trim() || apiKey.trim()) {
@@ -491,6 +495,26 @@ export default function CreateAgentModal({
             {t('modal.createAgentSkipPreset')}
           </button>
         )}
+
+        {/* ── 个人资料（可选） ── */}
+        <div className="space-y-2 mb-3">
+          <textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder={t('agentDetail.bioPlaceholder')}
+            rows={2}
+            maxLength={500}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
+          />
+          <input
+            type="text"
+            value={statusText}
+            onChange={(e) => setStatusText(e.target.value)}
+            placeholder={t('agentDetail.statusTextPlaceholder')}
+            maxLength={100}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+        </div>
 
         {/* ── 操作按钮区 ── */}
         <div className="flex gap-3">

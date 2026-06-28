@@ -450,20 +450,13 @@ async def get_profile(
         profile["is_friend"] = is_friend
         return profile
     else:
-        from sqlalchemy import or_
-        # 兼容两种 ID：Agent.id（来自搜索）或 User.id（来自 DM partner）
-        # Agent.id 和 users.id 是不同的自增序列，可能不一致
+        # 使用 Agent.id 查询（调用方统一传 Agent.id：搜索返回 Agent.id，DM _get_partner_info 也返回 Agent.id）
         result = await db.execute(
-            select(Agent).where(
-                or_(Agent.id == entity_id, Agent.user_id == entity_id),
-                Agent.discoverable == True,
-            )
+            select(Agent).where(Agent.id == entity_id, Agent.discoverable == True)
         )
-        agents = result.scalars().all()
-        if len(agents) == 0:
+        agent = result.scalar_one_or_none()
+        if agent is None:
             raise HTTPException(status_code=404, detail="AI 不存在或不可发现")
-        # 优先精确匹配 Agent.id
-        agent = next((a for a in agents if a.id == entity_id), agents[0])
         # 查制作者
         owner_result = await db.execute(
             select(User.username).where(User.id == agent.owner_id)
@@ -480,7 +473,7 @@ async def get_profile(
             "owner_name": owner_name,
         })
 
-        # 好友检查：统一用 Agent.id（Friendship.friend_id 存储的是 Agent.id）
+        # 好友检查
         is_friend = False
         friend_check = await db.execute(
             select(Friendship).where(

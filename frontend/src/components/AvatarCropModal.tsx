@@ -9,10 +9,8 @@ interface AvatarCropModalProps {
   onCancel: () => void
 }
 
-function getCroppedImg(image: HTMLImageElement, crop: Area): Promise<Blob> {
+function getCroppedImgRaw(image: HTMLImageElement, crop: Area): Promise<Blob> {
   const canvas = document.createElement('canvas')
-  const scaleX = image.naturalWidth / image.width
-  const scaleY = image.naturalHeight / image.height
   canvas.width = crop.width
   canvas.height = crop.height
   const ctx = canvas.getContext('2d')
@@ -20,10 +18,10 @@ function getCroppedImg(image: HTMLImageElement, crop: Area): Promise<Blob> {
 
   ctx.drawImage(
     image,
-    crop.x * scaleX,
-    crop.y * scaleY,
-    crop.width * scaleX,
-    crop.height * scaleY,
+    crop.x,
+    crop.y,
+    crop.width,
+    crop.height,
     0,
     0,
     crop.width,
@@ -47,9 +45,7 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
   const [imageSrc, setImageSrc] = useState<string>('')
   const [crop, setCrop] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const croppedRef = useRef<Area | null>(null)
-  const imageRef = useRef<HTMLImageElement | null>(null)
 
   // 加载图片
   useState(() => {
@@ -62,22 +58,28 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
 
   const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
     croppedRef.current = croppedPixels
-    setCroppedAreaPixels(croppedPixels)
   }, [])
 
   const handleConfirm = useCallback(async () => {
     const crop = croppedRef.current
-    if (!imageRef.current || !crop) {
-      onConfirm(file)  // 裁剪未就绪，直接用原图
+    if (!imageSrc || !crop) {
+      onConfirm(file)
       return
     }
     try {
-      const blob = await getCroppedImg(imageRef.current, crop)
+      // 创建临时图片元素，crop 坐标已是原始图像像素坐标（react-easy-crop 自动处理缩放）
+      const img = new Image()
+      img.src = imageSrc
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve()
+        img.onerror = () => reject(new Error('Image load failed'))
+      })
+      const blob = await getCroppedImgRaw(img, crop)
       onConfirm(blob)
     } catch {
       onConfirm(file)
     }
-  }, [file, onConfirm])
+  }, [file, imageSrc, onConfirm])
 
   if (!imageSrc) {
     return (
@@ -118,12 +120,6 @@ export default function AvatarCropModal({ file, onConfirm, onCancel }: AvatarCro
           onCropChange={setCrop}
           onCropComplete={onCropComplete}
           onZoomChange={setZoom}
-          onMediaLoaded={(media) => {
-            // 保存图片引用用于后续 canvas 裁剪
-            if (media instanceof HTMLImageElement) {
-              imageRef.current = media
-            }
-          }}
         />
       </div>
 

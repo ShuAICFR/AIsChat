@@ -17,6 +17,8 @@ class SystemSettings(Base):
 
     orphan_retention_days = Column(Integer, default=7, comment="孤儿文件宽限期（天），到期自动物理删除")
 
+    default_file_quota_mb = Column(Integer, default=100, comment="新用户默认文件存储配额（MB）")
+
     system_prompt_overrides = Column(JSONB, nullable=True, comment="系统提示词覆盖（管理员自定义 core_identity/protocols 等段）")
     system_prompt_order = Column(JSONB, nullable=True, comment="系统提示词段拼接顺序（NULL=使用代码默认 SEGMENT_ORDER）")
 

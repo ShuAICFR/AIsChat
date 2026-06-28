@@ -1358,6 +1358,7 @@ function SystemSettingsTab() {
   const [config, setConfig] = useState<any>(null)
   const [lang, setLang] = useState('en')
   const [platformCredit, setPlatformCredit] = useState(0)
+  const [fileQuota, setFileQuota] = useState(100)
   const [hasActiveKeys, setHasActiveKeys] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -1370,6 +1371,7 @@ function SystemSettingsTab() {
       setConfig(settings)
       setLang(settings.default_language || 'en')
       setPlatformCredit(settings.default_platform_credit || 0)
+      setFileQuota(settings.default_file_quota_mb ?? 100)
       setHasActiveKeys(keys.some((k: any) => k.is_active))
     }).catch(console.error)
   }, [])
@@ -1381,6 +1383,7 @@ function SystemSettingsTab() {
       const payload: any = {}
       if (field === 'language') payload.default_language = value
       else if (field === 'platform_credit') payload.default_platform_credit = value
+      else if (field === 'file_quota') payload.default_file_quota_mb = value
       const updated = await api.put('/admin/system-settings', payload)
       setConfig(updated)
       setMsg(t('admin.saveSuccess'))
@@ -1457,6 +1460,45 @@ function SystemSettingsTab() {
         {!hasActiveKeys && (
           <p className="text-xs text-amber-400 mt-1.5">{t('admin.platformCreditNoActiveKey')}</p>
         )}
+      </div>
+
+      {/* 用户默认文件配额 */}
+      <div>
+        <label className="block text-sm font-medium mb-1 text-textSecondary">{t('admin.defaultFileQuota')}</label>
+        <p className="text-xs text-textMuted mb-2">{t('admin.defaultFileQuotaDesc')}</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            value={fileQuota}
+            onChange={(e) => setFileQuota(parseInt(e.target.value) || 1)}
+            min={1}
+            max={1048576}
+            className="w-32 px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+          />
+          <span className="text-xs text-textMuted">MB</span>
+          <button
+            onClick={() => {
+              const old = config?.default_file_quota_mb ?? 100
+              if (fileQuota === old) return
+              const delta = fileQuota - old
+              const confirmed = confirm(
+                (fileQuota > old
+                  ? t('admin.fileQuotaIncreaseConfirm')
+                  : t('admin.fileQuotaDecreaseConfirm')
+                )
+                  .replace('{old}', String(old))
+                  .replace('{new}', String(fileQuota))
+                  .replace('{delta}', (delta >= 0 ? '+' : '') + delta)
+              )
+              if (!confirmed) return
+              handleSave('file_quota', fileQuota)
+            }}
+            disabled={saving || fileQuota === (config?.default_file_quota_mb ?? 100)}
+            className="px-3 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-400 text-sm disabled:opacity-40 transition-colors"
+          >
+            {t('settings.save')}
+          </button>
+        </div>
       </div>
 
       {msg && <p className={`text-sm ${msg.includes('失败') || msg.includes('无法') || msg.includes('No active') ? 'text-rose-400' : 'text-mint-400'}`}>{msg}</p>}

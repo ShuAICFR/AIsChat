@@ -810,6 +810,10 @@ const zh: TranslationDict = {
   'admin.defaultPlatformCreditDesc': '新用户注册时自动获得此额度。修改该值会批量更新所有用户的平台赠送额度（差值法）。0 = 禁用赠送。需至少有一个活跃的池 Key。',
   'admin.platformCreditNoActiveKey': 'API Key 池中没有活跃的 Key，无法启用平台赠送额度。请先添加并激活至少一个池 Key。',
       'admin.platformCreditConfirm': '确认修改平台赠送额度？\n\n当前 {old} → 新值 {new}\n差值 = {delta}\n\n这将影响所有 {userCount} 个用户！',
+  'admin.defaultFileQuota': '用户默认文件配额（MB）',
+  'admin.defaultFileQuotaDesc': '新用户注册时的初始文件存储配额。修改该值会批量调整所有用户的基数额度（兑换码加成不受影响）。',
+  'admin.fileQuotaIncreaseConfirm': '确认提高文件配额基数？\n\n当前 {old}MB → 新值 {new}MB\n所有用户将增加 +{delta}MB',
+  'admin.fileQuotaDecreaseConfirm': '确认降低文件配额基数？\n\n当前 {old}MB → 新值 {new}MB\n所有用户基数额度变为 {new}MB（兑换码加成保留）。\n\n⚠ 使用量超限的用户将无法上传新文件。',
   'admin.presets': '预设',
 
   // ======================== 管理员 Tab ========================
@@ -2198,6 +2202,10 @@ const en: TranslationDict = {
   'admin.defaultPlatformCreditDesc': 'New users receive this credit on registration. Changing this value batch-updates all users via delta. 0 = disabled. Requires at least one active pool Key.',
   'admin.platformCreditNoActiveKey': 'No active pool Key. Please add and activate at least one Key first.',
       'admin.platformCreditConfirm': 'Confirm platform credit change?\n\nCurrent {old} -> New {new}\nDelta = {delta}\n\nThis affects all {userCount} users!',
+  'admin.defaultFileQuota': 'Default User File Quota (MB)',
+  'admin.defaultFileQuotaDesc': 'Initial storage quota for new users. Changing this batch-adjusts all users\' base quota (redemption bonuses are preserved).',
+  'admin.fileQuotaIncreaseConfirm': 'Confirm file quota base increase?\n\nCurrent {old}MB -> New {new}MB\nAll users will gain +{delta}MB',
+  'admin.fileQuotaDecreaseConfirm': 'Confirm file quota base decrease?\n\nCurrent {old}MB -> New {new}MB\nAll users\' base will become {new}MB (redemption bonuses kept).\n\n⚠ Users over the limit cannot upload new files.',
   'admin.adding': 'Adding...',
   'admin.add': 'Add',
 

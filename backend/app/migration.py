@@ -68,6 +68,7 @@ async def run_migrations():
             await _migrate_content_hash(db)          # v0.9.0 文件去重 SHA256 哈希
             await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
             await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
+            await _migrate_default_file_quota(db)   # v0.9.0 用户默认文件配额配置
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")
@@ -1721,6 +1722,37 @@ async def _migrate_orphan_retention(db):
     ))
     await db.flush()
     logger.info("  ✅ system_settings.orphan_retention_days 迁移完成")
+
+
+async def _migrate_default_file_quota(db):
+    """v0.9.0: system_settings.default_file_quota_mb + users.file_quota_bonus_mb"""
+    created_any = False
+
+    if not await _column_exists(db, "system_settings", "default_file_quota_mb"):
+        logger.info("  💾 添加 system_settings.default_file_quota_mb 列")
+        await db.execute(text(
+            "ALTER TABLE system_settings ADD COLUMN default_file_quota_mb INTEGER NOT NULL DEFAULT 100"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ system_settings.default_file_quota_mb 已存在，跳过")
+
+    if not await _column_exists(db, "users", "file_quota_bonus_mb"):
+        logger.info("  💾 添加 users.file_quota_bonus_mb 列（迁移已有配额中超出100的部分为加成）")
+        await db.execute(text(
+            "ALTER TABLE users ADD COLUMN file_quota_bonus_mb INTEGER NOT NULL DEFAULT 0"
+        ))
+        # 已有用户：file_quota_mb 超出 100 的部分归为兑换码加成
+        await db.execute(text(
+            "UPDATE users SET file_quota_bonus_mb = GREATEST(file_quota_mb - 100, 0)"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.file_quota_bonus_mb 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ default_file_quota / file_quota_bonus 迁移完成")
 
 
 async def _fix_column_types(db):

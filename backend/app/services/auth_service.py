@@ -44,9 +44,11 @@ async def register_user(
         sys = await get_settings(db)
         user.language = sys.get("default_language", "zh")
         user.platform_gifted_credit = sys.get("default_platform_credit", 0)
+        user.file_quota_mb = sys.get("default_file_quota_mb", 100)
     except Exception:
         user.language = "zh"
         user.platform_gifted_credit = 0
+        user.file_quota_mb = 100
     db.add(user)
     await db.flush()
     await db.refresh(user)

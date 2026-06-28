@@ -33,6 +33,7 @@ async def get_settings(db: AsyncSession) -> dict:
         "system_prompt_overrides": row.system_prompt_overrides,
         "system_prompt_order": row.system_prompt_order,
         "federation_sync_interval_minutes": row.federation_sync_interval_minutes,
+        "default_file_quota_mb": row.default_file_quota_mb,
         "updated_by": row.updated_by,
         "updated_at": str(row.updated_at) if row.updated_at else None,
     }
@@ -42,6 +43,7 @@ async def update_settings(
     db: AsyncSession,
     default_language: str | None = None,
     default_platform_credit: int | None = None,
+    default_file_quota_mb: int | None = None,
     updated_by: int | None = None,
 ) -> dict:
     """
@@ -49,6 +51,7 @@ async def update_settings(
 
     若设置 default_platform_credit > 0，需验证池中至少有一个 active Key。
     修改 default_platform_credit 会批量更新所有用户的 platform_gifted_credit。
+    修改 default_file_quota_mb 会同步调整所有用户的 file_quota_mb（保留兑换码加成）。
     """
     row = await _get_or_create(db)
 
@@ -84,6 +87,27 @@ async def update_settings(
             logger.info(
                 f"  平台赠送额度变更: {old_value} → {default_platform_credit} "
                 f"(delta={delta:+d})，已批量更新所有用户"
+            )
+
+    if default_file_quota_mb is not None:
+        old_value = row.default_file_quota_mb or 100
+        delta = default_file_quota_mb - old_value
+        row.default_file_quota_mb = default_file_quota_mb
+
+        if delta != 0:
+            from app.models.user import User as UserModel
+            from sqlalchemy import text
+            # 调整所有用户的 file_quota_mb（基数额度），兑换码加成部分不变
+            await db.execute(
+                text(
+                    "UPDATE users SET file_quota_mb = file_quota_mb + :delta "
+                    "WHERE type = 'human'"
+                ),
+                {"delta": delta},
+            )
+            logger.info(
+                f"  文件配额基数变更: {old_value}MB → {default_file_quota_mb}MB "
+                f"(delta={delta:+d})，已批量更新所有人类用户"
             )
 
     if updated_by is not None:

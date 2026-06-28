@@ -42,8 +42,9 @@ class User(Base):
     # AI 包断额度（创建 AI 时一次性支付 api_credit_cost，该 AI 后续调用全免）
     agent_bundle_credit = Column(Integer, default=0)
 
-    # 文件存储配额（MB）
+    # 文件存储配额（MB）— 总配额 = 基数(default) + 加成(兑换码)
     file_quota_mb = Column(Integer, default=100)
+    file_quota_bonus_mb = Column(Integer, default=0, comment="兑换码累积的额外配额")
 
     # 语言偏好（zh / en）
     language = Column(String(10), default="zh")

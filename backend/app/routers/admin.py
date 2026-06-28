@@ -908,6 +908,7 @@ async def update_system_settings(
             db,
             default_language=req.default_language,
             default_platform_credit=req.default_platform_credit,
+            default_file_quota_mb=req.default_file_quota_mb,
             updated_by=admin["user_id"],
         )
         await _log_admin_action(

@@ -8,6 +8,7 @@ import logging
 import httpx
 import os as _os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
@@ -578,8 +579,9 @@ async def _build_current_context(
     is_federated: bool = False,
 ) -> str:
     """current_context 段：当前会话上下文（每次不同，不缓存）"""
-    now = datetime.utcnow()
-    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
+    tz = ZoneInfo(settings.display_timezone)
+    now = datetime.now(tz)
+    now_str = now.strftime(f"%Y-%m-%d %H:%M {tz.key}")
     context = (
         f"## 当前会话\n"
         f"- 当前时间：**{now_str}**\n"
@@ -942,8 +944,9 @@ async def build_dm_messages(
     except Exception:
         pass
 
-    now = datetime.utcnow()
-    now_str = now.strftime("%Y-%m-%d %H:%M UTC")
+    tz = ZoneInfo(settings.display_timezone)
+    now = datetime.now(tz)
+    now_str = now.strftime(f"%Y-%m-%d %H:%M {tz.key}")
 
     # ── DM 上下文段 ──
     dm_context = (

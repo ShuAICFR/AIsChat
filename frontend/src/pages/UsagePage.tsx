@@ -66,11 +66,26 @@ export default function UsagePage() {
     api.get<DailyPoint[]>(`/conversation-log/usage/agents/${selectedAgent}/daily?days=${days}`)
       .then(r => {
         const arr = Array.isArray(r) ? r : []
-        // 给每个数据点追加缓存命中率
-        setDailyData(arr.map(d => ({
+        // 给每个数据点追加缓存命中率；若仅 1 天则在前面补一个 0 点使曲线从零开始
+        const enriched = arr.map(d => ({
           ...d,
           cacheRate: d.total_tokens > 0 ? Math.round((d.cached_tokens || 0) / d.total_tokens * 100) : 0,
-        })))
+        }))
+        if (enriched.length === 1) {
+          const pad = new Date(enriched[0].date)
+          pad.setDate(pad.getDate() - 1)
+          enriched.unshift({
+            date: pad.toISOString().slice(0, 10),
+            total_tokens: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            reasoning_tokens: 0,
+            cached_tokens: 0,
+            request_count: 0,
+            cacheRate: 0,
+          })
+        }
+        setDailyData(enriched)
       })
       .catch(() => {})
       .finally(() => setChartLoading(false))
@@ -156,7 +171,7 @@ export default function UsagePage() {
       </div>
 
       {/* AI 选择 + 图表 */}
-      <div className="bg-surface rounded-2xl border border-border p-5">
+      <div className="bg-surface rounded-2xl border border-border p-5 overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="animate-spin" size={24} /></div>
         ) : overview.length === 0 ? (
@@ -258,7 +273,7 @@ export default function UsagePage() {
                       tickFormatter={v => fmtTokenNum(v, lang)}
                       width={55}
                     />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: colors.textMuted }} unit="%" />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: colors.textMuted }} unit="%" width={45} />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: isDark ? '#1F2937' : '#FFFFFF',

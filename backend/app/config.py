@@ -108,6 +108,9 @@ class Settings(BaseSettings):
         "ENCRYPTION_KEY", jwt_secret_key
     )  # 默认复用 JWT key
 
+    # 显示时区（用于 AI 系统提示词中的当前时间）
+    display_timezone: str = os.getenv("DISPLAY_TIMEZONE", "Asia/Shanghai")
+
     # 联邦通信 — GitHub 注册表
     github_token: str = os.getenv("GITHUB_TOKEN", "")
     registry_repo: str = os.getenv("REGISTRY_REPO", "ShuAICFR/AIsChat")

@@ -682,6 +682,78 @@ async def _tool_call_loop(
                     continue  # Key 已满，换下一个
                 acquired = True
 
+            # 流式逐工具分发：回调在 SSE 解析到完整 tool_call 时即刻执行
+            _pending_results: list[dict] = []  # {tc_id, result}
+            _end_turn = False
+
+            async def _dispatch_one_tool(tc: dict):
+                nonlocal last_task, _end_turn
+                if _end_turn:
+                    return
+                tc_id = tc.get("id", "")
+                func_info = tc.get("function", {})
+                tool_name = func_info.get("name", "")
+                arguments_str = func_info.get("arguments", "{}")
+                try:
+                    arguments = json.loads(arguments_str)
+                except json.JSONDecodeError:
+                    _pending_results.append({"tc_id": tc_id, "result": {
+                        "error": True, "message": f"工具 {tool_name} 参数 JSON 无效: {arguments_str[:200]}"
+                    }})
+                    return
+                from app.services.tool_registry import validate_tool_call
+                is_valid, validate_error = validate_tool_call(tool_name, arguments)
+                if not is_valid:
+                    logger.warning(f"工具格式校验失败: {validate_error}")
+                    _pending_results.append({"tc_id": tc_id, "result": {"error": True, "message": validate_error}})
+                    return
+                logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
+                # 消息类工具推送"正在输入中…"状态
+                if tool_name in ("send_message", "send_dm") and trigger == "user":
+                    _typing_data: dict = {"agent_id": agent.id, "agent_name": agent.name, "trigger": trigger}
+                    if conversation_type == "dm" and session_id:
+                        _typing_data["session_id"] = session_id
+                    elif group_id is not None:
+                        _typing_data["group_id"] = group_id
+                    _typing_event = {"type": "ai_typing", "conversation_type": conversation_type, "data": _typing_data}
+                    try:
+                        if conversation_type == "dm" and session_id:
+                            await manager.broadcast_to_dm(session_id, _typing_event)
+                        elif group_id is not None:
+                            await manager.broadcast_to_group(group_id, _typing_event)
+                    except Exception:
+                        pass
+                # 任务摘要追踪
+                _work_tools = {
+                    "execute_command": lambda a: f"执行命令: {a.get('command', '?')}",
+                    "store_memory": lambda a: f"存储记忆: {a.get('title', '?')}",
+                    "file_write": lambda a: f"写文件: {a.get('file_path', '?')}",
+                    "file_read": lambda a: f"读文件: {a.get('file_path', '?')}",
+                    "file_delete": lambda a: f"删除文件: {a.get('file_path', '?')}",
+                    "send_message": lambda a: f"在群聊中发言: {str(a.get('content', ''))[:40]}",
+                    "send_dm": lambda a: f"发私信: {str(a.get('content', ''))[:40]}",
+                    "send_friend_request": lambda a: f"发送好友申请: {a.get('message', '?')[:40]}",
+                    "toggle_thinking": lambda a: f"切换深度推理: {'开启' if a.get('enabled') else '关闭'}",
+                    "manage_workspace": lambda a: f"管理工作区: {a.get('action', '?')} — {a.get('section', '?')}",
+                    "set_alarm": lambda a: f"设置闹钟: {a.get('reason', '?')[:40]}",
+                }
+                task_summary = None
+                if tool_name in _work_tools:
+                    try:
+                        task_summary = _work_tools[tool_name](arguments)
+                    except Exception:
+                        pass
+                if not task_summary:
+                    task_summary = f"调用工具 {tool_name}"
+                result = await dispatch_tool_call(db, agent.id, group_id, tool_name, arguments, context)
+                if task_summary:
+                    last_task = task_summary
+                    if isinstance(result, dict):
+                        result["__task"] = task_summary
+                _pending_results.append({"tc_id": tc_id, "result": result})
+                if isinstance(result, dict) and result.get("end_turn"):
+                    _end_turn = True
+
             try:
                 # 内层：同 Key 重试（500/503）
                 for server_retry in range(MAX_SERVER_RETRIES + 1):
@@ -699,6 +771,7 @@ async def _tool_call_loop(
                             thinking_enabled=effective_cfg["thinking_enabled"],
                             stream=True,
                             pool_key_id=current_pool_key_id,
+                            on_tool_call=_dispatch_one_tool,
                         )
                         # 更新池 Key ID（可能已切换）
                         pool_key_id = current_pool_key_id
@@ -768,6 +841,25 @@ async def _tool_call_loop(
                                      conversation_type, group_id, session_id)
             return
 
+        # ── end_turn 已在流式回调中触发 → 补 assistant_msg + tool results 后退出 ──
+        if _end_turn:
+            assistant_msg = {"role": "assistant", "content": response.get("content")}
+            if response.get("tool_calls"):
+                assistant_msg["tool_calls"] = response["tool_calls"]
+            if response.get("reasoning_content"):
+                assistant_msg["reasoning_content"] = response["reasoning_content"]
+            messages.append(assistant_msg)
+            for pr in _pending_results:
+                messages.append({"role": "tool", "tool_call_id": pr["tc_id"],
+                                 "content": json.dumps(pr["result"], ensure_ascii=False)})
+            logger.info(f"AI {agent.name}({agent.id}) end_turn 流式触发，本轮结束")
+            await _save_conversation_log_safe(
+                db, agent, messages, conversation_type,
+                group_id, session_id, has_output=True, model=model,
+                token_usage=total_usage,
+            )
+            return
+
         content = response.get("content")
         tool_calls = response.get("tool_calls")
         finish_reason = response.get("finish_reason", "stop")
@@ -793,7 +885,7 @@ async def _tool_call_loop(
 
         # ── end_turn / no_action：AI 明确表示本轮结束 ──
         # 不走 system_reminder，直接干净退出（省一轮 API 调用）
-        if parsed_intent in ("end_turn", "no_action") and not tool_calls:
+        if parsed_intent in ("end_turn", "no_action") and not tool_calls and not _pending_results:
             logger.info(
                 f"AI {agent.name}({agent.id}) intent={parsed_intent}，本轮结束"
             )
@@ -822,7 +914,7 @@ async def _tool_call_loop(
             reminder_max = 1  # 最多额外 1 次
         else:  # 'every_time'
             reminder_max = 10  # 有 end_turn 兜底，可放宽额外机会
-        if content and not tool_calls and _reminder_extra < reminder_max:
+        if content and not tool_calls and not _pending_results and _reminder_extra < reminder_max:
             logger.info(
                 f"AI {agent.name}({agent.id}) 返回了文字但无工具调用"
                 f"（intent={parsed_intent or '解析失败'}），"
@@ -893,123 +985,13 @@ async def _tool_call_loop(
             assistant_msg["reasoning_content"] = response["reasoning_content"]
         messages.append(assistant_msg)
 
-        for tc in tool_calls:
-            tc_id = tc.get("id", "")
-            func_info = tc.get("function", {})
-            tool_name = func_info.get("name", "")
-            arguments_str = func_info.get("arguments", "{}")
-
-            try:
-                arguments = json.loads(arguments_str)
-            except json.JSONDecodeError:
-                arguments = {}
-                # v0.6.0: JSON 解析失败时注入具体错误
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": json.dumps({
-                        "error": True,
-                        "message": (
-                            f"工具 {tool_name} 的参数 JSON 格式无效，无法解析。"
-                            f"期望合法的 JSON 字符串，实际收到：{arguments_str[:200]}"
-                        ),
-                    }, ensure_ascii=False),
-                })
-                continue
-
-            # v0.6.0: 工具格式校验
-            from app.services.tool_registry import validate_tool_call
-            is_valid, validate_error = validate_tool_call(tool_name, arguments)
-            if not is_valid:
-                logger.warning(f"工具格式校验失败: {validate_error}")
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc_id,
-                    "content": json.dumps({
-                        "error": True,
-                        "message": validate_error,
-                    }, ensure_ascii=False),
-                })
-                continue
-
-            logger.info(f"AI {agent.name} 调用工具: {tool_name}({arguments})")
-
-            # v0.6.0: 消息类工具推送"正在输入中…"状态
-            _typing_tools = ("send_message", "send_dm")
-            if tool_name in _typing_tools and trigger == "user":
-                _typing_data: dict = {
-                    "agent_id": agent.id,
-                    "agent_name": agent.name,
-                    "trigger": trigger,
-                }
-                if conversation_type == "dm" and session_id:
-                    _typing_data["session_id"] = session_id
-                elif group_id is not None:
-                    _typing_data["group_id"] = group_id
-                _typing_event = {
-                    "type": "ai_typing",
-                    "conversation_type": conversation_type,
-                    "data": _typing_data,
-                }
-                try:
-                    if conversation_type == "dm" and session_id:
-                        await manager.broadcast_to_dm(session_id, _typing_event)
-                    elif group_id is not None:
-                        await manager.broadcast_to_group(group_id, _typing_event)
-                except Exception:
-                    pass  # 推送失败不阻塞工具执行
-
-            # 追踪"值得中断恢复的任务"（同时作为工具结果摘要注入给 LLM）
-            _work_tools = {
-                "execute_command": lambda a: f"执行命令: {a.get('command', '?')}",
-                "store_memory": lambda a: f"存储记忆: {a.get('title', '?')}",
-                "file_write": lambda a: f"写文件: {a.get('file_path', '?')}",
-                "file_read": lambda a: f"读文件: {a.get('file_path', '?')}",
-                "file_delete": lambda a: f"删除文件: {a.get('file_path', '?')}",
-                "send_message": lambda a: f"在群聊中发言: {str(a.get('content', ''))[:40]}",
-                "send_dm": lambda a: f"发私信: {str(a.get('content', ''))[:40]}",
-                "send_friend_request": lambda a: f"发送好友申请: {a.get('message', '?')[:40]}",
-                "toggle_thinking": lambda a: f"切换深度推理: {'开启' if a.get('enabled') else '关闭'}",
-                "manage_workspace": lambda a: f"管理工作区: {a.get('action', '?')} — {a.get('section', '?')}",
-                "set_alarm": lambda a: f"设置闹钟: {a.get('reason', '?')[:40]}",
-            }
-            task_summary = None
-            if tool_name in _work_tools:
-                try:
-                    task_summary = _work_tools[tool_name](arguments)
-                except Exception:
-                    pass
-            if not task_summary:
-                task_summary = f"调用工具 {tool_name}"
-
-            result = await dispatch_tool_call(
-                db, agent.id, group_id, tool_name, arguments, context,
-            )
-
-            # 注入任务摘要到工具结果，让下一轮 LLM 知道上一步做了什么、为什么
-            if task_summary:
-                last_task = task_summary
-                if isinstance(result, dict):
-                    result["__task"] = task_summary
-
-            # 将工具结果追加到 messages
+        # ── 追加流式回调中已执行工具的结果到 messages ──
+        for pr in _pending_results:
             messages.append({
                 "role": "tool",
-                "tool_call_id": tc_id,
-                "content": json.dumps(result, ensure_ascii=False),
+                "tool_call_id": pr["tc_id"],
+                "content": json.dumps(pr["result"], ensure_ascii=False),
             })
-
-            # end_turn: AI 主动结束本轮回复，立即退出
-            if isinstance(result, dict) and result.get("end_turn"):
-                logger.info(f"AI {agent.name}({agent.id}) 调用 end_turn 结束本轮"
-                            f"（new_state={result.get('new_state')}）")
-                await _save_conversation_log_safe(
-                    db, agent, messages, conversation_type,
-                    group_id, session_id,
-                    has_output=True, model=model,
-                    token_usage=total_usage,
-                )
-                return
 
         # ── 闹钟模式：第一轮工具执行完后注入收尾提醒 ──
         if conversation_type == "alarm":

@@ -12,6 +12,15 @@ import { useLang, useT } from '../i18n/I18nContext'
 import MermaidBlock from './MermaidBlock'
 import FilePreviewModal from './FilePreviewModal'
 
+/** 弹跳三点（思考中/输入中共用） */
+const BouncingDots = ({ className = '' }: { className?: string }) => (
+  <span className={`inline-flex gap-0.5 ${className}`}>
+    <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+    <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+    <span className="w-1 h-1 bg-current rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+  </span>
+);
+
 /** 聊天消息中的 code 渲染：只对 block code/mermaid 做溢出控制，inline code 不干预 */
 function ChatCodeRenderer({ className, children, inline, ...props }: any) {
   const match = /language-(\w+)/.exec(className || '')
@@ -109,11 +118,7 @@ const MessageBubble = memo(function MessageBubble({
           {senderType === 'system' ? (
             <ShieldAlert size={16} className="text-white" />
           ) : (thinking || isTyping) ? (
-            <span className="inline-flex gap-0.5">
-              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1 h-1 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-            </span>
+            <BouncingDots className="text-white/80" />
           ) : senderAvatarUrl ? (
             <img src={senderAvatarUrl} alt={senderName} className="w-full h-full rounded-full object-cover" />
           ) : (
@@ -152,7 +157,7 @@ const MessageBubble = memo(function MessageBubble({
           [&_a]:break-all [&_a]:text-primary-500 dark:[&_a]:text-primary-400 [&_a]:underline
         `}>
           {isTyping ? (
-            <span className="inline-block w-2 h-4 bg-primary-400 rounded-sm animate-pulse align-middle" />
+            <BouncingDots className="text-primary-400 align-middle" />
           ) : (
             <Markdown
               remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}

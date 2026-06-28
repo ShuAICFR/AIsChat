@@ -168,6 +168,7 @@ async def chat_completion(
     user_id: str | None = None,
     stream: bool = False,
     pool_key_id: int | None = None,
+    on_tool_call: callable = None,
 ) -> dict:
     """
     LLM 聊天补全（支持流式/非流式，v0.4.0 拆分）。
@@ -190,7 +191,7 @@ async def chat_completion(
                 messages, model, api_base_url, api_key, tools,
                 temperature, top_p, presence_penalty, frequency_penalty,
                 max_tokens, response_format, thinking_enabled, user_id,
-                pool_key_id,
+                pool_key_id, on_tool_call,
             )
         else:
             result = await _chat_completion_non_streaming(
@@ -301,6 +302,7 @@ async def _chat_completion_streaming(
     thinking_enabled: bool = False,
     user_id: str | None = None,
     pool_key_id: int | None = None,
+    on_tool_call: callable = None,
 ) -> dict:
     """
     SSE 流式聊天补全。
@@ -347,6 +349,7 @@ async def _chat_completion_streaming(
 
     # 工具调用累加器（流式模式下 tool_calls 分多个 chunk 到达）
     tool_call_acc: dict[int, dict] = {}  # index → {id, name, arguments}
+    dispatched: set[int] = set()  # 已通过 on_tool_call 分发的 index
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         async with client.stream("POST", url, json=payload, headers=headers) as response:
@@ -421,9 +424,30 @@ async def _chat_completion_streaming(
                         if func.get("arguments"):
                             acc["function"]["arguments"] += func["arguments"]
 
+                    # 检测已完整（参数 JSON 可解析）的工具调用，即刻回调分发
+                    if on_tool_call:
+                        for idx in sorted(tool_call_acc.keys()):
+                            if idx in dispatched:
+                                continue
+                            acc = tool_call_acc[idx]
+                            if acc["id"] and acc["function"]["name"] and acc["function"]["arguments"]:
+                                try:
+                                    json.loads(acc["function"]["arguments"])
+                                    dispatched.add(idx)
+                                except json.JSONDecodeError:
+                                    continue  # 参数尚未收全，等下一个 chunk
+                                # 参数收全 → 即刻分发，不等到流结束
+                                await on_tool_call(dict(acc))
+
                 # 记录 finish_reason
                 if choices[0].get("finish_reason"):
                     finish_reason = choices[0]["finish_reason"]
+
+    # 流结束：补发尚未派发的 tool_call（参数 JSON 一直未完整的兜底）
+    if on_tool_call:
+        for idx in sorted(tool_call_acc.keys()):
+            if idx not in dispatched:
+                await on_tool_call(dict(tool_call_acc[idx]))
 
     # 组装最终 tool_calls（按 index 排序）
     tool_calls = None

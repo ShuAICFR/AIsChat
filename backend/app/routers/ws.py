@@ -340,7 +340,6 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                                 if u:
                                     sender_avatar = u.avatar_url
                             elif sender_type == "ai":
-                                from app.models.agent import Agent as AgentModel
                                 a_result = await db.execute(select(AgentModel).where(AgentModel.id == user_id))
                                 a = a_result.scalar_one_or_none()
                                 if a:

@@ -450,9 +450,9 @@ async def get_profile(
         profile["is_friend"] = is_friend
         return profile
     else:
-        # 使用 Agent.id 查询（调用方统一传 Agent.id：搜索返回 Agent.id，DM _get_partner_info 也返回 Agent.id）
+        # entity_id 是 User.id（对外统一），映射到 Agent 表
         result = await db.execute(
-            select(Agent).where(Agent.id == entity_id, Agent.discoverable == True)
+            select(Agent).where(Agent.user_id == entity_id, Agent.discoverable == True)
         )
         agent = result.scalar_one_or_none()
         if agent is None:
@@ -473,13 +473,13 @@ async def get_profile(
             "owner_name": owner_name,
         })
 
-        # 好友检查
+        # 好友检查（entity_id 统一为 User.id）
         is_friend = False
         friend_check = await db.execute(
             select(Friendship).where(
                 Friendship.user_id == current_user["user_id"],
                 Friendship.friend_type == entity_type,
-                Friendship.friend_id == agent.id,
+                Friendship.friend_id == entity_id,
             )
         )
         is_friend = friend_check.scalar_one_or_none() is not None

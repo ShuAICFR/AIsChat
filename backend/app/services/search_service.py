@@ -73,12 +73,12 @@ async def search_entities(
             select(Friendship).where(
                 Friendship.user_id == current_user_id,
                 Friendship.friend_type == "ai",
-                Friendship.friend_id == agent.id,
+                Friendship.friend_id == agent.user_id,
             )
         )
         is_friend = friend_check.scalar_one_or_none() is not None
         results.append({
-            "id": agent.id,
+            "id": agent.user_id,  # 对外统一用 User.id（AI 也是 users 表的一条记录）
             "type": "ai",
             "name": agent.name,
             "avatar_url": agent.avatar_url,

@@ -70,7 +70,7 @@ async def send_friend_request(
         auto_respond = None
         if target_type == "ai":
             target_agent = await db.execute(
-                select(AgentModel).where(AgentModel.id == target_id)
+                select(AgentModel).where(AgentModel.user_id == target_id)
             )
             target_agent_obj = target_agent.scalar_one_or_none()
             if target_agent_obj:
@@ -90,7 +90,7 @@ async def send_friend_request(
     if target_type == "ai":
         from app.models.agent import Agent as AgentModelInner
         agent = await db.execute(
-            select(AgentModelInner).where(AgentModelInner.id == target_id)
+            select(AgentModelInner).where(AgentModelInner.user_id == target_id)
         )
         agent_obj = agent.scalar_one_or_none()
         if agent_obj is None:
@@ -530,25 +530,14 @@ async def _find_reverse_request(
     """查找对方是否已向当前发起者发送过待处理的好友申请
 
     requester_id: 当前发起者的 users.id
-    target_type/target_id: 当前发起的目标（human=users.id, ai=agents.id）
+    target_type/target_id: 当前发起的目标（human/ai 均走 users.id 统一空间）
 
     返回: 匹配的 reverse FriendshipRequest 或 None
     """
     from app.models.friendship import FriendshipRequest
-    from app.models.agent import Agent as AgentModel
 
-    # 解析目标实体的 user_id（用于查找对方发出的申请）
-    if target_type == "human":
-        target_user_id = target_id
-    else:
-        # AI: 查 agents 表获取 user_id
-        agent_result = await db.execute(
-            select(AgentModel.user_id).where(AgentModel.id == target_id)
-        )
-        target_user_id = agent_result.scalar_one_or_none()
-
-    if target_user_id is None:
-        return None
+    # target_id 统一为 users.id，无需 Agent 表转换
+    target_user_id = target_id
 
     # 获取对方发出的所有 pending 申请
     sent_result = await db.execute(
@@ -558,17 +547,9 @@ async def _find_reverse_request(
         )
     )
     for req in sent_result.scalars().all():
-        # 检查对方的申请目标是否匹配当前发起者
-        if req.target_type == "human" and req.target_id == requester_id:
+        # 对方的申请目标是否匹配当前发起者（AI 的 target_id 也是 User.id）
+        if req.target_id == requester_id:
             return req
-        if req.target_type == "ai":
-            # 对方申请目标是个 AI，查其 user_id 是否匹配 requester_id
-            ai_result = await db.execute(
-                select(AgentModel.user_id).where(AgentModel.id == req.target_id)
-            )
-            ai_user_id = ai_result.scalar_one_or_none()
-            if ai_user_id == requester_id:
-                return req
 
     return None
 

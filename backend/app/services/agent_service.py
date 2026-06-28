@@ -412,12 +412,12 @@ async def create_agent(
         select(Friendship).where(
             Friendship.user_id == owner_id,
             Friendship.friend_type == "ai",
-            Friendship.friend_id == agent.id,
+            Friendship.friend_id == agent.user_id,
         )
     )
     if not existing_check.scalar_one_or_none():
-        # 创建者 → AI
-        db.add(Friendship(user_id=owner_id, friend_type="ai", friend_id=agent.id))
+        # 创建者 → AI（friend_id 统一用 User.id）
+        db.add(Friendship(user_id=owner_id, friend_type="ai", friend_id=agent.user_id))
         # AI → 创建者
         db.add(Friendship(user_id=ai_user.id, friend_type="human", friend_id=owner_id))
         await db.flush()

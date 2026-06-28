@@ -37,15 +37,8 @@ async def _notify_friend_request(db: AsyncSession, event_type: str, data: dict, 
 
 
 async def _resolve_target_user_id(db: AsyncSession, target_type: str, target_id: int) -> int | None:
-    """将 target_type:target_id 解析为 users.id（用于 WebSocket 推送）"""
-    if target_type == "human":
-        return target_id
-    else:
-        from app.models.agent import Agent
-        result = await db.execute(
-            select(Agent.user_id).where(Agent.id == target_id)
-        )
-        return result.scalar_one_or_none()
+    """target_id 统一为 users.id（human 和 AI 都走统一 ID 空间），直接返回"""
+    return target_id
 
 
 @router.get("/search", response_model=SearchResponse)

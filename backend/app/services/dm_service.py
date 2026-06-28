@@ -67,19 +67,9 @@ async def get_or_create_dm_session(
     if current_user_id == target_user_id:
         raise ValueError("不能和自己私信")
 
-    # 检查目标用户是否存在（兼容 Agent.id → 解析为 User.id）
+    # 检查目标用户是否存在
     target = await db.execute(select(User).where(User.id == target_user_id))
     target_user = target.scalar_one_or_none()
-    if target_user is None:
-        # 可能是 Agent.id（如从 ProfileCard 或搜索传入），尝试解析
-        agent_result = await db.execute(
-            select(Agent.user_id).where(Agent.id == target_user_id)
-        )
-        agent_user_id = agent_result.scalar_one_or_none()
-        if agent_user_id:
-            target_user_id = agent_user_id
-            target = await db.execute(select(User).where(User.id == target_user_id))
-            target_user = target.scalar_one_or_none()
     if target_user is None:
         raise ValueError("目标用户不存在")
 
@@ -412,21 +402,12 @@ async def _get_partner_info(db: AsyncSession, user_id: int) -> dict:
     if user.type == "ai":
         # 查 agent 表获取在线状态和头像（AI 头像存在 agents 表，不在 users 表）
         agent_result = await db.execute(
-            select(Agent.state, Agent.avatar_url, Agent.id).where(Agent.user_id == user_id)
+            select(Agent.state, Agent.avatar_url).where(Agent.user_id == user_id)
         )
         agent_row = agent_result.one_or_none()
         if agent_row:
             state = agent_row[0]
             avatar_url = agent_row[1] or avatar_url  # Agent 头像优先
-            return {
-                "id": agent_row[2],  # 返回 Agent.id（非 User.id），与搜索/Schema 一致
-                "name": user.username,
-                "type": user.type,
-                "state": state,
-                "avatar_url": avatar_url,
-                "status_text": getattr(user, 'status_text', None),
-                "status_color": getattr(user, 'status_color', None),
-            }
 
     return {
         "id": user.id,

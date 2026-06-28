@@ -8,7 +8,10 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
+from app.database import get_db
 
 # 密码哈希上下文
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -98,9 +101,18 @@ async def get_current_user(
 
 async def require_admin(
     current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """FastAPI 依赖：要求管理员权限"""
-    if current_user["role"] != "admin":
+    """
+    FastAPI 依赖：要求管理员权限。
+    注意：必须从 DB 重新读取角色，因为 JWT 中的 role 可能是提权前的旧值。
+    """
+    from app.models.user import User as UserModel
+    result = await db.execute(
+        select(UserModel).where(UserModel.id == current_user["user_id"])
+    )
+    db_user = result.scalar_one_or_none()
+    if db_user is None or db_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="需要管理员权限",

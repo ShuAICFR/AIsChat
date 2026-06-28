@@ -65,6 +65,9 @@ async def run_migrations():
             await _fix_file_refs_referrer_type(db)      # v0.7.0+ 修复 file_references.referrer_type 缺 human
             await _fix_file_owner_type_check(db)       # v0.5.0+ 修复 file_metadata.owner_type 缺 human
             await _migrate_system_user(db)             # v0.8.0+ 系统通知用户（sender_id 外键需要）
+            await _migrate_content_hash(db)          # v0.9.0 文件去重 SHA256 哈希
+            await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
+            await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")
@@ -1668,6 +1671,56 @@ async def _fix_file_refs_referrer_type(db):
     ))
     await db.flush()
     logger.info("  ✅ file_references.referrer_type 约束已修复（添加 human）")
+
+
+async def _migrate_content_hash(db):
+    """v0.9.0: file_metadata.content_hash（SHA-256，用于文件去重）"""
+    if await _column_exists(db, "file_metadata", "content_hash"):
+        logger.info("  ⏭ file_metadata.content_hash 已存在，跳过")
+        return
+    logger.info("  🔐 添加 file_metadata.content_hash 列")
+    await db.execute(text("ALTER TABLE file_metadata ADD COLUMN content_hash VARCHAR(64)"))
+    await db.flush()
+    logger.info("  ✅ file_metadata.content_hash 迁移完成")
+
+
+async def _migrate_forward_ref_type(db):
+    """v0.9.0: file_references.ref_type 增加 'forward' 类型"""
+    result = await db.execute(text("""
+        SELECT conname, pg_get_constraintdef(oid)
+        FROM pg_constraint
+        WHERE conrelid = 'file_references'::regclass AND contype = 'c'
+          AND pg_get_constraintdef(oid) ILIKE '%ref_type%'
+    """))
+    row = result.fetchone()
+    if row is None:
+        logger.info("  ⏭ file_references.ref_type CHECK 约束不存在，跳过")
+        return
+    conname, current_def = row
+    if "'forward'" in current_def:
+        logger.info(f"  ⏭ {conname} 已包含 forward，跳过")
+        return
+    logger.info(f"  🔧 更新 {conname}：添加 'forward' 类型")
+    await db.execute(text(f"ALTER TABLE file_references DROP CONSTRAINT {conname}"))
+    await db.execute(text(
+        "ALTER TABLE file_references ADD CONSTRAINT ck_ref_type "
+        "CHECK (ref_type IN ('read', 'write', 'import', 'share', 'forward'))"
+    ))
+    await db.flush()
+    logger.info("  ✅ file_references.ref_type 已添加 forward")
+
+
+async def _migrate_orphan_retention(db):
+    """v0.9.0: system_settings.orphan_retention_days（孤儿文件宽限期，默认 7 天）"""
+    if await _column_exists(db, "system_settings", "orphan_retention_days"):
+        logger.info("  ⏭ system_settings.orphan_retention_days 已存在，跳过")
+        return
+    logger.info("  🗑️ 添加 system_settings.orphan_retention_days 列")
+    await db.execute(text(
+        "ALTER TABLE system_settings ADD COLUMN orphan_retention_days INTEGER NOT NULL DEFAULT 7"
+    ))
+    await db.flush()
+    logger.info("  ✅ system_settings.orphan_retention_days 迁移完成")
 
 
 async def _fix_column_types(db):

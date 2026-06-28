@@ -172,7 +172,7 @@ export default function ProfileCard({ entityType, entityId, entityName, state, o
           )}
           {createdAt && (
             <div className="flex items-center gap-1.5">
-              <Bot size={12} />
+              {entityType === 'ai' ? <Bot size={12} /> : <User size={12} />}
               <span>{t('profileCard.registeredOn')}: {new Date(createdAt).toLocaleDateString('zh-CN')}</span>
             </div>
           )}

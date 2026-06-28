@@ -4,6 +4,8 @@ import { api } from '../api/client'
 import { Plus, BellOff, Menu, UserPlus, Users, Bot, Globe, ShieldAlert } from 'lucide-react'
 import { getStateDotColor, CHAT_REFRESH_EVENT } from '../constants'
 import { formatRelativeTime } from '../utils/time'
+import { getStatusTextStyle, BG_SURFACE_LIGHT, BG_SURFACE_DARK } from '../utils/statusColor'
+import { useTheme } from '../context/ThemeContext'
 import { useLang, useT } from '../i18n/I18nContext'
 
 interface Group {
@@ -20,7 +22,7 @@ interface Group {
 
 interface DMSession {
   session_id: string
-  partner: { id: number; name: string; type: string; state: string | null; avatar_url: string | null }
+  partner: { id: number; name: string; type: string; state: string | null; avatar_url: string | null; status_text: string | null; status_color: string | null }
   last_message_preview: string | null
   last_message_at: string | null
   unread_count: number
@@ -122,6 +124,7 @@ export default function ChatSidebar({
 
   const lang = useLang()
   const t = useT()
+  const { theme } = useTheme()
 
   // 群聊头像组：4 个头像的 2×2 网格或默认图标
   const GroupAvatarGroup = ({ avatars }: { avatars: string[] }) => {
@@ -313,6 +316,16 @@ export default function ChatSidebar({
                         </span>
                       )}
                     </div>
+                    {s.partner.status_text && (
+                      <p
+                        className="text-[11px] mt-0.5 font-medium"
+                        style={s.partner.status_color
+                          ? getStatusTextStyle(s.partner.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
+                          : undefined}
+                      >
+                        {s.partner.status_text}
+                      </p>
+                    )}
                     <div className="text-[11px] text-textMuted mt-0.5 flex items-center gap-1 min-w-0">
                       <span className="min-w-0 flex-1" style={{ display: 'block' }}>
                         <span className="truncate block">{s.last_message_preview || t('chatlist.noMessages')}</span>

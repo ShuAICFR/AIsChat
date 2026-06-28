@@ -5,6 +5,8 @@ import { useT, useLang } from '../i18n/I18nContext'
 import { api } from '../api/client'
 import { AI_TYPE_LABEL } from '../constants'
 import { fmtTokenNum } from '../utils/format'
+import { getStatusTextStyle, STATUS_COLORS, BG_SURFACE_LIGHT, BG_SURFACE_DARK } from '../utils/statusColor'
+import { useTheme } from '../context/ThemeContext'
 import {
   User, Settings, LogOut, Shield,
   Gift, BarChart3, Bot, ChevronRight, Edit3,
@@ -57,6 +59,7 @@ export default function MePage() {
   const { user, logout, refreshUser } = useAuth()
   const t = useT()
   const lang = useLang()
+  const { theme } = useTheme()
   const navigate = useNavigate()
 
   const [agents, setAgents] = useState<AgentBrief[]>([])
@@ -77,6 +80,7 @@ export default function MePage() {
   const [editPassword, setEditPassword] = useState('')
   const [editBio, setEditBio] = useState('')
   const [editStatusText, setEditStatusText] = useState('')
+  const [editStatusColor, setEditStatusColor] = useState('')
   const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
@@ -166,6 +170,7 @@ export default function MePage() {
     setEditPassword('')
     setEditBio(user?.bio || '')
     setEditStatusText(user?.status_text || '')
+    setEditStatusColor(user?.status_color || '')
     setEditAvatarUrl(user?.avatar_url || '')
     setShowEditProfile(true)
   }
@@ -196,6 +201,7 @@ export default function MePage() {
       if (editPassword) body.password = editPassword
       if (editBio !== (user?.bio || '')) body.bio = editBio
       if (editStatusText !== (user?.status_text || '')) body.status_text = editStatusText
+      if (editStatusColor !== (user?.status_color || '')) body.status_color = editStatusColor || null
       if (editAvatarUrl !== (user?.avatar_url || '')) body.avatar_url = editAvatarUrl
       if (Object.keys(body).length > 0) {
         await api.put('/user/settings', body)
@@ -239,6 +245,16 @@ export default function MePage() {
               <span className="flex items-center gap-1"><Bot size={12} /> AI {agents.length}</span>
               <span>{t('me.daysOnline')} {daysSince} {t('me.daysSuffix')}</span>
             </div>
+            {user.status_text && (
+              <p
+                className="text-sm mt-1.5 font-medium"
+                style={user.status_color
+                  ? getStatusTextStyle(user.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
+                  : undefined}
+              >
+                {user.status_text}
+              </p>
+            )}
             <button
               onClick={openEditProfile}
               className="mt-2 text-xs text-primary-400 hover:text-primary-500 dark:hover:text-primary-300 flex items-center gap-1 transition-colors"
@@ -560,6 +576,29 @@ export default function MePage() {
                   className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                 />
                 <p className="text-[10px] text-textMuted mt-1">{editStatusText.length} 字</p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.statusColorLabel')}</label>
+                <div className="flex gap-1.5 flex-wrap">
+                  {STATUS_COLORS.map(c => (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setEditStatusColor(c.value)}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${
+                        editStatusColor === c.value
+                          ? 'border-primary-400 scale-110 shadow-md'
+                          : c.value === ''
+                            ? 'border-border bg-canvas hover:border-textMuted'
+                            : 'border-transparent hover:scale-105'
+                      }`}
+                      style={c.value ? { backgroundColor: c.value } : undefined}
+                      title={c.label}
+                    >
+                      {c.value === '' && <X size={10} className="text-textMuted m-auto" />}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.passwordField')}</label>

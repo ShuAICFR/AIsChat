@@ -301,6 +301,8 @@ async def list_friends(
         state = None
         friend_user_id = None
         avatar_url = None
+        status_text = None
+        status_color = None
 
         if f.friend_type == "human":
             u = users_map.get(f.friend_id)
@@ -308,6 +310,8 @@ async def list_friends(
                 name = u.username
                 friend_user_id = u.id
                 avatar_url = u.avatar_url
+                status_text = getattr(u, 'status_text', None)
+                status_color = getattr(u, 'status_color', None)
         elif f.friend_type == "ai":
             a = agents_map.get(f.friend_id)
             if a:
@@ -315,6 +319,7 @@ async def list_friends(
                 state = a.state
                 friend_user_id = a.user_id
                 avatar_url = a.avatar_url
+                status_text = getattr(a, 'status_text', None)
 
         last_dm_at = None
         if friend_user_id:
@@ -329,6 +334,8 @@ async def list_friends(
             "friend_name": name,
             "state": state,
             "avatar_url": avatar_url,
+            "status_text": status_text,
+            "status_color": status_color,
             "created_at": str(f.created_at) if f.created_at else None,
             "last_dm_at": last_dm_at,
         })

@@ -1781,6 +1781,13 @@ async def _migrate_bio_and_status(db):
     else:
         logger.info("  ⏭ agents.status_text 已存在，跳过")
 
+    if not await _column_exists(db, "users", "status_color"):
+        logger.info("  🎨 添加 users.status_color 列")
+        await db.execute(text("ALTER TABLE users ADD COLUMN status_color VARCHAR(20)"))
+        created_any = True
+    else:
+        logger.info("  ⏭ users.status_color 已存在，跳过")
+
     if created_any:
         await db.flush()
         logger.info("  ✅ bio/status_text 迁移完成")

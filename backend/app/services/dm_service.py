@@ -415,6 +415,8 @@ async def _get_partner_info(db: AsyncSession, user_id: int) -> dict:
         "type": user.type,
         "state": state,
         "avatar_url": avatar_url,
+        "status_text": getattr(user, 'status_text', None),
+        "status_color": getattr(user, 'status_color', None),
     }
 
 

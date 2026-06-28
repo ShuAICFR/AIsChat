@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext'
 import { useT } from '../i18n/I18nContext'
 import { Users, MessageSquare, UserPlus, Check, X, Search, ArrowUpDown, ArrowLeft, Bot, User, Menu } from 'lucide-react'
 import { getStateDotColor } from '../constants'
+import { getStatusTextStyle, BG_SURFACE_LIGHT, BG_SURFACE_DARK } from '../utils/statusColor'
+import { useTheme } from '../context/ThemeContext'
 
 interface Friend {
   friend_type: string
@@ -12,6 +14,8 @@ interface Friend {
   friend_name: string
   state: string | null
   avatar_url: string | null
+  status_text: string | null
+  status_color: string | null
   created_at: string | null
   last_dm_at: string | null
   friend_user_id?: number | null
@@ -117,6 +121,7 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showSearch, setShowSearch] = useState(false)
   const { user } = useAuth()
+  const { theme } = useTheme()
   const navigate = useNavigate()
   const { openDrawer } = useOutletContext<{ openDrawer: () => void }>()
 
@@ -337,6 +342,16 @@ export default function FriendsPage() {
                     <span className="text-xs text-textMuted">
                       {f.friend_type === 'ai' ? <><Bot size={12} className="inline" /> {t('friends.friendAi')}</> : <><User size={12} className="inline" /> {t('friends.friendHuman')}</>}
                     </span>
+                    {f.status_text && (
+                      <p
+                        className="text-xs mt-0.5 font-medium"
+                        style={f.status_color
+                          ? getStatusTextStyle(f.status_color, theme === 'dark' ? BG_SURFACE_DARK : BG_SURFACE_LIGHT)
+                          : undefined}
+                      >
+                        {f.status_text}
+                      </p>
+                    )}
                   </div>
                   <MessageSquare size={16} className="text-textMuted shrink-0" />
                 </button>

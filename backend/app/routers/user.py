@@ -30,6 +30,7 @@ class UpdateSettingsRequest(BaseModel):
     avatar_url: str | None = None
     bio: str | None = None
     status_text: str | None = None
+    status_color: str | None = None
 
     @field_validator("status_text")
     @classmethod
@@ -65,6 +66,7 @@ async def update_settings(
             avatar_url=req.avatar_url,
             bio=req.bio,
             status_text=req.status_text,
+            status_color=req.status_color,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

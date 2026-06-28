@@ -58,6 +58,7 @@ class User(Base):
 
     # 自定义状态文本（展示在资料卡中，最多 100 字）
     status_text = Column(String(100), nullable=True, comment="自定义状态文本")
+    status_color = Column(String(20), nullable=True, comment="状态文字颜色(hex)")
 
     # 初始化设置向导是否完成
     setup_completed = Column(Boolean, default=False)

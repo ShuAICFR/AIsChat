@@ -76,6 +76,7 @@ export default function MePage() {
   const [editUsername, setEditUsername] = useState('')
   const [editPassword, setEditPassword] = useState('')
   const [editBio, setEditBio] = useState('')
+  const [editStatusText, setEditStatusText] = useState('')
   const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
@@ -130,7 +131,7 @@ export default function MePage() {
     api.get<{ ai_count: number; friend_count: number; group_count: number; storage_used: number }>('/user/stats').then(r => {
       setStats(r)
     }).catch(() => {})
-  }, [])
+  }, [user])
 
   // 汇总
   const totalTokens = usage.reduce((s, u) => s + (u.total_tokens || 0), 0)
@@ -164,6 +165,7 @@ export default function MePage() {
     setEditUsername(user?.username || '')
     setEditPassword('')
     setEditBio(user?.bio || '')
+    setEditStatusText(user?.status_text || '')
     setEditAvatarUrl(user?.avatar_url || '')
     setShowEditProfile(true)
   }
@@ -193,6 +195,7 @@ export default function MePage() {
       if (editUsername && editUsername !== user?.username) body.username = editUsername
       if (editPassword) body.password = editPassword
       if (editBio !== (user?.bio || '')) body.bio = editBio
+      if (editStatusText !== (user?.status_text || '')) body.status_text = editStatusText
       if (editAvatarUrl !== (user?.avatar_url || '')) body.avatar_url = editAvatarUrl
       if (Object.keys(body).length > 0) {
         await api.put('/user/settings', body)
@@ -546,6 +549,17 @@ export default function MePage() {
                   rows={3}
                   className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-none"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.statusTextField')}</label>
+                <input
+                  type="text"
+                  value={editStatusText}
+                  onChange={e => setEditStatusText(e.target.value)}
+                  placeholder={t('me.statusTextPlaceholder')}
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                />
+                <p className="text-[10px] text-textMuted mt-1">{editStatusText.length} 字</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-textSecondary mb-1">{t('me.passwordField')}</label>

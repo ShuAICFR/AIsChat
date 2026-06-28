@@ -48,7 +48,6 @@ interface NavSection {
   category: string
 }
 const NAV_SECTIONS: NavSection[] = [
-  { id: 'profile',    icon: Pencil,  labelKey: 'settings.profileTitle',    category: 'settings.catAccount' },
   { id: 'quota',       icon: Zap,     labelKey: 'settings.quotaTitle',      category: 'settings.catAccount' },
   { id: 'api',         icon: Key,     labelKey: 'settings.apiConfigTitle',   category: 'settings.catApi' },
   { id: 'timezone',    icon: Clock,   labelKey: 'settings.timezone',         category: 'settings.catPrefs' },
@@ -74,8 +73,6 @@ export default function SettingsPage() {
   const [timezone, setTimezone] = useState('Asia/Shanghai')
   const [language, setLanguage] = useState('zh')
   const [chatStyle, setChatStyle] = useState('cozy')
-  const [bio, setBio] = useState('')
-  const [statusText, setStatusText] = useState('')
   const [notifications, setNotifications] = useState<boolean>(() => {
     const stored = localStorage.getItem('notifications_enabled')
     return stored === null ? true : stored === 'true'
@@ -131,7 +128,6 @@ export default function SettingsPage() {
   const [savedValues, setSavedValues] = useState<{
     apiBaseUrl: string; autoTimeout: number; autoDefault: boolean
     timezone: string; language: string; chatStyle: string
-    bio: string; statusText: string
   } | null>(null)
 
   const hasUnsavedChanges = savedValues !== null && (
@@ -141,8 +137,6 @@ export default function SettingsPage() {
     timezone !== savedValues.timezone ||
     language !== savedValues.language ||
     chatStyle !== savedValues.chatStyle ||
-    bio !== savedValues.bio ||
-    statusText !== savedValues.statusText ||
     apiKey.trim() !== ''
   )
 
@@ -181,10 +175,6 @@ export default function SettingsPage() {
         if (data.timezone) setTimezone(tz)
         if (data.language) setLanguage(lang)
         if (data.ui_prefs?.chat_style) setChatStyle(style)
-        const userBio = data.bio || ''
-        const userStatus = data.status_text || ''
-        setBio(userBio)
-        setStatusText(userStatus)
         setSavedValues({
           apiBaseUrl: apiUrl,
           autoTimeout: to,
@@ -192,8 +182,6 @@ export default function SettingsPage() {
           timezone: tz,
           language: lang,
           chatStyle: style,
-          bio: userBio,
-          statusText: userStatus,
         })
       }).catch(console.error)
       api.get<any[]>('/agents').then(list => {
@@ -243,8 +231,6 @@ export default function SettingsPage() {
         timezone,
         language,
         ui_prefs: { chat_style: chatStyle },
-        bio: bio || null,
-        status_text: statusText || null,
       })
       setApiKey('')
       setMessage(t('settings.saveSuccess'))
@@ -255,8 +241,6 @@ export default function SettingsPage() {
         timezone,
         language,
         chatStyle,
-        bio,
-        statusText,
       })
       refreshUser()
       api.get<any[]>('/agents').then(list => setAgents(list || [])).catch(() => {})
@@ -392,39 +376,6 @@ export default function SettingsPage() {
             {redeemMsg}
           </p>
         )}
-      </div>
-
-      {/* 个人资料 */}
-      <div id="settings-profile" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
-        <div className="flex items-center gap-2 mb-4">
-          <Pencil size={18} className="text-primary-400" />
-          <h2 className="font-semibold text-textPrimary">{t('settings.profileTitle')}</h2>
-        </div>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.bioLabel')}</label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={3}
-              maxLength={500}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50 resize-y"
-              placeholder={t('settings.bioPlaceholder')}
-            />
-            <p className="text-[10px] text-textMuted mt-1">{bio.length}/500</p>
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1.5 text-textSecondary">{t('settings.statusTextLabel')}</label>
-            <input
-              type="text"
-              value={statusText}
-              onChange={(e) => setStatusText(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-              placeholder={t('settings.statusTextPlaceholder')}
-            />
-            <p className="text-[10px] text-textMuted mt-1">{t('settings.statusTextHint')} · {statusText.length} 字</p>
-          </div>
-        </div>
       </div>
 
       {/* API 提供商配置 */}

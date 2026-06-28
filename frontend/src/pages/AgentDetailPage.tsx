@@ -7,7 +7,7 @@ import Toggle from '../components/Toggle'
 import { useT } from '../i18n/I18nContext'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
-  Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot, Settings,
+  Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot, Settings, User,
   ScrollText, Loader2,
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'

@@ -19,6 +19,7 @@ interface User {
   ui_prefs: Record<string, any>
   avatar_url: string | null
   bio: string | null
+  status_text: string | null
   setup_completed: boolean
   created_at: string | null
   assigned_pool_key_name: string | null  // v0.6.0: 绑定的池 Key 名
@@ -82,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       total_effective: 0,
       avatar_url: null,
       bio: null,
+      status_text: null,
       setup_completed: data.setup_completed ?? true,
       created_at: null,
       assigned_pool_key_name: null,
@@ -110,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       total_effective: 0,
       avatar_url: null,
       bio: null,
+      status_text: null,
       setup_completed: data.setup_completed ?? false,
       created_at: null,
       assigned_pool_key_name: null,

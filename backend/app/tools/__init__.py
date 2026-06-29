@@ -18,6 +18,7 @@ from app.tools.chat_social.view_unread import ViewUnread
 from app.tools.chat_social.list_available_skills import ListAvailableSkills
 from app.tools.chat_social.cross_post import CrossPost
 from app.tools.chat_social.send_file import SendFile
+from app.tools.chat_social.send_friend_request import SendFriendRequest
 
 # ── memory ──
 from app.tools.memory.store_memory import StoreMemory

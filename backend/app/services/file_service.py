@@ -126,8 +126,11 @@ async def check_file_access(db: AsyncSession, file_id: int, requester_type: str,
     # 如果文件被附在请求者可见的消息中，授予 read 权限
     # 这覆盖了 AI send_file 到群聊/DM 后接收方下载的场景
     if required_perm == "read":
-        if await _file_attached_to_visible_message(db, file_id, requester_type, requester_id):
-            return metadata
+        try:
+            if await _file_attached_to_visible_message(db, file_id, requester_type, requester_id):
+                return metadata
+        except Exception:
+            logger.warning(f"消息附件可见性检查失败 (file_id={file_id})", exc_info=True)
 
     return None
 
@@ -142,7 +145,7 @@ async def _file_attached_to_visible_message(
     check_group = text("""
         SELECT 1 FROM messages m
         JOIN group_members gm ON m.group_id = gm.group_id
-        WHERE m.attachments @> :pattern::jsonb
+        WHERE m.attachments @> CAST(:pattern AS JSONB)
           AND gm.member_type = :req_type
           AND gm.member_id = :req_id
         LIMIT 1

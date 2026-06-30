@@ -363,6 +363,7 @@ function InviteMemberModal({
   const [results, setResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectedEntries, setSelectedEntries] = useState<Map<string, SearchResult>>(new Map())
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState<string[]>([])
@@ -392,12 +393,21 @@ function InviteMemberModal({
     return () => clearTimeout(timer)
   }, [query])
 
-  const toggleMember = (type: string, id: number) => {
-    const key = `${type}:${id}`
+  const toggleMember = (r: SearchResult) => {
+    const key = `${r.type}:${r.id}`
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      if (next.has(key)) {
+        next.delete(key)
+        setSelectedEntries((prevEntries) => {
+          const nextEntries = new Map(prevEntries)
+          nextEntries.delete(key)
+          return nextEntries
+        })
+      } else {
+        next.add(key)
+        setSelectedEntries((prevEntries) => new Map(prevEntries).set(key, r))
+      }
       return next
     })
   }
@@ -408,21 +418,28 @@ function InviteMemberModal({
     setError('')
     setSuccess([])
     const ok: string[] = []
+    const failedNames: string[] = []
     for (const key of selected) {
       const [member_type, idStr] = key.split(':')
       const member_id = parseInt(idStr)
       try {
         await api.post(`/groups/${groupId}/invite`, { member_type, member_id })
         ok.push(key)
-      } catch {
-        // 单个失败不中断
+      } catch (err: any) {
+        const entry = selectedEntries.get(key)
+        const name = entry?.name || `${member_type}:${idStr}`
+        const msg = err.message || t('chat.inviteFailed')
+        const reason = msg.includes('已在群聊') || msg.includes('already') ? t('chat.alreadyInGroup') : msg
+        failedNames.push(`${name} ${reason}`)
       }
     }
     setSuccess(ok)
     if (ok.length === selected.size) {
       setTimeout(onClose, 1200)
     } else if (ok.length === 0) {
-      setError(t('chat.inviteFailedRetry'))
+      setError(failedNames.join('；'))
+    } else {
+      setError(failedNames.join('；'))
     }
     setLoading(false)
   }
@@ -443,7 +460,9 @@ function InviteMemberModal({
       setSuccess([`${manualType}:${id}`])
       setTimeout(onClose, 1000)
     } catch (err: any) {
-      setError(err.message || t('chat.inviteFailed'))
+      const msg = err.message || t('chat.inviteFailed')
+      // 后端返回"该成员已在群聊中" → 友好显示
+      setError(msg.includes('已在群聊') || msg.includes('already') ? `${manualType === 'ai' ? 'AI' : '用户'} ID:${id} ${t('chat.alreadyInGroup')}` : msg)
     } finally {
       setLoading(false)
     }
@@ -504,7 +523,7 @@ function InviteMemberModal({
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => toggleMember(r.type, r.id)}
+                    onChange={() => toggleMember(r)}
                     className="w-4 h-4 rounded border-border bg-canvas text-primary-500 focus:ring-primary-500/50"
                   />
                   <div className="flex-1 min-w-0">
@@ -577,7 +596,12 @@ function InviteMemberModal({
           </div>
         )}
 
-        {error && <div className="text-sm text-rose-400 mb-2">{error}</div>}
+        {error && (
+          <div className="text-sm text-rose-400 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2.5 mb-3 flex items-start gap-2 whitespace-pre-line">
+            <span className="shrink-0 mt-0.5">⚠</span>
+            <span>{error}</span>
+          </div>
+        )}
         {success.length > 0 && (
           <div className="text-sm text-mint-400 mb-2">{t('chat.inviteSuccess').replace('{success}', String(success.length))}</div>
         )}

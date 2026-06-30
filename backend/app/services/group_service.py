@@ -5,7 +5,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, and_, update, func as sqlfunc
+from sqlalchemy import select, desc, and_, update, delete, func as sqlfunc
 from app.models.group import Group, GroupMember
 from app.models.message import Message, PendingMessage
 from app.models.agent import Agent
@@ -982,3 +982,35 @@ async def _get_member(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def disband_group(db: AsyncSession, group_id: int, operator_id: int) -> Group:
+    """
+    解散群聊（仅群主可操作）。
+
+    会清理无 CASCADE 的关联数据（rough_memories 设 NULL、conversation_logs 删除），
+    有 CASCADE 的表（members/messages/pending/embeddings）由数据库自动级联删除。
+    """
+    group = await db.get(Group, group_id)
+    if group is None:
+        raise ValueError("群聊不存在")
+
+    # 权限检查：只有 human owner 可以解散
+    member = await _get_member(db, group_id, "human", operator_id)
+    if member is None or member.role != "owner":
+        raise ValueError("仅群主可解散群聊")
+
+    # 清理无 CASCADE 的关联数据
+    from app.models.memory import RoughMemory
+    await db.execute(
+        update(RoughMemory).where(RoughMemory.group_id == group_id).values(group_id=None)
+    )
+    from app.models.conversation_log import ConversationLog
+    await db.execute(
+        delete(ConversationLog).where(ConversationLog.group_id == group_id)
+    )
+
+    await db.delete(group)
+    await db.flush()
+    logger.info(f"群聊 '{group.name}' (id={group_id}) 已被群主 {operator_id} 解散")
+    return group

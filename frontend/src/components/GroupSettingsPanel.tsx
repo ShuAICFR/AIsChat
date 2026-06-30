@@ -309,6 +309,17 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
     }
   }
 
+  const handleDisband = async () => {
+    if (!group) return
+    if (!confirm(t('groupSettings.confirmDisband'))) return
+    try {
+      await api.delete(`/groups/${group.id}`)
+      onLeave()  // 复用退出逻辑：关闭面板 + 刷新列表
+    } catch (e: any) {
+      setError(e?.detail || t('error.operationFailed'))
+    }
+  }
+
   const handleExportChat = async () => {
     if (!group) return
     setExporting(true)
@@ -556,6 +567,16 @@ export default function GroupSettingsPanel({ group, onClose, onUpdate, onLeave }
                 <LogOut size={16} />
                 {isOwner && !group.name.startsWith('DM:') ? t('groupSettings.ownerCannotLeave') : t('groupSettings.leaveGroup')}
               </button>
+
+              {/* 解散群聊（仅群主可见） */}
+              {isOwner && (
+                <button
+                  onClick={handleDisband}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-600/15 text-red-500 rounded-lg text-sm font-medium hover:bg-red-600/25 transition-colors border border-red-500/20"
+                >
+                  {t('groupSettings.disbandGroup')}
+                </button>
+              )}
             </>
           )}
 

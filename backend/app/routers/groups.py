@@ -30,6 +30,7 @@ from app.services.group_service import (
     change_member_role,
     remove_member,
     leave_group,
+    disband_group,
     get_unread_info,
     update_last_read,
 )
@@ -463,6 +464,20 @@ async def leave(
     try:
         await leave_group(db, group_id, "human", current_user["user_id"])
         return {"message": "已退出群聊"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.delete("/groups/{group_id}")
+async def delete_group(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """解散群聊（仅群主可操作）"""
+    try:
+        await disband_group(db, group_id, current_user["user_id"])
+        return {"message": "群聊已解散", "group_id": group_id}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 

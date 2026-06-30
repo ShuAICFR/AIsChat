@@ -564,20 +564,46 @@ def _build_personality(agent, language: str = "zh", system_prompt_override: str 
 
 
 async def _build_tools_segment(db, agent, is_dm: bool = False) -> str:
-    """tools 段：当前可用工具清单（非空，状态切换时变）"""
+    """tools 段：技能背包视图——按 6 段分组展示，含段描述"""
     from app.services.tool_registry import get_allowed_tools
     from app.services.skill_engine import _is_delay_reply_allowed
+    from app.tools.base import SKILL_SEGMENT_META, ToolRegistry
+
     delay_allowed = await _is_delay_reply_allowed(db, agent)
-    current_tools = get_allowed_tools(agent.state, thinking_enabled=agent.thinking_enabled, delay_reply_allowed=delay_allowed)
-    tool_names = [t["function"]["name"] for t in current_tools]
-    tool_list = "、".join(tool_names)
-    segment_name = "DM 私信" if is_dm else "群聊社交"
-    return (
-        f"## 当前可用工具（技能段：{segment_name}）\n"
-        f"你当前加载的工具：{tool_list}\n"
-        f"这些是你现在能直接用的能力。如果上述列表中不包含某个工具（比如 execute_command），"
-        f"说明该能力在当前模式下不可用，需要切换到对应的技能段。"
+    current_tools = get_allowed_tools(
+        agent.state, thinking_enabled=agent.thinking_enabled,
+        delay_reply_allowed=delay_allowed,
     )
+    current_tool_names = {t["function"]["name"] for t in current_tools}
+    all_segments = ToolRegistry.get_segments()
+
+    lines = [
+        "## 技能背包 · 当前可用工具",
+        f"你的状态：{agent.state}　可用工具：{len(current_tool_names)} 个",
+        "",
+    ]
+
+    for seg_key, seg_info in all_segments.items():
+        seg_meta = SKILL_SEGMENT_META.get(seg_key, {})
+        seg_name = seg_meta.get("name", seg_key)
+        seg_desc = seg_meta.get("description", "")
+        all_tools_in_seg = [t["name"] for t in seg_info.get("tools", [])]
+        available = [t for t in all_tools_in_seg if t in current_tool_names]
+        unavailable_count = len(all_tools_in_seg) - len(available)
+
+        if not available:
+            continue  # 该段完全不可用，不展示
+
+        suffix = f"（另有 {unavailable_count} 个不可用）" if unavailable_count > 0 else ""
+        lines.append(f"📦 **{seg_name}** — {seg_desc}{suffix}")
+        lines.append(f"   {', '.join(available)}")
+        lines.append("")
+
+    lines.append(
+        "工具列表中不含的工具说明当前状态下不可用。如需查看全部能力（含不可用的），"
+        "调用 list_available_skills。"
+    )
+    return "\n".join(lines)
 
 
 async def _build_current_context(

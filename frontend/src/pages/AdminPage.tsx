@@ -331,14 +331,14 @@ function UsersTab() {
         <button
           onClick={() => setPage((p) => Math.max(1, p - 1))}
           disabled={page <= 1}
-          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40 text-textSecondary"
         >
           {t('common.prevPage')}
         </button>
         <button
           onClick={() => setPage((p) => p + 1)}
           disabled={data.items.length < data.page_size}
-          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40"
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40 text-textSecondary"
         >
           {t('common.nextPage')}
         </button>
@@ -1340,11 +1340,11 @@ function OpenCLILogsSection() {
       </div>
       <div className="flex gap-2 mt-3">
         <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40 text-textSecondary">
           {t('common.prevPage')}
         </button>
         <button onClick={() => setPage(p => p + 1)} disabled={data.items.length < data.page_size}
-          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40">
+          className="text-sm px-3 py-1 border border-border bg-canvas rounded hover:bg-elevated disabled:opacity-40 text-textSecondary">
           {t('common.nextPage')}
         </button>
       </div>

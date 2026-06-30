@@ -663,16 +663,14 @@ async def _build_injected_skills(
     except Exception as e:
         logger.warning(f"Skill 注入失败（非致命）: {e}")
 
-    # ── v0.7.0: 文件系统记忆索引注入 ──
+    # ── v0.9.0: 数据库版目录级记忆注入（替代文件系统版）──
     try:
-        from app.services.memory_index import generate_memory_index, format_index_for_prompt
-        memory_index = await generate_memory_index(agent.id)
-        if memory_index.get("total_files", 0) > 0:
-            index_text = format_index_for_prompt(memory_index)
-            if index_text:
-                parts.append(index_text)
+        from app.services.structured_memory_service import format_db_records_for_prompt
+        db_records_text = await format_db_records_for_prompt(db, agent.id)
+        if db_records_text:
+            parts.append(db_records_text)
     except Exception as e:
-        logger.warning(f"文件记忆索引注入失败（非致命）: {e}")
+        logger.warning(f"数据库记忆注入失败（非致命）: {e}")
 
     return "\n\n".join(parts) if parts else ""
 
@@ -760,6 +758,128 @@ async def _inject_image_data(
         except Exception as e:
             logger.warning(f"读取图片失败: {physical_path}: {e}")
             continue
+
+    return messages
+
+
+
+async def _build_cross_conversation_context(
+    db: AsyncSession,
+    agent,
+    current_group_id: int | None = None,
+    current_session_id: str | None = None,
+    trigger_user_id: int | None = None,
+) -> list[dict]:
+    """
+    为数字生命档/沉浸档 AI 加载其他对话的最近消息。
+
+    所有对话的消息都加载到同一上下文中（而非注入一个独立的摘要块），
+    用「在[群名/私信名]中：」标记区分不同对话。AI 切换对话就像人类切换 App 一样自然。
+
+    v0.9.0: 通用/半通用 AI 按 trigger_user_id 过滤，防止跨用户隐私泄露。
+    共鸣 AI 无此限制——所有对话归于同一自我。
+
+    返回 [] 表示无跨对话上下文（聊天档 AI 不加载，或该 AI 只有当前这一个对话）。
+    """
+    from app.models.group import Group as GroupModel
+    from app.models.group import GroupMember
+    from app.models.dm import DMSession, DMMessage
+    from app.models.user import User as UserModel
+
+    profile = getattr(agent, 'config_profile', 'chat') or 'chat'
+    if profile not in ('digital_life', 'immersive'):
+        return []
+
+    ai_type = agent.ai_type or "resonance"
+    is_filtered = ai_type in ("general", "semi_general") and trigger_user_id is not None
+
+    messages: list[dict] = []
+
+    # ── 1. 收集群聊 ──
+    try:
+        where = (
+            GroupMember.member_type == "ai",
+            GroupMember.member_id == agent.id,
+            GroupModel.id != current_group_id if current_group_id else True,
+        )
+        gm_result = await db.execute(
+            select(GroupModel.id, GroupModel.name)
+            .join(GroupMember, GroupModel.id == GroupMember.group_id)
+            .where(*where)
+            .limit(10)
+        )
+        ai_groups = gm_result.all()
+
+        for gid, gname in ai_groups:
+            if gname and gname.startswith("DM:"):
+                continue
+            recent = await get_recent_messages(db, gid, limit=3)
+            if not recent:
+                continue
+            messages.append({"role": "system", "content": f"在群聊「{gname}」（ID:{gid}）中："})
+            for m in reversed(recent):
+                role = "user" if m.sender_type == "human" else "assistant"
+                md = message_to_dict(m)
+                name = md.get("sender_name", "未知")
+                sender_id = m.sender_id
+                messages.append({
+                    "role": role,
+                    "content": f"{name}(ID:{sender_id}): {(m.content or '')[:200]}",
+                })
+    except Exception as e:
+        logger.warning(f"跨对话上下文(群聊)查询失败: {e}")
+
+    # ── 2. 收集私信 ──
+    try:
+        if agent.user_id:
+            dm_result = await db.execute(
+                select(DMSession)
+                .where(
+                    (DMSession.user1_id == agent.user_id) | (DMSession.user2_id == agent.user_id)
+                )
+                .order_by(DMSession.last_message_at.desc().nullslast())
+                .limit(10)
+            )
+            dm_sessions = dm_result.scalars().all()
+
+            for ds in dm_sessions:
+                if current_session_id and ds.session_id == current_session_id:
+                    continue
+                partner_id = ds.user2_id if ds.user1_id == agent.user_id else ds.user1_id
+                # 通用/半通用：仅显示与当前用户相关的私信
+                if is_filtered and partner_id != trigger_user_id:
+                    continue
+                partner_name = f"用户{partner_id}"
+                try:
+                    u = await db.get(UserModel, partner_id)
+                    if u:
+                        partner_name = u.username
+                except Exception:
+                    pass
+
+                dm_msgs = await db.execute(
+                    select(DMMessage)
+                    .where(DMMessage.session_id == ds.session_id)
+                    .order_by(DMMessage.created_at.desc())
+                    .limit(3)
+                )
+                dm_list = dm_msgs.scalars().all()
+                if not dm_list:
+                    continue
+
+                messages.append({"role": "system", "content": f"在私信「{partner_name}」（users.id={partner_id}，会话ID:{ds.session_id}）中："})
+                for m in reversed(dm_list):
+                    role = "user" if m.sender_id != agent.user_id else "assistant"
+                    if role == "user":
+                        label = f"{partner_name}(ID:{partner_id})"
+                    else:
+                        label = f"{agent.name}(ID:{agent.user_id})"
+                    messages.append({
+                        "role": role,
+                        "content": f"{label}: {(m.content or '')[:200]}",
+                    })
+    except Exception as e:
+        logger.warning(f"跨对话上下文(私信)查询失败: {e}")
 
     return messages
 
@@ -874,6 +994,14 @@ async def build_messages(
         logger.warning(f"工作区上下文注入失败（非致命）: {e}")
 
     messages = [{"role": "system", "content": system_prompt}]
+
+    # ── 数字生命/沉浸档：跨对话统一上下文 ──
+    cross_msgs = await _build_cross_conversation_context(
+        db, agent, current_group_id=group_id, trigger_user_id=trigger_user_id,
+    )
+    if cross_msgs:
+        messages.extend(cross_msgs)
+        logger.info(f"🌐 AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文")
 
     # ── 历史消息（保持原有逻辑不变） ──
     if vector_accelerated:
@@ -1022,6 +1150,14 @@ async def build_dm_messages(
         logger.warning(f"DM 工作区上下文注入失败（非致命）: {e}")
 
     messages = [{"role": "system", "content": system_prompt}]
+
+    # ── 数字生命/沉浸档：跨对话统一上下文 ──
+    cross_msgs = await _build_cross_conversation_context(
+        db, agent, current_session_id=session_id, trigger_user_id=trigger_user_id,
+    )
+    if cross_msgs:
+        messages.extend(cross_msgs)
+        logger.info(f"🌐 AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文（DM）")
 
     # ── DM 历史消息 ──
     result = await db.execute(

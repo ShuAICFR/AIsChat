@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { getInstanceUrl } from '../utils/platform'
 
 export interface WebSocketMessage {
   type: string
@@ -56,8 +57,9 @@ export function useWebSocket(
     const token = localStorage.getItem('access_token')
     if (!token) return () => {}
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    const instanceUrl = getInstanceUrl()
+    const protocol = instanceUrl.startsWith('https') ? 'wss:' : 'ws:'
+    const host = instanceUrl.replace(/^https?:\/\//, '')
     const url = `${protocol}//${host}/ws?token=${token}`
 
     const ws = new WebSocket(url)

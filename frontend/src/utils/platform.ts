@@ -1,0 +1,31 @@
+/**
+ * 平台检测工具
+ * 用于区分 Web 端和桌面端（Tauri）环境
+ */
+
+/** 是否运行在 Tauri 桌面端环境中 */
+export function isDesktop(): boolean {
+  return '__TAURI_INTERNALS__' in window
+}
+
+/** 获取实例地址：桌面端从 localStorage 读取，Web 端用当前 origin */
+export function getInstanceUrl(): string {
+  if (isDesktop()) {
+    const stored = localStorage.getItem('instance_url')
+    if (stored) return stored.replace(/\/+$/, '') // 去掉末尾斜杠
+  }
+  return window.location.origin
+}
+
+/** 获取 API 基础路径 */
+export function getApiBase(): string {
+  return `${getInstanceUrl()}/api`
+}
+
+/** 获取 WebSocket URL */
+export function getWsUrl(): string {
+  const instanceUrl = getInstanceUrl()
+  const protocol = instanceUrl.startsWith('https') ? 'wss' : 'ws'
+  const host = instanceUrl.replace(/^https?:\/\//, '')
+  return `${protocol}://${host}/ws`
+}

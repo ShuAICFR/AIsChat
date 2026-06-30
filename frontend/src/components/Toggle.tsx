@@ -28,9 +28,9 @@ const Toggle: React.FC<ToggleProps> = ({ checked, onChange, disabled = false, la
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`w-12 h-6 rounded-full transition-colors shrink-0 ${
+      className={`w-12 h-6 rounded-full transition-colors shrink-0 border-2 border-border ${
         disabled ? 'opacity-40 cursor-not-allowed' : ''
-      } ${checked ? 'bg-mint-400' : 'bg-border'}`}
+      } ${checked ? 'bg-mint-400 border-mint-400' : 'bg-canvas'}`}
     >
       <div
         className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${

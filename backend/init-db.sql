@@ -653,6 +653,25 @@ DO $$ BEGIN
 END $$;
 
 -- ============================================================
+-- 目录级结构记忆 — 双重记忆架构的系统2
+-- agent_id + category = 顶层目录, sub_key = 子目录, field = 文件名
+-- UNIQUE 约束使同路径重复写入自动覆盖（upsert）
+-- ============================================================
+CREATE TABLE IF NOT EXISTS structured_records (
+    id SERIAL PRIMARY KEY,
+    agent_id INT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    category VARCHAR(100) NOT NULL,
+    sub_key VARCHAR(200) NOT NULL,
+    field VARCHAR(200) NOT NULL,
+    value TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(agent_id, category, sub_key, field)
+);
+CREATE INDEX IF NOT EXISTS idx_sr_agent_cat ON structured_records(agent_id, category);
+CREATE INDEX IF NOT EXISTS idx_sr_agent_cat_sub ON structured_records(agent_id, category, sub_key);
+
+-- ============================================================
 -- 索引
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_messages_group_id ON messages(group_id);

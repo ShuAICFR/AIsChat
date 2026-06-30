@@ -13,6 +13,8 @@ import AdminPage from './pages/AdminPage'
 import FriendsPage from './pages/FriendsPage'
 import SetupPage from './pages/SetupPage'
 import ManualPage from './pages/ManualPage'
+import InstanceSetupPage from './pages/InstanceSetupPage'
+import LocalModelPage from './pages/LocalModelPage'
 
 function ProtectedLayout() {
   const { user, loading } = useAuth()
@@ -30,6 +32,15 @@ function ProtectedLayout() {
   // 新用户需先完成初始化设置向导
   if (!user.setup_completed && location.pathname !== '/setup') {
     return <Navigate to="/setup" replace />
+  }
+
+  // 桌面端首次启动：未配置实例地址则跳转到配置页
+  if (
+    '__TAURI_INTERNALS__' in window &&
+    !localStorage.getItem('instance_url') &&
+    location.pathname !== '/instance-setup'
+  ) {
+    return <Navigate to="/instance-setup" replace />
   }
 
   return <Layout />
@@ -64,6 +75,8 @@ export const router = createBrowserRouter([
       { path: 'me/usage', element: <UsagePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'setup', element: <SetupPage /> },
+      { path: 'instance-setup', element: <InstanceSetupPage /> },
+      { path: 'local-models', element: <LocalModelPage /> },
       { path: 'manual', element: <ManualPage /> },
       { path: 'manual/admin', element: <ManualPage /> },
       {

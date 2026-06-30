@@ -1,9 +1,17 @@
 /**
  * API 客户端
  * 封装 fetch，自动添加 JWT 认证头
+ * 桌面端从 localStorage 读取实例地址拼 API 路径，Web 端保持 '/api' 相对路径
  */
-
-const API_BASE = '/api'
+function getApiBaseUrl(): string {
+  // 桌面端：从 localStorage 读取实例地址
+  const stored = localStorage.getItem('instance_url')
+  if (stored) {
+    return stored.replace(/\/+$/, '') + '/api'
+  }
+  // Web 端：使用默认值
+  return '/api'
+}
 
 class ApiError extends Error {
   status: number
@@ -28,7 +36,7 @@ async function request<T = any>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
     ...options,
     headers,
   })
@@ -69,7 +77,7 @@ async function uploadFile(path: string, file: File): Promise<any> {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBaseUrl()}${path}`, {
     method: 'POST',
     headers,
     body: formData,

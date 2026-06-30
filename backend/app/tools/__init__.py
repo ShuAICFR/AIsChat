@@ -19,10 +19,12 @@ from app.tools.chat_social.list_available_skills import ListAvailableSkills
 from app.tools.chat_social.cross_post import CrossPost
 from app.tools.chat_social.send_file import SendFile
 from app.tools.chat_social.send_friend_request import SendFriendRequest
+from app.tools.chat_social.search_users import SearchUsers
 
 # ── memory ──
 from app.tools.memory.store_memory import StoreMemory
 from app.tools.memory.recall_memory import RecallMemory
+from app.tools.memory.manage_records import ManageRecords
 
 # ── group_management ──
 from app.tools.group_management.create_group import CreateGroup

@@ -402,9 +402,8 @@ async def create_agent(
     await db.flush()
     await db.refresh(agent)
 
-    # v0.7.0: 初始化文件系统记忆目录
-    from app.services.memory_index import init_memory_directories
-    await init_memory_directories(agent.id, ai_type=ai_type)
+    # v0.9.0: 记忆系统已迁移到数据库（structured_records 表）
+    # 文件系统记忆目录（memory_index.py）已废弃，新 AI 不再创建
 
     # 自动将创建者添加为 AI 的好友（双向）
     from app.models.friendship import Friendship

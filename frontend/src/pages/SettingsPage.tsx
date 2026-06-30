@@ -7,7 +7,8 @@ import Toggle from '../components/Toggle'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 import VerificationCodeInput from '../components/VerificationCodeInput'
 import { LANGUAGES } from '../i18n/languages'
-import { Key, Zap, Save, Clock, Palette, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft, Mail } from 'lucide-react'
+import { isDesktop } from '../utils/platform'
+import { Key, Zap, Save, Clock, Palette, Bell, Eye, EyeOff, CheckCircle, XCircle, Loader2, Globe, Layout, Bot, Pencil, X, Ticket, Plus, ChevronDown, ChevronRight, Shield, AlertTriangle, ArrowLeft, Mail, Monitor, HardDrive, Trash2, Cpu, Wrench, Box, ExternalLink } from 'lucide-react'
 import { useNavigate, useBlocker, useLocation } from 'react-router-dom'
 
 // 常用时区列表
@@ -54,6 +55,9 @@ const NAV_SECTIONS: NavSection[] = [
   { id: 'appearance',  icon: Palette, labelKey: 'settings.appearance',       category: 'settings.appearance' },
   { id: 'notifications', icon: Bell,  labelKey: 'settings.notifications',   category: 'settings.appearance' },
   { id: 'email',         icon: Mail,  labelKey: 'auth.email',                category: 'settings.catAccount' },
+  ...(isDesktop() ? [
+    { id: 'desktop',  icon: Monitor, labelKey: 'settings.desktopSection',     category: 'settings.catDesktop' },
+  ] : []),
 ]
 
 export default function SettingsPage() {
@@ -86,6 +90,25 @@ export default function SettingsPage() {
   const [redeeming, setRedeeming] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState('')
   const [showAgentApi, setShowAgentApi] = useState(false)
+
+  // ── 桌面端设置 ──
+  const [autoStart, setAutoStart] = useState(false)
+  const [buildFactoryExpanded, setBuildFactoryExpanded] = useState(false)
+  const [buildEnvInstalled, setBuildEnvInstalled] = useState(false)
+  const [buildEnvVersion, setBuildEnvVersion] = useState('')
+  const [building, setBuilding] = useState(false)
+  const [installingEnv, setInstallingEnv] = useState(false)
+  const [lastBuild, setLastBuild] = useState('')
+  const [downloadLink, setDownloadLink] = useState('')
+  const [clearCacheMsg, setClearCacheMsg] = useState('')
+
+  // 检测当前平台
+  const getCurrentPlatform = (): 'windows' | 'macos' | 'linux' => {
+    const ua = navigator.userAgent.toLowerCase()
+    if (ua.includes('win')) return 'windows'
+    if (ua.includes('mac')) return 'macos'
+    return 'linux'
+  }
 
   // ── 邮箱管理 ──
   const [showBindEmail, setShowBindEmail] = useState(false)
@@ -754,6 +777,246 @@ export default function SettingsPage() {
           <Toggle checked={notifications} onChange={() => handleNotificationToggle(!notifications)} />
         </div>
       </div>
+
+      {/* ── 桌面端设置 ── */}
+      {isDesktop() && (
+        <div id="settings-desktop" className="bg-surface rounded-xl border border-border p-3 md:p-6 scroll-mt-16">
+          <div className="flex items-center gap-2 mb-4">
+            <Monitor size={18} className="text-primary-400" />
+            <h2 className="font-semibold text-textPrimary">{t('settings.desktopSection')}</h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent-500/10 text-accent-500 border border-accent-500/20">{t('settings.desktopSectionDesc')}</span>
+          </div>
+
+          <div className="space-y-4">
+            {/* 开机自启动 */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-canvas/50">
+              <div>
+                <p className="text-sm font-medium text-textPrimary">{t('settings.autoStart')}</p>
+                <p className="text-xs text-textMuted mt-0.5">{t('settings.autoStartDesc')}</p>
+              </div>
+              <Toggle checked={autoStart} onChange={async (enabled) => {
+                setAutoStart(enabled)
+                // Frank 的 Rust 接口：设置开机自启
+                if ('__TAURI__' in window) {
+                  try {
+                    const { invoke } = await import('@tauri-apps/api/core')
+                    await invoke('set_auto_start', { enabled })
+                  } catch { /* Frank 未实现时静默忽略 */ }
+                }
+              }} />
+            </div>
+
+            {/* 数据存储位置 */}
+            <div className="p-3 rounded-xl border border-border bg-canvas/50">
+              <div className="flex items-center gap-2 mb-1">
+                <HardDrive size={14} className="text-textMuted" />
+                <p className="text-sm font-medium text-textPrimary">{t('settings.dataLocation')}</p>
+              </div>
+              <p className="text-xs text-textMuted">{t('settings.dataLocationDesc')}</p>
+              <p className="text-xs text-primary-400 font-mono mt-1.5">
+                ~/.aischat/data/
+              </p>
+            </div>
+
+            {/* 清理缓存 */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-canvas/50">
+              <div>
+                <p className="text-sm font-medium text-textPrimary">{t('settings.clearCache')}</p>
+                <p className="text-xs text-textMuted mt-0.5">{t('settings.clearCacheDesc')}</p>
+              </div>
+              <button
+                onClick={async () => {
+                  if ('__TAURI__' in window) {
+                    try {
+                      const { invoke } = await import('@tauri-apps/api/core')
+                      await invoke('clear_cache')
+                      setClearCacheMsg(t('settings.clearCacheSuccess'))
+                    } catch { /* Frank 未实现时静默忽略 */ }
+                  }
+                  setTimeout(() => setClearCacheMsg(''), 3000)
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-elevated text-sm text-textSecondary transition-colors"
+              >
+                <Trash2 size={13} />
+                {t('settings.clearCacheBtn')}
+              </button>
+            </div>
+            {clearCacheMsg && (
+              <p className="text-xs text-mint-400">{clearCacheMsg}</p>
+            )}
+
+            {/* 本地模型管理入口 */}
+            <button
+              onClick={() => navigate('/local-models')}
+              className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-canvas/50 hover:bg-elevated transition-colors text-left"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <Cpu size={14} className="text-textMuted" />
+                  <p className="text-sm font-medium text-textPrimary">{t('settings.localModelEntry')}</p>
+                </div>
+                <p className="text-xs text-textMuted mt-0.5 ml-6">{t('settings.localModelEntryDesc')}</p>
+              </div>
+              <ExternalLink size={14} className="text-textMuted shrink-0" />
+            </button>
+
+            {/* 实例连接配置入口 */}
+            <button
+              onClick={() => navigate('/instance-setup')}
+              className="w-full flex items-center justify-between p-3 rounded-xl border border-border bg-canvas/50 hover:bg-elevated transition-colors text-left"
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <Globe size={14} className="text-textMuted" />
+                  <p className="text-sm font-medium text-textPrimary">{t('settings.instanceSetupEntry')}</p>
+                </div>
+                <p className="text-xs text-textMuted mt-0.5 ml-6">{t('settings.instanceSetupEntryDesc')}</p>
+              </div>
+              <ExternalLink size={14} className="text-textMuted shrink-0" />
+            </button>
+
+            {/* 桌面端构建工厂 */}
+            <div className="p-3 rounded-xl border border-border bg-canvas/50">
+              <button
+                onClick={() => setBuildFactoryExpanded(!buildFactoryExpanded)}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-2">
+                  {buildFactoryExpanded ? <ChevronDown size={14} className="text-textMuted" /> : <ChevronRight size={14} className="text-textMuted" />}
+                  <Box size={14} className="text-textMuted" />
+                  <p className="text-sm font-medium text-textPrimary">{t('settings.buildFactory')}</p>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                    buildEnvInstalled
+                      ? 'bg-mint-400/10 text-mint-400 border border-mint-400/20'
+                      : 'bg-border/30 text-textMuted'
+                  }`}>
+                    {buildEnvInstalled ? t('settings.buildFactoryInstalled') : t('settings.buildFactoryNotInstalled')}
+                  </span>
+                </div>
+              </button>
+
+              {buildFactoryExpanded && (
+                <div className="mt-3 space-y-3">
+                  <p className="text-xs text-textMuted">{t('settings.buildFactoryDesc')}</p>
+
+                  {!buildEnvInstalled ? (
+                    <div className="bg-canvas rounded-lg p-4 border border-border">
+                      <div className="flex items-center gap-2 mb-3">
+                        <XCircle size={14} className="text-textMuted" />
+                        <span className="text-sm text-textPrimary">
+                          {t('settings.buildFactoryNotInstalled')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-textMuted mb-3">{t('settings.buildFactoryRequired')}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setInstallingEnv(true)
+                            if ('__TAURI__' in window) {
+                              try {
+                                const { invoke } = await import('@tauri-apps/api/core')
+                                await invoke('install_build_env')
+                                setBuildEnvInstalled(true)
+                              } catch { /* Frank 未实现时静默忽略 */ }
+                            }
+                            setInstallingEnv(false)
+                          }}
+                          disabled={installingEnv}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500 text-white text-xs font-medium hover:bg-primary-400 disabled:opacity-30 transition-colors"
+                        >
+                          {installingEnv ? <Loader2 size={12} className="animate-spin" /> : <Wrench size={12} />}
+                          {installingEnv ? t('settings.buildFactoryInstalling') : t('settings.buildFactoryInstall')}
+                        </button>
+                        <button className="px-3 py-1.5 rounded-lg border border-border text-xs text-textSecondary hover:bg-elevated transition-colors">
+                          {t('settings.buildFactoryViewDocs')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-canvas rounded-lg p-4 border border-border space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle size={14} className="text-mint-400" />
+                        <span className="text-sm text-textPrimary">
+                          {t('settings.buildFactoryInstalled')}
+                        </span>
+                        {buildEnvVersion && (
+                          <span className="text-xs text-textMuted">{buildEnvVersion}</span>
+                        )}
+                      </div>
+
+                      {/* 构建目标 */}
+                      <div>
+                        <p className="text-xs font-medium text-textSecondary mb-2">{t('settings.buildFactoryBuildTarget')}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { label: 'Windows (.exe)', plat: 'windows' as const },
+                            { label: 'macOS (.dmg)', plat: 'macos' as const },
+                            { label: 'Linux (.AppImage)', plat: 'linux' as const },
+                          ].map(({ label, plat }) => {
+                            const current = getCurrentPlatform()
+                            const available = current === plat
+                            return (
+                              <button
+                                key={plat}
+                                disabled={!available}
+                                title={available ? '' : t('settings.buildFactoryCrossPlatformHint')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                  available
+                                    ? 'bg-primary-500 text-white hover:bg-primary-400'
+                                    : 'bg-border/20 text-textMuted cursor-not-allowed'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={async () => {
+                            setBuilding(true)
+                            if ('__TAURI__' in window) {
+                              try {
+                                const { invoke } = await import('@tauri-apps/api/core')
+                                await invoke('build_desktop', { target: getCurrentPlatform() })
+                                setLastBuild(new Date().toLocaleString())
+                              } catch { /* Frank 未实现时静默忽略 */ }
+                            }
+                            setBuilding(false)
+                          }}
+                          disabled={building}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-mint-500 text-white text-xs font-medium hover:bg-mint-400 disabled:opacity-30 transition-colors"
+                        >
+                          {building ? <Loader2 size={12} className="animate-spin" /> : <Wrench size={12} />}
+                          {building ? t('settings.buildFactoryBuilding') : t('settings.buildFactoryBuild')}
+                        </button>
+                        <button className="px-3 py-1.5 rounded-lg border border-border text-xs text-textSecondary hover:bg-elevated transition-colors">
+                          {t('settings.buildFactoryViewLog')}
+                        </button>
+                      </div>
+
+                      {lastBuild && (
+                        <div className="text-xs text-textMuted">
+                          {t('settings.buildFactoryLastBuild')}：{lastBuild}
+                        </div>
+                      )}
+
+                      {downloadLink && (
+                        <div className="text-xs">
+                          <span className="text-textMuted">{t('settings.buildFactoryDownloadLink')}：</span>
+                          <span className="text-primary-400 font-mono">{downloadLink}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {saveFooter}
     </div>

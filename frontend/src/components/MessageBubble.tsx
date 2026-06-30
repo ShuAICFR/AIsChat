@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useState, useCallback } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -6,7 +6,7 @@ import remarkBreaks from 'remark-breaks'
 import rehypeKatex from 'rehype-katex'
 import { useAuth } from '../context/AuthContext'
 import { getStateDotColor } from '../constants'
-import { FileIcon, Download, Globe, ShieldAlert } from 'lucide-react'
+import { FileIcon, Download, Globe, ShieldAlert, Loader2, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
 import { formatMessageTime } from '../utils/time'
 import { useLang, useT } from '../i18n/I18nContext'
 import MermaidBlock from './MermaidBlock'
@@ -70,6 +70,112 @@ function fileIconColor(mimeType: string): string {
   if (mimeType.includes('pdf')) return 'text-rose-400'
   if (mimeType.includes('zip') || mimeType.includes('tar') || mimeType.includes('gz')) return 'text-amber-400'
   return 'text-primary-400'
+}
+
+/** 扩展名→MIME 映射（后端未返回 mime_type 时 fallback） */
+const EXT_MIME_MAP: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  json: 'application/json', xml: 'application/xml', yaml: 'application/x-yaml', yml: 'application/x-yaml',
+  js: 'application/javascript', ts: 'text/typescript', py: 'text/x-python',
+  c: 'text/x-c', cpp: 'text/x-c++src', h: 'text/x-c', hpp: 'text/x-c++src',
+  sh: 'application/x-shellscript', bash: 'application/x-shellscript',
+  md: 'text/markdown', txt: 'text/plain', html: 'text/html', css: 'text/css',
+  csv: 'text/csv', log: 'text/plain', toml: 'application/toml', ini: 'text/plain',
+  mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
+  zip: 'application/zip', tar: 'application/x-tar', gz: 'application/gzip',
+}
+
+/** 获取 MIME：优先后端返回值，缺失时从文件名推断 */
+function resolveMime(att: { name: string; mime_type?: string }): string {
+  if (att.mime_type) return att.mime_type
+  const ext = att.name.split('.').pop()?.toLowerCase() || ''
+  return EXT_MIME_MAP[ext] || ''
+}
+
+/** 是否可内联文本渲染 */
+function isInlineText(mime: string): boolean {
+  if (!mime) return false
+  if (mime.startsWith('text/')) return true
+  const textish = [
+    'application/json', 'application/xml', 'application/javascript',
+    'application/x-yaml', 'application/x-sh', 'application/x-shellscript',
+  ]
+  return textish.includes(mime)
+}
+
+/** 内联文本文件预览卡片 */
+function InlineTextFile({
+  fileId, name, size, mime, token, isMine,
+}: {
+  fileId: number; name: string; size: number; mime: string; token: string; isMine: boolean;
+}) {
+  const t = useT()
+  const [expanded, setExpanded] = useState(false)
+  const [body, setBody] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+
+  const toggle = useCallback(async () => {
+    if (expanded) { setExpanded(false); return }
+    setExpanded(true)
+    if (body !== null) return
+    setLoading(true)
+    setErr('')
+    try {
+      const res = await fetch(`/api/fs/download/${fileId}?token=${encodeURIComponent(token)}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const text = await res.text()
+      setBody(text.length > 256 * 1024
+        ? text.slice(0, 256 * 1024) + '\n\n' + t('filePreview.fileTooLarge')
+        : text)
+    } catch (e: any) {
+      setErr(e.message || t('common.loadFailed'))
+    } finally {
+      setLoading(false)
+    }
+  }, [expanded, body, fileId, token, t])
+
+  const cardBg = isMine
+    ? 'bg-white/10 hover:bg-white/[0.14] border-white/10'
+    : 'bg-canvas hover:bg-elevated border-border'
+
+  return (
+    <div className={`w-full max-w-[340px] rounded-lg border ${cardBg} overflow-hidden transition-colors`}>
+      <button
+        onClick={toggle}
+        className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-left"
+      >
+        {expanded
+          ? <ChevronDown size={12} className="shrink-0 opacity-50" />
+          : <ChevronRight size={12} className="shrink-0 opacity-50" />
+        }
+        <FileIcon size={12} className="shrink-0 text-textMuted" />
+        <span className="truncate flex-1 font-medium">{name}</span>
+        <span className="text-[10px] opacity-40 shrink-0">{formatFileSize(size)}</span>
+      </button>
+      {expanded && (
+        <div className="border-t border-inherit">
+          {loading ? (
+            <div className="flex items-center justify-center py-5">
+              <Loader2 size={15} className="animate-spin opacity-35" />
+            </div>
+          ) : err ? (
+            <div className="flex items-center gap-1.5 px-3 py-3 text-[11px] text-rose-400">
+              <AlertTriangle size={12} />
+              <span>{err}</span>
+            </div>
+          ) : body ? (
+            <pre className="text-[11px] leading-relaxed whitespace-pre-wrap break-all px-3 py-2 max-h-[360px] overflow-y-auto font-mono select-text opacity-80 bg-black/[0.03] dark:bg-white/[0.03]">
+              {body}
+            </pre>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
 }
 
 const MessageBubble = memo(function MessageBubble({
@@ -189,6 +295,22 @@ const MessageBubble = memo(function MessageBubble({
                         title={att.name}
                       />
                     </button>
+                  )
+                }
+
+                // 文本类文件：内联展开预览
+                const mime = resolveMime(att)
+                if (isInlineText(mime)) {
+                  return (
+                    <InlineTextFile
+                      key={att.file_id}
+                      fileId={att.file_id}
+                      name={att.name}
+                      size={att.size}
+                      mime={mime}
+                      token={token || ''}
+                      isMine={isMine}
+                    />
                   )
                 }
 

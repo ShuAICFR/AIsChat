@@ -86,7 +86,7 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
         // 文本类
         const text = await res.text()
         if (text.length > 2 * 1024 * 1024) {
-          setContent(text.slice(0, 2 * 1024 * 1024) + '\n\n… 文件过大，仅显示前 2MB')
+          setContent(text.slice(0, 2 * 1024 * 1024) + '\n\n' + t('filePreview.fileTooLarge'))
         } else {
           setContent(text)
         }

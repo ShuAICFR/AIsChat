@@ -14,6 +14,28 @@ import AvatarCropModal from '../components/AvatarCropModal'
 import AgentSettingsModal from '../components/AgentSettingsModal'
 import FilePreviewModal from '../components/FilePreviewModal'
 
+/** 扩展名→MIME 类型映射（后端未返回 mime_type 时 fallback） */
+const EXT_MIME_MAP: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  json: 'application/json', xml: 'application/xml', yaml: 'application/x-yaml', yml: 'application/x-yaml',
+  js: 'application/javascript', ts: 'text/typescript', py: 'text/x-python',
+  sh: 'application/x-shellscript', bash: 'application/x-shellscript',
+  md: 'text/markdown', txt: 'text/plain', html: 'text/html', css: 'text/css',
+  csv: 'text/csv', log: 'text/plain',
+  mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
+  zip: 'application/zip', tar: 'application/x-tar', gz: 'application/gzip',
+}
+
+/** 获取文件 MIME 类型：优先后端返回值，缺失时从文件名推断 */
+function getMimeType(file: { name: string; mime_type?: string }): string {
+  if (file.mime_type) return file.mime_type
+  const ext = file.name.split('.').pop()?.toLowerCase() || ''
+  return EXT_MIME_MAP[ext] || ''
+}
+
 interface Agent {
   id: number
   owner_id: number
@@ -64,7 +86,7 @@ interface StorageInfo {
   quota_bytes: number
   quota_mb: number
   usage_percent: number
-  files: Array<{ id: number; name: string; size: number; path: string }>
+  files: Array<{ id: number; name: string; size: number; path: string; mime_type?: string }>
 }
 
 interface FileReference {
@@ -968,21 +990,7 @@ export default function AgentDetailPage() {
                     {storage.files.map((f) => (
                       <div key={f.id} className="flex items-center justify-between text-xs py-2 px-2 rounded hover:bg-canvas group">
                         <button
-                          onClick={() => {
-                            const ext = f.name.split('.').pop()?.toLowerCase()
-                            const mimeMap: Record<string, string> = {
-                              png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
-                              webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
-                              pdf: 'application/pdf',
-                              docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                              json: 'application/json', xml: 'application/xml', yaml: 'application/x-yaml', yml: 'application/x-yaml',
-                              js: 'application/javascript', ts: 'text/typescript', py: 'text/x-python',
-                              sh: 'application/x-shellscript', bash: 'application/x-shellscript',
-                              md: 'text/markdown', txt: 'text/plain', html: 'text/html', css: 'text/css',
-                              csv: 'text/csv', log: 'text/plain',
-                            }
-                            setPreviewFile({ id: f.id, name: f.name, size: f.size, mime: mimeMap[ext || ''] || '' })
-                          }}
+                          onClick={() => setPreviewFile({ id: f.id, name: f.name, size: f.size, mime: getMimeType(f) })}
                           className="text-textSecondary hover:text-primary-400 truncate flex-1 mr-2 transition-colors text-left"
                           title={t('agentDetail.clickToPreview')}
                         >

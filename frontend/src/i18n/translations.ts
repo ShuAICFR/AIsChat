@@ -240,6 +240,9 @@ const zh: TranslationDict = {
   'forward.release': '释放引用',
   'forward.forwarded': '转发',
 
+  // ======================== 文件预览 / FilePreview ========================
+  'filePreview.fileTooLarge': '… 文件过大，仅显示前 2MB',
+
   // ======================== 外部链接安全弹窗 ========================
   'externalLink.title': '即将离开本站',
   'externalLink.hint': '你即将前往以下外部网页：',
@@ -1825,6 +1828,9 @@ const en: TranslationDict = {
   'forward.release': 'Release',
   'forward.forwarded': 'Forwarded',
 
+  // ======================== 文件预览 / FilePreview ========================
+  'filePreview.fileTooLarge': '… File too large, showing first 2MB',
+
   // ======================== External Link Safety ========================
   'externalLink.title': 'Leaving this site',
   'externalLink.hint': 'You are about to visit the following external website:',
@@ -3368,6 +3374,9 @@ const ja: TranslationDict = {
   'forward.title': 'ファイル転送',
   'forward.release': '参照を解除',
   'forward.forwarded': '転送済み',
+
+  // ======================== 文件预览 / FilePreview ========================
+  'filePreview.fileTooLarge': '… ファイルが大きすぎるため、最初の2MBのみ表示',
 
   // ======================== 外部リンク安全ダイアログ ========================
   'externalLink.title': 'サイトを離れます',

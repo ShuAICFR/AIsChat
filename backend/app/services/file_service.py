@@ -91,15 +91,26 @@ async def check_file_access(db: AsyncSession, file_id: int, requester_type: str,
     if metadata.owner_type == requester_type and metadata.owner_id == requester_id:
         return metadata
 
-    # AI 的文件 → 其主人（human owner）也有权限
+    # AI 的文件 → 其制作者和合作者也有权限
     if metadata.owner_type == "ai" and requester_type == "human":
-        from app.models.agent import Agent as AgentModel
+        from app.models.agent import Agent as AgentModel, AgentCollaborator
         agent_result = await db.execute(
             select(AgentModel).where(AgentModel.id == metadata.owner_id)
         )
         agent = agent_result.scalar_one_or_none()
-        if agent is not None and agent.owner_id == requester_id:
-            return metadata
+        if agent is not None:
+            # 制作者
+            if agent.owner_id == requester_id:
+                return metadata
+            # 合作者
+            collab_result = await db.execute(
+                select(AgentCollaborator).where(
+                    AgentCollaborator.agent_id == metadata.owner_id,
+                    AgentCollaborator.user_id == requester_id,
+                )
+            )
+            if collab_result.scalar_one_or_none() is not None:
+                return metadata
 
     # collaboration_mode 判定
     mode = metadata.collaboration_mode or "solo"

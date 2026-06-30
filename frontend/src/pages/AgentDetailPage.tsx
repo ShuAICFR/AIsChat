@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'
 import AgentSettingsModal from '../components/AgentSettingsModal'
+import FilePreviewModal from '../components/FilePreviewModal'
 
 interface Agent {
   id: number
@@ -144,6 +145,7 @@ export default function AgentDetailPage() {
   // Avatar
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [cropFile, setCropFile] = useState<File | null>(null)
+  const [previewFile, setPreviewFile] = useState<{ id: number; name: string; size: number; mime: string } | null>(null)
 
   // Storage
   const [storage, setStorage] = useState<StorageInfo | null>(null)
@@ -966,25 +968,23 @@ export default function AgentDetailPage() {
                     {storage.files.map((f) => (
                       <div key={f.id} className="flex items-center justify-between text-xs py-2 px-2 rounded hover:bg-canvas group">
                         <button
-                          onClick={async () => {
-                            try {
-                              const token = localStorage.getItem('access_token')
-                              const base = localStorage.getItem('instance_url')?.replace(/\/+$/, '') || ''
-                              const res = await fetch(`${base}/api/fs/download/${f.id}`, {
-                                headers: { 'Authorization': `Bearer ${token}` },
-                              })
-                              if (!res.ok) throw new Error('Download failed')
-                              const blob = await res.blob()
-                              const url = URL.createObjectURL(blob)
-                              const a = document.createElement('a')
-                              a.href = url
-                              a.download = f.name
-                              a.click()
-                              URL.revokeObjectURL(url)
-                            } catch { /* ignore */ }
+                          onClick={() => {
+                            const ext = f.name.split('.').pop()?.toLowerCase()
+                            const mimeMap: Record<string, string> = {
+                              png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+                              webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+                              pdf: 'application/pdf',
+                              docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                              json: 'application/json', xml: 'application/xml', yaml: 'application/x-yaml', yml: 'application/x-yaml',
+                              js: 'application/javascript', ts: 'text/typescript', py: 'text/x-python',
+                              sh: 'application/x-shellscript', bash: 'application/x-shellscript',
+                              md: 'text/markdown', txt: 'text/plain', html: 'text/html', css: 'text/css',
+                              csv: 'text/csv', log: 'text/plain',
+                            }
+                            setPreviewFile({ id: f.id, name: f.name, size: f.size, mime: mimeMap[ext || ''] || '' })
                           }}
                           className="text-textSecondary hover:text-primary-400 truncate flex-1 mr-2 transition-colors text-left"
-                          title={t('agentDetail.clickToDownload')}
+                          title={t('agentDetail.clickToPreview')}
                         >
                           {f.name}
                         </button>
@@ -1403,6 +1403,17 @@ export default function AgentDetailPage() {
           file={cropFile}
           onConfirm={handleCropConfirm}
           onCancel={() => setCropFile(null)}
+        />
+      )}
+
+      {/* 文件预览弹窗 */}
+      {previewFile && (
+        <FilePreviewModal
+          fileId={previewFile.id}
+          fileName={previewFile.name}
+          fileSize={previewFile.size}
+          mimeType={previewFile.mime}
+          onClose={() => setPreviewFile(null)}
         />
       )}
 

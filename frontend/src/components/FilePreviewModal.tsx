@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import remarkBreaks from 'remark-breaks'
+import rehypeKatex from 'rehype-katex'
 import { Download, X, ArrowLeft, FileIcon, Loader2, AlertTriangle, ZoomIn, ZoomOut, RotateCcw, Share2 } from 'lucide-react'
 import { useT } from '../i18n/I18nContext'
+import MermaidBlock from './MermaidBlock'
 import ForwardFileModal from './ForwardFileModal'
 
 /** 可直接文本预览的 MIME 类型 */
@@ -17,10 +23,54 @@ function isTextPreviewable(mimeType: string): boolean {
   return textish.includes(mimeType)
 }
 
+/** 扩展名→语言标签（用于代码块语法高亮） */
+const EXT_LANG_MAP: Record<string, string> = {
+  py: 'python', js: 'javascript', ts: 'typescript', jsx: 'jsx', tsx: 'tsx',
+  c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
+  json: 'json', xml: 'xml', html: 'html', css: 'css', scss: 'scss',
+  yaml: 'yaml', yml: 'yaml', toml: 'toml',
+  sh: 'bash', bash: 'bash', zsh: 'bash',
+  sql: 'sql', rs: 'rust', go: 'go', java: 'java', kt: 'kotlin', swift: 'swift',
+  php: 'php', rb: 'ruby', lua: 'lua', r: 'r', dart: 'dart',
+}
+
+/** 文件名→语言标签 */
+function getCodeLang(fileName: string, mimeType: string): string {
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  if (EXT_LANG_MAP[ext]) return EXT_LANG_MAP[ext]
+  // MIME fallback
+  if (mimeType.startsWith('text/') && mimeType !== 'text/plain' && mimeType !== 'text/markdown') {
+    return mimeType.replace('text/x-', '').replace('text/', '')
+  }
+  return ''
+}
+
+/** 是否 Markdown */
+function isMarkdownFile(fileName: string, mimeType: string): boolean {
+  return mimeType === 'text/markdown' || fileName.endsWith('.md') || fileName.endsWith('.markdown')
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+}
+
+/** 代码块渲染器（复用 MessageBubble 的设计） */
+function FileCodeRenderer({ className, children, inline, ...props }: any) {
+  const match = /language-(\w+)/.exec(className || '')
+  const code = String(children).replace(/\n$/, '')
+  if (!inline && match && match[1] === 'mermaid') {
+    return <MermaidBlock code={code} compact />
+  }
+  if (inline) {
+    return <code className={`bg-black/5 dark:bg-white/10 rounded px-1 py-0.5 text-[0.85em] break-all ${className || ''}`}>{children}</code>
+  }
+  return (
+    <code className={`block overflow-x-auto whitespace-pre rounded-xl bg-black/5 dark:bg-white/5 border border-border/50 p-4 text-xs text-textPrimary ${className || ''}`}>
+      {children}
+    </code>
+  )
 }
 
 interface FilePreviewModalProps {
@@ -44,12 +94,35 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
   const token = localStorage.getItem('access_token')
   const dlUrl = `/api/fs/download/${fileId}?token=${token || ''}`
 
-  const isImage = mimeType.startsWith('image/')
-  const isPDF = mimeType === 'application/pdf'
-  const isDocx = mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  // 优先后端 mimeType，缺失时从文件名扩展名推断
+  const resolvedMime = (() => {
+    if (mimeType && mimeType !== 'application/octet-stream') return mimeType
+    const ext = fileName.split('.').pop()?.toLowerCase() || ''
+    const mimeMap: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+      webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp',
+      pdf: 'application/pdf',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      json: 'application/json', xml: 'application/xml', yaml: 'application/x-yaml', yml: 'application/x-yaml',
+      js: 'application/javascript', ts: 'text/typescript', py: 'text/x-python',
+      c: 'text/x-c', cpp: 'text/x-c++src', h: 'text/x-c', hpp: 'text/x-c++src',
+      sh: 'application/x-shellscript', bash: 'application/x-shellscript',
+      md: 'text/markdown', txt: 'text/plain', html: 'text/html', css: 'text/css',
+      csv: 'text/csv', log: 'text/plain', toml: 'application/toml', ini: 'text/plain',
+      mp4: 'video/mp4', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav',
+      zip: 'application/zip', tar: 'application/x-tar', gz: 'application/gzip',
+    }
+    return mimeMap[ext] || 'application/octet-stream'
+  })()
+
+  const isImage = resolvedMime.startsWith('image/')
+  const isPDF = resolvedMime === 'application/pdf'
+  const isDocx = resolvedMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || fileName.endsWith('.docx')
-  const isText = isTextPreviewable(mimeType)
+  const isText = isTextPreviewable(resolvedMime)
   const previewable = isImage || isPDF || isDocx || isText
+  const isMd = isMarkdownFile(fileName, resolvedMime)
+  const codeLang = getCodeLang(fileName, resolvedMime)
 
   useEffect(() => {
     if (!previewable) {
@@ -84,12 +157,15 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
         }
 
         // 文本类
-        const text = await res.text()
+        let text = await res.text()
         if (text.length > 2 * 1024 * 1024) {
-          setContent(text.slice(0, 2 * 1024 * 1024) + '\n\n' + t('filePreview.fileTooLarge'))
-        } else {
-          setContent(text)
+          text = text.slice(0, 2 * 1024 * 1024) + '\n\n' + t('filePreview.fileTooLarge')
         }
+        // 代码文件：包装为 markdown 代码块交给 Markdown 渲染
+        if (codeLang) {
+          text = '```' + codeLang + '\n' + text + '\n```'
+        }
+        setContent(text)
         setLoading(false)
       })
       .catch((err) => {
@@ -100,7 +176,7 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
       })
 
     return () => ac.abort()
-  }, [fileId, previewable, dlUrl, fileName, onClose, t, isImage, isPDF, isDocx])
+  }, [fileId, previewable, dlUrl, fileName, onClose, t, isImage, isPDF, isDocx, codeLang])
 
   // 图片缩放控制
   const zoomIn = useCallback(() => setScale((s) => Math.min(s + 0.5, 5)), [])
@@ -231,6 +307,22 @@ export default function FilePreviewModal({ fileId, fileName, fileSize, mimeType,
                     className="prose prose-sm dark:prose-invert max-w-none text-textPrimary"
                     dangerouslySetInnerHTML={{ __html: content || '' }}
                   />
+                ) : isMd || codeLang ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-textPrimary
+                    [&_.katex-display]:overflow-x-auto [&_.katex-display]:-mx-1 [&_.katex-display]:px-1
+                    [&_.katex]:text-inherit [&_.katex]:max-w-full [&_.katex]:overflow-x-auto [&_.katex]:inline-block
+                    [&_pre]:overflow-x-auto [&_pre]:-mx-1 [&_pre]:px-1
+                    [&_table]:overflow-x-auto [&_table]:block
+                    [&_img]:max-w-full [&_img]:rounded-lg
+                    [&_a]:break-all [&_a]:text-primary-500 dark:[&_a]:text-primary-400 [&_a]:underline">
+                    <Markdown
+                      remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{ code: FileCodeRenderer }}
+                    >
+                      {content || ''}
+                    </Markdown>
+                  </div>
                 ) : (
                   <pre className="text-xs text-textPrimary whitespace-pre-wrap break-all font-mono leading-relaxed select-text">
                     {content}

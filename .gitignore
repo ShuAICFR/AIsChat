@@ -38,6 +38,9 @@ backend/uploads/
 .DS_Store
 Thumbs.db
 
+# 桌面客户端（独立仓库）
+AIsChat-Client/
+
 # 垃圾文件（Windows 编码残留）
 I:*
 R:*

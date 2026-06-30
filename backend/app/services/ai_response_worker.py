@@ -979,7 +979,7 @@ async def _tool_call_loop(
                         "括号表情可以写在 send_message 的 content 里发出去，"
                         "但不能只返回括号文字而不调工具。"
                         "请现在就调用 send_message 或你需要的其他工具。"
-                        "如果你决定不再继续回复，请调用 end_turn 工具来结束本轮。"
+                        "如果你决定不再继续回复，在 content 返回 {\"intent\":\"end_turn\"} 即可（不需要调工具）。"
                     ),
                 }, ensure_ascii=False),
             })

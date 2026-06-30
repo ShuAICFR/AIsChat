@@ -311,11 +311,10 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
 
                 else:
                     # ── 群聊消息（原有逻辑） ──
-                    if not group_id or not content:
+                    attachments = data.get("attachments")
+                    if not group_id or (not content and not attachments):
                         await ws.send_json(build_ws_error("MISSING_FIELD", "缺少 group_id 或 content"))
                         continue
-
-                    attachments = data.get("attachments")
 
                     async with async_session() as db:
                         try:

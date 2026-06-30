@@ -965,15 +965,29 @@ export default function AgentDetailPage() {
                   <div className="space-y-1 max-h-72 overflow-y-auto">
                     {storage.files.map((f) => (
                       <div key={f.id} className="flex items-center justify-between text-xs py-2 px-2 rounded hover:bg-canvas group">
-                        <a
-                          href={`/api/fs/download/${f.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-textSecondary hover:text-primary-400 truncate flex-1 mr-2 transition-colors"
+                        <button
+                          onClick={async () => {
+                            try {
+                              const token = localStorage.getItem('access_token')
+                              const base = localStorage.getItem('instance_url')?.replace(/\/+$/, '') || ''
+                              const res = await fetch(`${base}/api/fs/download/${f.id}`, {
+                                headers: { 'Authorization': `Bearer ${token}` },
+                              })
+                              if (!res.ok) throw new Error('Download failed')
+                              const blob = await res.blob()
+                              const url = URL.createObjectURL(blob)
+                              const a = document.createElement('a')
+                              a.href = url
+                              a.download = f.name
+                              a.click()
+                              URL.revokeObjectURL(url)
+                            } catch { /* ignore */ }
+                          }}
+                          className="text-textSecondary hover:text-primary-400 truncate flex-1 mr-2 transition-colors text-left"
                           title={t('agentDetail.clickToDownload')}
                         >
                           {f.name}
-                        </a>
+                        </button>
                         <span className="text-textMuted shrink-0 mr-2">{formatSize(f.size)}</span>
                         <button
                           onClick={() => handleOpenDeleteConfirm(f)}

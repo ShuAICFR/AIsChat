@@ -251,11 +251,10 @@ async def websocket_endpoint(ws: WebSocket, token: str = Query(...)):
                 # 判断会话类型
                 if session_id:
                     # ── 私信消息 ──
-                    if not content:
+                    dm_attachments = data.get("attachments")
+                    if not content and not dm_attachments:
                         await ws.send_json(build_ws_error("MISSING_FIELD", "缺少 content"))
                         continue
-
-                    dm_attachments = data.get("attachments")
 
                     async with async_session() as db:
                         try:

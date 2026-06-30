@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "clsx": "^2.1.1",
     "katex": "^0.17.0",
     "lucide-react": "^0.468.0",

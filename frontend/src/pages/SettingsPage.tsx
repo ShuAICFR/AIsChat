@@ -799,7 +799,7 @@ export default function SettingsPage() {
                 // Frank 的 Rust 接口：设置开机自启
                 if ('__TAURI__' in window) {
                   try {
-                    const { invoke } = await import(/* @vite-ignore */ '@tauri-apps/api/core')
+                    const { invoke } = await import('@tauri-apps/api/core')
                     await invoke('set_auto_start', { enabled })
                   } catch { /* Frank 未实现时静默忽略 */ }
                 }
@@ -828,7 +828,7 @@ export default function SettingsPage() {
                 onClick={async () => {
                   if ('__TAURI__' in window) {
                     try {
-                      const { invoke } = await import(/* @vite-ignore */ '@tauri-apps/api/core')
+                      const { invoke } = await import('@tauri-apps/api/core')
                       await invoke('clear_cache')
                       setClearCacheMsg(t('settings.clearCacheSuccess'))
                     } catch { /* Frank 未实现时静默忽略 */ }
@@ -914,7 +914,7 @@ export default function SettingsPage() {
                             setInstallingEnv(true)
                             if ('__TAURI__' in window) {
                               try {
-                                const { invoke } = await import(/* @vite-ignore */ '@tauri-apps/api/core')
+                                const { invoke } = await import('@tauri-apps/api/core')
                                 await invoke('install_build_env')
                                 setBuildEnvInstalled(true)
                               } catch { /* Frank 未实现时静默忽略 */ }
@@ -979,7 +979,7 @@ export default function SettingsPage() {
                             setBuilding(true)
                             if ('__TAURI__' in window) {
                               try {
-                                const { invoke } = await import(/* @vite-ignore */ '@tauri-apps/api/core')
+                                const { invoke } = await import('@tauri-apps/api/core')
                                 await invoke('build_desktop', { target: getCurrentPlatform() })
                                 setLastBuild(new Date().toLocaleString())
                               } catch { /* Frank 未实现时静默忽略 */ }

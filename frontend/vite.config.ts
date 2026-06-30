@@ -9,11 +9,6 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
-  build: {
-    rollupOptions: {
-      external: ['@tauri-apps/api/core'],
-    },
-  },
   server: {
     port: 3000,
     host: true,              // 允许外部访问（Docker 部署需要）

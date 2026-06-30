@@ -291,6 +291,11 @@
   dependencies:
     postcss-selector-parser "6.0.10"
 
+"@tauri-apps/api@^2.11.1":
+  version "2.11.1"
+  resolved "https://registry.npmjs.org/@tauri-apps/api/-/api-2.11.1.tgz"
+  integrity sha512-M2FPuYND2m+wh5hfW9ZpSdxMPdEJovPBWwoHJmwUpysTYNHaOkVFN419m/K0LIgjb/7KU2vBgsUepJWugQCvAA==
+
 "@types/babel__core@^7.20.5":
   version "7.20.5"
   resolved "https://registry.npmmirror.com/@types/babel__core/-/babel__core-7.20.5.tgz"

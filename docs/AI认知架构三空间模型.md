@@ -3,7 +3,7 @@
 > 本文档描述 AIsChat 中 AI 的认知架构设计——思考空间、对话空间、记忆空间三者分离，以及 JSON intent 轻量协议、双重记忆架构（向量+数据库结构记忆）。
 > This document describes the cognitive architecture of AIs in AIsChat — the separation of thinking, conversation, and memory spaces, the lightweight JSON intent protocol, and the dual memory architecture (vector + structured database).
 >
-> **v0.9.0 更新**：文件系统记忆已迁移为数据库结构记忆（`structured_records`），新增统一上下文（immersive/digital_life 档），详见第 4-7 节。理论基础见 [`docs/memory-architecture.md`](./memory-architecture.md)。
+> **v0.9.0 更新**：文件系统记忆已迁移为数据库结构记忆（`structured_records`），新增统一上下文（immersive/digital_life 档），详见第 4-7 节。理论基础见 [`docs/记忆架构设计.md`](./记忆架构设计.md)。
 
 ---
 
@@ -135,7 +135,7 @@ flowchart TD
 ## 4. 结构记忆（数据库版 v0.9.0）
 
 > 理论基础：Tulving SPI 模型语义记忆层 + 2026 AI 记忆综述 Agentic Memory pattern。
-> 详细设计见 [`docs/memory-architecture.md`](./memory-architecture.md)。
+> 详细设计见 [`docs/记忆架构设计.md`](./记忆架构设计.md)。
 
 ### 4.1 数据模型
 
@@ -287,7 +287,7 @@ flowchart TB
 |------|------|
 | `models/structured_record.py` | 结构记忆 ORM |
 | `services/structured_memory_service.py` | CRUD + 提示词格式化 |
-| `docs/memory-architecture.md` | 双重记忆架构设计（含 Tulving SPI 理论基础） |
+| `docs/记忆架构设计.md` | 双重记忆架构设计（含 Tulving SPI 理论基础） |
 | 前端 `utils/platform.ts` | `isDesktop()` / `getInstanceUrl()` |
 | 前端 `pages/InstanceSetupPage.tsx` | 桌面端实例配置 |
 | 前端 `pages/LocalModelPage.tsx` | Ollama 本地模型管理 |

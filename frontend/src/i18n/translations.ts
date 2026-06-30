@@ -585,7 +585,7 @@ const zh: TranslationDict = {
 
   // v0.9.0 对话权限与限额
   'agents.allowOthersChat': '允许他人对话此 AI',
-  'agents.allowOthersChatDesc': '关闭后仅主人和合作者可触发 AI 回复',
+  'agents.allowOthersChatDesc': '关闭后仅制作者和合作者可触发 AI 回复',
   'agents.othersChatUnlimited': '始终允许（无限制）',
   'agents.othersChatQuota': '限制触发次数',
   'agents.othersChatQuotaLabel': '配额上限（次）',
@@ -2159,7 +2159,7 @@ const en: TranslationDict = {
 
   // v0.9.0 Chat permissions & quota
   'agents.allowOthersChat': 'Allow others to chat with this AI',
-  'agents.allowOthersChatDesc': 'When disabled, only the owner and collaborators can trigger AI replies',
+  'agents.allowOthersChatDesc': 'When disabled, only the creator and collaborators can trigger AI replies',
   'agents.othersChatUnlimited': 'Always allow (unlimited)',
   'agents.othersChatQuota': 'Limit trigger count',
   'agents.othersChatQuotaLabel': 'Quota limit (times)',

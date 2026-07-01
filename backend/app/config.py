@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     )
     default_chat_model: str = "deepseek-v4-flash"
     default_work_model: str = "deepseek-v4-pro"
-    default_embedding_model: str = "deepseek-embed"
+    default_embedding_model: str = os.getenv("EMBEDDING_MODEL", "deepseek-embed")
 
     @property
     def is_deepseek_api(self) -> bool:

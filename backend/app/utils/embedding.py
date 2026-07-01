@@ -27,8 +27,13 @@ async def detect_embedding_dimension(
     if _embedding_dimension is not None:
         return _embedding_dimension, _embedding_model
 
-    # 尝试的模型列表（按优先级）
-    models_to_try = ["deepseek-embed", "text-embedding-3-small"]
+    # 尝试的模型列表（按优先级：环境变量 > deepseek-embed > OpenAI 兼容 > 开源）
+    configured = settings.default_embedding_model
+    models_to_try = [configured]
+    # 去重追加常见备选
+    for m in ["deepseek-embed", "text-embedding-3-small", "text-embedding-ada-002", "bge-large-zh-v1.5"]:
+        if m not in models_to_try:
+            models_to_try.append(m)
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         for model in models_to_try:

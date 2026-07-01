@@ -75,6 +75,7 @@ async def run_migrations():
             await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
             await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
             await _migrate_default_file_quota(db)   # v0.9.0 用户默认文件配额配置
+            await _migrate_structured_records(db)  # v0.10.0 结构记忆表（目录级键值存储）
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
             await db.commit()
             logger.info("✅ 数据库迁移检查完成")
@@ -1946,6 +1947,29 @@ async def _migrate_email_templates(db):
     await db.execute(text("ALTER TABLE system_settings ADD COLUMN email_templates JSONB"))
     await db.flush()
     logger.info("  ✅ system_settings.email_templates 列添加完成")
+
+
+async def _migrate_structured_records(db):
+    """v0.10.0: 目录级结构记忆表（双重记忆架构的系统2）"""
+    if await _table_exists(db, "structured_records"):
+        logger.info("  ⏭ structured_records 表已存在，跳过")
+        return
+    logger.info("  🗂️ 创建 structured_records 表")
+    await db.execute(text("""
+        CREATE TABLE structured_records (
+            id SERIAL PRIMARY KEY,
+            agent_id INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            category VARCHAR(100) NOT NULL,
+            sub_key VARCHAR(200) NOT NULL,
+            field VARCHAR(200) NOT NULL,
+            value TEXT NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            UNIQUE(agent_id, category, sub_key, field)
+        )
+    """))
+    await db.flush()
+    logger.info("  ✅ structured_records 表创建完成")
 
 
 async def _fix_column_types(db):

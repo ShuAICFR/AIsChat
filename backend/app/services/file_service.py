@@ -564,7 +564,7 @@ async def track_file_reference(
     ref_type: str = "read",
 ) -> FileReference:
     """记录文件引用（幂等：同一引用方对同一文件只保留一条记录）"""
-    # 检查是否已存在
+    # 检查是否已存在，用 scalars().all() 兜底历史遗留的重复记录（MultipleResultsFound）
     result = await db.execute(
         select(FileReference).where(
             FileReference.file_id == file_id,
@@ -572,7 +572,13 @@ async def track_file_reference(
             FileReference.referrer_id == referrer_id,
         )
     )
-    existing = result.scalar_one_or_none()
+    rows = result.scalars().all()
+    existing = rows[0] if rows else None
+    # 清理历史遗留的重复记录（没有 UNIQUE 约束时可能产生）
+    if len(rows) > 1:
+        for dup in rows[1:]:
+            await db.delete(dup)
+        await db.flush()
     if existing:
         # 更新引用类型（如从 read 升级到 write）
         if existing.ref_type != ref_type:

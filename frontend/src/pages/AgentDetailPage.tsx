@@ -8,7 +8,7 @@ import { useT } from '../i18n/I18nContext'
 import {
   ArrowLeft, Trash2, Download, Upload, Key, Edit3,
   Image, HardDrive, Brain, Copy, Check, X, RefreshCw, Bot, Settings, User,
-  ScrollText, Loader2,
+  ScrollText, Loader2, ChevronRight, ChevronDown,
 } from 'lucide-react'
 import AvatarCropModal from '../components/AvatarCropModal'
 import AgentSettingsModal from '../components/AgentSettingsModal'
@@ -124,6 +124,136 @@ interface WorkspaceFiles {
   journal: string
 }
 
+// ── 向量记忆卡片（可折叠内容 + scope 彩色标签） ──
+
+function VectorMemoryCard({ mem, t: _t }: { mem: MemoryItem; t: any }) {
+  const [showFull, setShowFull] = useState(false)
+  const scopeColor: Record<string, string> = {
+    private: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+    group: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    cross_user: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+  }
+  const scopeLabel: Record<string, string> = {
+    private: '私有', group: '群组', cross_user: '跨用户',
+  }
+  return (
+    <div className="p-3 rounded-lg bg-canvas border border-border">
+      <button onClick={() => setShowFull(!showFull)} className="w-full text-left">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-sm font-medium text-textPrimary">{mem.title}</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded border ${scopeColor[mem.scope] || scopeColor.private}`}>
+            {scopeLabel[mem.scope] || mem.scope}
+          </span>
+        </div>
+      </button>
+      {showFull && mem.content && (
+        <p className="text-xs text-textSecondary mt-2 pt-2 border-t border-border/50 leading-relaxed whitespace-pre-wrap">
+          {mem.content}
+        </p>
+      )}
+      <p className="text-[10px] text-textMuted mt-1">
+        {mem.created_at ? new Date(mem.created_at).toLocaleString('zh-CN') : ''}
+      </p>
+    </div>
+  )
+}
+
+// ── 结构化记忆视图 ──
+
+interface StructuredCategory {
+  category: string
+  record_count: number
+  sub_count: number
+  subs: StructuredSub[]
+}
+
+interface StructuredSub {
+  sub_key: string
+  field_count: number
+  last_update: string | null
+  fields: Record<string, string>
+}
+
+function StructuredMemoryView({ agentId }: { agentId: number }) {
+  const t = useT()
+  const [data, setData] = useState<StructuredCategory[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [expandedCat, setExpandedCat] = useState<string | null>(null)
+  const [expandedSub, setExpandedSub] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    api.get<{ categories: StructuredCategory[] }>(`/agents/${agentId}/structured-records`)
+      .then(res => { if (!cancelled) setData(res.categories) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [agentId])
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 size={18} className="animate-spin text-textMuted" /></div>
+
+  if (!data || data.length === 0) return (
+    <div className="text-center py-8">
+      <p className="text-sm text-textMuted mb-2">{t('agentDetail.structuredEmpty')}</p>
+      <p className="text-xs text-textMuted leading-relaxed max-w-md mx-auto">{t('agentDetail.structuredEmptyHint')}</p>
+    </div>
+  )
+
+  return (
+    <div className="space-y-1 max-h-[500px] overflow-y-auto">
+      {data.map((cat) => {
+        const isCatOpen = expandedCat === cat.category
+        return (
+          <div key={cat.category} className="rounded-lg border border-border overflow-hidden">
+            {/* Category row */}
+            <button
+              onClick={() => setExpandedCat(isCatOpen ? null : cat.category)}
+              className="w-full flex items-center gap-2 px-3 py-2 hover:bg-elevated transition-colors text-left"
+            >
+              {isCatOpen ? <ChevronDown size={14} className="text-textMuted shrink-0" /> : <ChevronRight size={14} className="text-textMuted shrink-0" />}
+              <span className="text-sm font-medium text-textPrimary">{cat.category}/</span>
+              <span className="text-xs text-textMuted ml-auto">{cat.record_count} 条</span>
+            </button>
+            {/* Sub rows */}
+            {isCatOpen && (
+              <div className="border-t border-border bg-canvas/50">
+                {cat.subs.map((sub) => {
+                  const isSubOpen = expandedSub === `${cat.category}/${sub.sub_key}`
+                  return (
+                    <div key={sub.sub_key}>
+                      <button
+                        onClick={() => setExpandedSub(isSubOpen ? null : `${cat.category}/${sub.sub_key}`)}
+                        className="w-full flex items-center gap-2 px-5 py-1.5 hover:bg-elevated transition-colors text-left text-xs"
+                      >
+                        {isSubOpen ? <ChevronDown size={11} className="text-textMuted shrink-0" /> : <ChevronRight size={11} className="text-textMuted shrink-0" />}
+                        <span className="text-textPrimary font-medium">{sub.sub_key}</span>
+                        <span className="text-textMuted ml-auto shrink-0">{sub.field_count} 字段</span>
+                        {sub.last_update && (
+                          <span className="text-[10px] text-textMuted">{new Date(sub.last_update).toLocaleDateString('zh-CN')}</span>
+                        )}
+                      </button>
+                      {isSubOpen && (
+                        <div className="border-t border-border/50 ml-7 py-1 px-4 space-y-0.5">
+                          {Object.entries(sub.fields).map(([field, value]) => (
+                            <div key={field} className="text-xs flex gap-2 py-0.5">
+                              <span className="text-primary-400 font-medium shrink-0 min-w-[60px]">{field}</span>
+                              <span className="text-textSecondary break-all">{value.length > 100 ? value.slice(0, 100) + '…' : value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function AgentDetailPage() {
   const t = useT()
   const { id } = useParams<{ id: string }>()
@@ -184,6 +314,7 @@ export default function AgentDetailPage() {
   const [memories, setMemories] = useState<MemoryItem[]>([])
   const [memPage, setMemPage] = useState(1)
   const [memTotal, setMemTotal] = useState(0)
+  const [memSubTab, setMemSubTab] = useState<'structured' | 'vector'>('structured')
 
   // Workspace
   const [workspace, setWorkspace] = useState<WorkspaceFiles>({ todo: '', plan: '', journal: '' })
@@ -1296,45 +1427,54 @@ export default function AgentDetailPage() {
             <div className="flex items-center gap-2 mb-3">
               <Brain size={16} className="text-primary-400" />
               <h3 className="font-medium text-textPrimary text-sm">{t('agentDetail.memoryTitlePrefix')}{memTotal}{t('agentDetail.memoryTitleSuffix')}</h3>
-            </div>
-            {memories.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {memories.map((m) => (
-                  <div key={m.id} className="p-3 rounded-lg bg-canvas border border-border">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-medium text-textPrimary">{m.title}</span>
-                      <span className="text-xs text-textMuted">{m.scope}</span>
-                    </div>
-                    {m.content && (
-                      <p className="text-xs text-textSecondary line-clamp-2">{m.content}</p>
-                    )}
-                    <p className="text-xs text-textMuted mt-1">
-                      {m.created_at ? new Date(m.created_at).toLocaleString('zh-CN') : ''}
-                    </p>
-                  </div>
+              <div className="flex gap-0.5 ml-auto bg-canvas rounded-lg p-0.5 border border-border">
+                {(['structured', 'vector'] as const).map((st) => (
+                  <button
+                    key={st}
+                    onClick={() => { setMemSubTab(st); if (st === 'vector') loadMemories(1) }}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                      memSubTab === st ? 'bg-primary-500 text-white shadow-sm' : 'text-textMuted hover:text-textSecondary'
+                    }`}
+                  >
+                    {st === 'structured' ? t('agentDetail.structuredMemories') : t('agentDetail.vectorMemories')}
+                  </button>
                 ))}
               </div>
+            </div>
+
+            {memSubTab === 'structured' ? (
+              <StructuredMemoryView agentId={agentId} />
             ) : (
-              <p className="text-sm text-textMuted">{t('agentDetail.noMemories')}</p>
-            )}
-            {memTotal > 20 && (
-              <div className="flex justify-center gap-2 mt-4">
-                <button
-                  onClick={() => loadMemories(memPage - 1)}
-                  disabled={memPage <= 1}
-                  className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
-                >
-                  {t('agentDetail.prevPage')}
-                </button>
-                <span className="text-xs text-textMuted py-1">{memPage} / {Math.ceil(memTotal / 20)}</span>
-                <button
-                  onClick={() => loadMemories(memPage + 1)}
-                  disabled={memPage >= Math.ceil(memTotal / 20)}
-                  className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
-                >
-                  {t('agentDetail.nextPage')}
-                </button>
-              </div>
+              <>
+                {memories.length > 0 ? (
+                  <div className="space-y-1.5 max-h-96 overflow-y-auto">
+                    {memories.map((m) => (
+                      <VectorMemoryCard key={m.id} mem={m} t={t} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-textMuted">{t('agentDetail.noMemories')}</p>
+                )}
+                {memTotal > 20 && (
+                  <div className="flex justify-center gap-2 mt-4">
+                    <button
+                      onClick={() => loadMemories(memPage - 1)}
+                      disabled={memPage <= 1}
+                      className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
+                    >
+                      {t('agentDetail.prevPage')}
+                    </button>
+                    <span className="text-xs text-textMuted py-1">{memPage} / {Math.ceil(memTotal / 20)}</span>
+                    <button
+                      onClick={() => loadMemories(memPage + 1)}
+                      disabled={memPage >= Math.ceil(memTotal / 20)}
+                      className="px-3 py-1 text-xs rounded-lg border border-border text-textSecondary hover:text-textPrimary disabled:opacity-30"
+                    >
+                      {t('agentDetail.nextPage')}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

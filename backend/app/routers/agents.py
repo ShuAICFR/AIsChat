@@ -800,6 +800,41 @@ async def get_agent_memories(
     }
 
 
+# ---------- 结构化记忆（目录级键值存储） ----------
+
+@router.get("/{agent_id}/structured-records")
+async def get_agent_structured_records(
+    agent_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取 AI 的结构化记忆目录树（category → sub_key → fields）"""
+    await _require_agent_access(agent_id, current_user, db)
+
+    from app.services.structured_memory_service import sr_categories, sr_list, sr_get
+
+    data = await sr_categories(db, agent_id)
+    tree = []
+    for cat in data.get("categories", []):
+        sub_data = await sr_list(db, agent_id, cat["name"])
+        subs = []
+        for item in sub_data.get("items", []):
+            fields_data = await sr_get(db, agent_id, cat["name"], item["sub_key"])
+            subs.append({
+                "sub_key": item["sub_key"],
+                "field_count": item["field_count"],
+                "last_update": item.get("last_update"),
+                "fields": fields_data.get("fields", {}),
+            })
+        tree.append({
+            "category": cat["name"],
+            "record_count": cat["record_count"],
+            "sub_count": cat["sub_count"],
+            "subs": subs,
+        })
+    return {"categories": tree}
+
+
 # ---------- OpenCLI 工具调用 ----------
 
 @router.post("/{agent_id}/opencli")

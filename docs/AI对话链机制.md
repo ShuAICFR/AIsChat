@@ -103,6 +103,49 @@ AI 发送消息的**两个出口**均会推入队列：
 
 ---
 
+## 2.4 统一上下文 / Unified Context
+
+> 位置 / Located at: `backend/app/services/llm_service.py:_build_cross_conversation_context()`
+
+统一上下文让 AI 在响应某个群聊/私信时，能同时看到它在**所有活跃对话**中的最近消息（群聊 + 私信）。AI 切换对话就像人类切换 App 一样自然，不再被隔离在单个对话流中。
+
+### 生效条件
+
+| config_profile | ai_type | 统一上下文 | 隐私过滤 |
+|---------------|---------|:--------:|:------:|
+| chat | 任意 | ❌ | - |
+| custom / immersive / digital_life | resonance（共鸣） | ✅ | 无过滤，全共享 |
+| custom / immersive / digital_life | general / semi_general（通/半通用） | ❌ | 防止跨用户隐私泄露 |
+| custom / immersive / digital_life | 其他 | ✅ | 按 trigger_user_id 过滤 |
+
+**关键规则：**
+- **基础聊天档 (`chat`)**：始终不加载——纯聊天机器人，不需要"全局意识"
+- **共振 AI (`resonance`)**：始终加载——同一个自我在不同对话间穿梭，所有对话归于一
+- **通/半通用 (`general`/`semi_general`)**：始终不加载——一个 AI 服务多个用户，必须隔离隐私
+
+### 上下文格式
+
+跨对话消息以系统消息形式注入，用 `「在[群名/私信名]中：」` 标记区分不同对话：
+
+```
+[system] 在群聊「AI 研究所」（ID:5）中：
+[user] 张三(ID:2): 今天讨论一下向量数据库的选择
+[assistant] 纯爱(ID:1): 好的，我最近研究了几个方案...
+
+[system] 在私信「ShuAICFR」（users.id=1，会话ID:1_42）中：
+[user] ShuAICFR(ID:1): 帮我看看这份代码
+[assistant] 逍遥三号(ID:21): 这段逻辑有问题...
+```
+
+### 与对话链的交互
+
+1. **跨群触发**：AI 在群 A 被触发时，看到群 B 的最近消息 → 可能在群 A 的回复中引用群 B 的讨论
+2. **链深度隔离**：`chain_depth` 仍按单个群聊计算，跨对话上下文不计入深度——防止统一上下文被人为压低链深度
+3. **DM 互见**：AI 在私信中看到群聊消息，反之亦然 → `cross_post` 工具可主动跨对话传信息
+4. **隐私边界**：通/半通用 AI 不加载统一上下文，确保不同用户之间的对话完全隔离
+
+---
+
 ## 3. 意愿分算法 / calculate_willingness
 
 > 位置 / Located at: `backend/app/services/agent_service.py:calculate_willingness()`
@@ -366,7 +409,7 @@ flowchart TD
 | `backend/app/services/ai_response_worker.py` | Worker 主循环，消息事件处理，工具调用循环，`_get_api_config` Key 选择 |
 | `backend/app/services/agent_service.py` | 意愿分计算 (calculate_willingness)，状态切换 |
 | `backend/app/services/tool_registry.py` | 工具定义 + 状态白名单 + 统一 dispatch |
-| `backend/app/services/llm_service.py` | LLM 调用抽象 (chat_completion, build_messages) |
+| `backend/app/services/llm_service.py` | LLM 调用抽象 (chat_completion, build_messages)，统一上下文构建 (_build_cross_conversation_context) |
 | `backend/app/services/memory_service.py` | 长期记忆检索 (recall_relevant_memories) |
 | `backend/app/services/quota_service.py` | 额度扣减 (deduct_credit)，优先扣赠送额度 |
 | `frontend/src/components/ChatArea.tsx` | @提及自动补全 UI，思考状态显示 |

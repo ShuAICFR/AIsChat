@@ -64,6 +64,10 @@ class FileReference(Base):
             "ref_type IN ('read', 'write', 'import', 'share', 'forward')",
             name="ck_ref_type",
         ),
+        UniqueConstraint(
+            "file_id", "referrer_type", "referrer_id",
+            name="uq_file_ref",
+        ),
     )
 
 

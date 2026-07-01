@@ -74,6 +74,7 @@ async def run_migrations():
             await _migrate_content_hash(db)          # v0.9.0 文件去重 SHA256 哈希
             await _migrate_forward_ref_type(db)     # v0.9.0 文件转发引用类型
             await _migrate_orphan_retention(db)     # v0.9.0 孤儿文件宽限期配置
+            await _migrate_oracle_file_references(db) # v0.10.x: 文件引用表幂等唯一约束
             await _migrate_default_file_quota(db)   # v0.9.0 用户默认文件配额配置
             await _migrate_structured_records(db)  # v0.10.0 结构记忆表（目录级键值存储）
             await _fix_column_types(db)  # 必须是最后一个：修复老部署的列类型不匹配
@@ -1970,6 +1971,51 @@ async def _migrate_structured_records(db):
     """))
     await db.flush()
     logger.info("  ✅ structured_records 表创建完成")
+
+
+async def _migrate_oracle_file_references(db):
+    """v0.10.x: file_references 表添加 UNIQUE 约束（幂等引用追踪）"""
+    # 检查是否已有唯一约束
+    result = await db.execute(text("""
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_name = 'file_references' AND constraint_name = 'uq_file_ref'
+    """))
+    if result.fetchone():
+        logger.info("  ⏭ file_references.uq_file_ref 已存在，跳过")
+        return
+
+    # 清理重复行：按 (file_id, referrer_type, referrer_id) 分组，每组只保留最小 id
+    logger.info("  🧹 清理 file_references 重复记录...")
+    # 先查出要删的 id
+    result = await db.execute(text("""
+        SELECT id FROM (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY file_id, referrer_type, referrer_id
+                       ORDER BY id ASC
+                   ) AS rn
+            FROM file_references
+        ) sub WHERE rn > 1
+    """))
+    dup_ids = [r[0] for r in result.fetchall()]
+    if dup_ids:
+        # 分批删除（避免 IN 列表过长）
+        for i in range(0, len(dup_ids), 500):
+            batch = dup_ids[i:i + 500]
+            await db.execute(
+                text("DELETE FROM file_references WHERE id = ANY(:ids)"),
+                {"ids": batch},
+            )
+        logger.info(f"  ✅ 已清理 {len(dup_ids)} 条重复记录")
+
+    # 加唯一约束
+    logger.info("  🔒 添加 file_references.uq_file_ref 约束")
+    await db.execute(text("""
+        ALTER TABLE file_references
+        ADD CONSTRAINT uq_file_ref UNIQUE (file_id, referrer_type, referrer_id)
+    """))
+    await db.flush()
+    logger.info("  ✅ file_references 幂等约束迁移完成")
 
 
 async def _fix_column_types(db):

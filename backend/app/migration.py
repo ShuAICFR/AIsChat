@@ -46,6 +46,7 @@ async def run_migrations():
             await _migrate_provider_config(db)      # v1.0.0 LLM 厂商预设
             await _migrate_smtp_configs_array(db)      # v1.0.0 多 SMTP 容灾：单对象 → 数组
             await _migrate_email_templates(db)          # v1.0.0 自定义邮件模板列
+            await _migrate_auto_dnd_fields(db)         # v1.0.0+ 自动免打扰配置字段
             await _migrate_agent_users(db)            # 此处会 select(Agent) — 需上面列已存在
             await _migrate_create_dm_tables(db)
             await _migrate_dm_messages(db)
@@ -668,6 +669,35 @@ async def _migrate_conversation_logs(db):
         logger.info("  ✅ 对话日志系统迁移完成")
     else:
         logger.info("  ⏭ 对话日志系统均已存在，跳过")
+
+
+async def _migrate_auto_dnd_fields(db):
+    """v1.0.0+: 自动免打扰配置字段 — auto_dnd_threshold, auto_dnd_duration（幂等）"""
+    created_any = False
+
+    if not await _column_exists(db, "agents", "auto_dnd_threshold"):
+        logger.info("  ➕ 添加 agents.auto_dnd_threshold 列")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN auto_dnd_threshold INTEGER DEFAULT 20"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.auto_dnd_threshold 已存在，跳过")
+
+    if not await _column_exists(db, "agents", "auto_dnd_duration"):
+        logger.info("  ➕ 添加 agents.auto_dnd_duration 列")
+        await db.execute(text(
+            "ALTER TABLE agents ADD COLUMN auto_dnd_duration INTEGER DEFAULT 5"
+        ))
+        created_any = True
+    else:
+        logger.info("  ⏭ agents.auto_dnd_duration 已存在，跳过")
+
+    if created_any:
+        await db.flush()
+        logger.info("  ✅ 自动免打扰字段迁移完成")
+    else:
+        logger.info("  ⏭ 自动免打扰字段均已存在，跳过")
 
 
 async def _migrate_api_credit(db):

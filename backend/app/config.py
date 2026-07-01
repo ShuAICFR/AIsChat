@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     )
     default_chat_model: str = "deepseek-v4-flash"
     default_work_model: str = "deepseek-v4-pro"
-    default_embedding_model: str = os.getenv("EMBEDDING_MODEL", "deepseek-embed")
+    # DeepSeek 不提供 embedding API，默认用 OpenAI 兼容模型
+    # 设为空字符串可禁用向量检索（纯文本搜索降级）
+    default_embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
     @property
     def is_deepseek_api(self) -> bool:

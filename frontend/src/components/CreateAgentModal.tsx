@@ -243,6 +243,10 @@ export default function CreateAgentModal({
   const [memorySharedScope, setMemorySharedScope] = useState('private_only')
   const [bio, setBio] = useState('')
   const [statusText, setStatusText] = useState('')
+  const [autoDndThreshold, setAutoDndThreshold] = useState(20)
+  const [autoDndDuration, setAutoDndDuration] = useState(5)
+  const [conversationLogsLimit, setConversationLogsLimit] = useState<number | null>(null)
+  const [userCanViewLogs, setUserCanViewLogs] = useState<boolean | null>(null)
 
   // 弹窗状态
   const [showDetailSettings, setShowDetailSettings] = useState(false)
@@ -382,6 +386,10 @@ export default function CreateAgentModal({
         memory_shared_scope: memorySharedScope,
         bio: bio || null,
         status_text: statusText || null,
+        auto_dnd_threshold: autoDndThreshold,
+        auto_dnd_duration: autoDndDuration,
+        conversation_logs_limit: conversationLogsLimit,
+        user_can_view_logs: userCanViewLogs,
       })
       // 如果填写了独立 API 配置，创建后立即设置
       if (apiBaseUrl.trim() || apiKey.trim()) {
@@ -593,6 +601,10 @@ export default function CreateAgentModal({
             memoryLoadMode={memoryLoadMode} setMemoryLoadMode={setMemoryLoadMode}
             memoryRecentCount={memoryRecentCount} setMemoryRecentCount={setMemoryRecentCount}
             memorySharedScope={memorySharedScope} setMemorySharedScope={setMemorySharedScope}
+            autoDndThreshold={autoDndThreshold} setAutoDndThreshold={setAutoDndThreshold}
+            autoDndDuration={autoDndDuration} setAutoDndDuration={setAutoDndDuration}
+            conversationLogsLimit={conversationLogsLimit} setConversationLogsLimit={setConversationLogsLimit}
+            userCanViewLogs={userCanViewLogs} setUserCanViewLogs={setUserCanViewLogs}
             modelOptions={modelOptions}
             defaults={defaults}
             thinkingSupported={thinkingSupported}
@@ -725,6 +737,10 @@ function DetailSettingsModal({
   memoryLoadMode, setMemoryLoadMode,
   memoryRecentCount, setMemoryRecentCount,
   memorySharedScope, setMemorySharedScope,
+  autoDndThreshold, setAutoDndThreshold,
+  autoDndDuration, setAutoDndDuration,
+  conversationLogsLimit, setConversationLogsLimit,
+  userCanViewLogs, setUserCanViewLogs,
   modelOptions,
   defaults,
   thinkingSupported,
@@ -762,6 +778,10 @@ function DetailSettingsModal({
   memoryLoadMode: string; setMemoryLoadMode: (v: string) => void
   memoryRecentCount: number; setMemoryRecentCount: (v: number) => void
   memorySharedScope: string; setMemorySharedScope: (v: string) => void
+  autoDndThreshold: number; setAutoDndThreshold: (v: number) => void
+  autoDndDuration: number; setAutoDndDuration: (v: number) => void
+  conversationLogsLimit: number | null; setConversationLogsLimit: (v: number | null) => void
+  userCanViewLogs: boolean | null; setUserCanViewLogs: (v: boolean | null) => void
   modelOptions: ModelOption[]
   defaults: { chat_model: string; work_model: string }
   thinkingSupported: boolean
@@ -938,6 +958,37 @@ function DetailSettingsModal({
                 <option value="private_plus_shared_all">{t('modal.detailSettingsMemorySharedScopeAll')}</option>
               </select>
               <p className="text-[10px] text-textMuted mt-1">{t('modal.detailSettingsMemorySharedScopeDesc')}</p>
+            </div>
+          </Section>
+
+          {/* ── 自动免打扰 ── */}
+          <Section title={t('modal.detailSettingsAutoDnd') || '自动免打扰'} desc={t('modal.detailSettingsAutoDndDesc') || '意愿评分低于阈值时自动进入免打扰'}>
+            <SliderField label={t('modal.detailSettingsAutoDndThreshold') || '触发阈值'} value={autoDndThreshold} setValue={setAutoDndThreshold} min={0} max={100} step={5} desc={t('modal.detailSettingsAutoDndThresholdDesc') || '意愿评分低于此值时自动开启免打扰'} />
+            <NumberField label={t('modal.detailSettingsAutoDndDuration') || '持续时长（分钟）'} value={autoDndDuration} setValue={setAutoDndDuration} min={1} max={1440} desc={t('modal.detailSettingsAutoDndDurationDesc') || '自动免打扰的持续时长'} />
+          </Section>
+
+          {/* ── 对话日志 ── */}
+          <Section title={t('modal.detailSettingsConversationLogs') || '对话日志'} desc={t('modal.detailSettingsConversationLogsDesc') || '此 AI 的日志保留和用户查看权限'}>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsConversationLogsLimit') || '日志保留上限'}</label>
+              <input type="number" min={1} max={10000} value={conversationLogsLimit ?? ''}
+                onChange={(e) => setConversationLogsLimit(e.target.value ? parseInt(e.target.value) : null)}
+                placeholder={t('modal.detailSettingsConversationLogsLimitDesc') || '留空继承全局'}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary placeholder:text-textMuted focus:outline-none focus:ring-2 focus:ring-primary-500/50" />
+              <p className="text-[10px] text-textMuted mt-0.5">{t('modal.detailSettingsConversationLogsLimitDesc') || '留空继承全局设置'}</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1 text-textSecondary">{t('modal.detailSettingsUserCanViewLogs') || '允许用户查看日志'}</label>
+              <select
+                value={userCanViewLogs === null ? 'inherit' : userCanViewLogs ? 'on' : 'off'}
+                onChange={(e) => { const v = e.target.value; setUserCanViewLogs(v === 'inherit' ? null : v === 'on') }}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-sm text-textPrimary focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+              >
+                <option value="inherit">{t('modal.detailSettingsInheritGlobal')}</option>
+                <option value="on">{t('common.enabled')}</option>
+                <option value="off">{t('common.disabled')}</option>
+              </select>
+              <p className="text-[10px] text-textMuted mt-0.5">{t('modal.detailSettingsUserCanViewLogsDesc') || '留空继承全局默认设置'}</p>
             </div>
           </Section>
 
@@ -1164,7 +1215,7 @@ function SliderField({
         type="range" min={min} max={max} step={step}
         value={value}
         onChange={(e) => setValue(parseFloat(e.target.value))}
-        className="w-full accent-primary-500"
+        className="w-full"
       />
       {desc && <p className="text-[10px] text-textMuted mt-0.5">{desc}</p>}
     </div>

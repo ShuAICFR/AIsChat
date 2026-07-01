@@ -314,6 +314,10 @@ async def create_agent(
     others_chat_quota: int = 30,
     others_chat_used: int = 0,
     disallow_mode: str = "strict",
+    auto_dnd_threshold: int = 20,
+    auto_dnd_duration: int = 5,
+    conversation_logs_limit: int | None = None,
+    user_can_view_logs: bool | None = None,
 ) -> Agent:
     """
     创建 AI 代理。
@@ -397,6 +401,10 @@ async def create_agent(
         others_chat_quota=others_chat_quota,
         others_chat_used=others_chat_used,
         disallow_mode=disallow_mode,
+        auto_dnd_threshold=auto_dnd_threshold,
+        auto_dnd_duration=auto_dnd_duration,
+        conversation_logs_limit=conversation_logs_limit,
+        user_can_view_logs=user_can_view_logs,
     )
     db.add(agent)
     await db.flush()
@@ -791,6 +799,18 @@ async def update_agent_config(
         agent.allow_friend_requests = updates["allow_friend_requests"]
     if "auto_respond_friend_request" in updates:
         agent.auto_respond_friend_request = updates["auto_respond_friend_request"]
+
+    # 自动免打扰
+    if "auto_dnd_threshold" in updates and updates["auto_dnd_threshold"] is not None:
+        agent.auto_dnd_threshold = updates["auto_dnd_threshold"]
+    if "auto_dnd_duration" in updates and updates["auto_dnd_duration"] is not None:
+        agent.auto_dnd_duration = updates["auto_dnd_duration"]
+
+    # 对话日志权限
+    if "conversation_logs_limit" in updates:
+        agent.conversation_logs_limit = updates["conversation_logs_limit"]
+    if "user_can_view_logs" in updates:
+        agent.user_can_view_logs = updates["user_can_view_logs"]
 
     # config_profile（手动编辑参数时自动回退到 custom）
     if "config_profile" in updates and updates["config_profile"] is not None:
@@ -1386,6 +1406,8 @@ def agent_to_dict(agent: Agent) -> dict:
         "is_paused": agent.is_paused,
         "auto_dnd_threshold": agent.auto_dnd_threshold,
         "auto_dnd_duration": agent.auto_dnd_duration,
+        "conversation_logs_limit": agent.conversation_logs_limit,
+        "user_can_view_logs": agent.user_can_view_logs,
         "is_ai_editable": agent.is_ai_editable,
         "thinking_enabled": agent.thinking_enabled,
         "config_profile": agent.config_profile or "custom",

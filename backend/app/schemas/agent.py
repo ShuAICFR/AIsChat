@@ -41,6 +41,10 @@ class AgentCreateRequest(BaseModel):
     memory_shared_scope: str = Field(default="private_only", description="共享记忆范围: private_only|private_plus_shared_by_user|private_plus_shared_all")
     bio: str | None = Field(default=None, max_length=500, description="AI 简介")
     status_text: str | None = Field(default=None, max_length=100, description="个性状态（中文≤10字，英文≤30字符）")
+    auto_dnd_threshold: int = Field(default=20, ge=0, le=100, description="自动免打扰触发阈值（意愿评分低于此值自动进入 DND）")
+    auto_dnd_duration: int = Field(default=5, ge=1, le=1440, description="自动免打扰持续时长（分钟）")
+    conversation_logs_limit: int | None = Field(default=None, description="对话日志保留上限（null=继承全局）")
+    user_can_view_logs: bool | None = Field(default=None, description="用户可否查看此 AI 对话日志（null=继承全局）")
 
     @field_validator("status_text")
     @classmethod
@@ -96,6 +100,10 @@ class AgentUpdateConfigRequest(BaseModel):
     others_chat_quota: int | None = Field(default=None, ge=1, le=9999, description="配额上限（触发次数）")
     others_chat_used: int | None = Field(default=None, ge=0, description="当前已使用次数（手动设值）")
     disallow_mode: str | None = Field(default=None, description="禁止时的模式: strict|own_key")
+    auto_dnd_threshold: int | None = Field(default=None, ge=0, le=100, description="自动免打扰触发阈值")
+    auto_dnd_duration: int | None = Field(default=None, ge=1, le=1440, description="自动免打扰持续时长（分钟）")
+    conversation_logs_limit: int | None = Field(default=None, description="对话日志保留上限（null=继承全局）")
+    user_can_view_logs: bool | None = Field(default=None, description="用户可否查看此 AI 对话日志（null=继承全局）")
 
     @field_validator("status_text")
     @classmethod
@@ -153,6 +161,10 @@ class AgentResponse(BaseModel):
     bio: str | None = None
     status_text: str | None = None
     reminder_grace: str = "every_time"
+    auto_dnd_threshold: int = 20
+    auto_dnd_duration: int = 5
+    conversation_logs_limit: int | None = None
+    user_can_view_logs: bool | None = None
     created_at: str | None
 
 

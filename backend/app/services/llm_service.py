@@ -1103,8 +1103,8 @@ async def build_dm_messages(
         f"{now_str}\n"
         f"\n"
         f"## 私信规则\n"
-        f"- 回复时调用 send_dm(target_user_id={partner_user_id}, content=\"...\")\n"
-        f"- 不要用 send_message（那是群聊工具）\n"
+        f"- 回复对方用 send_dm(target_user_id={partner_user_id})，不要用 send_message（那是群聊工具）\n"
+        f"- 不要在这里测试工具或自言自语——这里只有对方能看到\n"
     )
 
     # ── 记忆检索查询 ──

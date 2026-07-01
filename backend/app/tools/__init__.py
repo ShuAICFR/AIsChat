@@ -34,6 +34,7 @@ from app.tools.group_management.invite_to_group import InviteToGroup
 from app.tools.self_config.update_self_config import UpdateSelfConfig
 from app.tools.self_config.toggle_thinking import ToggleThinking
 from app.tools.self_config.manage_skills import ManageSkills
+from app.tools.self_config.set_status import SetStatus
 
 # ── self_management ──
 from app.tools.self_management.end_turn import EndTurn
@@ -45,6 +46,7 @@ from app.tools.self_management.check_workspace import CheckWorkspace
 from app.tools.self_management.clear_current_task import ClearCurrentTask
 from app.tools.self_management.manage_workspace import ManageWorkspace
 from app.tools.self_management.compress_context import CompressContext
+from app.tools.self_management.tool_help import ToolHelp
 
 # ── file_operations ──
 from app.tools.file_operations.execute_command import ExecuteCommand

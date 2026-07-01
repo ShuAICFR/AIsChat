@@ -237,11 +237,12 @@ flowchart LR
     style Cur fill:#dc2626,stroke:#b91c1c,color:#fff
 ```
 
-| config_profile | 统一上下文 | 隐私过滤 |
-|---------------|:--------:|:------:|
-| chat | ❌ | - |
-| immersive | ✅ | 通用/半通用按 trigger_user_id |
-| digital_life | ✅ | 共鸣 AI 无过滤 |
+| config_profile | ai_type | 统一上下文 | 隐私过滤 |
+|---------------|---------|:--------:|:------:|
+| chat | 任意 | ❌ | - |
+| custom / immersive / digital_life | resonance | ✅ | 无过滤（共鸣 AI 全共享） |
+| custom / immersive / digital_life | general / semi_general | ❌ | - |
+| custom / immersive / digital_life | 其他 | ✅ | 按 trigger_user_id |
 
 ---
 

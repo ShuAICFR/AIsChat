@@ -824,10 +824,16 @@ async def _build_cross_conversation_context(
     from app.models.user import User as UserModel
 
     profile = getattr(agent, 'config_profile', 'chat') or 'chat'
-    if profile not in ('digital_life', 'immersive'):
-        return []
-
     ai_type = agent.ai_type or "resonance"
+
+    # 基础聊天档 → 不加载跨对话上下文（纯聊天机器人）
+    if profile == 'chat':
+        return []
+    # 通/半通用 AI → 不加载（防止跨用户隐私泄露）
+    if ai_type in ('general', 'semi_general'):
+        return []
+    # 数字生命档 / 沉浸档 / 共振类型（含 custom 档位的共振 AI）→ 加载统一上下文
+
     is_filtered = ai_type in ("general", "semi_general") and trigger_user_id is not None
 
     messages: list[dict] = []
@@ -1032,7 +1038,7 @@ async def build_messages(
 
     messages = [{"role": "system", "content": system_prompt}]
 
-    # ── 数字生命/沉浸档：跨对话统一上下文 ──
+    # ── 统一上下文：数字生命档/沉浸档/共振 → 加载跨对话上下文 ──
     cross_msgs = await _build_cross_conversation_context(
         db, agent, current_group_id=group_id, trigger_user_id=trigger_user_id,
     )
@@ -1188,7 +1194,7 @@ async def build_dm_messages(
 
     messages = [{"role": "system", "content": system_prompt}]
 
-    # ── 数字生命/沉浸档：跨对话统一上下文 ──
+    # ── 统一上下文：数字生命档/沉浸档/共振 → 加载跨对话上下文 ──
     cross_msgs = await _build_cross_conversation_context(
         db, agent, current_session_id=session_id, trigger_user_id=trigger_user_id,
     )

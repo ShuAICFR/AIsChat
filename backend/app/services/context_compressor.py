@@ -21,14 +21,15 @@ logger = logging.getLogger(__name__)
 
 # 默认上下文窗口（DeepSeek V4 为 128K）
 DEFAULT_CONTEXT_WINDOW = 128_000
-# 压缩阈值：达到上下文窗口的 80% 时触发
-COMPRESSION_THRESHOLD = 0.8
+# 压缩阈值：v1.1.0 大幅降低——常态压缩以稳定 prompt cache 前缀
+# 旧值 0.8（~102K tokens）基本不触发；新值 ~8K tokens 即触发
+COMPRESSION_THRESHOLD = 0.06
 # 压缩后至少保留的最近消息数
 DEFAULT_KEEP_LAST_N = 5
 # 压缩用摘要的最大 token 数
 SUMMARY_MAX_TOKENS = 800
 # messages 总数低于此值不压缩
-MIN_MESSAGES_FOR_COMPRESSION = 10
+MIN_MESSAGES_FOR_COMPRESSION = 8
 
 
 def estimate_tokens(messages: list[dict]) -> int:

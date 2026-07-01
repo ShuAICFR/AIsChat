@@ -618,29 +618,11 @@ async def _build_current_context(
     group_name: str, is_dm: bool,
     is_federated: bool = False,
 ) -> str:
-    """current_context 段：当前会话上下文（每次不同，不缓存）"""
+    """current_context 段：当前时间（v1.1.0 精简——会话标题已用统一格式）"""
     tz = ZoneInfo(settings.display_timezone)
     now = datetime.now(tz)
     now_str = now.strftime(f"%Y-%m-%d %H:%M {tz.key}")
-    context = (
-        f"## 当前会话\n"
-        f"- 当前时间：**{now_str}**\n"
-        f"- 群聊名称：**{group_name}**\n"
-        f"- 群聊 ID：**{group_id}**\n"
-    )
-    if is_dm:
-        context += (
-            "- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
-            "- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
-            "- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
-            "- 如果你需要向所有人汇报测试结果，应该在群里发\n"
-        )
-    else:
-        context += (
-            "- 这是一个 **群聊**，有多位成员\n"
-            "- 需要呼叫某人时可以用 @名称\n"
-            "- 消息格式中带有发送者名称和 ID，帮你区分是谁在说话\n"
-        )
+    context = f"## 当前时间\n{now_str}\n"
     context += (
         f"- **重要**：回复时请使用 send_message(group_id={group_id}, content=\"...\")，"
         f"不要用其他 group_id\n"
@@ -859,15 +841,14 @@ async def _build_cross_conversation_context(
             recent = await get_recent_messages(db, gid, limit=3)
             if not recent:
                 continue
-            messages.append({"role": "system", "content": f"在群聊「{gname}」（ID:{gid}）中："})
+            messages.append({"role": "system", "content": f"在群聊「{gname}」(id={gid})中："})
             for m in reversed(recent):
                 role = "user" if m.sender_type == "human" else "assistant"
                 md = message_to_dict(m)
                 name = md.get("sender_name", "未知")
-                sender_id = m.sender_id
                 messages.append({
                     "role": role,
-                    "content": f"{name}(ID:{sender_id}): {(m.content or '')[:200]}",
+                    "content": f"{name}: {(m.content or '')[:200]}",
                 })
     except Exception as e:
         logger.warning(f"跨对话上下文(群聊)查询失败: {e}")
@@ -910,13 +891,10 @@ async def _build_cross_conversation_context(
                 if not dm_list:
                     continue
 
-                messages.append({"role": "system", "content": f"在私信「{partner_name}」（users.id={partner_id}，会话ID:{ds.session_id}）中："})
+                messages.append({"role": "system", "content": f"在私信「{partner_name}」(id={partner_id})中："})
                 for m in reversed(dm_list):
                     role = "user" if m.sender_id != agent.user_id else "assistant"
-                    if role == "user":
-                        label = f"{partner_name}(ID:{partner_id})"
-                    else:
-                        label = f"{agent.name}(ID:{agent.user_id})"
+                    label = partner_name if role == "user" else agent.name
                     messages.append({
                         "role": role,
                         "content": f"{label}: {(m.content or '')[:200]}",
@@ -1044,7 +1022,10 @@ async def build_messages(
     )
     if cross_msgs:
         messages.extend(cross_msgs)
-        logger.info(f"🌐 AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文")
+        logger.info(f"  AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文")
+
+    # ── 当前群聊（最后一个会话标题，位置即语义）──
+    messages.append({"role": "system", "content": f"在群聊「{group_name}」(id={group_id})中："})
 
     # ── 历史消息（保持原有逻辑不变） ──
     if vector_accelerated:
@@ -1070,13 +1051,9 @@ async def build_messages(
             content = m.content
             md = message_to_dict(m)
             name = md.get("sender_name", "未知")
-            if is_dm:
-                prefix = f"{name}: "
-            else:
-                prefix = f"{name}(ID:{m.sender_id}): "
             messages.append({
                 "role": role,
-                "content": prefix + content,
+                "content": f"{name}: {content}",
             })
 
         # 🖼️ 为最后一条用户消息注入图片附件（DeepSeek V4 Pro 多模态）
@@ -1122,18 +1099,14 @@ async def build_dm_messages(
     now = datetime.now(tz)
     now_str = now.strftime(f"%Y-%m-%d %H:%M {tz.key}")
 
-    # ── DM 上下文段 ──
+    # ── DM 上下文段（精简：标题格式已承载会话信息，不再重复说教）──
     dm_context = (
-        f"## 当前会话\n"
-        f"- 当前时间：**{now_str}**\n"
-        f"- 这是一个 **一对一私信对话（DM）**，不是多人群聊\n"
-        f"- 私信会话 ID：**{session_id}**\n"
-        f"- 对方是 **{partner_name}**（users.id = {partner_user_id}）\n"
-        f"- 对方发的每条消息都会直接推给你，你不需要 @提及 对方\n"
-        f"- 不要在这里汇报工具测试结果或自言自语——这里只有对方能看到\n"
-        f"- **回复时必须调用 send_dm(target_user_id={partner_user_id}, content=\"...\")**"
-        f"——不是 send_message（send_message 是群聊工具，send_dm 才是私信工具）\n"
-        f"- 内容要自然亲切，像聊天而不是工作汇报\n"
+        f"## 当前时间\n"
+        f"{now_str}\n"
+        f"\n"
+        f"## 私信规则\n"
+        f"- 回复时调用 send_dm(target_user_id={partner_user_id}, content=\"...\")\n"
+        f"- 不要用 send_message（那是群聊工具）\n"
     )
 
     # ── 记忆检索查询 ──
@@ -1200,7 +1173,10 @@ async def build_dm_messages(
     )
     if cross_msgs:
         messages.extend(cross_msgs)
-        logger.info(f"🌐 AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文（DM）")
+        logger.info(f"  AI {agent.name}: 加入 {len(cross_msgs)} 条跨对话上下文（DM）")
+
+    # ── 当前私信（最后一个会话标题，位置即语义）──
+    messages.append({"role": "system", "content": f"在私信「{partner_name}」(id={partner_user_id})中："})
 
     # ── DM 历史消息 ──
     result = await db.execute(

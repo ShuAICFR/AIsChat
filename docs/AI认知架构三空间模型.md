@@ -221,17 +221,20 @@ flowchart TB
     Res -->|无过滤| Mem
 ```
 
-### 5.2 统一上下文（v0.9.0）
+### 5.2 统一上下文（v1.1.0）
+
+> v1.1.0 重新设计：所有会话采用统一的 `"在XX「名字」(id=X)中："` 标题格式，当前会话放最后。详见 [`AI对话链机制.md §2.4`](./AI对话链机制.md#24-统一上下文--unified-context)。
 
 ```mermaid
 flowchart LR
-    subgraph UC["AI 统一上下文"]
+    subgraph UC["AI 统一上下文（所有会话统一格式）"]
         Sys["[system] 核心身份 + 人格 + 工具"]
-        G1["[system] 在群聊「XX」（ID:42）中："]
-        M1["[user] 张三(ID:5): hello"]
-        G2["[system] 在私信「李四」（ID:3）中："]
-        M2["[user] 李四(ID:3): 你好"]
-        Cur["[user] ShuAICFR: 你记得...  ← 当前触发"]
+        G1["[system] 在群聊「化学研讨」(id=42)中："]
+        M1["[assistant] 张三: 上次说的催化剂..."]
+        G2["[system] 在私信「李四」(id=3)中："]
+        M2["[user] 李四: 你好，我是新来的"]
+        Cur["[system] 在私信「ShuAICFR」(id=1)中： ← 当前，最后一个！"]
+        CurM["[user] ShuAICFR: 你记得..."]
     end
     style Sys fill:#7c3aed,stroke:#6d28d9,color:#fff
     style Cur fill:#dc2626,stroke:#b91c1c,color:#fff
@@ -248,7 +251,7 @@ flowchart LR
 
 ## 6. 系统提示词段布局
 
-七段结构（v0.9.0），固定段在前最大化 cache 命中：
+七段结构（v1.1.0），固定段在前最大化 cache 命中：
 
 ```mermaid
 flowchart TB
@@ -260,15 +263,18 @@ flowchart TB
     end
     subgraph Dynamic["动态段"]
         S5["5. current_context"]
-        S6["6. cross_context 🆕 统一上下文"]
-        S7["7. injected_skills<br/>向量记忆 + Skill 引擎<br/>+ 结构记忆索引 🆕"]
+        S6["6. cross_context 🆕 v1.1.0<br/>统一上下文（统一标题格式）"]
+        S7["7. injected_skills<br/>向量记忆 + Skill 引擎<br/>+ 结构记忆索引"]
     end
     S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 
     style S1 fill:#2563eb,stroke:#1d4ed8,color:#fff
     style S6 fill:#dc2626,stroke:#b91c1c,color:#fff
+
     style S7 fill:#0891b2,stroke:#0e7490,color:#fff
 ```
+
+> v1.1.0: 跨对话上下文从独立消息注入改为统一标题格式，配合上下文压缩保缓存命中。详见 [`AI对话链机制.md §2.4`](./AI对话链机制.md#24-统一上下文--unified-context)。
 
 ---
 
@@ -300,7 +306,7 @@ flowchart TB
 | `Toggle.tsx` | 加 `border-2 border-border` 描边 |
 | `AdminPage.tsx` | 分页按钮加 `text-textSecondary` 日夜适配 |
 | `llm_service.py` | 空目录不注入索引 → 始终注入 |
-| `llm_service.py` | 新增 `_build_cross_conversation_context` 统一上下文 |
+| `llm_service.py` | 新增 `_build_cross_conversation_context` 统一上下文（v1.1.0 统一标题格式） |
 | `api/client.ts` | API_BASE 可配置（桌面端 localStorage） |
 | `hooks/useWebSocket.ts` | WS URL 从配置读取 |
 
